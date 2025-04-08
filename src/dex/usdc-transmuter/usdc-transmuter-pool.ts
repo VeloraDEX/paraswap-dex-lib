@@ -5,7 +5,10 @@ import { catchParseLogError } from '../../utils';
 import { StatefulEventSubscriber } from '../../stateful-event-subscriber';
 import { IDexHelper } from '../../dex-helper/idex-helper';
 import { PoolState } from './types';
-import { gnosisChainUsdcTransmuterAbi } from './constants';
+import {
+  gnosisChainUsdcTransmuterAbi,
+  gnosisChainUsdcTransmuterAddress,
+} from './constants';
 
 export class UsdcTransmuterEventPool extends StatefulEventSubscriber<PoolState> {
   handlers: {
@@ -25,20 +28,16 @@ export class UsdcTransmuterEventPool extends StatefulEventSubscriber<PoolState> 
     protected network: number,
     protected dexHelper: IDexHelper,
     logger: Logger,
-    protected usdcTransmuterIface = new Interface(gnosisChainUsdcTransmuterAbi), // TODO: add any additional params required for event subscriber
+    protected usdcTransmuterIface = new Interface(gnosisChainUsdcTransmuterAbi),
   ) {
-    // TODO: Add pool name
     super(parentName, 'USDC_TRANSMUTER', dexHelper, logger);
 
-    // TODO: make logDecoder decode logs that
     this.logDecoder = (log: Log) => this.usdcTransmuterIface.parseLog(log);
-    this.addressesSubscribed = [
-      /* subscribed addresses */
-    ];
+    this.addressesSubscribed = [gnosisChainUsdcTransmuterAddress.toLowerCase()];
 
-    // Add handlers
+    // Add handlers - we don't need to handle any events since the rate is always 1:1
     this.handlers['Deposit'] = this.handleDeposit.bind(this);
-    this.handlers['Withdrawal'] = this.handleWithdrawal.bind(this);
+    this.handlers['Withdraw'] = this.handleWithdrawal.bind(this);
   }
 
   /**
@@ -76,11 +75,13 @@ export class UsdcTransmuterEventPool extends StatefulEventSubscriber<PoolState> 
    * @returns state of the event subscriber at blocknumber
    */
   async generateState(blockNumber: number): Promise<DeepReadonly<PoolState>> {
-    // TODO: complete me!
-    return {};
+    // Since the rate is always 1:1, we just need to mark the pool as initialized
+    return {
+      initialized: true,
+    };
   }
 
-  // Its just a dummy example
+  // These handlers don't need to do anything since the rate is always 1:1
   handleDeposit(
     event: any,
     state: DeepReadonly<PoolState>,

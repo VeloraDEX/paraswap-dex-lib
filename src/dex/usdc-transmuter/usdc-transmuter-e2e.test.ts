@@ -3,14 +3,11 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 import { testE2E } from '../../../tests/utils-e2e';
-import {
-  Tokens,
-  Holders,
-  NativeTokenSymbols,
-} from '../../../tests/constants-e2e';
+import { Tokens, Holders } from '../../../tests/constants-e2e';
 import { Network, ContractMethod, SwapSide } from '../../constants';
 import { StaticJsonRpcProvider } from '@ethersproject/providers';
 import { generateConfig } from '../../config';
+import { gnosisChainUsdcTransmuterTokens } from './constants';
 
 /*
   README
@@ -57,22 +54,52 @@ function testForNetwork(
   tokenASymbol: string,
   tokenBSymbol: string,
   tokenAAmount: string,
-  tokenBAmount: string,
-  nativeTokenAmount: string,
 ) {
   const provider = new StaticJsonRpcProvider(
     generateConfig(network).privateHttpProvider,
     network,
   );
+
+  // Add test tokens to Tokens and Holders if they don't exist
+  if (!Tokens[network]) {
+    Tokens[network] = {};
+  }
+
+  if (!Tokens[network]['USDC']) {
+    Tokens[network]['USDC'] = {
+      address: gnosisChainUsdcTransmuterTokens.USDC.address,
+      decimals: gnosisChainUsdcTransmuterTokens.USDC.decimals,
+    };
+  }
+
+  if (!Tokens[network]['USDCe']) {
+    Tokens[network]['USDCe'] = {
+      address: gnosisChainUsdcTransmuterTokens.USDCe.address,
+      decimals: gnosisChainUsdcTransmuterTokens.USDCe.decimals,
+    };
+  }
+
+  // You'll need to add holders for these tokens in your test environment
+  if (!Holders[network]) {
+    Holders[network] = {};
+  }
+
+  // Make sure you have holders defined for your tokens
+  if (!Holders[network]['USDC']) {
+    console.warn('No holder defined for USDC on Gnosis Chain. Tests may fail.');
+  }
+
+  if (!Holders[network]['USDCe']) {
+    console.warn(
+      'No holder defined for USDCe on Gnosis Chain. Tests may fail.',
+    );
+  }
+
   const tokens = Tokens[network];
   const holders = Holders[network];
-  const nativeTokenSymbol = NativeTokenSymbols[network];
 
-  // TODO: Add any direct swap contractMethod name if it exists
   const sideToContractMethods = new Map([
     [SwapSide.SELL, [ContractMethod.swapExactAmountIn]],
-    // TODO: If buy is not supported remove the buy contract methods
-    [SwapSide.BUY, [ContractMethod.swapExactAmountOut]],
   ]);
 
   describe(`${network}`, () => {
@@ -80,38 +107,12 @@ function testForNetwork(
       describe(`${side}`, () => {
         contractMethods.forEach((contractMethod: ContractMethod) => {
           describe(`${contractMethod}`, () => {
-            it(`${nativeTokenSymbol} -> ${tokenASymbol}`, async () => {
-              await testE2E(
-                tokens[nativeTokenSymbol],
-                tokens[tokenASymbol],
-                holders[nativeTokenSymbol],
-                side === SwapSide.SELL ? nativeTokenAmount : tokenAAmount,
-                side,
-                dexKey,
-                contractMethod,
-                network,
-                provider,
-              );
-            });
-            it(`${tokenASymbol} -> ${nativeTokenSymbol}`, async () => {
-              await testE2E(
-                tokens[tokenASymbol],
-                tokens[nativeTokenSymbol],
-                holders[tokenASymbol],
-                side === SwapSide.SELL ? tokenAAmount : nativeTokenAmount,
-                side,
-                dexKey,
-                contractMethod,
-                network,
-                provider,
-              );
-            });
             it(`${tokenASymbol} -> ${tokenBSymbol}`, async () => {
               await testE2E(
                 tokens[tokenASymbol],
                 tokens[tokenBSymbol],
                 holders[tokenASymbol],
-                side === SwapSide.SELL ? tokenAAmount : tokenBAmount,
+                tokenAAmount,
                 side,
                 dexKey,
                 contractMethod,
@@ -129,25 +130,12 @@ function testForNetwork(
 describe('UsdcTransmuter E2E', () => {
   const dexKey = 'UsdcTransmuter';
 
-  describe('Mainnet', () => {
-    const network = Network.MAINNET;
-
-    // TODO: Modify the tokenASymbol, tokenBSymbol, tokenAAmount;
+  describe('Gnosis Chain', () => {
+    const network = Network.GNOSIS;
     const tokenASymbol: string = 'USDC';
     const tokenBSymbol: string = 'USDCe';
+    const tokenAAmount: string = (10 * 10 ** 6).toString(); // 10 USDC
 
-    const tokenAAmount: string = (10 * 10 ** 6).toString();
-    const tokenBAmount: string = (10 * 10 ** 6).toString();
-    const nativeTokenAmount = (10 * 10 ** 18).toString();
-
-    testForNetwork(
-      network,
-      dexKey,
-      tokenASymbol,
-      tokenBSymbol,
-      tokenAAmount,
-      tokenBAmount,
-      nativeTokenAmount,
-    );
+    testForNetwork(network, dexKey, tokenASymbol, tokenBSymbol, tokenAAmount);
   });
 });

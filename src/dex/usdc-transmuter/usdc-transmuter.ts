@@ -8,6 +8,8 @@ import {
   SimpleExchangeParam,
   PoolLiquidity,
   Logger,
+  DexExchangeParam,
+  NumberAsString,
 } from '../../types';
 import { SwapSide, Network } from '../../constants';
 import * as CALLDATA_GAS_COST from '../../calldata-gas-cost';
@@ -21,16 +23,19 @@ import { UsdcTransmuterEventPool } from './usdc-transmuter-pool';
 import {
   gnosisChainUsdcTransmuterAddress,
   gnosisChainUsdcTransmuterTokens,
+  gnosisChainUsdcTransmuterAbi,
 } from './constants';
+import { Interface } from '@ethersproject/abi';
 
 export class UsdcTransmuter
   extends SimpleExchange
   implements IDex<UsdcTransmuterData>
 {
   protected eventPools: UsdcTransmuterEventPool;
+  protected usdcTransmuterIface: Interface;
 
-  readonly hasConstantPriceLargeAmounts = false;
-  readonly needWrapNative = true;
+  readonly hasConstantPriceLargeAmounts = true;
+  readonly needWrapNative = false;
 
   readonly isFeeOnTransferSupported = false;
 
@@ -46,6 +51,7 @@ export class UsdcTransmuter
   ) {
     super(dexHelper, dexKey);
     this.logger = dexHelper.getLogger(dexKey);
+    this.usdcTransmuterIface = new Interface(gnosisChainUsdcTransmuterAbi);
     this.eventPools = new UsdcTransmuterEventPool(
       dexKey,
       network,
@@ -59,9 +65,10 @@ export class UsdcTransmuter
   // for pricing requests. It is optional for a DEX to
   // implement this function
   async initializePricing(blockNumber: number) {
-    // TODO: complete me!
     await this.eventPools.initialize(blockNumber, {
-      state: {},
+      state: {
+        initialized: true,
+      },
     });
   }
 
@@ -82,8 +89,25 @@ export class UsdcTransmuter
     side: SwapSide,
     blockNumber: number,
   ): Promise<string[]> {
-    // TODO: complete me!
-    return [`${this.dexKey}_${gnosisChainUsdcTransmuterAddress}`];
+    const srcTokenAddress = srcToken.address.toLowerCase();
+    const destTokenAddress = destToken.address.toLowerCase();
+
+    // Check if this is a valid pair for the transmuter
+    const validTokens = [
+      gnosisChainUsdcTransmuterTokens.USDC.address.toLowerCase(),
+      gnosisChainUsdcTransmuterTokens.USDCe.address.toLowerCase(),
+    ];
+
+    if (
+      validTokens.includes(srcTokenAddress) &&
+      validTokens.includes(destTokenAddress) &&
+      srcTokenAddress !== destTokenAddress &&
+      side === SwapSide.SELL
+    ) {
+      return [`${this.dexKey}_${gnosisChainUsdcTransmuterAddress}`];
+    }
+
+    return [];
   }
 
   // Returns pool prices for amounts.
@@ -98,15 +122,56 @@ export class UsdcTransmuter
     blockNumber: number,
     limitPools?: string[],
   ): Promise<null | ExchangePrices<UsdcTransmuterData>> {
-    // TODO: complete me!
-    return null;
+    if (side === SwapSide.BUY) {
+      return null;
+    }
+
+    const srcTokenAddress = srcToken.address.toLowerCase();
+    const destTokenAddress = destToken.address.toLowerCase();
+
+    // Check if this is a valid pair for the transmuter
+    const validTokens = [
+      gnosisChainUsdcTransmuterTokens.USDC.address.toLowerCase(),
+      gnosisChainUsdcTransmuterTokens.USDCe.address.toLowerCase(),
+    ];
+
+    if (
+      !validTokens.includes(srcTokenAddress) ||
+      !validTokens.includes(destTokenAddress) ||
+      srcTokenAddress === destTokenAddress
+    ) {
+      return null;
+    }
+
+    const poolIdentifier = `${this.dexKey}_${gnosisChainUsdcTransmuterAddress}`;
+
+    if (limitPools && !limitPools.includes(poolIdentifier)) {
+      return null;
+    }
+
+    // For USDC Transmuter, the exchange rate is always 1:1
+    // So the output amount is the same as the input amount
+    const prices = amounts.map(amount => amount);
+
+    return [
+      {
+        prices,
+        unit: prices[0],
+        data: {
+          exchange: gnosisChainUsdcTransmuterAddress,
+        },
+        poolIdentifier,
+        exchange: this.dexKey,
+        gasCost: this.getCalldataGasCost(null),
+        poolAddresses: [gnosisChainUsdcTransmuterAddress],
+      },
+    ];
   }
 
   // Returns estimated gas cost of calldata for this DEX in multiSwap
   getCalldataGasCost(
-    poolPrices: PoolPrices<UsdcTransmuterData>,
-  ): number | number[] {
-    // TODO: update if there is any payload in getAdapterParam
+    poolPrices: PoolPrices<UsdcTransmuterData> | null,
+  ): number {
     return CALLDATA_GAS_COST.DEX_NO_PAYLOAD;
   }
 
@@ -122,16 +187,54 @@ export class UsdcTransmuter
     data: UsdcTransmuterData,
     side: SwapSide,
   ): AdapterExchangeParam {
-    // TODO: complete me!
     const { exchange } = data;
 
-    // Encode here the payload for adapter
-    const payload = '';
+    // Determine which function to call based on the source token
+    const srcTokenAddress = srcToken.toLowerCase();
+    const isDeposit =
+      srcTokenAddress ===
+      gnosisChainUsdcTransmuterTokens.USDC.address.toLowerCase();
+
+    // Encode the function call
+    const functionName = isDeposit ? 'deposit' : 'withdraw';
+    const payload = this.usdcTransmuterIface.encodeFunctionData(functionName, [
+      srcAmount,
+    ]);
 
     return {
       targetExchange: exchange,
       payload,
       networkFee: '0',
+    };
+  }
+
+  // This method is required for building the transaction parameters
+  getDexParam(
+    srcToken: Address,
+    destToken: Address,
+    srcAmount: NumberAsString,
+    destAmount: NumberAsString,
+    recipient: Address,
+    data: UsdcTransmuterData,
+    side: SwapSide,
+  ): DexExchangeParam {
+    const srcTokenAddress = srcToken.toLowerCase();
+    const isDeposit =
+      srcTokenAddress ===
+      gnosisChainUsdcTransmuterTokens.USDC.address.toLowerCase();
+
+    // Encode the function call
+    const functionName = isDeposit ? 'deposit' : 'withdraw';
+    const swapData = this.usdcTransmuterIface.encodeFunctionData(functionName, [
+      srcAmount,
+    ]);
+
+    return {
+      needWrapNative: this.needWrapNative,
+      dexFuncHasRecipient: false,
+      exchangeData: swapData,
+      targetExchange: data.exchange,
+      returnAmountPos: undefined,
     };
   }
 
@@ -141,7 +244,7 @@ export class UsdcTransmuter
   // getTopPoolsForToken. It is optional for a DEX
   // to implement this
   async updatePoolState(): Promise<void> {
-    // TODO: complete me!
+    // Nothing to update as the rate is always 1:1
   }
 
   // Returns list of top pools based on liquidity. Max
@@ -150,29 +253,43 @@ export class UsdcTransmuter
     tokenAddress: Address,
     limit: number,
   ): Promise<PoolLiquidity[]> {
-    //TODO: complete me!
-    return [
-      {
-        address: gnosisChainUsdcTransmuterAddress,
-        connectorTokens: [
-          {
-            address: gnosisChainUsdcTransmuterTokens.USDC.address,
-            decimals: gnosisChainUsdcTransmuterTokens.USDC.decimals,
-          },
-          {
-            address: gnosisChainUsdcTransmuterTokens.USDCe.address,
-            decimals: gnosisChainUsdcTransmuterTokens.USDCe.decimals,
-          },
-        ],
-        exchange: gnosisChainUsdcTransmuterAddress,
-        liquidityUSD: Infinity,
-      },
-    ];
+    const tokenAddressLower = tokenAddress.toLowerCase();
+
+    // Check if the token is either USDC or USDC.e
+    if (
+      tokenAddressLower ===
+        gnosisChainUsdcTransmuterTokens.USDC.address.toLowerCase() ||
+      tokenAddressLower ===
+        gnosisChainUsdcTransmuterTokens.USDCe.address.toLowerCase()
+    ) {
+      // Determine the connector token (the other token in the pair)
+      const connectorToken =
+        tokenAddressLower ===
+        gnosisChainUsdcTransmuterTokens.USDC.address.toLowerCase()
+          ? gnosisChainUsdcTransmuterTokens.USDCe
+          : gnosisChainUsdcTransmuterTokens.USDC;
+
+      return [
+        {
+          address: gnosisChainUsdcTransmuterAddress,
+          connectorTokens: [
+            {
+              address: connectorToken.address,
+              decimals: connectorToken.decimals,
+            },
+          ],
+          exchange: this.dexKey,
+          liquidityUSD: 1000000, // Set a high value to prioritize this pool
+        },
+      ];
+    }
+
+    return [];
   }
 
   // This is optional function in case if your implementation has acquired any resources
   // you need to release for graceful shutdown. For example, it may be any interval timer
   releaseResources(): AsyncOrSync<void> {
-    // TODO: complete me!
+    // No resources to release
   }
 }

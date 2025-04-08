@@ -13,6 +13,7 @@ import {
   checkConstantPoolPrices,
 } from '../../../tests/utils';
 import { Tokens } from '../../../tests/constants-e2e';
+import { gnosisChainUsdcTransmuterTokens } from './constants';
 
 /*
   README
@@ -151,16 +152,32 @@ describe('UsdcTransmuter', function () {
   let blockNumber: number;
   let usdcTransmuter: UsdcTransmuter;
 
-  describe('Mainnet', () => {
-    const network = Network.MAINNET;
+  describe('Gnosis Chain', () => {
+    const network = Network.GNOSIS;
     const dexHelper = new DummyDexHelper(network);
 
-    const tokens = Tokens[network];
+    // Add test tokens to Tokens if they don't exist
+    if (!Tokens[network]) {
+      Tokens[network] = {};
+    }
 
-    // TODO: Put here token Symbol to check against
-    // Don't forget to update relevant tokens in constant-e2e.ts
-    const srcTokenSymbol = 'srcTokenSymbol';
-    const destTokenSymbol = 'destTokenSymbol';
+    if (!Tokens[network]['USDC']) {
+      Tokens[network]['USDC'] = {
+        address: gnosisChainUsdcTransmuterTokens.USDC.address,
+        decimals: gnosisChainUsdcTransmuterTokens.USDC.decimals,
+      };
+    }
+
+    if (!Tokens[network]['USDCe']) {
+      Tokens[network]['USDCe'] = {
+        address: gnosisChainUsdcTransmuterTokens.USDCe.address,
+        decimals: gnosisChainUsdcTransmuterTokens.USDCe.decimals,
+      };
+    }
+
+    const tokens = Tokens[network];
+    const srcTokenSymbol = 'USDC';
+    const destTokenSymbol = 'USDCe';
 
     const amountsForSell = [
       0n,
@@ -176,20 +193,6 @@ describe('UsdcTransmuter', function () {
       10n * BI_POWS[tokens[srcTokenSymbol].decimals],
     ];
 
-    const amountsForBuy = [
-      0n,
-      1n * BI_POWS[tokens[destTokenSymbol].decimals],
-      2n * BI_POWS[tokens[destTokenSymbol].decimals],
-      3n * BI_POWS[tokens[destTokenSymbol].decimals],
-      4n * BI_POWS[tokens[destTokenSymbol].decimals],
-      5n * BI_POWS[tokens[destTokenSymbol].decimals],
-      6n * BI_POWS[tokens[destTokenSymbol].decimals],
-      7n * BI_POWS[tokens[destTokenSymbol].decimals],
-      8n * BI_POWS[tokens[destTokenSymbol].decimals],
-      9n * BI_POWS[tokens[destTokenSymbol].decimals],
-      10n * BI_POWS[tokens[destTokenSymbol].decimals],
-    ];
-
     beforeAll(async () => {
       blockNumber = await dexHelper.web3Provider.eth.getBlockNumber();
       usdcTransmuter = new UsdcTransmuter(network, dexKey, dexHelper);
@@ -199,36 +202,37 @@ describe('UsdcTransmuter', function () {
     });
 
     it('getPoolIdentifiers and getPricesVolume SELL', async function () {
-      await testPricingOnNetwork(
-        usdcTransmuter,
-        network,
-        dexKey,
-        blockNumber,
-        srcTokenSymbol,
-        destTokenSymbol,
+      const pools = await usdcTransmuter.getPoolIdentifiers(
+        tokens[srcTokenSymbol],
+        tokens[destTokenSymbol],
         SwapSide.SELL,
-        amountsForSell,
-        '', // TODO: Put here proper function name to check pricing
-      );
-    });
-
-    it('getPoolIdentifiers and getPricesVolume BUY', async function () {
-      await testPricingOnNetwork(
-        usdcTransmuter,
-        network,
-        dexKey,
         blockNumber,
-        srcTokenSymbol,
-        destTokenSymbol,
-        SwapSide.BUY,
-        amountsForBuy,
-        '', // TODO: Put here proper function name to check pricing
       );
+      console.log(
+        `${srcTokenSymbol} <> ${destTokenSymbol} Pool Identifiers: `,
+        pools,
+      );
+
+      expect(pools.length).toBeGreaterThan(0);
+
+      const poolPrices = await usdcTransmuter.getPricesVolume(
+        tokens[srcTokenSymbol],
+        tokens[destTokenSymbol],
+        amountsForSell,
+        SwapSide.SELL,
+        blockNumber,
+        pools,
+      );
+      console.log(
+        `${srcTokenSymbol} <> ${destTokenSymbol} Pool Prices: `,
+        poolPrices,
+      );
+
+      expect(poolPrices).not.toBeNull();
+      checkConstantPoolPrices(poolPrices!, amountsForSell, dexKey);
     });
 
     it('getTopPoolsForToken', async function () {
-      // We have to check without calling initializePricing, because
-      // pool-tracker is not calling that function
       const newUsdcTransmuter = new UsdcTransmuter(network, dexKey, dexHelper);
       if (newUsdcTransmuter.updatePoolState) {
         await newUsdcTransmuter.updatePoolState();
@@ -239,13 +243,11 @@ describe('UsdcTransmuter', function () {
       );
       console.log(`${srcTokenSymbol} Top Pools:`, poolLiquidity);
 
-      if (!newUsdcTransmuter.hasConstantPriceLargeAmounts) {
-        checkPoolsLiquidity(
-          poolLiquidity,
-          Tokens[network][srcTokenSymbol].address,
-          dexKey,
-        );
-      }
+      checkPoolsLiquidity(
+        poolLiquidity,
+        tokens[srcTokenSymbol].address,
+        dexKey,
+      );
     });
   });
 });

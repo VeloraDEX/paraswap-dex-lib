@@ -4,10 +4,10 @@ dotenv.config();
 
 import { UsdcTransmuterEventPool } from './usdc-transmuter-pool';
 import { Network } from '../../constants';
-import { Address } from '../../types';
 import { DummyDexHelper } from '../../dex-helper/index';
 import { testEventSubscriber } from '../../../tests/utils-events';
 import { PoolState } from './types';
+import { gnosisChainUsdcTransmuterAddress } from './constants';
 
 /*
   README
@@ -49,23 +49,26 @@ async function fetchPoolState(
   blockNumber: number,
   poolAddress: string,
 ): Promise<PoolState> {
-  // TODO: complete me!
-  return {};
+  // Since the rate is always 1:1, we just need a simple state
+  return {
+    initialized: true,
+  };
 }
 
-// eventName -> blockNumbers
-type EventMappings = Record<string, number[]>;
-
-describe('UsdcTransmuter EventPool Mainnet', function () {
+describe('UsdcTransmuter EventPool Gnosis Chain', function () {
   const dexKey = 'UsdcTransmuter';
-  const network = Network.MAINNET;
+  const network = Network.GNOSIS;
   const dexHelper = new DummyDexHelper(network);
   const logger = dexHelper.getLogger(dexKey);
   let usdcTransmuterPool: UsdcTransmuterEventPool;
 
-  // poolAddress -> EventMappings
-  const eventsToTest: Record<Address, EventMappings> = {
-    // TODO: complete me!
+  // Since the rate is always 1:1, we don't need to test specific events
+  // But we'll set up a basic test structure
+  const eventsToTest = {
+    [gnosisChainUsdcTransmuterAddress]: {
+      // We can use any block number for testing since the state is constant
+      Deposit: [15000000],
+    },
   };
 
   beforeEach(async () => {
@@ -74,12 +77,11 @@ describe('UsdcTransmuter EventPool Mainnet', function () {
       network,
       dexHelper,
       logger,
-      /* TODO: Put here additional constructor arguments if needed */
     );
   });
 
   Object.entries(eventsToTest).forEach(
-    ([poolAddress, events]: [string, EventMappings]) => {
+    ([poolAddress, events]: [string, Record<string, number[]>]) => {
       describe(`Events for ${poolAddress}`, () => {
         Object.entries(events).forEach(
           ([eventName, blockNumbers]: [string, number[]]) => {

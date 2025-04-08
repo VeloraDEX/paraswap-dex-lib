@@ -1,10 +1,9 @@
 import { Address } from '../../types';
 
 export type PoolState = {
-  // TODO: poolState is the state of event
-  // subscriber. This should be the minimum
-  // set of parameters required to compute
-  // pool prices. Complete me!
+  // Since the exchange rate is always 1:1, we don't need to track any state
+  // This is just a placeholder
+  initialized: boolean;
 };
 
 export type UsdcTransmuterData = {
