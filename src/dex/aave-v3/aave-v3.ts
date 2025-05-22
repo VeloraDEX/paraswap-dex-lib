@@ -79,7 +79,11 @@ export class AaveV3 extends SimpleExchange implements IDex<Data, Param> {
       TOKEN_LIST_LOCAL_TTL_SECONDS,
     );
     if (cachedTokenList !== null) {
-      setTokensOnNetwork(this.network, JSON.parse(cachedTokenList));
+      setTokensOnNetwork(
+        this.network,
+        this.dexKey,
+        JSON.parse(cachedTokenList),
+      );
       return;
     }
 
@@ -100,7 +104,7 @@ export class AaveV3 extends SimpleExchange implements IDex<Data, Param> {
       JSON.stringify(tokenList),
     );
 
-    setTokensOnNetwork(this.network, tokenList);
+    setTokensOnNetwork(this.network, this.dexKey, tokenList);
   }
 
   private _getPoolIdentifier(srcToken: Token, destToken: Token): string {
@@ -120,6 +124,7 @@ export class AaveV3 extends SimpleExchange implements IDex<Data, Param> {
   ): Promise<string[]> {
     const aToken = getATokenIfAaveV3Pair(
       this.network,
+      this.dexKey,
       this.dexHelper.config.wrapETH(srcToken),
       this.dexHelper.config.wrapETH(destToken),
     );
@@ -140,7 +145,7 @@ export class AaveV3 extends SimpleExchange implements IDex<Data, Param> {
     const _src = this.dexHelper.config.wrapETH(srcToken);
     const _dst = this.dexHelper.config.wrapETH(destToken);
 
-    const aToken = getATokenIfAaveV3Pair(this.network, _src, _dst);
+    const aToken = getATokenIfAaveV3Pair(this.network, this.dexKey, _src, _dst);
 
     if (!aToken) return null;
 
@@ -338,7 +343,7 @@ export class AaveV3 extends SimpleExchange implements IDex<Data, Param> {
     await this.initializeTokens();
     const address = tokenAddress.toLowerCase();
 
-    const token = TokensByAddress[this.network][address];
+    const token = TokensByAddress[this.network][this.dexKey][address];
     if (!token) return [];
 
     const isAToken = token.aAddress === address;

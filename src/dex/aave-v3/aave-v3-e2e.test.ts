@@ -44,7 +44,7 @@ describe('AaveV3 E2E', () => {
           blockNumber,
         )
           .then(tokenList => {
-            setTokensOnNetwork(network, tokenList);
+            setTokensOnNetwork(network, dexKey, tokenList);
           })
           .catch(e => {
             console.log(`ERROR on ${Network[network]}`, e);
