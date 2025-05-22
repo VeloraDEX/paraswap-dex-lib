@@ -9,6 +9,10 @@ export const Tokens: {
   [network: number]: { [symbol: string]: Token };
 } = {
   [Network.MAINNET]: {
+    aEthLidowstETH: {
+      address: '0xC035a7cf15375cE2706766804551791aD035E0C2',
+      decimals: 18,
+    },
     sUSDS: {
       address: '0xa3931d71877C0E7a3148CB7Eb4463524FEc27fbD',
       decimals: 18,

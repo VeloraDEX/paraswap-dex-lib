@@ -10,7 +10,7 @@ import {
 } from '../../../tests/utils';
 import { BI_POWS } from '../../bigint-constants';
 
-const network = Network.POLYGON;
+const network = Network.MAINNET;
 const TokenASymbol = 'USDT';
 const TokenA = {
   address: '0xc2132d05d31c914a87c6611c10748aeb04b58e8f',
@@ -26,7 +26,7 @@ const TokenB = {
 
 const amounts = [0n, BI_POWS[6], 2000000n];
 
-const dexKey = 'AaveV3';
+const dexKey = 'AaveV3Lido';
 
 describe('AaveV3', function () {
   it('The "initializePricing" method sets cache properly', async () => {
@@ -137,7 +137,7 @@ describe('AaveV3', function () {
       const aaveV3 = new AaveV3(network, dexKey, dexHelper);
 
       const poolLiquidity = await aaveV3.getTopPoolsForToken(
-        TokenA.address,
+        '0xc035a7cf15375ce2706766804551791ad035e0c2',
         10,
       );
       console.log(`${TokenASymbol} Top Pools:`, poolLiquidity);

@@ -23,7 +23,11 @@ import { IDexHelper } from '../../dex-helper/idex-helper';
 import { Data, Param, PoolAndWethFunctions } from './types';
 import { SimpleExchange } from '../simple-exchange';
 import { Adapters, Config } from './config';
-import { getATokenIfAaveV3Pair, setTokensOnNetwork } from './tokens';
+import {
+  getATokenIfAaveV3Pair,
+  setTokensOnNetwork,
+  TokensByAddress,
+} from './tokens';
 
 import WETH_GATEWAY_ABI from '../../abi/aave-v3-weth-gateway.json';
 import POOL_ABI from '../../abi/AaveV3_lending_pool.json';
@@ -64,6 +68,10 @@ export class AaveV3 extends SimpleExchange implements IDex<Data, Param> {
   }
 
   async initializePricing(blockNumber: number): Promise<void> {
+    await this.initializeTokens(blockNumber);
+  }
+
+  async initializeTokens(blockNumber?: number): Promise<void> {
     let cachedTokenList = await this.dexHelper.cache.getAndCacheLocally(
       this.dexKey,
       this.network,
@@ -77,11 +85,11 @@ export class AaveV3 extends SimpleExchange implements IDex<Data, Param> {
 
     let tokenList = await fetchTokenList(
       this.dexHelper.web3Provider,
-      blockNumber,
       this.config.poolAddress,
       this.pool,
       this.erc20Interface,
       this.dexHelper.multiWrapper,
+      blockNumber,
     );
 
     await this.dexHelper.cache.setex(
@@ -326,6 +334,32 @@ export class AaveV3 extends SimpleExchange implements IDex<Data, Param> {
     tokenAddress: Address,
     limit: number,
   ): Promise<PoolLiquidity[]> {
-    return [];
+    // only for aToken <=> underlying token
+    await this.initializeTokens();
+    const address = tokenAddress.toLowerCase();
+
+    const token = TokensByAddress[this.network][address];
+    if (!token) return [];
+
+    const isAToken = token.aAddress === address;
+
+    return [
+      {
+        exchange: this.dexKey,
+        address: token.aAddress,
+        connectorTokens: [
+          isAToken
+            ? {
+                address: token.address,
+                decimals: token.decimals,
+              }
+            : {
+                address: token.aAddress,
+                decimals: token.decimals,
+              },
+        ],
+        liquidityUSD: 10 ** 9,
+      },
+    ];
   }
 }

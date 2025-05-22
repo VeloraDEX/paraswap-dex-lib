@@ -5,8 +5,9 @@ import { AaveToken } from './types';
 
 export const Tokens: { [network: number]: { [symbol: string]: aToken } } = {};
 
-const TokensByAddress: { [network: number]: { [address: string]: aToken } } =
-  {};
+export const TokensByAddress: {
+  [network: number]: { [address: string]: aToken };
+} = {};
 
 // return null if the pair does not exists otherwise return the aToken
 export function getATokenIfAaveV3Pair(
