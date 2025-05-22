@@ -11,7 +11,7 @@ export const DODOV2ProxyAddress: { [network: number]: Address } = {
   [Network.AVALANCHE]: '0x2cD18557E14aF72DAA8090BcAA95b231ffC9ea26',
 };
 
-export const DODOAproveAddress: { [network: number]: Address } = {
+export const DODOApproveAddress: { [network: number]: Address } = {
   [Network.MAINNET]: '0xCB859eA579b28e02B87A1FDE08d087ab9dbE5149',
   [Network.BSC]: '0xa128Ba44B2738A558A1fdC06d6303d52D3Cef8c1',
   [Network.ARBITRUM]: '0xA867241cDC8d3b0C07C85cC06F25a0cD3b5474d8',
