@@ -51,7 +51,6 @@
     "checks": "yarn check:pq && yarn check:tsc && yarn check:es"
   },
   "dependencies": {
-    "@0x/utils": "^4.5.2",
     "@balancer-labs/balancer-maths": "^0.0.26",
     "@balancer-labs/sor": "4.1.3",
     "@bgd-labs/aave-address-book": "4.15.1",
