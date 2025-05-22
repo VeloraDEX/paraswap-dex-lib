@@ -901,20 +901,22 @@ export class Dexalot extends SimpleExchange implements IDex<DexalotData> {
   }
 
   async isBlacklisted(txOrigin: Address): Promise<boolean> {
-    const cachedBlacklist = await this.dexHelper.cache.get(
-      this.dexKey,
-      this.network,
-      this.blacklistCacheKey,
-    );
+    const [cachedBlacklist, isRateLimited] = await Promise.all([
+      this.dexHelper.cache.get(
+        this.dexKey,
+        this.network,
+        this.blacklistCacheKey,
+      ),
+      this.isRateLimited(txOrigin),
+    ]);
+
+    if (isRateLimited) {
+      return true;
+    }
 
     if (cachedBlacklist) {
       const blacklist = JSON.parse(cachedBlacklist) as string[];
       return blacklist.includes(txOrigin.toLowerCase());
-    }
-
-    // To not show pricing for rate limited users
-    if (await this.isRateLimited(txOrigin)) {
-      return true;
     }
 
     return false;
