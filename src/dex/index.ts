@@ -108,6 +108,7 @@ import { UsualPP } from './usual-pp/usual-pp';
 import { Ekubo } from './ekubo/ekubo';
 import { UniswapV4 } from './uniswap-v4/uniswap-v4';
 import { uniswapV4Merge } from './uniswap-v4/optimizer';
+import { MiroMigrator } from './miro-migrator/miro-migrator';
 
 const LegacyDexes = [
   CurveV2,
@@ -209,6 +210,7 @@ const Dexes = [
   UsualMUsd0,
   UsualPP,
   Ekubo,
+  MiroMigrator,
 ];
 
 export type LegacyDexConstructor = new (dexHelper: IDexHelper) => IDexTxBuilder<
