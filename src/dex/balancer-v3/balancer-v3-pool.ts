@@ -173,7 +173,7 @@ export class BalancerV3EventPool extends StatefulEventSubscriber<PoolStateMap> {
   }
 
   async getUpdatedPoolState(
-    existingPoolState: DeepReadonly<PoolStateMap>,
+    blockNumber: number,
   ): Promise<DeepReadonly<PoolStateMap> | null> {
     // Get all latest pools from API
     const apiPoolStateMap = await getPoolsApi(
@@ -181,35 +181,16 @@ export class BalancerV3EventPool extends StatefulEventSubscriber<PoolStateMap> {
       this.hooksConfigMap,
     );
 
-    // Filter out pools that already exist in existing state
-    const newApiPools = Object.entries(apiPoolStateMap).reduce(
-      (acc, [address, pool]) => {
-        if (!existingPoolState[address]) {
-          acc[address] = pool;
-        }
-        return acc;
-      },
-      {} as typeof apiPoolStateMap,
-    );
-
-    // If no new pools return
-    if (Object.keys(newApiPools).length === 0) {
-      return null;
-    }
-
-    // Only get on-chain state for new pools
-    const newOnChainPools = await getOnChainState(
+    // Get on-chain state for all pools to ensure correct state
+    const latestOnChainPools = await getOnChainState(
       this.network,
-      newApiPools,
+      apiPoolStateMap,
       this.dexHelper,
       this.interfaces,
+      blockNumber,
     );
 
-    // Merge existing pools with new pools
-    return {
-      ...existingPoolState,
-      ...newOnChainPools,
-    };
+    return latestOnChainPools;
   }
 
   liquidityAddedEvent(
@@ -510,9 +491,7 @@ export class BalancerV3EventPool extends StatefulEventSubscriber<PoolStateMap> {
    */
   async updateStatePools(): Promise<void> {
     const blockNumber = await this.dexHelper.provider.getBlockNumber();
-    // We just want the current saved state
-    const currentState = this.getStaleState() || {};
-    const updatedPoolState = await this.getUpdatedPoolState(currentState);
+    const updatedPoolState = await this.getUpdatedPoolState(blockNumber);
     if (updatedPoolState) this.setState(updatedPoolState, blockNumber);
   }
 

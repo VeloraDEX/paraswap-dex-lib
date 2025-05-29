@@ -1525,6 +1525,10 @@ export const Tokens: {
       address: '0x6ab707aca953edaefbc4fd23ba73294241490620',
       decimals: 6,
     },
+    waOptWETH: {
+      address: '0x464b808c2c7e04b07e860fdf7a91870620246148',
+      decimals: 18,
+    },
   },
   [Network.ZKEVM]: {
     ETH: {
@@ -1761,6 +1765,10 @@ export const Tokens: {
     },
     smUSDC: {
       address: '0x616a4e1db48e22028f6bbf20444cd3b8e3273738',
+      decimals: 18,
+    },
+    weETH: {
+      address: `0x04C0599Ae5A44757c0af6F9eC3b93da8976c150A`,
       decimals: 18,
     },
   },
