@@ -10,6 +10,7 @@ import { UniswapV3 } from './uniswap-v3/uniswap-v3';
 import { BalancerV2 } from './balancer-v2/balancer-v2';
 import { balancerV2Merge } from './balancer-v2/optimizer';
 import { UniswapV2 } from './uniswap-v2/uniswap-v2';
+import { RingV2 } from './ring-v2/ring-v2';
 import { UniswapV2Alias } from './uniswap-v2/constants';
 import { uniswapMerge } from './uniswap-v2/optimizer';
 import { BiSwap } from './uniswap-v2/biswap';
@@ -56,6 +57,7 @@ import { Swerve } from './curve-v1/forks/swerve/swerve';
 import { CurveV1Factory } from './curve-v1-factory/curve-v1-factory';
 import { CurveV1StableNg } from './curve-v1-stable-ng/curve-v1-stable-ng';
 import { curveV1Merge } from './curve-v1-factory/optimizer';
+import { ringMerge } from './ring-v2/optimizer';
 import { GenericRFQ } from './generic-rfq/generic-rfq';
 import { WstETH } from './wsteth/wsteth';
 import { ERC4626 } from './erc4626/erc4626';
@@ -139,6 +141,7 @@ const Dexes = [
   UniswapV2,
   UniswapV3,
   UniswapV4,
+  RingV2,
   Algebra,
   PancakeswapV3,
   VelodromeSlipstream,
@@ -243,6 +246,7 @@ export class DexAdapterService {
     uniswapMerge,
     curveV1Merge,
     uniswapV4Merge,
+    ringMerge,
   ];
 
   constructor(

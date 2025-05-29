@@ -463,7 +463,7 @@ const baseConfigs: { [network: number]: BaseConfig } = {
   [Network.SEPOLIA]: {
     network: Network.SEPOLIA,
     networkName: 'Sepolia',
-    isTestnet: false,
+    isTestnet: true,
     nativeTokenName: 'Ether',
     nativeTokenSymbol: 'ETH',
     wrappedNativeTokenAddress: '0x7b79995e5f793a07bc00c21412e50ecae098e7f9',
