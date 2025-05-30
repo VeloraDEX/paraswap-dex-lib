@@ -105,6 +105,7 @@ import { UsualMUsd0 } from './usual/usual-m-usd0';
 import { MWrappedM } from './usual/m-wrapped-m';
 import { WrappedMM } from './usual/wrapped-m-m';
 import { UsualPP } from './usual-pp/usual-pp';
+import { AlgebraIntegral } from './algebra-integral/algebra-integral';
 import { Ekubo } from './ekubo/ekubo';
 import { UniswapV4 } from './uniswap-v4/uniswap-v4';
 import { uniswapV4Merge } from './uniswap-v4/optimizer';
@@ -140,6 +141,7 @@ const Dexes = [
   UniswapV3,
   UniswapV4,
   Algebra,
+  AlgebraIntegral,
   PancakeswapV3,
   VelodromeSlipstream,
   BiSwap,

@@ -671,6 +671,10 @@ export const Tokens: {
       address: '0x9C78EE466D6Cb57A4d01Fd887D2b5dFb2D46288f',
       decimals: 18,
     },
+    WOLF: {
+      address: '0x8f18dC399594b451EdA8c5da02d0563c0b2d0f16',
+      decimals: 9,
+    },
     AMDAI: {
       address: '0x27F8D03b3a2196956ED754baDc28D73be8830A6e',
       decimals: 18,
@@ -1958,6 +1962,7 @@ export const Holders: {
     amUSDC: '0x6e7f19cd23049c7118e14470e2bf85d2e26ee0ae',
     MAI: '0x9a8cf02f3e56c664ce75e395d0e4f3dc3dafe138',
     SDEX: '0xB0470cF15B22a6A32c49a7C20E3821B944A76058',
+    WOLF: '0x4aa6907Fa9F1BC2Be15158897E0138E947C86956',
     CRV: '0x2151578e1fEc29361bB0481312Ea6b935014D636',
     SUSHI: '0x1605CE87dD176b38a17d30e8926370ffD5268bf6',
     EURA: '0x9A760aa1Fe631fD9aC0Aee0965736121c7c132cc',
