@@ -10,6 +10,7 @@ import { parseUnits } from 'ethers/lib/utils';
 import { HooksConfigMap } from './hooks/balancer-hook-event-subscriber';
 import { getUniqueHookNames } from './utils';
 import { GyroECLPImmutableString } from './gyroECLPPool';
+import { ReClammApiName } from './reClammPool';
 interface PoolToken {
   address: string;
   weight: string | null;
@@ -107,7 +108,8 @@ function toImmutablePoolStateMap(
       .filter(
         pool =>
           !pool.hook ||
-          (pool.hook && pool.hook.address.toLowerCase() in hooksConfigMap),
+          pool.type === ReClammApiName || // In reClamm the pool is also its own hook. We don't track hook state as its not needed for pricing
+          pool.hook.address.toLowerCase() in hooksConfigMap,
       )
       .reduce((map, pool) => {
         const immutablePoolState: CommonImmutablePoolState = {
@@ -120,10 +122,8 @@ function toImmutablePoolStateMap(
           ),
           weights: pool.poolTokens.map(t => scaleOrDefault(t.weight, 18, 0n)),
           poolType: pool.type,
-          hookAddress: pool.hook ? pool.hook.address.toLowerCase() : undefined,
-          hookType: pool.hook
-            ? hooksConfigMap[pool.hook.address.toLowerCase()].type
-            : undefined,
+          hookAddress: getHookAddress(pool.hook, pool.type),
+          hookType: getHookType(pool.hook, pool.type, hooksConfigMap),
           supportsUnbalancedLiquidity: true, // can default to true as only required for add/remove maths which we don't use
           // GyroECLP
           // Parameters to configure the E-CLP pool, with 18 decimals
@@ -155,6 +155,31 @@ function scaleOrDefault(
   defaultValue: bigint,
 ): bigint {
   return original ? parseUnits(original, decimals).toBigInt() : defaultValue;
+}
+
+function getHookType(
+  hook: {
+    address: string;
+  } | null,
+  poolType: string,
+  hooksConfigMap: HooksConfigMap,
+) {
+  if (!hook) return undefined;
+  else if (poolType === ReClammApiName)
+    return undefined; // The hook is not used for pricing so we just treat as non-existent
+  else return hooksConfigMap[hook.address.toLowerCase()].type;
+}
+
+function getHookAddress(
+  hook: {
+    address: string;
+  } | null,
+  poolType: string,
+) {
+  if (!hook) return undefined;
+  else if (poolType === ReClammApiName)
+    return undefined; // The hook is not used for pricing so we just treat as non-existent
+  else return hook.address.toLowerCase();
 }
 
 // Any data from API will be immutable. Mutable data such as balances, etc will be fetched via onchain/event state.
