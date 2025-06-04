@@ -1,0 +1,61 @@
+{
+  "blockNumber": 22458085,
+  "network": 1,
+  "srcToken": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+  "srcDecimals": 18,
+  "srcAmount": "1000000",
+  "destToken": "0x6b175474e89094c44da98b954eedeac495271d0f",
+  "destDecimals": 18,
+  "destAmount": "2542567994",
+  "bestRoute": [
+    {
+      "percent": 100,
+      "swaps": [
+        {
+          "srcToken": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+          "srcDecimals": 18,
+          "destToken": "0x6b175474e89094c44da98b954eedeac495271d0f",
+          "destDecimals": 18,
+          "swapExchanges": [
+            {
+              "exchange": "RingV2",
+              "srcAmount": "1000000",
+              "destAmount": "2542567994",
+              "percent": 100,
+              "data": {
+                "router": "0x39d1d8fcC5E6EEAf567Bce4e29B94fec956D3519",
+                "path": [
+                  "0xa250cc729bb3323e7933022a67b52200fe354767",
+                  "0x8a6fe57c08c84e0f4ee97aae68a62e820a37d259"
+                ],
+                "factory": "0xeb2A625B704d73e82946D8d026E1F588Eed06416",
+                "initCode": "0x96e8ac4277198ff8b6f785478aa9a39f403cb768dd02cbee326c3e7da348845f",
+                "feeFactor": 10000,
+                "pools": [
+                  {
+                    "address": "0x68C498Df05982d635914ee0Ae6501C749A78B473",
+                    "fee": 30,
+                    "direction": false
+                  }
+                ]
+              },
+              "poolAddresses": ["0x68C498Df05982d635914ee0Ae6501C749A78B473"]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "gasCostUSD": "0",
+  "gasCost": "0",
+  "others": [],
+  "side": "SELL",
+  "contractAddress": "0x6a000f20005980200259b80c5102003040001068",
+  "tokenTransferProxy": "",
+  "version": "6.2",
+  "hmac": "0",
+  "srcUSD": "0",
+  "destUSD": "0",
+  "contractMethod": "swapExactAmountIn",
+  "partnerFee": 0
+}

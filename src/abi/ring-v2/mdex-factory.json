@@ -1,0 +1,759 @@
+[
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "_feeToSetter",
+        "type": "address"
+      }
+    ],
+    "payable": false,
+    "stateMutability": "nonpayable",
+    "type": "constructor"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "token0",
+        "type": "address"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "token1",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "address",
+        "name": "pair",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "name": "PairCreated",
+    "type": "event"
+  },
+  {
+    "constant": true,
+    "inputs": [],
+    "name": "FEE_RATE_DENOMINATOR",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "payable": false,
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "constant": false,
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "pair",
+        "type": "address"
+      }
+    ],
+    "name": "addPair",
+    "outputs": [
+      {
+        "internalType": "bool",
+        "name": "",
+        "type": "bool"
+      }
+    ],
+    "payable": false,
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "constant": true,
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "name": "allPairs",
+    "outputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "payable": false,
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "constant": true,
+    "inputs": [],
+    "name": "allPairsLength",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "payable": false,
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "constant": false,
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "tokenA",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "tokenB",
+        "type": "address"
+      }
+    ],
+    "name": "createPair",
+    "outputs": [
+      {
+        "internalType": "address",
+        "name": "pair",
+        "type": "address"
+      }
+    ],
+    "payable": false,
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "constant": false,
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "pair",
+        "type": "address"
+      }
+    ],
+    "name": "delPair",
+    "outputs": [
+      {
+        "internalType": "bool",
+        "name": "",
+        "type": "bool"
+      }
+    ],
+    "payable": false,
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "constant": true,
+    "inputs": [],
+    "name": "feeRateNumerator",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "payable": false,
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "constant": true,
+    "inputs": [],
+    "name": "feeTo",
+    "outputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "payable": false,
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "constant": true,
+    "inputs": [],
+    "name": "feeToRate",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "payable": false,
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "constant": true,
+    "inputs": [],
+    "name": "feeToSetter",
+    "outputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "payable": false,
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "constant": true,
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "amountOut",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "reserveIn",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "reserveOut",
+        "type": "uint256"
+      },
+      {
+        "internalType": "address",
+        "name": "token0",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "token1",
+        "type": "address"
+      }
+    ],
+    "name": "getAmountIn",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "amountIn",
+        "type": "uint256"
+      }
+    ],
+    "payable": false,
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "constant": true,
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "amountIn",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "reserveIn",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "reserveOut",
+        "type": "uint256"
+      },
+      {
+        "internalType": "address",
+        "name": "token0",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "token1",
+        "type": "address"
+      }
+    ],
+    "name": "getAmountOut",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "amountOut",
+        "type": "uint256"
+      }
+    ],
+    "payable": false,
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "constant": true,
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "amountOut",
+        "type": "uint256"
+      },
+      {
+        "internalType": "address[]",
+        "name": "path",
+        "type": "address[]"
+      }
+    ],
+    "name": "getAmountsIn",
+    "outputs": [
+      {
+        "internalType": "uint256[]",
+        "name": "amounts",
+        "type": "uint256[]"
+      }
+    ],
+    "payable": false,
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "constant": true,
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "amountIn",
+        "type": "uint256"
+      },
+      {
+        "internalType": "address[]",
+        "name": "path",
+        "type": "address[]"
+      }
+    ],
+    "name": "getAmountsOut",
+    "outputs": [
+      {
+        "internalType": "uint256[]",
+        "name": "amounts",
+        "type": "uint256[]"
+      }
+    ],
+    "payable": false,
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "constant": true,
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "name": "getPair",
+    "outputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "payable": false,
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "constant": true,
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "pair",
+        "type": "address"
+      }
+    ],
+    "name": "getPairFees",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "payable": false,
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "constant": true,
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "pair",
+        "type": "address"
+      }
+    ],
+    "name": "getPairRate",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "payable": false,
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "constant": true,
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "tokenA",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "tokenB",
+        "type": "address"
+      }
+    ],
+    "name": "getReserves",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "reserveA",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "reserveB",
+        "type": "uint256"
+      }
+    ],
+    "payable": false,
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "constant": true,
+    "inputs": [],
+    "name": "getSupportListLength",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "payable": false,
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "constant": true,
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "index",
+        "type": "uint256"
+      }
+    ],
+    "name": "getSupportPair",
+    "outputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "payable": false,
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "constant": true,
+    "inputs": [],
+    "name": "initCodeHash",
+    "outputs": [
+      {
+        "internalType": "bytes32",
+        "name": "",
+        "type": "bytes32"
+      }
+    ],
+    "payable": false,
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "constant": true,
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "pair",
+        "type": "address"
+      }
+    ],
+    "name": "isSupportPair",
+    "outputs": [
+      {
+        "internalType": "bool",
+        "name": "",
+        "type": "bool"
+      }
+    ],
+    "payable": false,
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "constant": true,
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "name": "pairFeeToRate",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "payable": false,
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "constant": true,
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "name": "pairFees",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "payable": false,
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "constant": true,
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "tokenA",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "tokenB",
+        "type": "address"
+      }
+    ],
+    "name": "pairFor",
+    "outputs": [
+      {
+        "internalType": "address",
+        "name": "pair",
+        "type": "address"
+      }
+    ],
+    "payable": false,
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "constant": true,
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "amountA",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "reserveA",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "reserveB",
+        "type": "uint256"
+      }
+    ],
+    "name": "quote",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "amountB",
+        "type": "uint256"
+      }
+    ],
+    "payable": false,
+    "stateMutability": "pure",
+    "type": "function"
+  },
+  {
+    "constant": false,
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "rate",
+        "type": "uint256"
+      }
+    ],
+    "name": "setDefaultFeeToRate",
+    "outputs": [],
+    "payable": false,
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "constant": false,
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "_feeRateNumerator",
+        "type": "uint256"
+      }
+    ],
+    "name": "setFeeRateNumerator",
+    "outputs": [],
+    "payable": false,
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "constant": false,
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "_feeTo",
+        "type": "address"
+      }
+    ],
+    "name": "setFeeTo",
+    "outputs": [],
+    "payable": false,
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "constant": false,
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "_feeToSetter",
+        "type": "address"
+      }
+    ],
+    "name": "setFeeToSetter",
+    "outputs": [],
+    "payable": false,
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "constant": false,
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "pair",
+        "type": "address"
+      },
+      {
+        "internalType": "uint256",
+        "name": "rate",
+        "type": "uint256"
+      }
+    ],
+    "name": "setPairFeeToRate",
+    "outputs": [],
+    "payable": false,
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "constant": false,
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "pair",
+        "type": "address"
+      },
+      {
+        "internalType": "uint256",
+        "name": "fee",
+        "type": "uint256"
+      }
+    ],
+    "name": "setPairFees",
+    "outputs": [],
+    "payable": false,
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "constant": true,
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "tokenA",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "tokenB",
+        "type": "address"
+      }
+    ],
+    "name": "sortTokens",
+    "outputs": [
+      {
+        "internalType": "address",
+        "name": "token0",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "token1",
+        "type": "address"
+      }
+    ],
+    "payable": false,
+    "stateMutability": "pure",
+    "type": "function"
+  }
+]

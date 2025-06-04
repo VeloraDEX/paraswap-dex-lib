@@ -13,6 +13,10 @@ import priceRouteSimpleSwapUniV3EthUsdc from './fixtures/executor01/routes/price
 import exchangeParamsSimpleSwapUniV3EthUsdc from './fixtures/executor01/exchange-params/price-route-simpleSwap-univ3-eth-usdc.json';
 import maybeWethCalldataSimpleSwapUniV3EthUsdc from './fixtures/executor01/maybe-weth-calldata/price-route-simpleSwap-univ3-eth-usdc.json';
 
+import priceRouteSimpleSwapUniV2EthDAI from './fixtures/executor01/routes/price-route-simpleSwap-univ2-eth-dai.json';
+import exchangeParamsSimpleSwapUniV2EthDAI from './fixtures/executor01/exchange-params/price-route-simpleSwap-univ2-eth-dai.json';
+// import maybeWethCalldataSimpleSwapUniV2EthDAI from './fixtures/executor01/maybe-weth-calldata/price-route-simpleSwap-univ2-eth-dai.json';
+
 import priceRouteSimpleSwapUniV3UsdcEth from './fixtures/executor01/routes/price-route-simpleSwap-univ3-usdc-eth.json';
 import exchangeParamsSimpleSwapUniV3UsdcEth from './fixtures/executor01/exchange-params/price-route-simpleSwap-univ3-usdc-eth.json';
 import maybeWethCalldataSimpleSwapUniV3UsdcEth from './fixtures/executor01/maybe-weth-calldata/price-route-simpleSwap-univ3-usdc-eth.json';
