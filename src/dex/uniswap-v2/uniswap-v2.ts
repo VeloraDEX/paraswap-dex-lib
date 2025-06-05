@@ -1081,7 +1081,7 @@ export class UniswapV2
     return this.directFunctionNameV6;
   }
 
-  private getPoolIdentifier(token0: string, token1: string) {
+  protected getPoolIdentifier(token0: string, token1: string) {
     const [_token0, _token1] =
       token0.toLowerCase() < token1.toLowerCase()
         ? [token0, token1]
