@@ -1193,6 +1193,11 @@
   resolved "https://registry.yarnpkg.com/@openzeppelin/contracts-upgradeable/-/contracts-upgradeable-4.9.2.tgz#a817c75688f8daede420052fbcb34e52482e769e"
   integrity sha512-siviV3PZV/fHfPaoIC51rf1Jb6iElkYWnNYZ0leO23/ukXuvOyoC/ahy8jqiV7g+++9Nuo3n/rk5ajSN/+d/Sg==
 
+"@openzeppelin/contracts-upgradeable@4.9.3":
+  version "4.9.3"
+  resolved "https://registry.yarnpkg.com/@openzeppelin/contracts-upgradeable/-/contracts-upgradeable-4.9.3.tgz#ff17a80fb945f5102571f8efecb5ce5915cc4811"
+  integrity sha512-jjaHAVRMrE4UuZNfDwjlLGDxTHWIOwTJS2ldnc278a0gevfXfPr8hxKEVBGFBE96kl2G3VHDZhUimw/+G3TG2A==
+
 "@openzeppelin/contracts-upgradeable@^4.7.3":
   version "4.9.5"
   resolved "https://registry.yarnpkg.com/@openzeppelin/contracts-upgradeable/-/contracts-upgradeable-4.9.5.tgz#572b5da102fc9be1d73f34968e0ca56765969812"
@@ -1202,6 +1207,11 @@
   version "4.9.2"
   resolved "https://registry.yarnpkg.com/@openzeppelin/contracts/-/contracts-4.9.2.tgz#1cb2d5e4d3360141a17dbc45094a8cad6aac16c1"
   integrity sha512-mO+y6JaqXjWeMh9glYVzVu8HYPGknAAnWyxTRhGeckOruyXQMNnlcW6w/Dx9ftLeIQk6N+ZJFuVmTwF7lEIFrg==
+
+"@openzeppelin/contracts@4.9.3":
+  version "4.9.3"
+  resolved "https://registry.yarnpkg.com/@openzeppelin/contracts/-/contracts-4.9.3.tgz#00d7a8cf35a475b160b3f0293a6403c511099364"
+  integrity sha512-He3LieZ1pP2TNt5JbkPA4PNT9WC3gOTOlDcFGJW4Le4QKqwmiNJCRt44APfxMxvq7OugU/cqYuPcSBzOw38DAg==
 
 "@openzeppelin/contracts@^4.7.3":
   version "4.9.5"
@@ -1226,6 +1236,13 @@
     "@paraswap/core" "2.2.0"
     bignumber.js "^9.0.2"
     ts-essentials "^9.1.2"
+
+"@pendle-sdk@https://github.com/pendle-finance/pendle-examples-public":
+  version "1.0.0"
+  resolved "https://github.com/pendle-finance/pendle-examples-public#d8027817e1fe7dbd02b5f3a8253936003f7f92fa"
+  dependencies:
+    "@openzeppelin/contracts" "4.9.3"
+    "@openzeppelin/contracts-upgradeable" "4.9.3"
 
 "@protobufjs/aspromise@^1.1.1", "@protobufjs/aspromise@^1.1.2":
   version "1.1.2"

@@ -58,6 +58,7 @@
     "@hashflow/sdk": "^2.2.7",
     "@hashflow/taker-js": "^0.4.1",
     "@paraswap/core": "2.4.0",
+    "@pendle-sdk": "https://github.com/pendle-finance/pendle-examples-public#9b0407b",
     "@types/ws": "^8.5.12",
     "async": "^3.2.4",
     "axios": "0.27.2",
@@ -81,5 +82,6 @@
     "web3-utils": "1.6.0",
     "ws": "^8.18.0"
   },
-  "sideEffects": false
+  "sideEffects": false,
+  "packageManager": "yarn@1.22.22+sha1.ac34549e6aa8e7ead463a7407e1c7390f61a6610"
 }
