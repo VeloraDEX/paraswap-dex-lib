@@ -4,7 +4,7 @@ import uniswapV2factoryABI from '../../abi/uniswap-v2/uniswap-v2-factory.json';
 import { IDexHelper } from '../../dex-helper/idex-helper';
 import { StatefulEventSubscriber } from '../../stateful-event-subscriber';
 import { Address, Log, Logger } from '../../types';
-import { LogDescription } from 'ethers/lib/utils';
+import { LogDescription } from 'ethers';
 
 export type FactoryState = Record<string, never>;
 

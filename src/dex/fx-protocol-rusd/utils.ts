@@ -1,6 +1,6 @@
 import { Contract } from 'web3-eth-contract';
 import { FxProtocolPoolState } from './types';
-import { Interface } from '@ethersproject/abi';
+import { Interface } from 'ethers';
 
 export async function getOnChainState(
   multiContract: Contract,

@@ -6,6 +6,7 @@ import { Interface } from '@ethersproject/abi';
 import { DexParams } from './types';
 import BiSwapPoolABI from '../../abi/uniswap-v2/biswap-pool.json';
 import { getDexKeysWithNetwork } from '../../utils';
+import { BytesLike } from 'ethers';
 
 export const BiSwapConfig: DexConfigMap<DexParams> = {
   BiSwap: {
@@ -49,7 +50,7 @@ export class BiSwap extends UniswapV2 {
       target: pair.exchange!,
       callData: this.biSwapPool.encodeFunctionData('swapFee', []),
     };
-    const callDecoder = (values: any[]) =>
+    const callDecoder = (values: BytesLike) =>
       parseInt(
         this.biSwapPool.decodeFunctionResult('swapFee', values)[0].toString(),
       ) * 10;

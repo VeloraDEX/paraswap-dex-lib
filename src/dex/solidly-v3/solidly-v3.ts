@@ -1,6 +1,4 @@
-import { Interface } from '@ethersproject/abi';
 import _ from 'lodash';
-import { pack } from '@ethersproject/solidity';
 import {
   Token,
   Address,
@@ -11,8 +9,6 @@ import {
   Logger,
   NumberAsString,
   PoolPrices,
-  PreprocessTransactionOptions,
-  ExchangeTxInfo,
   DexExchangeParam,
 } from '../../types';
 import { SwapSide, Network, CACHE_PREFIX } from '../../constants';
@@ -28,10 +24,7 @@ import {
   SolidlyV3SimpleSwapParams,
   UniswapV3Param,
 } from './types';
-import {
-  getLocalDeadlineAsFriendlyPlaceholder,
-  SimpleExchange,
-} from '../simple-exchange';
+import { SimpleExchange } from '../simple-exchange';
 import { SolidlyV3Config, Adapters, PoolsToPreload } from './config';
 import { SolidlyV3EventPool } from './solidly-v3-pool';
 import DirectSwapABI from '../../abi/DirectSwap.json';
@@ -43,13 +36,14 @@ import {
   UNISWAPV3_TICK_BASE_OVERHEAD,
   UNISWAPV3_TICK_GAS_COST,
 } from './constants';
-import { assert, DeepReadonly } from 'ts-essentials';
+import { DeepReadonly } from 'ts-essentials';
 import { uniswapV3Math } from './contract-math/uniswap-v3-math';
 import { Contract } from 'web3-eth-contract';
 import { AbiItem } from 'web3-utils';
 import { TickMath } from './contract-math/TickMath';
 import { OnPoolCreatedCallback, SolidlyV3Factory } from './solidly-v3-factory';
 import { SpecialDex } from '../../executor/types';
+import { Interface, solidityPacked } from 'ethers';
 
 type PoolPairsInfo = {
   token0: Address;
@@ -674,7 +668,7 @@ export class SolidlyV3
         ? (TickMath.MIN_SQRT_RATIO + BigInt(1)).toString()
         : (TickMath.MAX_SQRT_RATIO - BigInt(1)).toString(),
     };
-    const swapData = this.poolIface.encodeFunctionData(swapFunction, [
+    const swapData = this.poolIface.encodeFunctionData(swapFunction!, [
       swapFunctionParams.recipient,
       swapFunctionParams.zeroForOne,
       swapFunctionParams.amountSpecified,
@@ -715,7 +709,7 @@ export class SolidlyV3
         ? (TickMath.MIN_SQRT_RATIO + BigInt(1)).toString()
         : (TickMath.MAX_SQRT_RATIO - BigInt(1)).toString(),
     };
-    const swapData = this.poolIface.encodeFunctionData(swapFunction, [
+    const swapData = this.poolIface.encodeFunctionData(swapFunction!, [
       swapFunctionParams.recipient,
       swapFunctionParams.zeroForOne,
       swapFunctionParams.amountSpecified,
@@ -963,8 +957,8 @@ export class SolidlyV3
     );
 
     return side === SwapSide.BUY
-      ? pack(types.reverse(), _path.reverse())
-      : pack(types, _path);
+      ? solidityPacked(types.reverse(), _path.reverse())
+      : solidityPacked(types, _path);
   }
 
   releaseResources() {

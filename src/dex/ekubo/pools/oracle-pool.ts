@@ -16,6 +16,7 @@ export class OraclePool extends BasePool {
     coreIface: Interface,
     dataFetcher: Contract,
     key: PoolKey,
+    coreAddress: string,
     core: Contract,
   ) {
     super(
@@ -26,6 +27,7 @@ export class OraclePool extends BasePool {
       coreIface,
       dataFetcher,
       key,
+      coreAddress,
       core,
     );
   }

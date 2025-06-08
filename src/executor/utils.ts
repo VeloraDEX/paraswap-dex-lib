@@ -1,4 +1,4 @@
-import { FunctionFragment, Interface } from '@ethersproject/abi';
+import { FunctionFragment, Interface } from 'ethers';
 import { RETURN_AMOUNT_POS_0, RETURN_AMOUNT_POS_32 } from './constants';
 
 export const extractReturnAmountPosition = (
@@ -11,6 +11,13 @@ export const extractReturnAmountPosition = (
     typeof functionName === 'string'
       ? iface.getFunction(functionName)
       : functionName;
+
+  if (!func) {
+    throw new Error(
+      `Function ${functionName} was not found in the provided abi`,
+    );
+  }
+
   const outputs = func.outputs || [];
   const index = outputs.findIndex(
     ({ name }) => name === outputName || (outputName === '' && name === null),
@@ -25,7 +32,7 @@ export const extractReturnAmountPosition = (
   if (index === 0) {
     if (
       outputs[0].baseType === 'array' &&
-      !outputs[0].arrayChildren.baseType.includes('[]') && // only static internalType
+      !outputs[0].arrayChildren!.baseType.includes('[]') && // only static internalType
       outputs.length === 1 // if array is the only output
     ) {
       return (

@@ -6,13 +6,12 @@ import {
 import { Network, SwapSide } from '../../../../constants';
 import { IDexHelper } from '../../../../dex-helper';
 import { Adapters, UniswapV3Config } from '../../config';
-import { Interface } from '@ethersproject/abi';
+import { Interface, solidityPacked } from 'ethers';
 import UniswapV3RouterABI from '../../../../abi/uniswap-v3/UniswapV3Router.abi.json';
 import UniswapV3QuoterV2ABI from '../../../../abi/uniswap-v3/UniswapV3QuoterV2.abi.json';
 import { getDexKeysWithNetwork } from '../../../../utils';
 import _ from 'lodash';
 import { Address, NumberAsString, Token } from '../../../../types';
-import { pack } from '@ethersproject/solidity';
 import { PoolState } from '../../types';
 import { VelodromeSlipstreamEventPool } from './velodrome-slipstream-pool';
 import { UniswapV3EventPool } from '../../uniswap-v3-pool';
@@ -173,8 +172,8 @@ export class VelodromeSlipstream extends UniswapV3 {
     );
 
     return side === SwapSide.BUY
-      ? pack(types.reverse(), _path.reverse())
-      : pack(types, _path);
+      ? solidityPacked(types.reverse(), _path.reverse())
+      : solidityPacked(types, _path);
   }
 
   protected prepareData(

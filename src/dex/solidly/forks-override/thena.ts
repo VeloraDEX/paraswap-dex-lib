@@ -2,10 +2,10 @@ import { Solidly } from '../solidly';
 import { SolidlyPair } from '../types';
 import { Network } from '../../../constants';
 import { IDexHelper } from '../../../dex-helper';
-import { Interface } from '@ethersproject/abi';
 import { getDexKeysWithNetwork } from '../../../utils';
 import { SolidlyConfig } from '../config';
 import _ from 'lodash';
+import { BytesLike, Interface } from 'ethers';
 
 const ThenaFactoryABI = [
   {
@@ -43,7 +43,7 @@ export class Thena extends Solidly {
         pair.stable,
       ]),
     };
-    const callDecoder = (values: any[]) =>
+    const callDecoder = (values: BytesLike) =>
       parseInt(
         thenaFactoryInterface
           .decodeFunctionResult('getFee', values)[0]

@@ -7,7 +7,6 @@ import Permit2Abi from '../abi/permit2.json';
 import { uint256ToBigInt } from '../lib/decoders';
 import { MultiCallParams, MultiWrapper } from '../lib/multi-wrapper';
 import { ConfigHelper } from '../config';
-import { BigNumber } from 'ethers';
 
 const DEFAULT_APPROVE_CACHE_KEY_VALUE = 'true';
 
@@ -134,8 +133,8 @@ export class AugustusApprovals {
                   this.permit2Interface.decodeFunctionResult(
                     'allowance',
                     value.toString(),
-                  ) as [BigNumber, BigNumber, BigNumber];
-                return amount.toBigInt();
+                  ) as [bigint, bigint, bigint];
+                return amount;
               },
             }
           : {

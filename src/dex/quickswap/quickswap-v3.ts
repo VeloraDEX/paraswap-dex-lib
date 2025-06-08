@@ -2,10 +2,10 @@ import { SwapSide } from '@paraswap/core';
 import { Address } from '../../types';
 import { IDexTxBuilder } from '../idex';
 import { UniswapV3, UniswapV3Param } from '../uniswap-v3';
-import { pack } from '@ethersproject/solidity';
 import { IDexHelper } from '../../dex-helper';
 import _ from 'lodash';
 import { QuickSwapConfig } from './config';
+import { solidityPacked } from 'ethers';
 
 const defaultConfig = _.pick(QuickSwapConfig, ['ThenaFusion']).ThenaFusion;
 
@@ -68,7 +68,7 @@ export class QuickSwapV3
     );
 
     return side === SwapSide.BUY
-      ? pack(types.reverse(), _path.reverse())
-      : pack(types, _path);
+      ? solidityPacked(types.reverse(), _path.reverse())
+      : solidityPacked(types, _path);
   }
 }

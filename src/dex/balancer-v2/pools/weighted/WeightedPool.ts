@@ -1,4 +1,4 @@
-import { Interface } from '@ethersproject/abi';
+import { Interface } from 'ethers';
 import WeightedPoolABI from '../../../../abi/balancer-v2/weighted-pool.json';
 import { callData, PoolState, SubgraphPoolBase, TokenState } from '../../types';
 import { decodeThrowError, getTokenScalingFactor } from '../../utils';

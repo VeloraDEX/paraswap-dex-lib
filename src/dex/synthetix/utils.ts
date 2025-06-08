@@ -5,7 +5,7 @@ import { MultiResult } from '../../lib/multi-wrapper';
 import { LatestRoundData, OracleObservation, Slot0 } from './types';
 
 export const encodeStringToBytes32 = (value: string) =>
-  ethers.utils.formatBytes32String(value);
+  ethers.encodeBytes32String(value);
 
 export const decodeObserveTickCumulatives = (
   result: MultiResult<BytesLike> | BytesLike,

@@ -31,7 +31,6 @@ import { SlippageCheckError } from '../generic-rfq/types';
 import settlementABI from '../../abi/bebop/BebopSettlement.abi.json';
 import { SimpleExchange } from '../simple-exchange';
 import { BebopConfig } from './config';
-import { Interface } from 'ethers/lib/utils';
 import { RateFetcher } from './rate-fetcher';
 import {
   BEBOP_API_URL,
@@ -54,7 +53,7 @@ import {
 } from './constants';
 import BigNumber from 'bignumber.js';
 import { getBigNumberPow } from '../../bignumber-constants';
-import { ethers, utils } from 'ethers';
+import { ethers, Interface } from 'ethers';
 import qs from 'qs';
 
 export class Bebop extends SimpleExchange implements IDex<BebopData> {
@@ -663,7 +662,7 @@ export class Bebop extends SimpleExchange implements IDex<BebopData> {
         srcAmount, // modify filledTakerAmount to make insertFromAmount work
       ]);
 
-      const fromAmount = ethers.utils.defaultAbiCoder.encode(
+      const fromAmount = ethers.AbiCoder.defaultAbiCoder().encode(
         ['uint256'],
         [srcAmount],
       );
@@ -705,13 +704,13 @@ export class Bebop extends SimpleExchange implements IDex<BebopData> {
     const destToken = this.dexHelper.config.wrapETH(_destToken);
 
     const params = {
-      sell_tokens: utils.getAddress(srcToken.address),
-      buy_tokens: utils.getAddress(destToken.address),
+      sell_tokens: ethers.getAddress(srcToken.address),
+      buy_tokens: ethers.getAddress(destToken.address),
       sell_amounts: isSell ? optimalSwapExchange.srcAmount : undefined,
       buy_amounts: isBuy ? optimalSwapExchange.destAmount : undefined,
-      taker_address: utils.getAddress(options.executionContractAddress),
-      receiver_address: utils.getAddress(options.recipient),
-      origin_address: utils.getAddress(options.txOrigin),
+      taker_address: ethers.getAddress(options.executionContractAddress),
+      receiver_address: ethers.getAddress(options.recipient),
+      origin_address: ethers.getAddress(options.txOrigin),
       gasless: false,
       skip_validation: true,
       source: this.bebopAuthName,
@@ -757,7 +756,7 @@ export class Bebop extends SimpleExchange implements IDex<BebopData> {
       if (side === SwapSide.SELL) {
         const requiredAmount = optimalSwapExchange.destAmount;
         const quoteAmount =
-          response.buyTokens[utils.getAddress(destToken.address)].amount;
+          response.buyTokens[ethers.getAddress(destToken.address)].amount;
 
         const requiredAmountWithSlippage = new BigNumber(requiredAmount)
           .times(options.slippageFactor)
@@ -776,7 +775,7 @@ export class Bebop extends SimpleExchange implements IDex<BebopData> {
       } else {
         const requiredAmount = optimalSwapExchange.srcAmount;
         const quoteAmount =
-          response.sellTokens[utils.getAddress(srcToken.address)].amount;
+          response.sellTokens[ethers.getAddress(srcToken.address)].amount;
 
         const requiredAmountWithSlippage = new BigNumber(requiredAmount)
           .times(options.slippageFactor)

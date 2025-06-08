@@ -1,4 +1,4 @@
-import { BigNumber, BytesLike } from 'ethers';
+import { BytesLike } from 'ethers';
 import { NumberAsString } from '../../types';
 import { Address } from '../../types';
 import { AbiItem } from 'web3-utils';
@@ -124,34 +124,18 @@ export type OutputResult = {
 
 // Just rewrote every type with BigNumber basically
 
-export type TickBitMapMappingsWithBigNumber = {
-  index: number;
-  value: BigNumber;
-};
-
-export type TickInfoWithBigNumber = {
-  initialized: boolean;
-  liquidityGross: BigNumber;
-  liquidityNet: BigNumber;
-};
-
-export type TickInfoMappingsWithBigNumber = {
-  index: number;
-  value: TickInfoWithBigNumber;
-};
-
 export type DecodedStateMultiCallResultWithRelativeBitmaps = {
   pool: Address;
-  blockTimestamp: BigNumber;
+  blockTimestamp: bigint;
   slot0: {
-    sqrtPriceX96: BigNumber;
+    sqrtPriceX96: bigint;
     tick: number;
     fee: number;
     unlocked: boolean;
   };
-  liquidity: BigNumber;
+  liquidity: bigint;
   tickSpacing: number;
-  maxLiquidityPerTick: BigNumber;
-  tickBitmap: TickBitMapMappingsWithBigNumber[];
-  ticks: TickInfoMappingsWithBigNumber[];
+  maxLiquidityPerTick: bigint;
+  tickBitmap: TickBitMapMappings[];
+  ticks: TickInfoMappings[];
 };

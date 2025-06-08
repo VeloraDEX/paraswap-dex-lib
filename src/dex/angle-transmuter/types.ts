@@ -1,4 +1,3 @@
-import { BigNumber } from 'ethers';
 import { Address, Token } from '../../types';
 import { ChainLinkState } from '../../lib/chainlink';
 
@@ -150,7 +149,7 @@ export type Chainlink = {
 
 export type MorphoOracle = {
   oracle: Address;
-  normalizationFactor: BigNumber;
+  normalizationFactor: bigint;
 };
 
 export type MaxOracle = {
@@ -186,12 +185,12 @@ export type DecodedOracleConfig = {
 };
 
 export type OracleHyperparameter = {
-  userDeviation: BigNumber;
-  burnRatioDeviation: BigNumber;
+  userDeviation: bigint;
+  burnRatioDeviation: bigint;
 };
 
 export type DecodedStateMultiCallResultPythOracle = {
-  price: BigNumber;
+  price: bigint;
   conf: number;
   expo: number;
   publishTime: number;

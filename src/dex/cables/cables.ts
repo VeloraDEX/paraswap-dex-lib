@@ -46,7 +46,7 @@ import { CablesRateFetcher } from './rate-fetcher';
 import { CablesData, CablesRFQResponse, RestrictData } from './types';
 import { SlippageCheckError } from '../generic-rfq/types';
 import mainnetRFQAbi from '../../abi/cables/CablesMainnetRFQ.json';
-import { Interface } from 'ethers/lib/utils';
+import { Interface } from 'ethers';
 import BigNumber from 'bignumber.js';
 import { ethers } from 'ethers';
 import { BI_MAX_UINT256 } from '../../bigint-constants';
@@ -151,8 +151,8 @@ export class Cables extends SimpleExchange implements IDex<any> {
       const isBuy = side === SwapSide.BUY;
 
       const rfqParams = {
-        makerAsset: ethers.utils.getAddress(makerToken.address),
-        takerAsset: ethers.utils.getAddress(takerToken.address),
+        makerAsset: ethers.getAddress(makerToken.address),
+        takerAsset: ethers.getAddress(takerToken.address),
         ...(isBuy && { makerAmount: optimalSwapExchange.destAmount }),
         ...(isSell && { takerAmount: optimalSwapExchange.srcAmount }),
         userAddress: options.executionContractAddress,
@@ -309,7 +309,7 @@ export class Cables extends SimpleExchange implements IDex<any> {
       swapFunctionParams,
     );
 
-    const fromAmount = ethers.utils.defaultAbiCoder.encode(
+    const fromAmount = ethers.AbiCoder.defaultAbiCoder().encode(
       ['uint256'],
       [quoteData.takerAmount],
     );

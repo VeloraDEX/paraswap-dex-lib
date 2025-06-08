@@ -39,11 +39,12 @@ export class BasePool extends StatefulEventSubscriber<PoolState.Object> {
     private readonly coreIface: Interface,
     private readonly dataFetcher: Contract,
     public readonly key: PoolKey,
+    coreAddress: string,
     core: Contract,
   ) {
     super(parentName, key.string_id, dexHelper, logger);
 
-    this.addressesSubscribed = [core.address];
+    this.addressesSubscribed = [coreAddress];
   }
 
   /**

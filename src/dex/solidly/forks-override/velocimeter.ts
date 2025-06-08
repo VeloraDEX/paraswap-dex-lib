@@ -2,10 +2,10 @@ import { Solidly } from '../solidly';
 import { SolidlyPair } from '../types';
 import { Network } from '../../../constants';
 import { IDexHelper } from '../../../dex-helper';
-import { Interface } from '@ethersproject/abi';
 import { getDexKeysWithNetwork } from '../../../utils';
 import { SolidlyConfig } from '../config';
 import _ from 'lodash';
+import { BytesLike, Interface } from 'ethers';
 import { uint256DecodeToNumber, addressDecode } from '../../../lib/decoders';
 import { MultiCallParams } from '../../../lib/multi-wrapper';
 import { SolidlyRpcPoolTracker } from '../rpc-pool-tracker';
@@ -60,7 +60,7 @@ export class Velocimeter extends SolidlyRpcPoolTracker {
         pair.exchange,
       ]),
     };
-    const callDecoder = (values: any[]) =>
+    const callDecoder = (values: BytesLike) =>
       parseInt(
         velocimeterFactoryIface
           .decodeFunctionResult('getFee', values)[0]

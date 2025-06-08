@@ -1,4 +1,4 @@
-import { _TypedDataEncoder } from 'ethers/lib/utils';
+import { TypedDataEncoder } from 'ethers';
 import { Network } from '../../constants';
 import { toUnixTimestamp } from '../../utils';
 import { BUILD_ORDER_CONSTANTS } from './constant';
@@ -48,5 +48,5 @@ export function calculateOrderHash(
     params,
     contractAddress,
   );
-  return _TypedDataEncoder.hash(domain, types, order);
+  return TypedDataEncoder.hash(domain, types, order);
 }

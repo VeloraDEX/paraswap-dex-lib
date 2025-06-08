@@ -83,16 +83,16 @@ const MAX_UINT128 = 340282366920938463463374607431768211455n;
 
 function encodeActions(actions: Actions[]): string {
   const types = actions.map(() => 'uint8');
-  return ethers.utils.solidityPack(types, actions);
+  return ethers.solidityPacked(types, actions);
 }
 
 function encodeInputForExecute(
   actions: string,
   actionValues: string[],
 ): string {
-  const command = ethers.utils.solidityPack(['uint8'], [Commands.V4_SWAP]);
+  const command = ethers.solidityPacked(['uint8'], [Commands.V4_SWAP]);
 
-  const input = ethers.utils.defaultAbiCoder.encode(
+  const input = ethers.AbiCoder.defaultAbiCoder().encode(
     ['bytes', 'bytes[]'],
     [actions, actionValues],
   );
@@ -108,7 +108,7 @@ function encodeSettle(
   amountIn: ActionConstants | bigint,
   takeFundsFromMsgSender: boolean,
 ): string {
-  const settle = ethers.utils.defaultAbiCoder.encode(
+  const settle = ethers.AbiCoder.defaultAbiCoder().encode(
     ['address', 'uint256', 'bool'],
     // srcToken, amountIn (`OPEN_DELTA` to settle all needed funds), takeFundsFromMsgSender (Executor in our case)
     [
@@ -126,7 +126,7 @@ function encodeTake(
   recipient: string,
   amountOut: ActionConstants | bigint,
 ) {
-  const take = ethers.utils.defaultAbiCoder.encode(
+  const take = ethers.AbiCoder.defaultAbiCoder().encode(
     ['address', 'address', 'uint256'],
     // destToken, recipient, amountOut (`OPEN_DELTA` to take all funds)
     [isETHAddress(destToken) ? NULL_ADDRESS : destToken, recipient, amountOut],
@@ -160,7 +160,7 @@ export function swapExactInputSingleCalldata(
   };
 
   // encode SWAP_EXACT_IN_SINGLE
-  const swap = ethers.utils.defaultAbiCoder.encode(
+  const swap = ethers.AbiCoder.defaultAbiCoder().encode(
     [
       /*
          ExactInputSingleParams {
@@ -229,7 +229,7 @@ export function swapExactInputCalldata(
   };
 
   // encode SWAP_EXACT_IN
-  const swap = ethers.utils.defaultAbiCoder.encode(
+  const swap = ethers.AbiCoder.defaultAbiCoder().encode(
     [
       /*
         PathKey {
@@ -295,7 +295,7 @@ export function swapExactOutputSingleCalldata(
   };
 
   // encode SWAP_EXACT_OUTPUT_SINGLE
-  const swap = ethers.utils.defaultAbiCoder.encode(
+  const swap = ethers.AbiCoder.defaultAbiCoder().encode(
     [
       /*
         ExactOutputSingleParams {
@@ -363,7 +363,7 @@ export function swapExactOutputCalldata(
   };
 
   // encode SWAP_EXACT_OUTPUT
-  const swap = ethers.utils.defaultAbiCoder.encode(
+  const swap = ethers.AbiCoder.defaultAbiCoder().encode(
     [
       /*
          PathKey {

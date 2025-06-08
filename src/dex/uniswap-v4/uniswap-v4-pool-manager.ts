@@ -6,7 +6,7 @@ import { DexParams, Pool, PoolManagerState, SubgraphPool } from './types';
 import { Address, Log, Logger } from '../../types';
 import UniswapV4StateViewABI from '../../abi/uniswap-v4/state-view.abi.json';
 import UniswapV4PoolManagerABI from '../../abi/uniswap-v4/pool-manager.abi.json';
-import { Interface } from 'ethers/lib/utils';
+import { Interface } from 'ethers';
 import { IDexHelper } from '../../dex-helper';
 import { AsyncOrSync, DeepReadonly } from 'ts-essentials';
 import { LogDescription } from '@ethersproject/abi/lib.esm';

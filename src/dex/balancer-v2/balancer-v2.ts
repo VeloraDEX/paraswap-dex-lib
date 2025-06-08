@@ -1,4 +1,3 @@
-import { Interface } from '@ethersproject/abi';
 import { assert, DeepReadonly } from 'ts-essentials';
 import _, { keyBy } from 'lodash';
 import {
@@ -35,6 +34,7 @@ import VaultABI from '../../abi/balancer-v2/vault.json';
 import DirectSwapABI from '../../abi/DirectSwap.json';
 import { StatefulEventSubscriber } from '../../stateful-event-subscriber';
 import {
+  encodeV6Metadata,
   getBigIntPow,
   getDexKeysWithNetwork,
   uuidToBytes16,
@@ -78,11 +78,10 @@ import {
   VARIABLE_GAS_COST_PER_CYCLE,
 } from './constants';
 import { NumberAsString, OptimalSwapExchange } from '@paraswap/core';
-import { hexConcat, hexlify, hexZeroPad, solidityPack } from 'ethers/lib/utils';
 import BalancerVaultABI from '../../abi/balancer-v2/vault.json';
-import { BigNumber } from 'ethers';
 import { SpecialDex } from '../../executor/types';
 import { extractReturnAmountPosition } from '../../executor/utils';
+import { solidityPacked, toBeHex, zeroPadValue, Interface } from 'ethers';
 
 // If you disable some pool, don't forget to clear the cache, otherwise changes won't be applied immediately
 const enabledPoolTypes = [
@@ -1416,10 +1415,7 @@ export class BalancerV2
       throw new Error(`Invalid contract method ${contractMethod}`);
     }
 
-    const metadata = hexConcat([
-      hexZeroPad(uuidToBytes16(uuid), 16),
-      hexZeroPad(hexlify(blockNumber), 16),
-    ]);
+    const metadata = encodeV6Metadata(uuid, blockNumber);
 
     const balancerBatchSwapParam = this.getBalancerV2BatchSwapParam(
       srcToken,
@@ -1483,10 +1479,9 @@ export class BalancerV2
     beneficiary: Address,
     approveFlag: boolean,
   ) {
-    const addressBN = BigNumber.from(beneficiary);
-    const flagBN = approveFlag ? BigNumber.from(1).shl(255) : BigNumber.from(0);
+    const flagBI = approveFlag ? 1n << 255n : 0n;
 
-    return addressBN.or(flagBN).toString();
+    return (BigInt(beneficiary) | flagBI).toString();
   }
 
   private encodeBalancerV2SwapParam(param: BalancerV2SwapParam): string {
@@ -1611,13 +1606,13 @@ export class BalancerV2
     let specialDexFlag = SpecialDex.DEFAULT;
 
     if (side === SwapSide.SELL) {
-      const totalAmount = swaps.reduce<BigNumber>((acc, swap) => {
-        return acc.add(swap.amount);
-      }, BigNumber.from(0));
+      const totalAmount = swaps.reduce<bigint>((acc, swap) => {
+        return acc + BigInt(swap.amount);
+      }, 0n);
 
-      exchangeData = solidityPack(
+      exchangeData = solidityPacked(
         ['bytes32', 'bytes'],
-        [hexZeroPad(hexlify(totalAmount), 32), exchangeData],
+        [zeroPadValue(toBeHex(totalAmount), 32), exchangeData],
       );
       specialDexFlag = SpecialDex.SWAP_ON_BALANCER_V2;
     }

@@ -8,7 +8,7 @@ import {
   SwapSide,
 } from '@paraswap/core';
 import { assert, AsyncOrSync } from 'ts-essentials';
-import { Interface, JsonFragment } from '@ethersproject/abi';
+import { BytesLike, Interface, JsonFragment } from 'ethers';
 import {
   AdapterExchangeParam,
   Address,
@@ -31,6 +31,7 @@ import {
 } from '../../constants';
 import * as CALLDATA_GAS_COST from '../../calldata-gas-cost';
 import {
+  encodeV6Metadata,
   getBigIntPow,
   getDexKeysWithNetwork,
   isETHAddress,
@@ -83,14 +84,12 @@ import {
   uint8ToNumber,
 } from '../../lib/decoders';
 import { MultiCallParams, MultiResult } from '../../lib/multi-wrapper';
-import { BigNumber, BytesLike } from 'ethers';
 import { FactoryStateHandler } from './state-polling-pools/factory-pool-polling';
 import { PoolPollingBase } from './state-polling-pools/pool-polling-base';
 import { CustomBasePoolForFactory } from './state-polling-pools/custom-pool-polling';
 import ImplementationConstants from './price-handlers/functions/constants';
 import { applyTransferFee } from '../../lib/token-transfer-fee';
 import { PriceHandler } from './price-handlers/price-handler';
-import { hexConcat, hexlify, hexZeroPad } from 'ethers/lib/utils';
 import { packCurveData } from '../../lib/curve/encoder';
 import { encodeCurveAssets } from '../curve-v1/packer';
 import { extractReturnAmountPosition } from '../../executor/utils';
@@ -549,7 +548,7 @@ export class CurveV1Factory
                     ],
                     [0, 0, 0, 0],
                     parsed =>
-                      parsed[0].map((p: BigNumber) => Number(p.toString())),
+                      parsed[0].map((p: bigint) => Number(p.toString())),
                   ),
               },
             ])
@@ -1269,10 +1268,7 @@ export class CurveV1Factory
 
     assert(side === SwapSide.SELL, 'Buy not supported');
 
-    const metadata = hexConcat([
-      hexZeroPad(uuidToBytes16(uuid), 16),
-      hexZeroPad(hexlify(blockNumber), 16),
-    ]);
+    const metadata = encodeV6Metadata(uuid, blockNumber);
 
     let wrapFlag = 0;
     const needWrapNative = this._needWrapNative(srcToken, destToken, data);

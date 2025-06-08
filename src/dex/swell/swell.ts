@@ -1,4 +1,3 @@
-import { Interface, JsonFragment } from '@ethersproject/abi';
 import { NumberAsString, SwapSide } from '@paraswap/core';
 import {
   AdapterExchangeParam,
@@ -27,7 +26,7 @@ import * as CALLDATA_GAS_COST from '../../calldata-gas-cost';
 import _ from 'lodash';
 import { SwellConfig, Adapters } from './config';
 import { RswethPool } from './rsweth-pool';
-import { ethers } from 'ethers';
+import { ethers, Interface, JsonFragment } from 'ethers';
 
 export enum swETHFunctions {
   deposit = 'deposit',
@@ -107,7 +106,7 @@ export class Swell
         .call({}, blockNumber);
 
     const decodedData = data.returnData.map(d =>
-      ethers.utils.defaultAbiCoder.decode(['uint256'], d),
+      ethers.AbiCoder.defaultAbiCoder().decode(['uint256'], d),
     );
     const [swETHToETHRateFixed, rswETHToETHRateFixed] = decodedData.map(d =>
       BigInt(d[0].toString()),

@@ -9,6 +9,7 @@ import _ from 'lodash';
 import { SolidlyRpcPoolTracker } from '../rpc-pool-tracker';
 import { uint256DecodeToNumber, addressDecode } from '../../../lib/decoders';
 import { MultiCallParams } from '../../../lib/multi-wrapper';
+import { BytesLike } from 'ethers';
 
 const EqualizerFactoryABI = [
   {
@@ -60,7 +61,7 @@ export class Equalizer extends SolidlyRpcPoolTracker {
         pair.exchange,
       ]),
     };
-    const callDecoder = (values: any[]) =>
+    const callDecoder = (values: BytesLike) =>
       parseInt(
         equalizerFactoryIface
           .decodeFunctionResult('getRealFee', values)[0]

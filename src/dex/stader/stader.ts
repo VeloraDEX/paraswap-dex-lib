@@ -1,4 +1,3 @@
-import { Interface, JsonFragment } from '@ethersproject/abi';
 import { NumberAsString, SwapSide } from '@paraswap/core';
 import {
   AdapterExchangeParam,
@@ -34,6 +33,7 @@ import * as CALLDATA_GAS_COST from '../../calldata-gas-cost';
 import _ from 'lodash';
 import { extractReturnAmountPosition } from '../../executor/utils';
 import { getDexKeysWithNetwork, isETHAddress } from '../../utils';
+import { Interface, JsonFragment } from 'ethers';
 
 export class Stader
   extends SimpleExchange

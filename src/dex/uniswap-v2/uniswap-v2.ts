@@ -1,5 +1,3 @@
-import { AbiCoder, Interface } from '@ethersproject/abi';
-import { pack } from '@ethersproject/solidity';
 import _ from 'lodash';
 import { AsyncOrSync, DeepReadonly } from 'ts-essentials';
 import erc20ABI from '../../abi/erc20.json';
@@ -49,6 +47,7 @@ import {
   prependWithOx,
   getBigIntPow,
   uuidToBytes16,
+  encodeV6Metadata,
 } from '../../utils';
 import uniswapV2ABI from '../../abi/uniswap-v2/uniswap-v2-pool.json';
 import uniswapV2factoryABI from '../../abi/uniswap-v2/uniswap-v2-factory.json';
@@ -59,10 +58,16 @@ import { UniswapV2Config, Adapters } from './config';
 import { Uniswapv2ConstantProductPool } from './uniswap-v2-constant-product-pool';
 import { applyTransferFee } from '../../lib/token-transfer-fee';
 import _rebaseTokens from '../../rebase-tokens.json';
-import { Flag, SpecialDex } from '../../executor/types';
-import { hexZeroPad, hexlify, solidityPack, hexConcat } from 'ethers/lib/utils';
-import { BigNumber } from 'ethers';
+import { SpecialDex } from '../../executor/types';
 import { OnPoolCreatedCallback, UniswapV2Factory } from './uniswap-v2-factory';
+import {
+  AbiCoder,
+  BytesLike,
+  Interface,
+  solidityPacked,
+  toBeHex,
+  zeroPadValue,
+} from 'ethers';
 
 const rebaseTokens = _rebaseTokens as { chainId: number; address: string }[];
 
@@ -133,7 +138,7 @@ export class UniswapV2EventPool extends StatefulEventSubscriber<UniswapV2PoolSta
     private dynamicFees = false,
     // feesMultiCallData is only used if dynamicFees is set to true
     private feesMultiCallEntry?: { target: Address; callData: string },
-    private feesMultiCallDecoder?: (values: any[]) => number,
+    private feesMultiCallDecoder?: (values: BytesLike) => number,
     private iface: Interface = uniswapV2PoolIface,
   ) {
     super(
@@ -154,6 +159,11 @@ export class UniswapV2EventPool extends StatefulEventSubscriber<UniswapV2PoolSta
     if (!LogCallTopics.includes(log.topics[0])) return null;
 
     const event = this.decoder(log);
+
+    if (!event) {
+      return null;
+    }
+
     switch (event.name) {
       case 'Sync':
         return {
@@ -295,13 +305,13 @@ export class UniswapV2
     await this.factoryInst.initialize(blockNumber);
   }
 
-  // getFeesMultiCallData should be override
+  // getFeesMultiCallData should be overridden
   // when isDynamicFees is set to true
   protected getFeesMultiCallData(pair: UniswapV2Pair):
     | undefined
     | {
         callEntry: { target: Address; callData: string };
-        callDecoder: (values: any[]) => number;
+        callDecoder: (values: BytesLike) => number;
       } {
     return undefined;
   }
@@ -889,16 +899,16 @@ export class UniswapV2
       // 28 bytes are prepended in the Bytecode builder
       const exchangeDataTypes = ['bytes4', 'bytes32', 'bytes32'];
       const exchangeDataToPack = [
-        hexZeroPad(hexlify(0), 4),
-        hexZeroPad(hexlify(data.pools.length), 32), // pool count
-        hexZeroPad(hexlify(BigNumber.from(srcAmount)), 32),
+        zeroPadValue(toBeHex(0), 4),
+        zeroPadValue(toBeHex(data.pools.length), 32), // pool count
+        zeroPadValue(toBeHex(srcAmount), 32),
       ];
       pools.forEach(pool => {
         exchangeDataTypes.push('bytes32');
-        exchangeDataToPack.push(hexZeroPad(hexlify(BigNumber.from(pool)), 32));
+        exchangeDataToPack.push(zeroPadValue(toBeHex(BigInt(pool)), 32));
       });
 
-      exchangeData = solidityPack(exchangeDataTypes, exchangeDataToPack);
+      exchangeData = solidityPacked(exchangeDataTypes, exchangeDataToPack);
       specialDexFlag = SpecialDex.SWAP_ON_UNISWAP_V2_FORK;
       transferSrcTokenBeforeSwap = data.pools[0].address;
       targetExchange = recipient;
@@ -1043,10 +1053,7 @@ export class UniswapV2
       return acc + p;
     }, '0x');
 
-    const metadata = hexConcat([
-      hexZeroPad(uuidToBytes16(uuid), 16),
-      hexZeroPad(hexlify(blockNumber), 16),
-    ]);
+    const metadata = encodeV6Metadata(uuid, blockNumber);
 
     const uniData: UniswapV2ParamsDirectBase = [
       srcToken,
@@ -1147,7 +1154,7 @@ export class UniswapV2
 
     const direction = srcTokenSorted === path.srcToken ? 1 : 0;
 
-    const tokensEncoded = pack(
+    const tokensEncoded = solidityPacked(
       ['address', 'address'],
       [srcTokenSorted, destTokenSorted],
     );

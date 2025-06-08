@@ -1,4 +1,4 @@
-import { Interface, AbiCoder } from '@ethersproject/abi';
+import { Interface, AbiCoder } from 'ethers';
 import { SimpleExchange } from '../simple-exchange';
 import { IDex } from '../idex';
 import _ from 'lodash';
@@ -43,7 +43,6 @@ import { extractReturnAmountPosition } from '../../executor/utils';
 const MAX_TRACKED_PAIR_POOLS = 3;
 
 const iface = new Interface(kyberDmmPoolABI);
-const coder = new AbiCoder();
 
 export class KyberDmm
   extends SimpleExchange
@@ -469,14 +468,18 @@ export class KyberDmm
             poolIndex * 3,
             (poolIndex + 1) * 3,
           );
-          const [reserves0, reserves1, vReserves0, vReserves1] = coder
-            .decode(['uint256', 'uint256', 'uint256', 'uint256'], poolData[0])
-            .map(n => BigInt(n.toString()));
-          const [shortEMA, longEMA, lastBlockVolume, lastTradeBlock] = coder
-            .decode(['uint256', 'uint256', 'uint128', 'uint256'], poolData[1])
-            .map(n => BigInt(n.toString()));
+          const [reserves0, reserves1, vReserves0, vReserves1] =
+            AbiCoder.defaultAbiCoder()
+              .decode(['uint256', 'uint256', 'uint256', 'uint256'], poolData[0])
+              .map(n => BigInt(n.toString()));
+          const [shortEMA, longEMA, lastBlockVolume, lastTradeBlock] =
+            AbiCoder.defaultAbiCoder()
+              .decode(['uint256', 'uint256', 'uint128', 'uint256'], poolData[1])
+              .map(n => BigInt(n.toString()));
           const ampBps = BigInt(
-            coder.decode(['uint256'], poolData[2]).toString(),
+            AbiCoder.defaultAbiCoder()
+              .decode(['uint256'], poolData[2])
+              .toString(),
           );
           acc[poolAddress] = {
             reserves: {

@@ -1,5 +1,4 @@
 import { Address } from '@paraswap/core';
-import { BigNumber } from 'ethers';
 import { CurveV1SwapType } from '../../dex/curve-v1/types';
 import { CurveV2SwapType } from '../../dex/curve-v2/types';
 
@@ -8,12 +7,12 @@ export const packCurveData = (
   approve: boolean,
   wrapFlag: number,
   swapType: CurveV2SwapType | CurveV1SwapType,
-): BigNumber => {
-  let packedData = BigNumber.from(address);
+): bigint => {
+  let packedData = BigInt(address);
 
-  packedData = packedData.or(BigNumber.from(approve ? 1 : 0).shl(160));
-  packedData = packedData.or(BigNumber.from(wrapFlag).shl(161));
-  packedData = packedData.or(BigNumber.from(swapType).shl(163));
+  packedData |= BigInt(approve ? 1 : 0) << 160n;
+  packedData |= BigInt(wrapFlag) << 161n;
+  packedData |= BigInt(swapType) << 162n;
 
   return packedData;
 };

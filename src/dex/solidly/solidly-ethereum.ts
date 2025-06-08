@@ -2,10 +2,10 @@ import { Solidly } from './solidly';
 import { SolidlyPair } from './types';
 import { Network } from '../../constants';
 import { IDexHelper } from '../../dex-helper';
-import { Interface } from '@ethersproject/abi';
 import { SolidlyConfig } from './config';
 import { getDexKeysWithNetwork } from '../../utils';
 import _ from 'lodash';
+import { BytesLike, Interface } from 'ethers';
 
 const SolidlyBaseV2FactoryABI = [
   'function poolFees(address pool) external view returns (uint256)',
@@ -33,7 +33,7 @@ export class SolidlyEthereum extends Solidly {
     );
   }
 
-  private callDecoder(values: any[]) {
+  private callDecoder(values: BytesLike) {
     const fees = parseInt(
       solidlyEthereumPairInterface
         .decodeFunctionResult(poolFeeMethodName, values)[0]

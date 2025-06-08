@@ -1,5 +1,4 @@
-import { BytesLike } from 'ethers';
-import { defaultAbiCoder, Interface } from '@ethersproject/abi';
+import { BytesLike, AbiCoder, Interface } from 'ethers';
 import {
   extractSuccessAndValue,
   stringDecode,
@@ -25,7 +24,7 @@ export const decodeATokenFromReserveData = (
     );
   }
 
-  const decoded = defaultAbiCoder.decode(
+  const decoded = AbiCoder.defaultAbiCoder().decode(
     [
       'tuple(uint256) configuration',
       'uint128 liquidityIndex',

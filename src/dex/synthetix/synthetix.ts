@@ -1,4 +1,3 @@
-import _ from 'lodash';
 import { AsyncOrSync } from 'ts-essentials';
 import {
   Token,
@@ -14,13 +13,12 @@ import {
 } from '../../types';
 import { SwapSide, Network } from '../../constants';
 import * as CALLDATA_GAS_COST from '../../calldata-gas-cost';
-import { getBigIntPow, getDexKeysWithNetwork, _require } from '../../utils';
+import { getBigIntPow, getDexKeysWithNetwork } from '../../utils';
 import { IDex } from '../../dex/idex';
 import { IDexHelper } from '../../dex-helper/idex-helper';
 import { DexParams, SynthetixData } from './types';
 import { SimpleExchange } from '../simple-exchange';
 import { SynthetixConfig, Adapters } from './config';
-import { Interface } from '@ethersproject/abi';
 import {
   STATE_TTL_IN_MS,
   SYNTHETIX_GAS_COST_WITHOUT_SUSD,
@@ -32,6 +30,7 @@ import { SynthetixState } from './synthetix-state';
 // So, I decided to unite them into one combined interface
 import CombinedSynthetixABI from '../../abi/synthetix/CombinedSynthetix.abi.json';
 import { extractReturnAmountPosition } from '../../executor/utils';
+import { Interface } from 'ethers';
 
 export class Synthetix extends SimpleExchange implements IDex<SynthetixData> {
   readonly hasConstantPriceLargeAmounts = false;

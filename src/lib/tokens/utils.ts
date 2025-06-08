@@ -1,9 +1,4 @@
-import {
-  BytesLike,
-  defaultAbiCoder,
-  Interface,
-  LogDescription,
-} from 'ethers/lib/utils';
+import { BytesLike, Interface, LogDescription, AbiCoder } from 'ethers';
 
 import ERC20ABI from '../../abi/ERC20.abi.json';
 import ERC721ABI from '../../abi/ERC721.abi.json';
@@ -49,7 +44,7 @@ export const uint256ArrayDecode = (
   if (isSuccess) {
     return 0n;
   }
-  return BigInt(defaultAbiCoder.decode(['uint256[]'], toDecode)[0]);
+  return BigInt(AbiCoder.defaultAbiCoder().decode(['uint256[]'], toDecode)[0]);
 };
 
 export const booleanDecode = (
@@ -60,7 +55,7 @@ export const booleanDecode = (
   if (isSuccess) {
     return false;
   }
-  return defaultAbiCoder.decode(['bool'], toDecode)[0];
+  return AbiCoder.defaultAbiCoder().decode(['bool'], toDecode)[0];
 };
 
 export const addressDecode = (
@@ -71,7 +66,9 @@ export const addressDecode = (
   if (!isSuccess) {
     return '';
   }
-  return defaultAbiCoder.decode(['address'], toDecode)[0].toLowerCase();
+  return AbiCoder.defaultAbiCoder()
+    .decode(['address'], toDecode)[0]
+    .toLowerCase();
 };
 
 export const extractOnlySuccess = (result: MultiResult<string>): boolean =>

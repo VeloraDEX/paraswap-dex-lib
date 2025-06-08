@@ -1,4 +1,3 @@
-import { AsyncOrSync } from 'ts-essentials';
 import {
   Token,
   Address,
@@ -26,7 +25,7 @@ import { SimpleExchange } from '../simple-exchange';
 import { ERC4626Config } from './config';
 import { BI_POWS } from '../../bigint-constants';
 import { ERC4626EventPool } from './erc-4626-pool';
-import { Interface } from '@ethersproject/abi';
+import { Interface } from 'ethers';
 import ERC4626_ABI from '../../abi/ERC4626.json';
 import { DEPOSIT_TOPIC, TRANSFER_TOPIC, WITHDRAW_TOPIC } from './constants';
 import { extractReturnAmountPosition } from '../../executor/utils';

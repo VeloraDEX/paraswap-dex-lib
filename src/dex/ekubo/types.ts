@@ -1,5 +1,3 @@
-import { BigNumber } from 'ethers';
-import _ from 'lodash';
 import { PoolKey } from '../synthetix/types';
 
 export type Pool = {
@@ -17,13 +15,13 @@ export interface Tick {
 
 export type QuoteData = {
   tick: number;
-  sqrtRatio: BigNumber;
-  liquidity: BigNumber;
+  sqrtRatio: bigint;
+  liquidity: bigint;
   minTick: number;
   maxTick: number;
   ticks: {
     number: number;
-    liquidityDelta: BigNumber;
+    liquidityDelta: bigint;
   }[];
 };
 

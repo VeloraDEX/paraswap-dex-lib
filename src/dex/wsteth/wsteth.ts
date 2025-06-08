@@ -1,4 +1,3 @@
-import { Interface } from '@ethersproject/abi';
 import {
   Token,
   Address,
@@ -24,6 +23,7 @@ import { Utils } from '../../utils';
 import WSTETH_ABI from '../../abi/wstETH.json';
 import STETH_ABI from '../../abi/stETH.json';
 import { extractReturnAmountPosition } from '../../executor/utils';
+import { Interface } from 'ethers';
 
 export class WstETH extends SimpleExchange implements IDex<WstETHData> {
   static readonly wstETHIface = new Interface(WSTETH_ABI);

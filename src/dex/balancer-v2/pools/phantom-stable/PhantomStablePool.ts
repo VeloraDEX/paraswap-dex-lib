@@ -1,5 +1,4 @@
-import { Interface } from '@ethersproject/abi';
-import { BigNumber } from '@ethersproject/bignumber';
+import { Interface } from 'ethers';
 import { BasePool } from '../balancer-v2-pool';
 import { isSameAddress, decodeThrowError } from '../../utils';
 import * as PhantomStableMath from './PhantomStableMath';
@@ -44,7 +43,7 @@ export class PhantomStablePool extends BasePool {
   // and equal to _INITIAL_BPT_SUPPLY, but most of it remains in the Pool, waiting to be exchanged for tokens. The
   // actual amount of BPT in circulation is the total supply minus the amount held by the Pool, and is known as the
   // 'virtual supply'.
-  MAX_TOKEN_BALANCE = BigNumber.from('2').pow('112').sub('1');
+  MAX_TOKEN_BALANCE = 2n ** 112n - 1n;
   vaultAddress: string;
   vaultInterface: Interface;
   poolInterface: Interface;
@@ -155,7 +154,7 @@ export class PhantomStablePool extends BasePool {
     let bptSupply: bigint;
     if (actualSupply) bptSupply = actualSupply;
     // VirtualBPTSupply must be used for the maths
-    else bptSupply = this.MAX_TOKEN_BALANCE.sub(balances[bptIndex]).toBigInt();
+    else bptSupply = this.MAX_TOKEN_BALANCE - balances[bptIndex];
 
     const droppedBpt = this.removeBPT(
       balancesUpscaled,
@@ -218,7 +217,7 @@ export class PhantomStablePool extends BasePool {
     let bptSupply: bigint;
     if (actualSupply) bptSupply = actualSupply;
     // VirtualBPTSupply must be used for the maths
-    else bptSupply = this.MAX_TOKEN_BALANCE.sub(balances[bptIndex]).toBigInt();
+    else bptSupply = this.MAX_TOKEN_BALANCE - balances[bptIndex];
 
     const droppedBpt = this.removeBPT(
       balancesUpscaled,

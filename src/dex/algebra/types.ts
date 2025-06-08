@@ -1,4 +1,4 @@
-import { BigNumber } from 'ethers';
+import { BigNumber } from '@ethersproject/bignumber';
 import { Address, NumberAsString } from '../../types';
 import { TickInfo } from '../uniswap-v3/types';
 

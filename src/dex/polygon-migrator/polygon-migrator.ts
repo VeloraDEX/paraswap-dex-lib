@@ -25,7 +25,7 @@ import * as CALLDATA_GAS_COST from '../../calldata-gas-cost';
 import { BI_POWS } from '../../bigint-constants';
 import { POLYGON_MIGRATION_GAS_COST } from './constants';
 import PolygonMigrationAbi from '../../abi/polygon-migration/PolygonMigration.abi.json';
-import { Interface } from 'ethers/lib/utils';
+import { Interface } from 'ethers';
 
 export class PolygonMigrator
   extends SimpleExchange

@@ -92,7 +92,7 @@ import { applyTransferFee } from '../../lib/token-transfer-fee';
 import { DIRECT_METHOD_NAME, DIRECT_METHOD_NAME_V6 } from './constants';
 import { packCurveData } from '../../lib/curve/encoder';
 import { encodeCurveAssets } from './packer';
-import { hexConcat, hexZeroPad, hexlify } from 'ethers/lib/utils';
+import { concat, zeroPadValue, toBeHex } from 'ethers';
 
 const CURVE_DEFAULT_CHUNKS = 10;
 
@@ -1004,9 +1004,9 @@ export class CurveV1
     }
     assert(side === SwapSide.SELL, 'Buy not supported');
 
-    const metadata = hexConcat([
-      hexZeroPad(uuidToBytes16(uuid), 16),
-      hexZeroPad(hexlify(blockNumber), 16),
+    const metadata = concat([
+      uuidToBytes16(uuid),
+      zeroPadValue(toBeHex(blockNumber), 16),
     ]);
 
     const swapParams: DirectCurveV1ParamV6 = [

@@ -1,6 +1,6 @@
 import { BI_POWS } from '../../bigint-constants';
 import { MultiResult } from '../../lib/multi-wrapper';
-import { BytesLike } from 'ethers/lib/utils';
+import { BytesLike } from 'ethers';
 import { generalDecoder } from '../../lib/decoders';
 
 export const WAD = BI_POWS[18];

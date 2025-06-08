@@ -1,4 +1,4 @@
-import { Interface } from '@ethersproject/abi';
+import { Interface } from 'ethers';
 import { IDexHelper } from '../../dex-helper';
 import { StatefulEventSubscriber } from '../../stateful-event-subscriber';
 import { Address, Log, Logger } from '../../types';
@@ -26,6 +26,9 @@ export class RswethPool extends StatefulEventSubscriber<RSWETHPoolState> {
     log: Readonly<Log>,
   ): AsyncOrSync<DeepReadonly<RSWETHPoolState> | null> {
     const event = this.decoder(log);
+
+    if (!event) return null;
+
     if (event.name === 'Reprice')
       return {
         rswETHToETHRateFixed: BigInt(event.args.newRswETHToETHRate),

@@ -13,7 +13,7 @@ import {
 import { SwapSide, Network, NULL_ADDRESS } from '../../constants';
 import * as CALLDATA_GAS_COST from '../../calldata-gas-cost';
 import { getBigIntPow, getDexKeysWithNetwork, isTruthy } from '../../utils';
-import { Context, IDex } from '../../dex/idex';
+import { IDex } from '../../dex/idex';
 import { IDexHelper } from '../../dex-helper/idex-helper';
 import { MaverickV2Data, PoolAPIResponse } from './types';
 import { SimpleExchange } from '../simple-exchange';
@@ -25,7 +25,7 @@ import {
 } from './config';
 import { MaverickV2EventPool } from './maverick-v2-pool';
 import { SUBGRAPH_TIMEOUT } from '../../constants';
-import { Interface } from '@ethersproject/abi';
+import { Interface } from 'ethers';
 import MaverickV2PoolABI from '../../abi/maverick-v2/MaverickV2Pool.json';
 import MaverickV2RouterABI from '../../abi/maverick-v2/MaverickV2Router.json';
 import ERC20ABI from '../../abi/erc20.json';

@@ -5,13 +5,9 @@ import { IDexHelper } from '../../dex-helper';
 import { Interface } from '@ethersproject/abi';
 import FluidDexPoolABI from '../../abi/fluid-dex/fluid-dex.abi.json';
 import { catchParseLogError } from '../../utils';
-import { ethers } from 'ethers';
+import { ethers, toBeHex, zeroPadValue } from 'ethers';
 import { uint256ToBigInt } from '../../lib/decoders';
 import { DecodedStateMultiCallResultWithRelativeBitmaps } from '../uniswap-v3/types';
-
-const {
-  utils: { hexlify, hexZeroPad },
-} = ethers;
 
 type PoolState = {
   isSwapAndArbitragePaused: boolean;
@@ -114,7 +110,7 @@ export class FluidDexEventPool extends StatefulEventSubscriber<PoolState> {
       {
         target: this.addressesSubscribed[0],
         callData: this.poolIface.encodeFunctionData('readFromStorage', [
-          hexZeroPad(hexlify(1), 32),
+          zeroPadValue(toBeHex(1), 32),
         ]),
         decodeFunction: uint256ToBigInt,
       },

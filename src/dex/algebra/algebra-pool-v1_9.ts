@@ -1,5 +1,4 @@
 import _ from 'lodash';
-import { Interface } from '@ethersproject/abi';
 import { DeepReadonly, assert } from 'ts-essentials';
 import { Address, BlockHeader, Log, Logger } from '../../types';
 import { bigIntify, catchParseLogError, int16 } from '../../utils';
@@ -14,7 +13,7 @@ import {
   TickBitMapMappingsWithBigNumber,
   TickInfoMappingsWithBigNumber,
 } from './types';
-import { ethers } from 'ethers';
+import { ethers, Interface } from 'ethers';
 import { Contract } from 'web3-eth-contract';
 import AlgebraV1_9ABI from '../../abi/algebra/AlgebraPool-v1_9.abi.json';
 import { OUT_OF_RANGE_ERROR_POSTFIX } from '../uniswap-v3/constants';
@@ -598,14 +597,14 @@ export class AlgebraEventPoolV1_9 extends StatefulEventSubscriber<PoolState_v1_9
     // https://github.com/Uniswap/v3-periphery/blob/main/contracts/libraries/PoolAddress.sol
     if (token0 > token1) [token0, token1] = [token1, token0];
 
-    const encodedKey = ethers.utils.keccak256(
-      ethers.utils.defaultAbiCoder.encode(
+    const encodedKey = ethers.keccak256(
+      ethers.AbiCoder.defaultAbiCoder().encode(
         ['address', 'address'],
         [token0, token1],
       ),
     );
 
-    return ethers.utils.getCreate2Address(
+    return ethers.getCreate2Address(
       this.poolDeployer,
       encodedKey,
       this.poolInitCodeHash,

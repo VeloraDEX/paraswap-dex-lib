@@ -2,8 +2,7 @@ import _ from 'lodash';
 import { Log } from '../../../types';
 import { DeepReadonly } from 'ts-essentials';
 import { HookStateMap } from './balancer-hook-event-subscriber';
-import { Interface } from '@ethersproject/abi';
-import { Contract } from 'ethers';
+import { Contract, Interface } from 'ethers';
 import { IDexHelper } from '../../../dex-helper';
 import { callData, decodeThrowError } from '../getOnChainState';
 import { Logger } from 'log4js';
@@ -44,7 +43,7 @@ export async function getStableSurgeHookState(
     ['function getPools() external view returns (address[])'],
     dexHelper.provider,
   );
-  const pools = (await resolverContract.callStatic.getPools({
+  const pools = (await resolverContract.getPools({
     blockTag: blockNumber,
   })) as string[];
   const surgeThresholdCallData: callData[] = pools.flatMap(pool => {

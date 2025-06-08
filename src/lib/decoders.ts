@@ -1,7 +1,6 @@
-import { Result } from '@ethersproject/abi';
 import BigNumber from 'bignumber.js';
-import { BigNumber as EthersBigNumber } from 'ethers';
-import { BytesLike, defaultAbiCoder } from 'ethers/lib/utils';
+import { BigNumber as EthersBigNumber } from '@ethersproject/bignumber';
+import { BytesLike, AbiCoder, Result } from 'ethers';
 import _, { parseInt } from 'lodash';
 import { BN_0 } from '../bignumber-constants';
 import { NULL_ADDRESS } from '../constants';
@@ -41,7 +40,7 @@ export function generalDecoder<T>(
     return defaultValue;
   }
 
-  const decoded = defaultAbiCoder.decode(types, toDecode);
+  const decoded = AbiCoder.defaultAbiCoder().decode(types, toDecode);
   return parser ? parser(decoded) : decoded[0];
 }
 
@@ -71,7 +70,7 @@ export const uint256ArrayDecode = (
   if (!isSuccess || toDecode === '0x') {
     return 0n;
   }
-  return defaultAbiCoder
+  return AbiCoder.defaultAbiCoder()
     .decode(['uint256[]'], toDecode)[0]
     .map((r: any) => r.toBigInt());
 };
@@ -85,7 +84,7 @@ export const uin256DecodeToBigNumber = (
     return BN_0;
   }
   return new BigNumber(
-    defaultAbiCoder.decode(['uint256'], toDecode)[0].toString(),
+    AbiCoder.defaultAbiCoder().decode(['uint256'], toDecode)[0].toString(),
   );
 };
 
@@ -97,7 +96,10 @@ export const uint256DecodeToNumber = (
   if (!isSuccess || toDecode === '0x') {
     return 0;
   }
-  return parseInt(defaultAbiCoder.decode(['uint256'], toDecode)[0], 10);
+  return parseInt(
+    AbiCoder.defaultAbiCoder().decode(['uint256'], toDecode)[0],
+    10,
+  );
 };
 
 export const uin256DecodeToFloat = (
@@ -108,7 +110,9 @@ export const uin256DecodeToFloat = (
   if (!isSuccess || toDecode === '0x') {
     return 0;
   }
-  return parseFloat(defaultAbiCoder.decode(['uint256'], toDecode)[0]);
+  return parseFloat(
+    AbiCoder.defaultAbiCoder().decode(['uint256'], toDecode)[0],
+  );
 };
 
 export const uin128DecodeToFloat = (
@@ -119,7 +123,9 @@ export const uin128DecodeToFloat = (
   if (!isSuccess || toDecode === '0x') {
     return 0;
   }
-  return parseFloat(defaultAbiCoder.decode(['uint128'], toDecode)[0]);
+  return parseFloat(
+    AbiCoder.defaultAbiCoder().decode(['uint128'], toDecode)[0],
+  );
 };
 
 export const uin128DecodeToInt = (
@@ -130,7 +136,10 @@ export const uin128DecodeToInt = (
   if (!isSuccess || toDecode === '0x') {
     return 0;
   }
-  return parseInt(defaultAbiCoder.decode(['uint128'], toDecode)[0], 10);
+  return parseInt(
+    AbiCoder.defaultAbiCoder().decode(['uint128'], toDecode)[0],
+    10,
+  );
 };
 
 export const booleanDecode = (
@@ -141,7 +150,7 @@ export const booleanDecode = (
   if (!isSuccess || toDecode === '0x') {
     return false;
   }
-  return defaultAbiCoder.decode(['bool'], toDecode)[0];
+  return AbiCoder.defaultAbiCoder().decode(['bool'], toDecode)[0];
 };
 
 export const addressDecode = (

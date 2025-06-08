@@ -1,4 +1,4 @@
-import { Interface } from '@ethersproject/abi';
+import { Interface } from 'ethers';
 import {
   Token,
   Address,

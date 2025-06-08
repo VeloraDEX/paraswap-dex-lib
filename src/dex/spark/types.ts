@@ -1,4 +1,4 @@
-import { Interface } from '@ethersproject/abi';
+import { Interface } from 'ethers';
 import { Address } from '../../types';
 
 export type SparkData = { exchange: Address };

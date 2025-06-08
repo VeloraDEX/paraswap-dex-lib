@@ -1,4 +1,3 @@
-import { Interface } from '@ethersproject/abi';
 import {
   Token,
   Address,
@@ -33,6 +32,7 @@ import WETH_GATEWAY_ABI from '../../abi/aave-v3-weth-gateway.json';
 import POOL_ABI from '../../abi/AaveV3_lending_pool.json';
 import { fetchTokenList } from './utils';
 import { NumberAsString } from '@paraswap/core';
+import { Interface } from 'ethers';
 
 const REF_CODE = 1;
 export const TOKEN_LIST_CACHE_KEY = 'token-list';

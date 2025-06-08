@@ -13,7 +13,6 @@ import {
 } from '../simple-exchange';
 import { NumberAsString } from '@paraswap/core';
 import { AsyncOrSync } from 'ts-essentials';
-import { Interface, JsonFragment } from '@ethersproject/abi';
 import TraderJoeV21RouterABI from '../../abi/TraderJoeV21Router.json';
 import {
   TraderJoeV2Data,
@@ -21,6 +20,7 @@ import {
   TraderJoeV2RouterParam,
 } from './types';
 import { extractReturnAmountPosition } from '../../executor/utils';
+import { Interface, JsonFragment } from 'ethers';
 
 export class BaseTraderJoeV2
   extends SimpleExchange

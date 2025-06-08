@@ -1,4 +1,4 @@
-import { BigNumber, BytesLike, ethers } from 'ethers';
+import { BytesLike, ethers } from 'ethers';
 import { assert } from 'ts-essentials';
 import { extractSuccessAndValue } from '../../lib/decoders';
 import { MultiResult } from '../../lib/multi-wrapper';
@@ -8,6 +8,7 @@ import {
   DecodedStateMultiCallResultWithRelativeBitmapsV1_9,
   TickInfoWithBigNumber,
 } from './types';
+import { BigNumber } from '@ethersproject/bignumber';
 
 export function decodeStateMultiCallResultWithRelativeBitmapsV1_1(
   result: MultiResult<BytesLike> | BytesLike,
@@ -19,7 +20,7 @@ export function decodeStateMultiCallResultWithRelativeBitmapsV1_1(
     `decodeStateMultiCallResultWithRelativeBitmaps failed to get decodable result: ${result}`,
   );
 
-  const decoded = ethers.utils.defaultAbiCoder.decode(
+  const decoded = ethers.AbiCoder.defaultAbiCoder().decode(
     [
       // I don't want to pass here any interface, so I just use it in ethers format
       `
@@ -82,7 +83,7 @@ export function decodeStateMultiCallResultWithRelativeBitmapsV1_9(
     `decodeStateMultiCallResultWithRelativeBitmaps failed to get decodable result: ${result}`,
   );
 
-  const decoded = ethers.utils.defaultAbiCoder.decode(
+  const decoded = ethers.AbiCoder.defaultAbiCoder().decode(
     [
       // I don't want to pass here any interface, so I just use it in ethers format
       `
@@ -161,7 +162,7 @@ export function decodeGlobalStateV1_1(
     ,
     results.communityFeeToken0,
     results.communityFeeToken1,
-  ] = ethers.utils.defaultAbiCoder.decode(
+  ] = ethers.AbiCoder.defaultAbiCoder().decode(
     [`uint160`, `int24`, `uint16`, `uint16`, `uint8`, `uint8`, `bool`],
     toDecode,
   );
@@ -198,7 +199,7 @@ export function decodeTicksV1_1(
     results.secondsPerLiquidityOutsideX128,
     results.secondsOutside,
     results.initialized,
-  ] = ethers.utils.defaultAbiCoder.decode(
+  ] = ethers.AbiCoder.defaultAbiCoder().decode(
     [
       `uint128`,
       `int128`,

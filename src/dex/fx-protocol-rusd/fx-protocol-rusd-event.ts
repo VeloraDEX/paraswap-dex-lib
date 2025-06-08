@@ -1,5 +1,4 @@
-import _ from 'lodash';
-import { defaultAbiCoder, Interface } from '@ethersproject/abi';
+import { AbiCoder, Interface } from 'ethers';
 import { IDexHelper } from '../../dex-helper';
 import { StatefulEventSubscriber } from '../../stateful-event-subscriber';
 import { Address, Log, Logger } from '../../types';
@@ -30,7 +29,7 @@ export class FxProtocolRusdEvent extends StatefulEventSubscriber<FxProtocolPoolS
     log: Readonly<Log>,
   ): AsyncOrSync<DeepReadonly<FxProtocolPoolState> | null> {
     if (log.topics[0] === UPDATE_REDEEM_FEE_TOPICHASH) {
-      const [defaultFeeRatio] = defaultAbiCoder.decode(
+      const [defaultFeeRatio] = AbiCoder.defaultAbiCoder().decode(
         ['uint256', 'int256'],
         log.data,
       );

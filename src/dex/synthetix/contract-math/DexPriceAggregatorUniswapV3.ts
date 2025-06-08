@@ -7,9 +7,9 @@ import { OracleLibrary } from './OracleLibrary';
 
 const POOL_INIT_CODE_HASH =
   '0xe34f199b19b2b4f47f68442619d555527d244f78a3297ea89325f843f87b8b54';
-const defaultAbiCoder = ethers.utils.defaultAbiCoder;
-const keccak256 = ethers.utils.keccak256;
-const solidityKeccak256 = ethers.utils.solidityKeccak256;
+const defaultAbiCoder = ethers.AbiCoder.defaultAbiCoder();
+const keccak256 = ethers.keccak256;
+const solidityKeccak256 = ethers.solidityPackedKeccak256;
 
 class DexPriceAggregatorUniswapV3 {
   assetToAsset(
@@ -189,11 +189,7 @@ class DexPriceAggregatorUniswapV3 {
       ),
     );
 
-    return ethers.utils.getCreate2Address(
-      factory,
-      encodedKey,
-      POOL_INIT_CODE_HASH,
-    );
+    return ethers.getCreate2Address(factory, encodedKey, POOL_INIT_CODE_HASH);
   }
 
   private _fetchAmountFromSinglePool(

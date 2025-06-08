@@ -24,7 +24,6 @@ import solidlyFactoryABI from '../../abi/solidly/SolidlyFactory.json';
 import solidlyPair from '../../abi/solidly/SolidlyPair.json';
 import _ from 'lodash';
 import { NumberAsString, SwapSide } from '@paraswap/core';
-import { Interface, AbiCoder } from '@ethersproject/abi';
 import { SolidlyStablePool } from './solidly-stable-pool';
 import { Uniswapv2ConstantProductPool } from '../uniswap-v2/uniswap-v2-constant-product-pool';
 import {
@@ -37,18 +36,17 @@ import {
 import { SolidlyConfig, Adapters } from './config';
 import { applyTransferFee } from '../../lib/token-transfer-fee';
 import {
-  hexDataLength,
-  hexZeroPad,
-  hexlify,
-  id,
-  solidityPack,
-} from 'ethers/lib/utils';
-import { BigNumber } from 'ethers';
-import { Flag, SpecialDex } from '../../executor/types';
+  solidityPacked,
+  Interface,
+  AbiCoder,
+  toBeHex,
+  zeroPadValue,
+} from 'ethers';
+import { SpecialDex } from '../../executor/types';
 
 const erc20Iface = new Interface(erc20ABI);
 const solidlyPairIface = new Interface(solidlyPair);
-const defaultAbiCoder = new AbiCoder();
+const defaultAbiCoder = AbiCoder.defaultAbiCoder();
 
 function encodePools(
   pools: SolidlyPool[],
@@ -670,24 +668,21 @@ export class Solidly extends UniswapV2 {
 
     const isStable = data.pools.some(pool => !!pool.stable);
     const isStablePoolAndPoolCount = isStable
-      ? BigNumber.from(1)
-          .shl(255)
-          .or(BigNumber.from(data.pools.length))
-          .toHexString()
-      : hexZeroPad(hexlify(data.pools.length), 32);
+      ? BigInt((1n << 255n) | BigInt(data.pools.length)).toString(16)
+      : zeroPadValue(toBeHex(data.pools.length), 32);
 
     let exchangeDataToPack = [
-      hexZeroPad(hexlify(0), 4),
+      zeroPadValue(toBeHex(0), 4),
       isStablePoolAndPoolCount,
     ];
 
     const pools = encodePools(data.pools, this.feeFactor);
     pools.forEach(pool => {
       exchangeDataTypes.push('bytes32');
-      exchangeDataToPack.push(hexZeroPad(hexlify(BigNumber.from(pool)), 32));
+      exchangeDataToPack.push(zeroPadValue(toBeHex(BigInt(pool)), 32));
     });
 
-    const exchangeData = solidityPack(exchangeDataTypes, exchangeDataToPack);
+    const exchangeData = solidityPacked(exchangeDataTypes, exchangeDataToPack);
 
     return {
       needWrapNative: this.needWrapNative,

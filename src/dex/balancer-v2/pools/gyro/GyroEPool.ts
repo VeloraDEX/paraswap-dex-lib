@@ -1,13 +1,8 @@
-import { Interface } from '@ethersproject/abi';
 import { BigNumber } from '@ethersproject/bignumber';
 
 import { BasePool } from '../balancer-v2-pool';
 import { NULL_ADDRESS, SwapSide } from '../../../../constants';
-import {
-  decodeThrowError,
-  getTokenScalingFactor,
-  safeParseFixed,
-} from '../../utils';
+import { decodeThrowError, getTokenScalingFactor } from '../../utils';
 import { callData, SubgraphPoolBase, PoolState, TokenState } from '../../types';
 import { MathSol } from '../../balancer-v2-math';
 import {
@@ -18,6 +13,7 @@ import {
   Vector2,
 } from '@balancer-labs/sor';
 import GyroEAbi from '../../../../abi/balancer-v2/gyro-e.abi.json';
+import { Interface } from 'ethers';
 
 // Swap Limit factor
 const SWAP_LIMIT_FACTOR = BigInt('999999000000000000');

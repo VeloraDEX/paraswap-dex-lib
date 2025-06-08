@@ -33,7 +33,7 @@ import {
   THIRTY_MINUTES,
   convertToNewDecimals,
 } from './utils';
-import { Interface } from '@ethersproject/abi';
+import { Interface } from 'ethers';
 import { BI_POWS } from '../../bigint-constants';
 import * as CALLDATA_GAS_COST from '../../calldata-gas-cost';
 import { Contract } from 'web3-eth-contract';

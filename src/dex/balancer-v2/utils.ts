@@ -1,5 +1,3 @@
-import { getAddress } from '@ethersproject/address';
-import { Interface, Result } from '@ethersproject/abi';
 import { parseFixed, BigNumber } from '@ethersproject/bignumber';
 import { getBigIntPow } from '../../utils';
 import { BI_POWS } from '../../bigint-constants';
@@ -13,6 +11,7 @@ import {
   SubgraphToken,
 } from './types';
 import { reverse, uniqBy } from 'lodash';
+import { getAddress, Interface, Result } from 'ethers';
 
 interface BalancerPathHop {
   pool: SubgraphPoolBase;

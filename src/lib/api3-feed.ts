@@ -9,7 +9,7 @@ import {
   MultiCallOutput,
 } from '../types';
 import { Lens } from '../lens';
-import { Interface } from '@ethersproject/abi';
+import { Interface } from 'ethers';
 import ProxyABI from '../abi/api3-proxy.json';
 import Api3ServerV1ABI from '../abi/api3-server-v1.json';
 
@@ -25,13 +25,13 @@ export class Api3FeedSubscriber<State> extends PartialEventSubscriber<
   static readonly proxyInterface = new Interface(ProxyABI);
   static readonly api3ServerV1Iface = new Interface(Api3ServerV1ABI);
   static readonly ANSWER_UPDATED_SIGNED_DATA =
-    Api3FeedSubscriber.api3ServerV1Iface.getEventTopic(
+    Api3FeedSubscriber.api3ServerV1Iface.getEvent(
       'UpdatedBeaconWithSignedData',
-    );
+    )!.topicHash;
   static readonly ANSWER_UPDATED_BEACON_SET_DATA =
-    Api3FeedSubscriber.api3ServerV1Iface.getEventTopic(
+    Api3FeedSubscriber.api3ServerV1Iface.getEvent(
       'UpdatedBeaconSetWithBeacons',
-    );
+    )!.topicHash;
 
   constructor(
     private proxy: Address,

@@ -1,4 +1,4 @@
-import { Interface, JsonFragment } from '@ethersproject/abi';
+import { Interface, JsonFragment } from 'ethers';
 import { SwapSide, MAX_UINT, Network } from '../constants';
 import {
   AdapterExchangeParam,

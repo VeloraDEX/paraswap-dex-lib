@@ -8,6 +8,7 @@ import { SolidlyConfig } from '../config';
 import _ from 'lodash';
 import { Address, PoolLiquidity } from '../../../types';
 import BigNumber from 'bignumber.js';
+import { BytesLike } from 'ethers';
 
 const ChronosFactoryABI = [
   {
@@ -52,7 +53,7 @@ export class Chronos extends Solidly {
       target: this.factoryAddress,
       callData: chronosFactoryIface.encodeFunctionData('getFee', [pair.stable]),
     };
-    const callDecoder = (values: any[]) =>
+    const callDecoder = (values: BytesLike) =>
       parseInt(
         chronosFactoryIface
           .decodeFunctionResult('getFee', values)[0]

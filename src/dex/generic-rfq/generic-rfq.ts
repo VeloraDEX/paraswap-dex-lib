@@ -31,8 +31,7 @@ import {
 } from '@paraswap/core';
 import { BI_MAX_UINT256 } from '../../bigint-constants';
 import { SpecialDex } from '../../executor/types';
-import { hexConcat, hexZeroPad, hexlify } from 'ethers/lib/utils';
-import { isETHAddress, uuidToBytes16 } from '../../utils';
+import { encodeV6Metadata, isETHAddress } from '../../utils';
 
 export const OVERORDER_BPS = 100;
 export const BPS_MAX_VALUE = 10000n;
@@ -256,10 +255,7 @@ export class GenericRFQ extends ParaSwapLimitOrders {
 
     const wrapApproveDirection = (direction << 3) | (approve << 2) | wrap;
 
-    const metadata = hexConcat([
-      hexZeroPad(uuidToBytes16(uuid), 16),
-      hexZeroPad(hexlify(blockNumber), 16),
-    ]);
+    const metadata = encodeV6Metadata(uuid, blockNumber);
 
     const params: RFQParams = [
       fromAmount,

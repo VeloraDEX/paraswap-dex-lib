@@ -1,8 +1,6 @@
 import { Contract } from 'web3-eth-contract';
 import { SparkSDaiPoolState } from './types';
-import { Interface, AbiCoder } from '@ethersproject/abi';
-
-const coder = new AbiCoder();
+import { Interface, AbiCoder } from 'ethers';
 
 // - `dsr` || `ssr`: the Dai Savings Rate or USDS savings rate
 // - `chi`: the Rate Accumulator
@@ -70,7 +68,7 @@ export async function getOnChainStateSDAI(
     .call({}, blockNumber);
 
   const [dsr, chi, rho, live] = data.returnData.map(item =>
-    coder.decode(['uint256'], item)[0].toString(),
+    AbiCoder.defaultAbiCoder().decode(['uint256'], item)[0].toString(),
   );
 
   return {
@@ -138,7 +136,7 @@ export async function getOnChainStateUSDS(
     .call({}, blockNumber);
 
   const [dsr, chi, rho] = data.returnData.map(item =>
-    coder.decode(['uint256'], item)[0].toString(),
+    AbiCoder.defaultAbiCoder().decode(['uint256'], item)[0].toString(),
   );
 
   return {

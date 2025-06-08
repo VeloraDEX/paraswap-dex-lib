@@ -1,9 +1,8 @@
 import _ from 'lodash';
-import { ethers } from 'ethers';
-import { Interface } from '@ethersproject/abi';
+import { ethers, Interface } from 'ethers';
 import { NULL_ADDRESS } from '../../constants';
 import { IDexHelper } from '../../dex-helper';
-import { MultiCallParams, MultiWrapper } from '../../lib/multi-wrapper';
+import { MultiCallParams } from '../../lib/multi-wrapper';
 import { BigIntAsString, Logger, Token } from '../../types';
 import { getBigIntPow, _require } from '../../utils';
 import { dexPriceAggregatorUniswapV3 } from './contract-math/DexPriceAggregatorUniswapV3';
@@ -788,7 +787,7 @@ export class SynthetixState {
             target: this.config.flexibleStorage,
             callData: this.combinedIface.encodeFunctionData('getUIntValue', [
               encodeStringToBytes32(SETTING_CONTRACT_NAME),
-              ethers.utils.solidityKeccak256(
+              ethers.solidityPackedKeccak256(
                 ['bytes32', 'bytes32'],
                 [encodeStringToBytes32(SETTING_ATOMIC_EXCHANGE_FEE_RATE), key],
               ),
@@ -799,7 +798,7 @@ export class SynthetixState {
             target: this.config.flexibleStorage,
             callData: this.combinedIface.encodeFunctionData('getUIntValue', [
               encodeStringToBytes32(SETTING_CONTRACT_NAME),
-              ethers.utils.solidityKeccak256(
+              ethers.solidityPackedKeccak256(
                 ['bytes32', 'bytes32'],
                 [encodeStringToBytes32(SETTING_EXCHANGE_FEE_RATE), key],
               ),
@@ -810,7 +809,7 @@ export class SynthetixState {
             target: this.config.flexibleStorage,
             callData: this.combinedIface.encodeFunctionData('getBoolValue', [
               encodeStringToBytes32(SETTING_CONTRACT_NAME),
-              ethers.utils.solidityKeccak256(
+              ethers.solidityPackedKeccak256(
                 ['bytes32', 'bytes32'],
                 [
                   encodeStringToBytes32(
@@ -826,7 +825,7 @@ export class SynthetixState {
             target: this.config.flexibleStorage,
             callData: this.combinedIface.encodeFunctionData('getAddressValue', [
               encodeStringToBytes32(SETTING_CONTRACT_NAME),
-              ethers.utils.solidityKeccak256(
+              ethers.solidityPackedKeccak256(
                 ['bytes32', 'bytes32'],
                 [
                   encodeStringToBytes32(

@@ -1,5 +1,5 @@
 import { UniswapV3EventPool } from '../../uniswap-v3-pool';
-import { Interface } from 'ethers/lib/utils';
+import { Interface } from 'ethers';
 import VelodromeSlipstreamPoolABI from '../../../../abi/velodrome-slipstream/VelodromeSlipstreamPool.abi.json';
 import VelodromeSlipstreamFactoryABI from '../../../../abi/velodrome-slipstream/VelodromeSlipstreamFactory.abi.json';
 import { MultiCallParams } from '../../../../lib/multi-wrapper';
@@ -168,10 +168,10 @@ export class VelodromeSlipstreamEventPool extends UniswapV3EventPool {
       '5af43d82803e903d91602b57fd5bf3', // https://github.com/OpenZeppelin/openzeppelin-contracts/blob/master/contracts/proxy/Clones.sol#L108
     ].join('');
 
-    return ethers.utils.getCreate2Address(
+    return ethers.getCreate2Address(
       factory,
       salt,
-      ethers.utils.keccak256(creationCode),
+      ethers.keccak256(creationCode),
     ) as Address;
   }
 
@@ -182,8 +182,8 @@ export class VelodromeSlipstreamEventPool extends UniswapV3EventPool {
   ): Address {
     if (token0 > token1) [token0, token1] = [token1, token0];
 
-    const encodedKey = ethers.utils.keccak256(
-      ethers.utils.defaultAbiCoder.encode(
+    const encodedKey = ethers.keccak256(
+      ethers.AbiCoder.defaultAbiCoder().encode(
         ['address', 'address', 'int24'],
         [token0, token1, BigInt.asUintN(24, this.tickSpacing!)],
       ),

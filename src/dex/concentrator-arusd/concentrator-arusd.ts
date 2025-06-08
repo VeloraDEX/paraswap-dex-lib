@@ -17,7 +17,7 @@ import { IDexHelper } from '../../dex-helper/idex-helper';
 import { ConcentratorArusdData, DexParams } from './types';
 import { SimpleExchange } from '../simple-exchange';
 import { ConcentratorArusdConfig } from './config';
-import { Interface } from '@ethersproject/abi';
+import { Interface } from 'ethers';
 import ArUSD_ABI from '../../abi/concentrator/arUSD.json';
 import ArUSD5115_ABI from '../../abi/concentrator/arUSD5115.json';
 import { extractReturnAmountPosition } from '../../executor/utils';

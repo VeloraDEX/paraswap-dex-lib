@@ -22,7 +22,6 @@ import { SimpleExchange } from '../simple-exchange';
 import { EkuboConfig } from './config';
 import { BasePool } from './pools/base-pool';
 import {
-  convertEkuboToParaSwap,
   convertParaSwapToEkubo,
   hexStringTokenPair,
   NATIVE_TOKEN_ADDRESS,
@@ -33,13 +32,11 @@ import { Interface } from '@ethersproject/abi';
 
 import CoreABI from '../../abi/ekubo/core.json';
 import DataFetcherABI from '../../abi/ekubo/data-fetcher.json';
-import { BigNumber, Contract } from 'ethers';
+import { Contract, toBeHex } from 'ethers';
 import { FULL_RANGE_TICK_SPACING } from './pools/math/tick';
-import { hexlify } from 'ethers/lib/utils';
 import RouterABI from '../../abi/ekubo/router.json';
 import { isPriceIncreasing } from './pools/math/swap';
 import { OraclePool } from './pools/oracle-pool';
-import { erc20Iface } from '../../lib/tokens/utils';
 import { AsyncOrSync } from 'ts-essentials';
 import { MAX_SQRT_RATIO_FLOAT, MIN_SQRT_RATIO_FLOAT } from './pools/math/price';
 import { MIN_I256 } from './pools/math/constants';
@@ -446,11 +443,11 @@ export class Ekubo extends SimpleExchange implements IDex<EkuboData> {
         [
           data.poolKeyAbi,
           data.isToken1,
-          BigNumber.from(amount),
+          amount,
           isPriceIncreasing(amount, data.isToken1)
             ? MAX_SQRT_RATIO_FLOAT
             : MIN_SQRT_RATIO_FLOAT,
-          BigNumber.from(data.skipAhead[amountStr] ?? 0),
+          data.skipAhead[amountStr] ?? 0,
           MIN_I256,
           recipient,
         ],
@@ -559,7 +556,7 @@ export class Ekubo extends SimpleExchange implements IDex<EkuboData> {
             } else if (extension === BigInt(this.config.oracle)) {
               poolConstructor = OraclePool;
             } else {
-              throw new Error(`Unknown pool extension ${hexlify(extension)}`);
+              throw new Error(`Unknown pool extension ${toBeHex(extension)}`);
             }
 
             const pool = new poolConstructor(
@@ -570,6 +567,7 @@ export class Ekubo extends SimpleExchange implements IDex<EkuboData> {
               this.coreIface,
               this.dataFetcher,
               poolKey,
+              this.config.core,
               this.core,
             );
 
@@ -610,7 +608,7 @@ export class Ekubo extends SimpleExchange implements IDex<EkuboData> {
       .filter(
         res =>
           this.supportedExtensions.includes(BigInt(res.extension)) &&
-          BigInt(res.core_address) === BigInt(this.core.address),
+          BigInt(res.core_address) === BigInt(this.config.core),
       )
       .map(
         info =>

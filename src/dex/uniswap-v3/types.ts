@@ -1,10 +1,11 @@
-import { BigNumber, BytesLike } from 'ethers';
+import { BytesLike } from 'ethers';
 import { NumberAsString } from '../../types';
 import { Address } from '../../types';
 import { AbiItem } from 'web3-utils';
 import { MultiResult } from '../../lib/multi-wrapper';
 import { UniswapV3EventPool } from './uniswap-v3-pool';
 import { UniswapV3Factory } from './uniswap-v3-factory';
+import { BigNumber } from '@ethersproject/bignumber';
 
 export type OracleObservation = {
   blockTimestamp: bigint;

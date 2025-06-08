@@ -16,12 +16,11 @@ import Web3 from 'web3';
 import multiABIV2 from '../../../abi/multi-v2.json';
 import ERC20ABI from '../../../abi/erc20.json';
 import { getLogger } from '../../../lib/log4js';
-import { Interface } from 'ethers/lib/utils';
+import { Interface } from 'ethers';
 import { AbiItem } from 'web3-utils';
 import AlgebraStateMulticallABI from '../../../abi/algebra/AlgebraStateMulticall.abi.json';
 import { TICK_BITMAP_TO_USE, TICK_BITMAP_BUFFER } from '../constants';
 import { BlockHeader } from 'web3-eth';
-import { ethers } from 'ethers';
 
 // public RPC, replace to RPC with archive node
 const web3Provider = new Web3('');
@@ -102,11 +101,7 @@ async function _fetchPoolState_v1_9SingleStep(
 }
 
 function preprocessField(value: any): string {
-  if (
-    typeof value === 'bigint' ||
-    typeof value === 'number' ||
-    ethers.BigNumber.isBigNumber(value)
-  ) {
+  if (typeof value === 'bigint' || typeof value === 'number') {
     return value.toString();
   }
   return value;

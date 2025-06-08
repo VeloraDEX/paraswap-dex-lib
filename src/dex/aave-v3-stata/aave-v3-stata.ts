@@ -1,4 +1,3 @@
-import { AsyncOrSync } from 'ts-essentials';
 import {
   Token,
   Address,
@@ -24,7 +23,6 @@ import {
 } from './types';
 import { SimpleExchange } from '../simple-exchange';
 import { AaveV3StataConfig, Adapters } from './config';
-import { Interface } from '@ethersproject/abi';
 import { fetchTokenList } from './utils';
 import {
   Tokens,
@@ -36,6 +34,7 @@ import { uint256ToBigInt } from '../../lib/decoders';
 import TokenABI from '../../abi/aavev3stata/Token.json';
 import { extractReturnAmountPosition } from '../../executor/utils';
 import { RETURN_AMOUNT_POS_32 } from '../../executor/constants';
+import { Interface } from 'ethers';
 // import { IStaticATokenLM_ABI } from '@bgd-labs/aave-address-book';
 // slimmed down version of @bgd-labs/aave-address-book
 // required as version of web3-utils used is buggy

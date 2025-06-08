@@ -1,4 +1,3 @@
-import { Interface } from '@ethersproject/abi';
 import { DeepReadonly } from 'ts-essentials';
 import { lens } from '../../lens';
 import { Address, Logger } from '../../types';
@@ -32,7 +31,7 @@ import {
   filterDictionaryOnly,
 } from './utils';
 import { RedstoneSubscriber } from './redstone';
-import { formatEther, formatUnits, parseUnits } from 'ethers/lib/utils';
+import { formatEther, formatUnits, parseUnits, Interface } from 'ethers';
 import { BackedSubscriber } from './backedOracle';
 import { Network, SwapSide } from '../../constants';
 import { ethers } from 'ethers';
@@ -108,7 +107,7 @@ export class AngleTransmuterEventPool extends ComposedEventSubscriber<PoolState>
         acc: { [address: string]: MorphoVaultSubscriber<PoolState> },
         [key, value],
       ) => {
-        if (value.baseVault && value.baseVault !== ethers.constants.AddressZero)
+        if (value.baseVault && value.baseVault !== ethers.ZeroAddress)
           acc[value.baseVault] = new MorphoVaultSubscriber<PoolState>(
             value.baseVault,
             lens<DeepReadonly<PoolState>>().oracles.morphoVault[
@@ -118,10 +117,7 @@ export class AngleTransmuterEventPool extends ComposedEventSubscriber<PoolState>
               `${key}:${value.baseVault} Morpho Vault for ${parentName}-${network}`,
             ),
           );
-        if (
-          value.quoteVault &&
-          value.quoteVault !== ethers.constants.AddressZero
-        )
+        if (value.quoteVault && value.quoteVault !== ethers.ZeroAddress)
           acc[value.quoteVault] = new MorphoVaultSubscriber<PoolState>(
             value.quoteVault,
             lens<DeepReadonly<PoolState>>().oracles.morphoVault[
@@ -380,7 +376,7 @@ export class AngleTransmuterEventPool extends ComposedEventSubscriber<PoolState>
       ).returnData;
       const morphoOracleInfo =
         MorphoOracleEventPool.generateInfo(morphoOracleResult);
-      if (morphoOracleInfo.baseFeed1 !== ethers.constants.AddressZero)
+      if (morphoOracleInfo.baseFeed1 !== ethers.ZeroAddress)
         ({ chainlinkMap, backedMap, redstoneMap } =
           await AngleTransmuterEventPool.generateStateChainlinkLike(
             morphoOracleInfo.baseFeed1,
@@ -390,7 +386,7 @@ export class AngleTransmuterEventPool extends ComposedEventSubscriber<PoolState>
             blockNumber,
             multiContract,
           ));
-      if (morphoOracleInfo.baseFeed2 !== ethers.constants.AddressZero)
+      if (morphoOracleInfo.baseFeed2 !== ethers.ZeroAddress)
         ({ chainlinkMap, backedMap, redstoneMap } =
           await AngleTransmuterEventPool.generateStateChainlinkLike(
             morphoOracleInfo.baseFeed2,
@@ -400,7 +396,7 @@ export class AngleTransmuterEventPool extends ComposedEventSubscriber<PoolState>
             blockNumber,
             multiContract,
           ));
-      if (morphoOracleInfo.quoteFeed1 !== ethers.constants.AddressZero)
+      if (morphoOracleInfo.quoteFeed1 !== ethers.ZeroAddress)
         ({ chainlinkMap, backedMap, redstoneMap } =
           await AngleTransmuterEventPool.generateStateChainlinkLike(
             morphoOracleInfo.quoteFeed1,
@@ -410,7 +406,7 @@ export class AngleTransmuterEventPool extends ComposedEventSubscriber<PoolState>
             blockNumber,
             multiContract,
           ));
-      if (morphoOracleInfo.quoteFeed2 !== ethers.constants.AddressZero)
+      if (morphoOracleInfo.quoteFeed2 !== ethers.ZeroAddress)
         ({ chainlinkMap, backedMap, redstoneMap } =
           await AngleTransmuterEventPool.generateStateChainlinkLike(
             morphoOracleInfo.quoteFeed2,
@@ -722,7 +718,7 @@ export class AngleTransmuterEventPool extends ComposedEventSubscriber<PoolState>
   } {
     const configOracle = state.transmuter.collaterals[collateral].config;
     const hyperparameters = filterDictionaryOnly(
-      ethers.utils.defaultAbiCoder.decode(
+      ethers.AbiCoder.defaultAbiCoder().decode(
         ['uint128 userDeviation', 'uint128 burnRatioDeviation'],
         configOracle.hyperparameters,
       ),
@@ -802,21 +798,21 @@ export class AngleTransmuterEventPool extends ComposedEventSubscriber<PoolState>
     } else if (oracleType == OracleReadType.MORPHO_ORACLE) {
       const morphoOracleConfig = config.oracles.morpho[feed.morpho!.oracle];
       const baseVaultPrice =
-        morphoOracleConfig.baseVault !== ethers.constants.AddressZero
+        morphoOracleConfig.baseVault !== ethers.ZeroAddress
           ? (morphoOracleConfig.baseVaultConversion *
               state.oracles.morphoVault[morphoOracleConfig.baseVault]
                 .totalAssets) /
             state.oracles.morphoVault[morphoOracleConfig.baseVault].totalSupply
           : 1n;
       const quoteVaultPrice =
-        morphoOracleConfig.quoteVault !== ethers.constants.AddressZero
+        morphoOracleConfig.quoteVault !== ethers.ZeroAddress
           ? (morphoOracleConfig.quoteVaultConversion *
               state.oracles.morphoVault[morphoOracleConfig.quoteVault]
                 .totalAssets) /
             state.oracles.morphoVault[morphoOracleConfig.quoteVault].totalSupply
           : 1n;
       const baseFeed1Price =
-        morphoOracleConfig.baseFeed1 !== ethers.constants.AddressZero
+        morphoOracleConfig.baseFeed1 !== ethers.ZeroAddress
           ? this._readMorphoFeedChainlink(
               config,
               state,
@@ -824,7 +820,7 @@ export class AngleTransmuterEventPool extends ComposedEventSubscriber<PoolState>
             )
           : 1n;
       const baseFeed2Price =
-        morphoOracleConfig.baseFeed2 !== ethers.constants.AddressZero
+        morphoOracleConfig.baseFeed2 !== ethers.ZeroAddress
           ? this._readMorphoFeedChainlink(
               config,
               state,
@@ -832,7 +828,7 @@ export class AngleTransmuterEventPool extends ComposedEventSubscriber<PoolState>
             )
           : 1n;
       const quoteFeed1Price =
-        morphoOracleConfig.quoteFeed1 !== ethers.constants.AddressZero
+        morphoOracleConfig.quoteFeed1 !== ethers.ZeroAddress
           ? this._readMorphoFeedChainlink(
               config,
               state,
@@ -840,7 +836,7 @@ export class AngleTransmuterEventPool extends ComposedEventSubscriber<PoolState>
             )
           : 1n;
       const quoteFeed2Price =
-        morphoOracleConfig.quoteFeed2 !== ethers.constants.AddressZero
+        morphoOracleConfig.quoteFeed2 !== ethers.ZeroAddress
           ? this._readMorphoFeedChainlink(
               config,
               state,

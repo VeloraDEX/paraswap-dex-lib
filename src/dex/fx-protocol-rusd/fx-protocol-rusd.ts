@@ -17,7 +17,7 @@ import { IDexHelper } from '../../dex-helper/idex-helper';
 import { DexParams, FxProtocolData } from './types';
 import { SimpleExchange } from '../simple-exchange';
 import { FxProtocolConfig } from './config';
-import { Interface, JsonFragment } from '@ethersproject/abi';
+import { Interface, JsonFragment } from 'ethers';
 import FxUSD_ABI from '../../abi/fx-protocol/FxUSD.json';
 import FxMarket_ABI from '../../abi/fx-protocol/FxMarket.json';
 import EthWeETHOralce_ABI from '../../abi/fx-protocol/weETHOralce.json';

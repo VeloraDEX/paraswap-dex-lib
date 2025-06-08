@@ -20,7 +20,7 @@ import { AaveGsmConfig } from './config';
 
 import GSM_ABI from '../../abi/aave-gsm/Aave_GSM.json';
 import { Interface } from '@ethersproject/abi';
-import { formatUnits, parseUnits } from 'ethers/lib/utils';
+import { formatUnits, parseUnits } from 'ethers';
 import { AaveGsmEventPool } from './aave-gsm-pool';
 import { MMath } from '../maverick-v1/maverick-math/maverick-basic-math';
 import {
@@ -308,7 +308,7 @@ export class AaveGsm extends SimpleExchange implements IDex<AaveGsmData> {
     const unit = parseUnits(
       '1',
       side === SwapSide.SELL ? srcToken.decimals : destToken.decimals,
-    ).toBigInt();
+    );
 
     const poolState = await this.getPoolState(target, blockNumber);
 

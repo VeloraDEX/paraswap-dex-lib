@@ -1,10 +1,9 @@
-import { Interface } from '@ethersproject/abi';
 import { DeepReadonly } from 'ts-essentials';
 import FactoryABI from '../../abi/algebra/AlgebraFactory-v1_1.abi.json';
 import { IDexHelper } from '../../dex-helper/idex-helper';
 import { StatefulEventSubscriber } from '../../stateful-event-subscriber';
 import { Address, Log, Logger } from '../../types';
-import { LogDescription } from 'ethers/lib/utils';
+import { LogDescription, Interface } from 'ethers';
 import { FactoryState } from './types';
 
 export type OnPoolCreatedCallback = ({

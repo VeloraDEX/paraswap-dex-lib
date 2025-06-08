@@ -1,7 +1,6 @@
 import _ from 'lodash';
 import { Contract } from 'web3-eth-contract';
-import { Interface } from '@ethersproject/abi';
-import { ethers } from 'ethers';
+import { ethers, Interface } from 'ethers';
 import { assert, DeepReadonly } from 'ts-essentials';
 import { Log, Logger, BlockHeader, Address } from '../../types';
 import {
@@ -539,14 +538,14 @@ export class PancakeSwapV3EventPool extends StatefulEventSubscriber<PoolState> {
     // https://github.com/Uniswap/v3-periphery/blob/main/contracts/libraries/PoolAddress.sol
     if (token0 > token1) [token0, token1] = [token1, token0];
 
-    const encodedKey = ethers.utils.keccak256(
-      ethers.utils.defaultAbiCoder.encode(
+    const encodedKey = ethers.keccak256(
+      ethers.AbiCoder.defaultAbiCoder().encode(
         ['address', 'address', 'uint24'],
         [token0, token1, BigInt.asUintN(24, fee)],
       ),
     );
 
-    return ethers.utils.getCreate2Address(
+    return ethers.getCreate2Address(
       this.poolDeployer ? this.poolDeployer : this.factoryAddress,
       encodedKey,
       this.poolInitCodeHash,

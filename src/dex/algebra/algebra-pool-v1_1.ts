@@ -1,5 +1,4 @@
 import _ from 'lodash';
-import { Interface } from '@ethersproject/abi';
 import { DeepReadonly, assert } from 'ts-essentials';
 import { Address, BlockHeader, Log, Logger } from '../../types';
 import { bigIntify, catchParseLogError, int16 } from '../../utils';
@@ -15,7 +14,7 @@ import {
   TickInfoMappingsWithBigNumber,
   TickInfoWithBigNumber,
 } from './types';
-import { BigNumber, ethers } from 'ethers';
+import { ethers, Interface } from 'ethers';
 import { Contract } from 'web3-eth-contract';
 import AlgebraABI from '../../abi/algebra/AlgebraPool-v1_1.abi.json';
 import FactoryABI from '../../abi/algebra/AlgebraFactory-v1_1.abi.json';
@@ -24,8 +23,8 @@ import { OUT_OF_RANGE_ERROR_POSTFIX } from '../uniswap-v3/constants';
 import {
   addressDecode,
   uint256ToBigInt,
-  uint128ToBigNumber,
   int24ToNumber,
+  uint128ToBigNumber,
 } from '../../lib/decoders';
 import { MultiCallParams } from '../../lib/multi-wrapper';
 import {
@@ -46,6 +45,7 @@ import {
   TICK_BITMAP_TO_USE,
   TICK_BITMAP_TO_USE_BY_CHAIN,
 } from './constants';
+import { BigNumber } from '@ethersproject/bignumber';
 
 const BN_ZERO = BigNumber.from(0);
 const MAX_BATCH_SIZE = 100;
@@ -837,14 +837,14 @@ export class AlgebraEventPoolV1_1 extends StatefulEventSubscriber<PoolStateV1_1>
     // https://github.com/Uniswap/v3-periphery/blob/main/contracts/libraries/PoolAddress.sol
     if (token0 > token1) [token0, token1] = [token1, token0];
 
-    const encodedKey = ethers.utils.keccak256(
-      ethers.utils.defaultAbiCoder.encode(
+    const encodedKey = ethers.keccak256(
+      ethers.AbiCoder.defaultAbiCoder().encode(
         ['address', 'address'],
         [token0, token1],
       ),
     );
 
-    return ethers.utils.getCreate2Address(
+    return ethers.getCreate2Address(
       this.poolDeployer,
       encodedKey,
       this.poolInitCodeHash,

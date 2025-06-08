@@ -2,13 +2,15 @@ import { Interface } from '@ethersproject/abi';
 import { IDexHelper } from '../dex-helper';
 import ERC20ABI from '../abi/erc20.json';
 import Permit2Abi from '../abi/permit2.json';
-import { ethers } from 'ethers';
 import {
-  Address,
-  OptimalRate,
-  OptimalSwap,
-  OptimalSwapExchange,
-} from '@paraswap/core';
+  concat,
+  dataLength,
+  ethers,
+  toBeHex,
+  zeroPadValue,
+  solidityPacked,
+} from 'ethers';
+import { Address, OptimalRate, OptimalSwap } from '@paraswap/core';
 import { DepositWithdrawReturn } from '../dex/weth/types';
 import { isETHAddress } from '../utils';
 import {
@@ -27,10 +29,6 @@ import { Executors, Flag, SpecialDex } from './types';
 import { MAX_UINT, Network, PERMIT2_ADDRESS } from '../constants';
 import { DexExchangeBuildParam, DexExchangeParam } from '../types';
 import { BI_MAX_UINT160, BI_MAX_UINT48 } from '../bigint-constants';
-
-const {
-  utils: { hexlify, hexDataLength, hexConcat, hexZeroPad, solidityPack },
-} = ethers;
 
 const MAX_UINT48 = BI_MAX_UINT48.toString();
 const MAX_UINT160 = BI_MAX_UINT160.toString();
@@ -142,7 +140,7 @@ export abstract class ExecutorBytecodeBuilder<S = {}, D = {}> {
     const checkSrcTokenBalance = flag % 3 === 2;
 
     if (checkSrcTokenBalance) {
-      approveCalldata = hexConcat([approveCalldata, ZEROS_12_BYTES, tokenAddr]);
+      approveCalldata = concat([approveCalldata, ZEROS_12_BYTES, tokenAddr]);
     }
 
     let approvalCalldata = this.buildCallData(
@@ -161,7 +159,7 @@ export abstract class ExecutorBytecodeBuilder<S = {}, D = {}> {
         this.dexHelper.config.data.network as Network
       ]?.includes(tokenAddr)
     ) {
-      approvalCalldata = hexConcat([
+      approvalCalldata = concat([
         this.buildApproveCallData(
           spender,
           tokenAddr,
@@ -208,7 +206,7 @@ export abstract class ExecutorBytecodeBuilder<S = {}, D = {}> {
         0,
       ]);
 
-      approvalCalldata = hexConcat([
+      approvalCalldata = concat([
         this.buildCallData(
           tokenAddr,
           resetApprove,
@@ -243,10 +241,10 @@ export abstract class ExecutorBytecodeBuilder<S = {}, D = {}> {
     const checkSrcTokenBalance = flag % 3 === 2;
 
     if (checkSrcTokenBalance) {
-      permit2Calldata = hexConcat([permit2Calldata, ZEROS_12_BYTES, tokenAddr]);
+      permit2Calldata = concat([permit2Calldata, ZEROS_12_BYTES, tokenAddr]);
     }
 
-    return hexConcat([approvalCalldata, permit2Calldata]);
+    return concat([approvalCalldata, permit2Calldata]);
   }
 
   protected buildWrapEthCallData(
@@ -276,7 +274,7 @@ export abstract class ExecutorBytecodeBuilder<S = {}, D = {}> {
       0,
       SpecialDex.DEFAULT,
       Flag.INSERT_FROM_AMOUNT_CHECK_ETH_BALANCE_AFTER_SWAP, // 7
-      hexDataLength(withdrawCallData),
+      dataLength(withdrawCallData),
     );
   }
 
@@ -291,7 +289,7 @@ export abstract class ExecutorBytecodeBuilder<S = {}, D = {}> {
       0,
       SpecialDex.DEFAULT,
       Flag.INSERT_FROM_AMOUNT_DONT_CHECK_BALANCE_AFTER_SWAP, // 3
-      hexDataLength(transferCallData),
+      dataLength(transferCallData),
     );
   }
 
@@ -343,14 +341,14 @@ export abstract class ExecutorBytecodeBuilder<S = {}, D = {}> {
     toAmountPos = 0, // not used for Executor01 and Executor02, just to follow the same interface
     returnAmountPos = DEFAULT_RETURN_AMOUNT_POS,
   ) {
-    return solidityPack(EXECUTOR_01_02_FUNCTION_CALL_DATA_TYPES, [
+    return solidityPacked(EXECUTOR_01_02_FUNCTION_CALL_DATA_TYPES, [
       tokenAddress, // token address
-      hexZeroPad(hexlify(hexDataLength(calldata) + BYTES_28_LENGTH), 4), // calldata length + bytes28(0)
-      hexZeroPad(hexlify(fromAmountPos), 2), // fromAmountPos
-      hexZeroPad(hexlify(destTokenPos), 2), // destTokenPos
-      hexZeroPad(hexlify(returnAmountPos), 1), // returnAmountPos
-      hexZeroPad(hexlify(specialDexFlag), 1), // special
-      hexZeroPad(hexlify(flag), 2), // flag
+      zeroPadValue(toBeHex(dataLength(calldata) + BYTES_28_LENGTH), 4), // calldata length + bytes28(0)
+      zeroPadValue(toBeHex(fromAmountPos), 2), // fromAmountPos
+      zeroPadValue(toBeHex(destTokenPos), 2), // destTokenPos
+      zeroPadValue(toBeHex(returnAmountPos), 1), // returnAmountPos
+      zeroPadValue(toBeHex(specialDexFlag), 1), // special
+      zeroPadValue(toBeHex(flag), 2), // flag
       ZEROS_28_BYTES, // bytes28(0)
       calldata, // calldata
     ]);
@@ -365,14 +363,14 @@ export abstract class ExecutorBytecodeBuilder<S = {}, D = {}> {
     flag: Flag,
     toAmountPos = 0,
   ) {
-    return solidityPack(EXECUTOR_03_FUNCTION_CALL_DATA_TYPES, [
+    return solidityPacked(EXECUTOR_03_FUNCTION_CALL_DATA_TYPES, [
       tokenAddress, // token address
-      hexZeroPad(hexlify(hexDataLength(calldata) + BYTES_28_LENGTH), 2), // calldata length + bytes28(0)
-      hexZeroPad(hexlify(toAmountPos), 2), // toAmountPos
-      hexZeroPad(hexlify(fromAmountPos), 2), // fromAmountPos
-      hexZeroPad(hexlify(destTokenPos), 2), // destTokenPos
-      hexZeroPad(hexlify(specialDexFlag), 2), // special
-      hexZeroPad(hexlify(flag), 2), // flag
+      zeroPadValue(toBeHex(dataLength(calldata) + BYTES_28_LENGTH), 2), // calldata length + bytes28(0)
+      zeroPadValue(toBeHex(toAmountPos), 2), // toAmountPos
+      zeroPadValue(toBeHex(fromAmountPos), 2), // fromAmountPos
+      zeroPadValue(toBeHex(destTokenPos), 2), // destTokenPos
+      zeroPadValue(toBeHex(specialDexFlag), 2), // special
+      zeroPadValue(toBeHex(flag), 2), // flag
       ZEROS_28_BYTES, // bytes28(0)
       calldata, // calldata
     ]);
@@ -433,7 +431,7 @@ export abstract class ExecutorBytecodeBuilder<S = {}, D = {}> {
       .indexOf(tokenAddr.replace('0x', ''));
 
     if (isTokenInCallData === -1) {
-      callData = hexConcat([callData, ZEROS_12_BYTES, tokenAddr]);
+      callData = concat([callData, ZEROS_12_BYTES, tokenAddr]);
     }
 
     return callData;

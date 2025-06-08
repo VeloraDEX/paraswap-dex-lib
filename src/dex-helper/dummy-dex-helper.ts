@@ -5,10 +5,9 @@ import {
   EventSubscriber,
   IRequestWrapper,
 } from './index';
-import axios, { AxiosResponse } from 'axios';
+import axios from 'axios';
 import { Address, LoggerConstructor, Token } from '../types';
-// import { Contract } from '@ethersproject/contracts';
-import { StaticJsonRpcProvider, Provider } from '@ethersproject/providers';
+import { JsonRpcProvider, Provider } from 'ethers';
 import multiABIV2 from '../abi/multi-v2.json';
 import log4js from 'log4js';
 import { getLogger } from '../lib/log4js';
@@ -332,7 +331,7 @@ export class DummyDexHelper implements IDexHelper {
     this.config = new ConfigHelper(false, generateConfig(network), 'is');
     this.cache = new DummyCache();
     this.httpRequest = new DummyRequestWrapper(this.config.data.apiKeyTheGraph);
-    this.provider = new StaticJsonRpcProvider(
+    this.provider = new JsonRpcProvider(
       rpcUrl ? rpcUrl : this.config.data.privateHttpProvider,
       network,
     );
@@ -382,7 +381,7 @@ export class DummyDexHelper implements IDexHelper {
   }
 
   replaceProviderWithRPC(rpcUrl: string) {
-    this.provider = new StaticJsonRpcProvider(rpcUrl, this.config.data.network);
+    this.provider = new JsonRpcProvider(rpcUrl, this.config.data.network);
     this.web3Provider = new Web3(rpcUrl);
     this.multiContract = new this.web3Provider.eth.Contract(
       multiABIV2 as any,

@@ -45,7 +45,7 @@ import { SimpleExchange } from '../simple-exchange';
 import { Adapters, DexalotConfig } from './config';
 import { RateFetcher } from './rate-fetcher';
 import mainnetRFQAbi from '../../abi/dexalot/DexalotMainnetRFQ.json';
-import { Interface } from 'ethers/lib/utils';
+import { Interface } from 'ethers';
 import { assert } from 'ts-essentials';
 import {
   DEXALOT_API_URL,
@@ -351,15 +351,11 @@ export class Dexalot extends SimpleExchange implements IDex<DexalotData> {
       while (left < right) {
         let mid = Math.floor((left + right) / 2);
         qty = BigInt(
-          ethers.utils
-            .parseUnits(orderbook[mid][1], quoteToken.decimals)
-            .toString(),
+          ethers.parseUnits(orderbook[mid][1], quoteToken.decimals).toString(),
         );
         if (isInputQuote) {
           const price = BigInt(
-            ethers.utils
-              .parseUnits(orderbook[mid][0], baseToken.decimals)
-              .toString(),
+            ethers.parseUnits(orderbook[mid][0], baseToken.decimals).toString(),
           );
           qty =
             (qty * BigInt(10 ** (baseToken.decimals * 2))) /
@@ -376,33 +372,27 @@ export class Dexalot extends SimpleExchange implements IDex<DexalotData> {
         amount = BigInt(0);
       if (amounts[i] === qty) {
         price = BigInt(
-          ethers.utils
-            .parseUnits(orderbook[left][0], baseToken.decimals)
-            .toString(),
+          ethers.parseUnits(orderbook[left][0], baseToken.decimals).toString(),
         );
         amount = amounts[i];
       } else if (left === 0) {
         price = 0n;
       } else if (left < orderbook.length) {
         const lPrice = BigInt(
-          ethers.utils
+          ethers
             .parseUnits(orderbook[left - 1][0], baseToken.decimals)
             .toString(),
         );
         const rPrice = BigInt(
-          ethers.utils
-            .parseUnits(orderbook[left][0], baseToken.decimals)
-            .toString(),
+          ethers.parseUnits(orderbook[left][0], baseToken.decimals).toString(),
         );
         let lQty = BigInt(
-          ethers.utils
+          ethers
             .parseUnits(orderbook[left - 1][1], quoteToken.decimals)
             .toString(),
         );
         let rQty = BigInt(
-          ethers.utils
-            .parseUnits(orderbook[left][1], quoteToken.decimals)
-            .toString(),
+          ethers.parseUnits(orderbook[left][1], quoteToken.decimals).toString(),
         );
         if (isInputQuote) {
           lQty =
@@ -602,8 +592,8 @@ export class Dexalot extends SimpleExchange implements IDex<DexalotData> {
         : options.slippageFactor.minus(1).multipliedBy(10000).toFixed(0);
 
       const rfqParams = {
-        makerAsset: ethers.utils.getAddress(makerToken.address),
-        takerAsset: ethers.utils.getAddress(takerToken.address),
+        makerAsset: ethers.getAddress(makerToken.address),
+        takerAsset: ethers.getAddress(takerToken.address),
         makerAmount: isBuy ? optimalSwapExchange.destAmount : undefined,
         takerAmount: isSell ? optimalSwapExchange.srcAmount : undefined,
         userAddress: options.userAddress,

@@ -1,4 +1,4 @@
-import { Interface } from '@ethersproject/abi';
+import { Interface } from 'ethers';
 import StablePoolABI from '../../../../abi/balancer-v2/stable-pool.json';
 import MetaStablePoolABI from '../../../../abi/balancer-v2/meta-stable-pool.json';
 import { callData, PoolState, SubgraphPoolBase, TokenState } from '../../types';

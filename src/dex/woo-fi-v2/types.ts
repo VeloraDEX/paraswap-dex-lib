@@ -1,4 +1,4 @@
-import { Interface } from 'ethers/lib/utils';
+import { Interface } from 'ethers';
 import { Address, Token } from '../../types';
 
 export type PoolState = {

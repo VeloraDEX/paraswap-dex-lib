@@ -1,6 +1,6 @@
 import { Contract } from 'web3-eth-contract';
 import { RSWETHPoolState, SWETHPoolState } from './type';
-import { Interface, AbiCoder } from '@ethersproject/abi';
+import { Interface, AbiCoder } from 'ethers';
 
 const coder = new AbiCoder();
 

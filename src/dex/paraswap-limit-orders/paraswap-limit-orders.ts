@@ -1,5 +1,4 @@
-import { ethers } from 'ethers';
-import { Interface } from '@ethersproject/abi';
+import { ethers, Interface } from 'ethers';
 import {
   Token,
   Address,
@@ -319,13 +318,11 @@ export class ParaSwapLimitOrders
     const isSell = side === SwapSide.SELL;
     const orderInfoParamType = this.rfqIface.getFunction(
       isSell ? 'tryBatchFillOrderTakerAmount' : 'tryBatchFillOrderMakerAmount',
-    ).inputs[0];
+    )!.inputs[0];
 
-    const orderInfoTypes = orderInfoParamType.format(
-      ethers.utils.FormatTypes.full,
-    );
+    const orderInfoTypes = orderInfoParamType.format('full');
 
-    const payload = this.rfqIface._abiCoder.encode(
+    const payload = ethers.AbiCoder.defaultAbiCoder().encode(
       [`tuple(${orderInfoTypes})`],
       [{ orderInfos }],
     );

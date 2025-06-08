@@ -1,4 +1,3 @@
-import { Interface } from '@ethersproject/abi';
 import { SwapSide } from '../../constants';
 import {
   AdapterExchangeParam,
@@ -13,6 +12,7 @@ import StablePoolABI from '../../abi/StablePool.json';
 import { IDexHelper } from '../../dex-helper';
 import { StablePoolFunctions, StablePoolData, StablePoolParam } from './types';
 import { extractReturnAmountPosition } from '../../executor/utils';
+import { Interface } from 'ethers';
 
 export class StablePool
   extends SimpleExchange

@@ -6,6 +6,7 @@ import { Interface } from '@ethersproject/abi';
 import NomiswapPoolABI from '../../abi/nomiswap-v2/nomiswap-v2-pool.json';
 import { DexParams } from './types';
 import { DexConfigMap } from '../../types';
+import { BytesLike } from 'ethers';
 
 export const NomiswapV2Config: DexConfigMap<DexParams> = {
   NomiswapV2: {
@@ -61,7 +62,7 @@ export class NomiswapV2 extends UniswapV2 {
       target: pair.exchange!,
       callData: this.nomiswapPool.encodeFunctionData('swapFee', []),
     };
-    const callDecoder = (values: any[]) =>
+    const callDecoder = (values: BytesLike) =>
       parseInt(
         this.nomiswapPool.decodeFunctionResult('swapFee', values)[0].toString(),
       ) * 10;

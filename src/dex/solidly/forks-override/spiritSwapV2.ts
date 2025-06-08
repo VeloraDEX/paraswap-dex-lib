@@ -6,6 +6,7 @@ import { Interface } from '@ethersproject/abi';
 import { SolidlyConfig } from '../config';
 import { getDexKeysWithNetwork } from '../../../utils';
 import _ from 'lodash';
+import { BytesLike } from 'ethers';
 
 const SpiritSwapV2PairABI = [
   {
@@ -43,7 +44,7 @@ export class SpiritSwapV2 extends Solidly {
       target: pair.exchange!,
       callData: spiritSwapV2PairIface.encodeFunctionData('fee', []),
     };
-    const callDecoder = (values: any[]) => {
+    const callDecoder = (values: BytesLike) => {
       const fees = parseInt(
         spiritSwapV2PairIface.decodeFunctionResult('fee', values)[0].toString(),
       );

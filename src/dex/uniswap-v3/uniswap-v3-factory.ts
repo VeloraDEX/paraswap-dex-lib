@@ -4,7 +4,7 @@ import FactoryABI from '../../abi/uniswap-v3/UniswapV3Factory.abi.json';
 import { IDexHelper } from '../../dex-helper/idex-helper';
 import { StatefulEventSubscriber } from '../../stateful-event-subscriber';
 import { Address, Log, Logger } from '../../types';
-import { LogDescription } from 'ethers/lib/utils';
+import { LogDescription } from 'ethers';
 import { FactoryState } from './types';
 
 export type OnPoolCreatedCallback = ({

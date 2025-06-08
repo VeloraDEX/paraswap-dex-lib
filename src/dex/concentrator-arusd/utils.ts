@@ -1,8 +1,6 @@
 import { Contract } from 'web3-eth-contract';
-import { ConcentratorArusdState, ConcentratorArusdNavState } from './types';
-import { Interface, AbiCoder } from '@ethersproject/abi';
-
-const coder = new AbiCoder();
+import { ConcentratorArusdState } from './types';
+import { Interface } from 'ethers';
 
 export async function getOnChainState(
   multiContract: Contract,

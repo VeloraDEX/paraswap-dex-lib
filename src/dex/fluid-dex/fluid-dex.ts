@@ -1,5 +1,4 @@
-import { BytesLike } from 'ethers/lib/utils';
-import { Interface } from '@ethersproject/abi';
+import { BytesLike, Interface } from 'ethers';
 import {
   Token,
   Address,
@@ -31,7 +30,6 @@ import { getDexKeysWithNetwork, getBigIntPow } from '../../utils';
 import { extractReturnAmountPosition } from '../../executor/utils';
 import { MultiResult } from '../../lib/multi-wrapper';
 import { generalDecoder } from '../../lib/decoders';
-import { BigNumber } from 'ethers';
 import { sqrt } from './utils';
 import { FluidDexLiquidityProxy } from './fluid-dex-liquidity-proxy';
 import { FluidDexEventPool } from './fluid-dex-pool';
@@ -816,10 +814,8 @@ export class FluidDex extends SimpleExchange implements IDex<FluidDexData> {
     y2: bigint,
   ): bigint {
     // Adding 1e18 precision
-    const xyRoot = sqrt(BigNumber.from(x).mul(y).mul(BigInt(1e18))).toBigInt();
-    const x2y2Root = sqrt(
-      BigNumber.from(x2).mul(y2).mul(BigInt(1e18)),
-    ).toBigInt();
+    const xyRoot = sqrt(x * y * BigInt(1e18));
+    const x2y2Root = sqrt(x2 * y2 * BigInt(1e18));
 
     // 1e18 precision gets cancelled out in division
     const numerator = t * xyRoot + y * x2y2Root - y2 * xyRoot;
@@ -852,10 +848,8 @@ export class FluidDex extends SimpleExchange implements IDex<FluidDexData> {
   ): bigint {
     // Adding 1e18 precision
 
-    const xyRoot = sqrt(BigNumber.from(x).mul(y).mul(BigInt(1e18))).toBigInt();
-    const x2y2Root = sqrt(
-      BigNumber.from(x2).mul(y2).mul(BigInt(1e18)),
-    ).toBigInt();
+    const xyRoot = sqrt(x * y * BigInt(1e18));
+    const x2y2Root = sqrt(x2 * y2 * BigInt(1e18));
 
     // Calculating 'a' using the given formula
     const a = (y2 * xyRoot + t * xyRoot - y * x2y2Root) / (xyRoot + x2y2Root);

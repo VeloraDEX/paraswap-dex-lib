@@ -6,7 +6,7 @@ import {
   StableMutableState,
 } from './types';
 import { BalancerV3Config } from './config';
-import { Interface, Result } from '@ethersproject/abi';
+import { Interface, Result } from 'ethers';
 import { IDexHelper } from '../../dex-helper';
 import { WAD } from './balancer-v3-pool';
 

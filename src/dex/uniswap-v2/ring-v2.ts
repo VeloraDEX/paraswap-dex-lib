@@ -1,6 +1,3 @@
-import { defaultAbiCoder, Interface } from '@ethersproject/abi';
-import { getAddress } from '@ethersproject/address';
-import { keccak256 } from '@ethersproject/keccak256';
 import {
   DEST_TOKEN_PARASWAP_TRANSFERS,
   Network,
@@ -26,6 +23,7 @@ import uniswapV2ABI from '../../abi/uniswap-v2/uniswap-v2-pool.json';
 import uniswapV2factoryABI from '../../abi/uniswap-v2/uniswap-v2-factory.json';
 import RingV2ExchangeRouterABI from '../../abi/uniswap-v2/ring-v2-router.json';
 import { extractReturnAmountPosition } from '../../executor/utils';
+import { ethers, Interface, keccak256 } from 'ethers';
 
 export enum RingV2Functions {
   swapExactTokensForTokens = 'swapExactTokensForTokens',
@@ -66,7 +64,7 @@ export function computeFWTokenAddress(
   dexKey: string,
   network: Network,
 ): string {
-  const constructorArgumentsEncoded = defaultAbiCoder.encode(
+  const constructorArgumentsEncoded = ethers.AbiCoder.defaultAbiCoder().encode(
     ['address'],
     [originalAddress],
   );
@@ -80,7 +78,7 @@ export function computeFWTokenAddress(
 
   const input = `0x${create2Inputs.map(i => i.slice(2)).join('')}`;
 
-  return getAddress(`0x${keccak256(input).slice(-40)}`);
+  return ethers.getAddress(`0x${keccak256(input).slice(-40)}`);
 }
 
 const DefaultRingV2PoolGasCost = 90 * 1000;

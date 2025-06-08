@@ -23,7 +23,7 @@ import infusionPairABI from '../../abi/infusion/InfusionPair.json';
 import infusionRouterABI from '../../abi/infusion/InfusionRouter.json';
 import _ from 'lodash';
 import { NumberAsString, SwapSide } from '@paraswap/core';
-import { Interface, AbiCoder } from '@ethersproject/abi';
+import { Interface, AbiCoder, BytesLike } from 'ethers';
 import { InfusionStablePool } from './infusion-stable-pool';
 import { Uniswapv2ConstantProductPool } from '../uniswap-v2/uniswap-v2-constant-product-pool';
 import {
@@ -637,7 +637,7 @@ export class Infusion extends UniswapV2 {
         pair.stable,
       ]),
     };
-    const callDecoder = (values: any[]) =>
+    const callDecoder = (values: BytesLike) =>
       parseInt(
         velodromeFactoryIface
           .decodeFunctionResult('getFee', values)[0]

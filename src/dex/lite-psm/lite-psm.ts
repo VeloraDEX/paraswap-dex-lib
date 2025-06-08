@@ -1,4 +1,3 @@
-import { Interface } from '@ethersproject/abi';
 import {
   Token,
   Address,
@@ -18,6 +17,7 @@ import {
   getDexKeysWithNetwork,
   getBigIntPow,
   uuidToBytes16,
+  encodeV6Metadata,
 } from '../../utils';
 import { IDex } from '../../dex/idex';
 import { IDexHelper } from '../../dex-helper/idex-helper';
@@ -40,7 +40,7 @@ import {
   OptimalSwapExchange,
   ParaSwapVersion,
 } from '@paraswap/core';
-import { BigNumber } from 'ethers';
+import { Interface } from 'ethers';
 import { LitePsmEventPool, getOnChainState } from './lite-psm-event-pool';
 import { extractReturnAmountPosition } from '../../executor/utils';
 
@@ -445,24 +445,15 @@ export class LitePsm
       throw new Error(`Invalid contract method ${contractMethod}`);
     }
 
-    const beneficiaryParam = BigNumber.from(beneficiary);
+    const approveParam = !data.isApproved ? 1n << 255n : 0n;
+    const directionParam = side === SwapSide.SELL ? 0n : 1n << 254n;
 
-    const approveParam = !data.isApproved
-      ? BigNumber.from(1).shl(255)
-      : BigNumber.from(0);
-    const directionParam =
-      side === SwapSide.SELL ? BigNumber.from(0) : BigNumber.from(1).shl(254);
-
-    const beneficiaryDirectionApproveFlag = beneficiaryParam
-      .or(directionParam)
-      .or(approveParam);
+    const beneficiaryDirectionApproveFlag =
+      BigInt(beneficiary) | directionParam | approveParam;
 
     const to18ConversionFactor = getBigIntPow(18 - data.gemDecimals);
 
-    const metadata = hexConcat([
-      hexZeroPad(uuidToBytes16(uuid), 16),
-      hexZeroPad(hexlify(blockNumber), 16),
-    ]);
+    const metadata = encodeV6Metadata(uuid, blockNumber);
 
     const params: LitePsmParams = [
       srcToken,

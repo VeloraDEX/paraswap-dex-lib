@@ -9,11 +9,9 @@ import {
   MultiCallOutput,
 } from '../../types';
 import { Lens } from '../../lens';
-import { Interface } from '@ethersproject/abi';
 import PythABI from '../../abi/angle-transmuter/Pyth.json';
 import _ from 'lodash';
-import { formatUnits, parseUnits } from 'ethers/lib/utils';
-import { BigNumber } from 'ethers';
+import { formatUnits, parseUnits, Interface } from 'ethers';
 import { PythState } from './types';
 
 export class PythSubscriber<State> extends PartialEventSubscriber<
@@ -22,7 +20,7 @@ export class PythSubscriber<State> extends PartialEventSubscriber<
 > {
   static readonly proxyInterface = new Interface(PythABI);
   static readonly ANSWER_UPDATED_TOPIC =
-    PythSubscriber.proxyInterface.getEventTopic('PriceFeedUpdate');
+    PythSubscriber.proxyInterface.getEvent('PriceFeedUpdate')!.topicHash;
 
   constructor(
     private proxy: Address,
@@ -97,7 +95,7 @@ export class PythSubscriber<State> extends PartialEventSubscriber<
     return this.lens.get()(state)[oracleId].answer;
   }
 
-  public _processPrice(price: BigNumber, expo: number): number {
+  public _processPrice(price: bigint, expo: number): number {
     const isNormalizerExpoNeg = expo < 0;
     if (isNormalizerExpoNeg) return Number(formatUnits(price, -expo));
     return Number(parseUnits(price.toString(), expo));

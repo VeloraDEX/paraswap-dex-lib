@@ -6,6 +6,7 @@ import { Interface } from '@ethersproject/abi';
 import { DexParams } from './types';
 import MDEXFactoryABI from '../../abi/uniswap-v2/mdex-factory.json';
 import { getDexKeysWithNetwork } from '../../utils';
+import { BytesLike } from 'ethers';
 
 export const MDEXConfig: DexConfigMap<DexParams> = {
   MDEX: {
@@ -52,7 +53,7 @@ export class MDEX extends UniswapV2 {
       ]),
     };
 
-    const callDecoder = (values: any[]) =>
+    const callDecoder = (values: BytesLike) =>
       parseInt(
         this.mdexFactory
           .decodeFunctionResult('getPairFees', values)[0]

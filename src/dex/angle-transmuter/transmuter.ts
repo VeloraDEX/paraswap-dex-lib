@@ -10,7 +10,6 @@ import {
 } from '../../types';
 import { CBETH, RETH, SFRXETH, STETH } from './constants';
 import { Lens } from '../../lens';
-import { Interface } from '@ethersproject/abi';
 import TransmuterABI from '../../abi/angle-transmuter/Transmuter.json';
 import TransmuterSidechainABI from '../../abi/angle-transmuter/TransmuterSidechain.json';
 import {
@@ -27,8 +26,8 @@ import {
   MorphoOracle,
 } from './types';
 import _ from 'lodash';
-import { BigNumber, ethers } from 'ethers';
-import { formatEther, formatUnits } from 'ethers/lib/utils';
+import { ethers } from 'ethers';
+import { formatEther, formatUnits, Interface } from 'ethers';
 import { filterDictionaryOnly } from './utils';
 import { Network } from '../../constants';
 
@@ -60,6 +59,9 @@ export class TransmuterSubscriber<State> extends PartialEventSubscriber<
   ): DeepReadonly<TransmuterState> | null {
     try {
       const parsed = this.interface.parseLog(log);
+
+      if (!parsed) return null;
+
       const _state: TransmuterState = _.cloneDeep(state) as TransmuterState;
       switch (parsed.name) {
         case 'FeesSet':
@@ -189,25 +191,25 @@ export class TransmuterSubscriber<State> extends PartialEventSubscriber<
               this.interface.decodeFunctionResult(
                 'getCollateralMintFees',
                 multicallOutputs[indexMintFees * nbrCollaterals + i],
-              )[0] as BigNumber[]
+              )[0] as bigint[]
             ).map(f => Number.parseFloat(formatUnits(f, 9))),
             yFeeMint: (
               this.interface.decodeFunctionResult(
                 'getCollateralMintFees',
                 multicallOutputs[indexMintFees * nbrCollaterals + i],
-              )[1] as BigNumber[]
+              )[1] as bigint[]
             ).map(f => Number.parseFloat(formatUnits(f, 9))),
             xFeeBurn: (
               this.interface.decodeFunctionResult(
                 'getCollateralBurnFees',
                 multicallOutputs[indexBurnFees * nbrCollaterals + i],
-              )[0] as BigNumber[]
+              )[0] as bigint[]
             ).map(f => Number.parseFloat(formatUnits(f, 9))),
             yFeeBurn: (
               this.interface.decodeFunctionResult(
                 'getCollateralBurnFees',
                 multicallOutputs[indexBurnFees * nbrCollaterals + i],
-              )[1] as BigNumber[]
+              )[1] as bigint[]
             ).map(f => Number.parseFloat(formatUnits(f, 9))),
           } as Fees,
           stablecoinsIssued: Number.parseFloat(
@@ -250,13 +252,13 @@ export class TransmuterSubscriber<State> extends PartialEventSubscriber<
       this.interface.decodeFunctionResult(
         'getRedemptionFees',
         multicallOutputs[multicallOutputs.length - 2],
-      )[0] as BigNumber[]
+      )[0] as bigint[]
     ).map(f => Number.parseFloat(formatUnits(f, 9)));
     transmuterState.yRedemptionCurve = (
       this.interface.decodeFunctionResult(
         'getRedemptionFees',
         multicallOutputs[multicallOutputs.length - 2],
-      )[1] as BigNumber[]
+      )[1] as bigint[]
     ).map(f => Number.parseFloat(formatUnits(f, 9)));
     transmuterState.totalStablecoinIssued = Number.parseFloat(
       formatUnits(
@@ -275,13 +277,13 @@ export class TransmuterSubscriber<State> extends PartialEventSubscriber<
    * Update Mint and Burn fees parameters
    */
   _handleFeesSet(
-    event: ethers.utils.LogDescription,
+    event: ethers.LogDescription,
     state: TransmuterState,
   ): Readonly<TransmuterState> | null {
     const isMint: boolean = event.args.mint;
     const collateral: string = event.args.collateral;
-    const xFee: BigNumber[] = event.args.xFee;
-    const yFee: BigNumber[] = event.args.yFee;
+    const xFee: bigint[] = event.args.xFee;
+    const yFee: bigint[] = event.args.yFee;
     if (isMint) {
       state.collaterals[collateral].fees.xFeeMint = xFee.map(f =>
         Number.parseFloat(formatUnits(f, 9)),
@@ -304,11 +306,11 @@ export class TransmuterSubscriber<State> extends PartialEventSubscriber<
    * Update redemption curve parameters
    */
   _handleRedemptionCurveSet(
-    event: ethers.utils.LogDescription,
+    event: ethers.LogDescription,
     state: TransmuterState,
   ): Readonly<TransmuterState> | null {
-    const xFee: BigNumber[] = event.args.xFee;
-    const yFee: BigNumber[] = event.args.yFee;
+    const xFee: bigint[] = event.args.xFee;
+    const yFee: bigint[] = event.args.yFee;
     state.xRedemptionCurve = xFee.map(f =>
       Number.parseFloat(formatUnits(f, 9)),
     );
@@ -322,7 +324,7 @@ export class TransmuterSubscriber<State> extends PartialEventSubscriber<
    * Adapt collateral exposure after a swap event
    */
   _handleSwap(
-    event: ethers.utils.LogDescription,
+    event: ethers.LogDescription,
     state: TransmuterState,
   ): Readonly<TransmuterState> | null {
     const tokenIn: string = event.args.tokenIn.toLowerCase();
@@ -348,7 +350,7 @@ export class TransmuterSubscriber<State> extends PartialEventSubscriber<
    * Adapt collateral balances after a redeem event
    */
   _handleRedeem(
-    event: ethers.utils.LogDescription,
+    event: ethers.LogDescription,
     state: TransmuterState,
   ): Readonly<TransmuterState> | null {
     const amount: number = Number.parseFloat(
@@ -366,7 +368,7 @@ export class TransmuterSubscriber<State> extends PartialEventSubscriber<
   }
 
   _handleAddCollateral(
-    event: ethers.utils.LogDescription,
+    event: ethers.LogDescription,
     state: TransmuterState,
   ): Readonly<TransmuterState> | null {
     this.collaterals.push(event.args.collateral);
@@ -375,7 +377,7 @@ export class TransmuterSubscriber<State> extends PartialEventSubscriber<
   }
 
   _handleRevokeCollateral(
-    event: ethers.utils.LogDescription,
+    event: ethers.LogDescription,
     state: TransmuterState,
   ): Readonly<TransmuterState> | null {
     const index = this.collaterals.indexOf(event.args.collateral);
@@ -386,7 +388,7 @@ export class TransmuterSubscriber<State> extends PartialEventSubscriber<
   }
 
   _handleAdjustStablecoins(
-    event: ethers.utils.LogDescription,
+    event: ethers.LogDescription,
     state: TransmuterState,
   ): Readonly<TransmuterState> | null {
     const collateral = event.args.collateral.toLowerCase();
@@ -400,7 +402,7 @@ export class TransmuterSubscriber<State> extends PartialEventSubscriber<
   }
 
   _handleSetWhitelistedStatus(
-    event: ethers.utils.LogDescription,
+    event: ethers.LogDescription,
     state: TransmuterState,
   ): Readonly<TransmuterState> | null {
     const status: number = event.args.whitelistStatus;
@@ -414,7 +416,7 @@ export class TransmuterSubscriber<State> extends PartialEventSubscriber<
   }
 
   _handleIsWhitelistedForType(
-    event: ethers.utils.LogDescription,
+    event: ethers.LogDescription,
     state: TransmuterState,
   ): Readonly<TransmuterState> | null {
     const status: number = event.args.whitelistStatus;
@@ -430,7 +432,7 @@ export class TransmuterSubscriber<State> extends PartialEventSubscriber<
   }
 
   _handleStablecoinCapSet(
-    event: ethers.utils.LogDescription,
+    event: ethers.LogDescription,
     state: TransmuterState,
   ): Readonly<TransmuterState> | null {
     const capAmount: number = event.args.stablecoinCap;
@@ -443,7 +445,7 @@ export class TransmuterSubscriber<State> extends PartialEventSubscriber<
    * Keep track of used oracles for each collaterals
    */
   _handleOracleSet(
-    event: ethers.utils.LogDescription,
+    event: ethers.LogDescription,
     state: TransmuterState,
     blockNumber: number,
   ): Readonly<TransmuterState> | null {
@@ -466,7 +468,7 @@ export class TransmuterSubscriber<State> extends PartialEventSubscriber<
     configOracle.targetType = oracleConfigDecoded.targetType;
     configOracle.hyperparameters = oracleConfigDecoded.hyperparameters;
     if (oracleConfigDecoded.oracleType === OracleReadType.EXTERNAL) {
-      const externalOracle: Address = ethers.utils.defaultAbiCoder.decode(
+      const externalOracle: Address = ethers.AbiCoder.defaultAbiCoder().decode(
         [`address externalOracle`],
         oracleConfigDecoded.oracleData,
       )[0];
@@ -486,7 +488,7 @@ export class TransmuterSubscriber<State> extends PartialEventSubscriber<
 
   static _decodeOracleConfig(oracleConfig: string): DecodedOracleConfig {
     const oracleConfigDecoded = filterDictionaryOnly(
-      ethers.utils.defaultAbiCoder.decode(
+      ethers.AbiCoder.defaultAbiCoder().decode(
         [
           'uint8 oracleType',
           'uint8 targetType',
@@ -566,7 +568,7 @@ export class TransmuterSubscriber<State> extends PartialEventSubscriber<
 
   static _decodeChainlinkOracle(oracleData: string): Chainlink {
     const chainlinkOracleDecoded = filterDictionaryOnly(
-      ethers.utils.defaultAbiCoder.decode(
+      ethers.AbiCoder.defaultAbiCoder().decode(
         [
           'address[] circuitChainlink',
           'uint32[] stalePeriods',
@@ -583,7 +585,7 @@ export class TransmuterSubscriber<State> extends PartialEventSubscriber<
 
   static _decodePythOracle(oracleData: string): Pyth {
     const pythOracleDecoded = filterDictionaryOnly(
-      ethers.utils.defaultAbiCoder.decode(
+      ethers.AbiCoder.defaultAbiCoder().decode(
         [
           'address pyth',
           'bytes32[] feedIds',
@@ -600,7 +602,10 @@ export class TransmuterSubscriber<State> extends PartialEventSubscriber<
 
   static _decodeMaxOracle(oracleData: string): number {
     const maxOracleDecoded = filterDictionaryOnly(
-      ethers.utils.defaultAbiCoder.decode(['uint256 maxValue'], oracleData),
+      ethers.AbiCoder.defaultAbiCoder().decode(
+        ['uint256 maxValue'],
+        oracleData,
+      ),
     ) as unknown as MaxOracle;
 
     return Number.parseFloat(formatEther(maxOracleDecoded.maxValue));
@@ -608,7 +613,7 @@ export class TransmuterSubscriber<State> extends PartialEventSubscriber<
 
   static _decodeMorphoOracle(oracleData: string): MorphoOracle {
     const morphoOracleDecoded = filterDictionaryOnly(
-      ethers.utils.defaultAbiCoder.decode(
+      ethers.AbiCoder.defaultAbiCoder().decode(
         ['address oracle', 'uint256 normalizationFactor'],
         oracleData,
       ),

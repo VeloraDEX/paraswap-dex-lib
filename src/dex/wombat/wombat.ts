@@ -1,7 +1,5 @@
 import { AsyncOrSync, DeepReadonly } from 'ts-essentials';
-import { Interface } from '@ethersproject/abi';
 import { NumberAsString, SwapSide } from '@paraswap/core';
-
 import {
   AdapterExchangeParam,
   Address,
@@ -29,10 +27,10 @@ import AssetABI from '../../abi/wombat/asset.json';
 import ERC20ABI from '../../abi/erc20.json';
 import { WombatQuoter } from './wombat-quoter';
 import { WombatBmw } from './wombat-bmw';
-import { fromWad } from './utils';
 import { WombatPool } from './wombat-pool';
 import { StatePollingManager } from '../../lib/stateful-rpc-poller/state-polling-manager';
 import { extractReturnAmountPosition } from '../../executor/utils';
+import { Interface } from 'ethers';
 
 export class Wombat extends SimpleExchange implements IDex<WombatData> {
   // contract interfaces

@@ -1,8 +1,7 @@
 import dotenv from 'dotenv';
 dotenv.config();
-import { Contract } from '@ethersproject/contracts';
-import { JsonRpcProvider } from '@ethersproject/providers';
 import VaultABI from '../../abi/balancer-v2/vault.json';
+import { Contract, JsonRpcProvider } from 'ethers';
 
 // Compare retrieve an onchain query result for a single swap
 export async function queryOnChain(
@@ -34,7 +33,7 @@ export async function queryOnChain(
     },
   ];
   const assets = [assetIn, assetOut];
-  const deltas = await vaultContract.callStatic.queryBatchSwap(
+  const deltas = await vaultContract.queryBatchSwap(
     kind,
     swaps,
     assets,

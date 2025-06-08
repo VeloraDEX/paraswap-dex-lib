@@ -491,7 +491,7 @@ export class WooFiV2 extends SimpleExchange implements IDex<WooFiV2Data> {
     const [rebateTo, ...baseTokenAddresses] =
       await this._fetchBaseTokensAndFeeWallet();
 
-    assert(ethers.utils.isAddress(rebateTo), 'Invalid rebateTo address');
+    assert(ethers.isAddress(rebateTo), 'Invalid rebateTo address');
 
     this.rebateTo = rebateTo;
     const decimals = await this._fetchDecimals(baseTokenAddresses);

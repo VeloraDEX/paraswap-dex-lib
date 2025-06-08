@@ -1,5 +1,3 @@
-import { BigNumber } from 'ethers';
-
 export { SwapSide, ContractMethod } from '@paraswap/core';
 
 export const PORT_TEST_SERVER = process.env.TEST_PORT;
@@ -65,13 +63,13 @@ export const DEST_TOKEN_DEX_TRANSFERS = 1;
 
 export const BPS_MAX_VALUE = 10000n;
 
-export const FEE_PERCENT_IN_BASIS_POINTS_MASK = BigNumber.from('0x3FFF');
-export const IS_USER_SURPLUS_MASK = BigNumber.from('1').shl(90);
-export const IS_DIRECT_TRANSFER_MASK = BigNumber.from('1').shl(91);
-export const IS_CAP_SURPLUS_MASK = BigNumber.from('1').shl(92);
-export const IS_SKIP_BLACKLIST_MASK = BigNumber.from('1').shl(93);
-export const IS_REFERRAL_MASK = BigNumber.from('1').shl(94);
-export const IS_TAKE_SURPLUS_MASK = BigNumber.from('1').shl(95);
+export const FEE_PERCENT_IN_BASIS_POINTS_MASK = 0x3fffn;
+export const IS_USER_SURPLUS_MASK = 1n << 90n;
+export const IS_DIRECT_TRANSFER_MASK = 1n << 91n;
+export const IS_CAP_SURPLUS_MASK = 1n << 92n;
+export const IS_SKIP_BLACKLIST_MASK = 1n << 93n;
+export const IS_REFERRAL_MASK = 1n << 94n;
+export const IS_TAKE_SURPLUS_MASK = 1n << 95n;
 
 // used for PoolTracker data
 export const NO_USD_LIQUIDITY = -1;

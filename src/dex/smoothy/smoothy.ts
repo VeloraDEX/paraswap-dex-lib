@@ -1,5 +1,4 @@
 import { Interface } from '@ethersproject/abi';
-import { Provider } from '@ethersproject/providers';
 import { SwapSide } from '../../constants';
 import {
   AdapterExchangeParam,

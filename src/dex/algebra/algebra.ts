@@ -1,7 +1,5 @@
-import { defaultAbiCoder } from '@ethersproject/abi';
-import { AsyncOrSync, DeepReadonly } from 'ts-essentials';
+import { DeepReadonly } from 'ts-essentials';
 import { AbiItem } from 'web3-utils';
-import { pack } from '@ethersproject/solidity';
 import _ from 'lodash';
 import {
   ExchangePrices,
@@ -40,7 +38,7 @@ import {
 } from '../simple-exchange';
 import { AlgebraConfig, Adapters } from './config';
 import { Contract } from 'web3-eth-contract';
-import { Interface } from 'ethers/lib/utils';
+import { AbiCoder, Interface, solidityPacked } from 'ethers';
 import SwapRouter from '../../abi/algebra/SwapRouter.json';
 import AlgebraQuoterABI from '../../abi/algebra/AlgebraQuoter.abi.json';
 import UniswapV3MultiABI from '../../abi/uniswap-v3/UniswapMulti.abi.json';
@@ -483,7 +481,10 @@ export class Algebra extends SimpleExchange implements IDex<AlgebraData> {
       if (!success) {
         return 0n;
       }
-      const decoded = defaultAbiCoder.decode(['uint256'], returnData);
+      const decoded = AbiCoder.defaultAbiCoder().decode(
+        ['uint256'],
+        returnData,
+      );
       totalGasCost += +gasUsed;
       totalSuccessFullSwaps++;
 
@@ -1128,8 +1129,8 @@ export class Algebra extends SimpleExchange implements IDex<AlgebraData> {
     );
 
     return side === SwapSide.BUY
-      ? pack(types.reverse(), _path.reverse())
-      : pack(types, _path);
+      ? solidityPacked(types.reverse(), _path.reverse())
+      : solidityPacked(types, _path);
   }
 
   releaseResources() {

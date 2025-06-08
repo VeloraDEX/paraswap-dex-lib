@@ -8,6 +8,7 @@ import { Solidly } from '../solidly';
 import { IDexHelper } from '../../../dex-helper';
 import { SolidlyPair } from '../types';
 import { Interface } from '@ethersproject/abi';
+import { BytesLike } from 'ethers';
 
 const RamsesFactoryABI = [
   {
@@ -59,7 +60,7 @@ export class Ramses extends Solidly {
         pair.exchange,
       ]),
     };
-    const callDecoder = (values: any[]) =>
+    const callDecoder = (values: BytesLike) =>
       parseInt(
         ramsesFactoryIface
           .decodeFunctionResult('pairFee', values)[0]

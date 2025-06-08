@@ -6,6 +6,7 @@ import { Interface } from '@ethersproject/abi';
 import { DexParams } from './types';
 import excaliburPoolABI from '../../abi/uniswap-v2/excalibur-pool.json';
 import { getDexKeysWithNetwork } from '../../utils';
+import { BytesLike } from 'ethers';
 
 export const ExcaliburConfig: DexConfigMap<DexParams> = {
   Excalibur: {
@@ -47,7 +48,7 @@ export class Excalibur extends UniswapV2 {
       target: pair.exchange!,
       callData: this.excaliburPool.encodeFunctionData('feeAmount', []),
     };
-    const callDecoder = (values: any[]) =>
+    const callDecoder = (values: BytesLike) =>
       Math.ceil(
         parseInt(
           this.excaliburPool

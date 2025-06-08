@@ -1,10 +1,6 @@
 import { NumberAsString } from '@paraswap/core';
-import {
-  TickBitMapMappingsWithBigNumber,
-  TickInfo,
-  TickInfoMappingsWithBigNumber,
-} from '../types';
-import { bigIntify } from '../../../utils';
+import { TickBitMapMappings, TickInfo, TickInfoMappings } from '../types';
+``;
 
 export function _mulmod(x: bigint, y: bigint, m: bigint): bigint {
   return m === 0n ? 0n : (x * y) % m;
@@ -20,12 +16,12 @@ export function _gt(x: bigint, y: bigint) {
 
 export function _reduceTickBitmap(
   tickBitmap: Record<NumberAsString, bigint>,
-  tickBitmapToReduce: TickBitMapMappingsWithBigNumber[],
+  tickBitmapToReduce: TickBitMapMappings[],
 ) {
   return tickBitmapToReduce.reduce<Record<NumberAsString, bigint>>(
     (acc, curr) => {
       const { index, value } = curr;
-      acc[index] = bigIntify(value);
+      acc[index] = value;
       return acc;
     },
     tickBitmap,
@@ -34,14 +30,14 @@ export function _reduceTickBitmap(
 
 export function _reduceTicks(
   ticks: Record<NumberAsString, TickInfo>,
-  ticksToReduce: TickInfoMappingsWithBigNumber[],
+  ticksToReduce: TickInfoMappings[],
 ) {
   return ticksToReduce.reduce<Record<string, TickInfo>>((acc, curr) => {
     const { index, value } = curr;
     if (value.initialized) {
       acc[index] = {
-        liquidityGross: bigIntify(value.liquidityGross),
-        liquidityNet: bigIntify(value.liquidityNet),
+        liquidityGross: value.liquidityGross,
+        liquidityNet: value.liquidityNet,
         initialized: value.initialized,
       };
     }

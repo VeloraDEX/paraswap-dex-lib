@@ -38,7 +38,7 @@ import { RateFetcher } from './rate-fetcher';
 import routerAbi from '../../abi/swaap-v2/vault.json';
 import BigNumber from 'bignumber.js';
 import { BN_0, BN_1, getBigNumberPow } from '../../bignumber-constants';
-import { Interface } from 'ethers/lib/utils';
+import { Interface } from 'ethers';
 import { AsyncOrSync, assert } from 'ts-essentials';
 import {
   SWAAP_RFQ_API_URL,

@@ -30,7 +30,7 @@ export const checkOrder = async (
       throw new Error(`signature is invalid`);
     }
   } else {
-    const recovered = ethers.utils
+    const recovered = ethers
       .recoverAddress(hash, order.signature)
       .toLowerCase();
 

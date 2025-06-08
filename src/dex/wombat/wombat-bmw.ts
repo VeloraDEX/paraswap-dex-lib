@@ -1,6 +1,6 @@
 import { Interface } from '@ethersproject/abi';
 import { BytesLike } from 'ethers';
-import { LogDescription } from 'ethers/lib/utils';
+import { LogDescription } from 'ethers';
 import { Contract } from 'web3-eth-contract';
 import { DeepReadonly } from 'ts-essentials';
 import { Address, Log, Logger, MultiCallInput } from '../../types';

@@ -1,16 +1,11 @@
 import _ from 'lodash';
-import { Interface } from '@ethersproject/abi';
+import { Interface } from 'ethers';
 import { AsyncOrSync, DeepReadonly } from 'ts-essentials';
 import { PartialEventSubscriber } from '../../composed-event-subscriber';
 import { Lens } from '../../lens';
 import VaultABI from '../../abi/gmx/vault.json';
 import { VaultUtils } from './vault-utils';
-import {
-  VaultConfig,
-  VaultState,
-  FastPriceFeedConfig,
-  PoolState,
-} from './types';
+import { VaultConfig, VaultState } from './types';
 import { VaultPriceFeed } from './vault-price-feed';
 import { USDG } from './usdg';
 import {
@@ -263,6 +258,9 @@ export class Vault<State> extends PartialEventSubscriber<State, VaultState> {
   ): AsyncOrSync<VaultState | null> {
     try {
       const parsed = Vault.interface.parseLog(log);
+
+      if (!parsed) return null;
+
       const _state: VaultState = _.cloneDeep(state);
       switch (parsed.name) {
         case 'IncreaseUsdgAmount': {

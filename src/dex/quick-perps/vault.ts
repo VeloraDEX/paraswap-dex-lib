@@ -1,5 +1,4 @@
 import _ from 'lodash';
-import { Interface } from '@ethersproject/abi';
 import { AsyncOrSync, DeepReadonly } from 'ts-essentials';
 import { PartialEventSubscriber } from '../../composed-event-subscriber';
 import { Lens } from '../../lens';
@@ -21,6 +20,7 @@ import {
   Log,
 } from '../../types';
 import { BlockHeader } from 'web3-eth';
+import { Interface } from 'ethers';
 
 export class Vault<State> extends PartialEventSubscriber<State, VaultState> {
   static readonly interface: Interface = new Interface(VaultABI);
@@ -263,6 +263,9 @@ export class Vault<State> extends PartialEventSubscriber<State, VaultState> {
   ): AsyncOrSync<VaultState | null> {
     try {
       const parsed = Vault.interface.parseLog(log);
+
+      if (!parsed) return null;
+
       const _state: VaultState = _.cloneDeep(state);
       switch (parsed.name) {
         case 'IncreaseUsdqAmount': {

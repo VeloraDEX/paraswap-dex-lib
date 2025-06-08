@@ -1,10 +1,9 @@
-import { ethers } from 'ethers';
+import { ethers, Interface } from 'ethers';
 import { IDexHelper } from '../../dex-helper';
 import { Token } from '../../types';
 import { bigIntify } from '../nerve/utils';
 import { getBigIntPow } from '../../utils';
 import { JarvisSwapFunctions, PoolConfig, PoolState } from './types';
-import { Interface } from '@ethersproject/abi';
 import { Contract } from 'web3-eth-contract';
 
 export const THIRTY_MINUTES = 60 * 30;
@@ -69,7 +68,7 @@ async function _getPricesFeedValues(
   priceFeedContract: Contract,
 ) {
   const pairList = poolConfigs.map(pool =>
-    ethers.utils.formatBytes32String(pool.priceFeedPair),
+    ethers.encodeBytes32String(pool.priceFeedPair),
   );
 
   const pricesFeedValues = (await priceFeedContract.methods

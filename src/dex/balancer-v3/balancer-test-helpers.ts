@@ -55,13 +55,11 @@ async function querySinglePathPrices(
   const expectedPrices = [0n];
   for (const call of readerCallData) {
     try {
-      const result = await balancerV3.dexHelper.provider.call(
-        {
-          to: call.target,
-          data: call.callData,
-        },
-        blockNumber,
-      );
+      const result = await balancerV3.dexHelper.provider.call({
+        to: call.target,
+        data: call.callData,
+        blockTag: blockNumber,
+      });
       const parsed = balancerRouter.decodeFunctionResult(
         side === SwapSide.SELL
           ? `querySwapSingleTokenExactIn`
@@ -97,13 +95,11 @@ async function queryMultiPathPrices(
   const expectedPrices = [0n];
   for (const call of readerCallData) {
     try {
-      const result = await balancerV3.dexHelper.provider.call(
-        {
-          to: call.target,
-          data: call.callData,
-        },
-        blockNumber,
-      );
+      const result = await balancerV3.dexHelper.provider.call({
+        to: call.target,
+        data: call.callData,
+        blockTag: blockNumber,
+      });
       const parsed = balancerBatchRouter.decodeFunctionResult(
         side === SwapSide.SELL ? `querySwapExactIn` : `querySwapExactOut`,
         result,

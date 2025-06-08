@@ -1,5 +1,5 @@
 import _ from 'lodash';
-import { Interface } from '@ethersproject/abi';
+import { Interface } from 'ethers';
 import { IDexHelper } from '../../dex-helper';
 import { StatefulEventSubscriber } from '../../stateful-event-subscriber';
 import { Address, Log, Logger } from '../../types';
@@ -27,6 +27,9 @@ export class ConcentratorArusdEvent extends StatefulEventSubscriber<Concentrator
     log: Readonly<Log>,
   ): AsyncOrSync<DeepReadonly<ConcentratorArusdState> | null> {
     const event = this.decoder(log);
+
+    if (!event) return null;
+
     const _state: ConcentratorArusdState = _.cloneDeep(state);
     if (event.name === 'Deposit') {
       _state.totalSupply = (

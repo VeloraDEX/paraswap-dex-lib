@@ -1,5 +1,4 @@
-import { Interface } from '@ethersproject/abi';
-import { BytesLike } from 'ethers/lib/utils';
+import { BytesLike, Interface } from 'ethers';
 import { DeepReadonly } from 'ts-essentials';
 import { Log, Logger } from '../../types';
 import { catchParseLogError } from '../../utils';
@@ -136,7 +135,7 @@ export class FluidDexFactory extends StatefulEventSubscriber<Pool[]> {
       ResolverABI,
       this.dexHelper.provider,
     );
-    const rawResult = await resolverContract.callStatic.getAllPools({
+    const rawResult = await resolverContract.getAllPools({
       blockTag: blockNumber,
     });
 

@@ -1,6 +1,6 @@
 import { BI_POWS } from '../../bigint-constants';
 import { StatefulEventSubscriber } from '../../stateful-event-subscriber';
-import { Interface } from '@ethersproject/abi';
+import { Interface } from 'ethers';
 
 import type { IDexHelper } from '../../dex-helper';
 import type { AsyncOrSync, DeepReadonly } from 'ts-essentials';

@@ -1,7 +1,6 @@
 import { Contract } from 'web3-eth-contract';
 import { ETHxPoolState } from './types';
-import { Interface, AbiCoder } from '@ethersproject/abi';
-import { BI_POWS } from '../../bigint-constants';
+import { Interface, AbiCoder } from 'ethers';
 
 export async function getOnChainStateETHx(
   multiContract: Contract,

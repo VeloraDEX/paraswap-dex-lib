@@ -5,7 +5,7 @@ import { IDexHelper } from '../../dex-helper/idex-helper';
 import { lens } from '../../lens';
 import { PoolConfig, PoolState } from './types';
 import { getOnChainState } from './utils';
-import { Interface } from '@ethersproject/abi';
+import { Interface } from 'ethers';
 import { ChainLinkPriceFeed } from './chainLinkpriceFeed-event';
 import { SynthereumPoolEvent } from './syntheteumPool-event';
 import { Contract } from 'web3-eth-contract';

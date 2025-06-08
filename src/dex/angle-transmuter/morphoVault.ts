@@ -1,4 +1,3 @@
-import { Interface } from '@ethersproject/abi';
 import type { DeepReadonly } from 'ts-essentials';
 import type {
   BlockHeader,
@@ -13,7 +12,7 @@ import MorphoVaultABI from '../../abi/angle-transmuter/MorphoVault.json';
 import { PartialEventSubscriber } from '../../composed-event-subscriber';
 import { Lens } from '../../lens';
 import _ from 'lodash';
-import { ethers } from 'ethers';
+import { ethers, Interface } from 'ethers';
 
 export class MorphoVaultSubscriber<State> extends PartialEventSubscriber<
   State,
@@ -36,6 +35,9 @@ export class MorphoVaultSubscriber<State> extends PartialEventSubscriber<
   ): DeepReadonly<MorphoVaultState> | null {
     try {
       const parsed = MorphoVaultSubscriber.interface.parseLog(log);
+
+      if (!parsed) return null;
+
       const _state: MorphoVaultState = _.cloneDeep(state) as MorphoVaultState;
       switch (parsed.name) {
         case 'UpdateLastTotalAssets':
@@ -99,7 +101,7 @@ export class MorphoVaultSubscriber<State> extends PartialEventSubscriber<
   }
 
   handleUpdateLastTotalAssets(
-    event: ethers.utils.LogDescription,
+    event: ethers.LogDescription,
     state: MorphoVaultState,
   ): DeepReadonly<MorphoVaultState> | null {
     state.totalAssets = bigIntify(event.args.updatedTotalAssets);
@@ -107,7 +109,7 @@ export class MorphoVaultSubscriber<State> extends PartialEventSubscriber<
   }
 
   handleAccrueFee(
-    event: ethers.utils.LogDescription,
+    event: ethers.LogDescription,
     state: MorphoVaultState,
   ): DeepReadonly<MorphoVaultState> | null {
     state.totalSupply += bigIntify(event.args.feeShares);
@@ -115,7 +117,7 @@ export class MorphoVaultSubscriber<State> extends PartialEventSubscriber<
   }
 
   handleDeposit(
-    event: ethers.utils.LogDescription,
+    event: ethers.LogDescription,
     state: MorphoVaultState,
   ): DeepReadonly<MorphoVaultState> | null {
     const shares = bigIntify(event.args.shares);
@@ -124,7 +126,7 @@ export class MorphoVaultSubscriber<State> extends PartialEventSubscriber<
   }
 
   handleWithdraw(
-    event: ethers.utils.LogDescription,
+    event: ethers.LogDescription,
     state: MorphoVaultState,
   ): DeepReadonly<MorphoVaultState> | null {
     const shares = bigIntify(event.args.shares);

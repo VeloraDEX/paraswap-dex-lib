@@ -1,7 +1,5 @@
 import { endpoints } from './config';
-import { BytesLike } from 'ethers';
-import BigNumber from 'bignumber.js';
-import { Interface } from '@ethersproject/abi';
+import { BytesLike, Interface } from 'ethers';
 import { stringDecode, addressDecode, uint8ToNumber } from '../../lib/decoders';
 import {
   MultiCallParams,
@@ -13,9 +11,6 @@ import axios from 'axios';
 import { Network } from '../../constants';
 import { IDexHelper } from '../../dex-helper';
 import { TOKEN_LISTS } from './token_list';
-
-export const BNify = (s: any): BigNumber =>
-  new BigNumber(typeof s === 'object' ? s : String(s));
 
 async function _getIdleTokenSymbols(
   idleTokens: string[],

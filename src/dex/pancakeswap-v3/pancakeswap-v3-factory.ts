@@ -4,7 +4,7 @@ import FactoryABI from '../../abi/pancakeswap-v3/PancakeswapV3Factory.abi.json';
 import { IDexHelper } from '../../dex-helper/idex-helper';
 import { StatefulEventSubscriber } from '../../stateful-event-subscriber';
 import { Address, Log, Logger } from '../../types';
-import { LogDescription } from 'ethers/lib/utils';
+import { LogDescription } from 'ethers';
 import { FactoryState } from '../uniswap-v3/types';
 
 export type OnPoolCreatedCallback = ({

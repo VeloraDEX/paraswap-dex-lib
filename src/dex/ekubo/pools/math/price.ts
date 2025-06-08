@@ -1,4 +1,3 @@
-import { BigNumber } from 'ethers';
 import {
   MAX_U256,
   TWO_POW_128,
@@ -34,12 +33,8 @@ export function fixedSqrtRatioToFloat(sqrtRatioFixed: bigint): bigint {
   }
 }
 
-export const MAX_SQRT_RATIO_FLOAT = BigNumber.from(
-  fixedSqrtRatioToFloat(MAX_SQRT_RATIO),
-);
-export const MIN_SQRT_RATIO_FLOAT = BigNumber.from(
-  fixedSqrtRatioToFloat(MIN_SQRT_RATIO),
-);
+export const MAX_SQRT_RATIO_FLOAT = fixedSqrtRatioToFloat(MAX_SQRT_RATIO);
+export const MIN_SQRT_RATIO_FLOAT = fixedSqrtRatioToFloat(MIN_SQRT_RATIO);
 
 export function nextSqrtRatioFromAmount0(
   sqrtRatio: bigint,

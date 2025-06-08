@@ -17,7 +17,6 @@ import {
 } from '../../types';
 import { Network } from '../../constants';
 import { getDexKeysWithNetwork } from '../../utils';
-import { Interface } from '@ethersproject/abi';
 import SSRAuthOracleAbi from '../../abi/sdai/SSRAuthOracle.abi.json';
 import SparkPSM3Abi from '../../abi/sdai/PSM3.abi.json';
 import { IDexHelper } from '../../dex-helper';
@@ -25,6 +24,7 @@ import { Adapters } from './config';
 import { extractReturnAmountPosition } from '../../executor/utils';
 import { BI_POWS } from '../../bigint-constants';
 import { SDAI_DEPOSIT_GAS_COST } from './constants';
+import { Interface } from 'ethers';
 
 export const sUSDSPsmConfig: DexConfigMap<SparkParams> = {
   SparkPsm: {

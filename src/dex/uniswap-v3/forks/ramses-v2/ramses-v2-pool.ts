@@ -9,7 +9,7 @@ import { _reduceTickBitmap, _reduceTicks } from '../../contract-math/utils';
 import { bigIntify } from '../../../../utils';
 import { TickBitMap } from '../../contract-math/TickBitMap';
 import { uint24ToBigInt } from '../../../../lib/decoders';
-import { Interface } from 'ethers/lib/utils';
+import { Interface } from 'ethers';
 import RamsesV2PoolABI from '../../../../abi/ramses-v2/RamsesV2Pool.abi.json';
 import { IDexHelper } from '../../../../dex-helper';
 import { Contract } from 'web3-eth-contract';

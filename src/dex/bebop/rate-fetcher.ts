@@ -12,7 +12,7 @@ import {
 } from './types';
 import { BebopPricingUpdate, tokensResponseValidator } from './validators';
 import { WebSocketFetcher } from '../../lib/fetcher/wsFetcher';
-import { utils } from 'ethers';
+import { ethers } from 'ethers';
 
 export function levels_from_flat_array(values: number[]): BebopLevel[] {
   const levels: BebopLevel[] = [];
@@ -93,9 +93,9 @@ export class RateFetcher {
     }
     for (const pairBook of updateObject.pairs) {
       const pair =
-        utils.getAddress('0x' + pairBook.base.toString('hex')) +
+        ethers.getAddress('0x' + pairBook.base.toString('hex')) +
         '/' +
-        utils.getAddress('0x' + pairBook.quote.toString('hex'));
+        ethers.getAddress('0x' + pairBook.quote.toString('hex'));
       const lastUpdateTs = pairBook.lastUpdateTs;
       const bids = pairBook.bids ? levels_from_flat_array(pairBook.bids) : [];
       const asks = pairBook.asks ? levels_from_flat_array(pairBook.asks) : [];

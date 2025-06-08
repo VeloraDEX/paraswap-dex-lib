@@ -1,17 +1,10 @@
 import _ from 'lodash';
-import { Interface, defaultAbiCoder } from '@ethersproject/abi';
 import { DeepReadonly } from 'ts-essentials';
 import { Log, Logger } from '../../types';
 import { catchParseLogError } from '../../utils';
 import { StatefulEventSubscriber } from '../../stateful-event-subscriber';
 import { IDexHelper } from '../../dex-helper/idex-helper';
-import {
-  PoolState,
-  PoolStateMap,
-  StableMutableState,
-  Step,
-  TokenInfo,
-} from './types';
+import { PoolState, PoolStateMap, Step, TokenInfo } from './types';
 import { getPoolsApi } from './getPoolsApi';
 import vaultExtensionAbi_V3 from '../../abi/balancer-v3/vault-extension.json';
 import {
@@ -34,6 +27,7 @@ import {
   HooksConfigMap,
 } from './hooks/balancer-hook-event-subscriber';
 import { StableSurge, StableSurgeHookState } from './hooks/stableSurgeHook';
+import { Interface } from 'ethers';
 
 export const WAD = BI_POWS[18];
 const FEE_SCALING_FACTOR = BI_POWS[11];
@@ -146,6 +140,11 @@ export class BalancerV3EventPool extends StatefulEventSubscriber<PoolStateMap> {
     blockNumber: number,
   ): Promise<DeepReadonly<PoolStateMap>> {
     const block = await this.dexHelper.provider.getBlock(blockNumber);
+
+    if (!block) {
+      throw new Error('"provider.getBlock" returned null!');
+    }
+
     const apiPoolStateMap = await getPoolsApi(
       this.network,
       this.hooksConfigMap,

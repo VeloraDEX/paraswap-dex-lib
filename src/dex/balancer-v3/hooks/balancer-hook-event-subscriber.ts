@@ -1,9 +1,4 @@
-import {
-  EventFragment,
-  Fragment,
-  FunctionFragment,
-  Interface,
-} from '@ethersproject/abi';
+import { EventFragment, Fragment, FunctionFragment, Interface } from 'ethers';
 import _ from 'lodash';
 import { DeepReadonly } from 'ts-essentials';
 import { Log, Logger } from '../../../types';

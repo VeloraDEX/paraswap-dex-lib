@@ -66,7 +66,7 @@ export const priceLevelsResponseValidator = joi.object({
 });
 
 export const addressSchema = joi.string().custom((value, helpers) => {
-  if (ethers.utils.isAddress(value)) {
+  if (ethers.isAddress(value)) {
     return value.toLowerCase();
   }
   return helpers.message({ custom: `'${value}' is not valid address` });

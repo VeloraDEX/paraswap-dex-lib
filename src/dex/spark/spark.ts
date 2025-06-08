@@ -18,7 +18,7 @@ import {
 } from '../../types';
 import { IDexHelper } from '../../dex-helper';
 import * as CALLDATA_GAS_COST from '../../calldata-gas-cost';
-import { Interface } from 'ethers/lib/utils';
+import { Interface } from 'ethers';
 import { calcChi, RAY, SparkSDaiEventPool } from './spark-sdai-pool';
 import { BI_POWS } from '../../bigint-constants';
 import { SDAI_DEPOSIT_GAS_COST } from './constants';

@@ -1,4 +1,4 @@
-import { Interface } from '@ethersproject/abi';
+import { Interface } from 'ethers';
 import { DeepReadonly } from 'ts-essentials';
 import {
   Token,

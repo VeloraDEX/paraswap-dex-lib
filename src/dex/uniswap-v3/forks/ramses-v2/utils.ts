@@ -14,7 +14,7 @@ export function decodeStateMultiCallResultWithRelativeBitmaps(
     `decodeStateMultiCallResultWithRelativeBitmaps failed to get decodable result: ${result}`,
   );
 
-  const decoded = ethers.utils.defaultAbiCoder.decode(
+  const decoded = ethers.AbiCoder.defaultAbiCoder().decode(
     [
       // I don't want to pass here any interface, so I just use it in ethers format
       `

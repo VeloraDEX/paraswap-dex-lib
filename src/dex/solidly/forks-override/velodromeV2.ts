@@ -4,8 +4,8 @@ import { SolidlyConfig } from '../config';
 import _ from 'lodash';
 import { Address, Token } from '../../../types';
 import { SolidlyPair } from '../types';
-import { Interface } from '@ethersproject/abi';
 import { IDexHelper } from '../../../dex-helper';
+import { BytesLike, Interface } from 'ethers';
 import { addressDecode, uint256DecodeToNumber } from '../../../lib/decoders';
 import { MultiCallParams } from '../../../lib/multi-wrapper';
 import { SolidlyRpcPoolTracker } from '../rpc-pool-tracker';
@@ -74,7 +74,7 @@ export class VelodromeV2 extends SolidlyRpcPoolTracker {
         pair.stable,
       ]),
     };
-    const callDecoder = (values: any[]) =>
+    const callDecoder = (values: BytesLike) =>
       parseInt(
         velodromeV2FactoryIface
           .decodeFunctionResult('getFee', values)[0]

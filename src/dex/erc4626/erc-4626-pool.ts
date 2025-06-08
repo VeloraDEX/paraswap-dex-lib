@@ -1,5 +1,5 @@
 import { StatefulEventSubscriber } from '../../stateful-event-subscriber';
-import { Interface } from '@ethersproject/abi';
+import { Interface } from 'ethers';
 
 import type { IDexHelper } from '../../dex-helper';
 import type { DeepReadonly } from 'ts-essentials';

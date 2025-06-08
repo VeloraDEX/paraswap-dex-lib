@@ -1,6 +1,5 @@
 import _ from 'lodash';
 import { Contract } from 'web3-eth-contract';
-import { Interface } from '@ethersproject/abi';
 import {
   AdapterExchangeParam,
   Address,
@@ -41,13 +40,15 @@ import { generatePoolStates } from './utils';
 import BalancerV1ExchangeProxyABI from '../../abi/BalancerV1ExchangeProxy.json';
 import BalancerCustomMulticallABI from '../../abi/BalancerCustomMulticall.json';
 import { NumberAsString, SwapSide } from '@paraswap/core';
-import { BigNumber, ethers } from 'ethers';
+import {
+  ethers,
+  Interface,
+  solidityPacked,
+  toBeHex,
+  zeroPadValue,
+} from 'ethers';
 import { SpecialDex } from '../../executor/types';
 import { extractReturnAmountPosition } from '../../executor/utils';
-
-const {
-  utils: { hexlify, hexZeroPad, solidityPack },
-} = ethers;
 
 const fetchAllPoolsQuery = `query {
     pools(first: ${MAX_POOL_CNT.toString()} 
@@ -395,15 +396,15 @@ export class BalancerV1
     let specialDexFlag = SpecialDex.DEFAULT;
 
     if (side === SwapSide.SELL) {
-      const totalAmount = swaps.reduce<BigNumber>((acc, swap) => {
-        return acc.add(swap.tokenInParam);
-      }, BigNumber.from(0));
+      const totalAmount = swaps.reduce<bigint>((acc, swap) => {
+        return acc + BigInt(swap.tokenInParam);
+      }, 0n);
 
-      exchangeData = solidityPack(
+      exchangeData = solidityPacked(
         ['bytes32', 'bytes32', 'bytes'],
         [
-          hexZeroPad(hexlify(swaps.length), 32),
-          hexZeroPad(hexlify(totalAmount), 32),
+          zeroPadValue(toBeHex(swaps.length), 32),
+          zeroPadValue(toBeHex(totalAmount), 32),
           exchangeData,
         ],
       );

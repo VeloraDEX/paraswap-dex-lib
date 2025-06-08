@@ -1,4 +1,3 @@
-import { Interface } from '@ethersproject/abi';
 import { IDexHelper } from '../../dex-helper/idex-helper';
 import { StatefulEventSubscriber } from '../../stateful-event-subscriber';
 import { Address, Log, Logger } from '../../types';
@@ -6,7 +5,7 @@ import { DeepReadonly } from 'ts-essentials';
 import { catchParseLogError } from '../../utils';
 import { ETHxPoolState } from './types';
 import { getOnChainStateETHx } from './utils';
-import { BI_POWS } from '../../bigint-constants';
+import { Interface } from 'ethers';
 
 export class ETHxEventPool extends StatefulEventSubscriber<ETHxPoolState> {
   decoder = (log: Log) => this.poolInterface.parseLog(log);
@@ -30,6 +29,9 @@ export class ETHxEventPool extends StatefulEventSubscriber<ETHxPoolState> {
   ): DeepReadonly<ETHxPoolState> | null {
     try {
       const event = this.decoder(log);
+
+      if (!event) return null;
+
       if (event.name === 'ExchangeRateUpdated') {
         const totalEth = BigInt(event.args.totalEth);
         const ethxSupply = BigInt(event.args.ethxSupply);

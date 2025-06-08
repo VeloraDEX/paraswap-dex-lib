@@ -1,5 +1,5 @@
 import { IDexHelper } from '../../dex-helper';
-import { Interface, JsonFragment } from '@ethersproject/abi';
+import { Interface, JsonFragment } from 'ethers';
 import TraderJoeV21RouterABI from '../../abi/TraderJoeV21Router.json';
 import { TRADERJOE_V2_1_ROUTER_ADDRESS } from './config';
 import { BaseTraderJoeV2 } from './base';

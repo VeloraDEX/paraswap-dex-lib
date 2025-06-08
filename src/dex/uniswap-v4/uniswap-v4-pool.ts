@@ -14,7 +14,7 @@ import {
 } from './types';
 import { IDexHelper } from '../../dex-helper';
 import { Log, Logger } from '../../types';
-import { BytesLike, Interface } from 'ethers/lib/utils';
+import { BytesLike, Interface } from 'ethers';
 import UniswapV4StateViewABI from '../../abi/uniswap-v4/state-view.abi.json';
 import UniswapV4PoolManagerABI from '../../abi/uniswap-v4/pool-manager.abi.json';
 import { BlockHeader } from 'web3-eth';

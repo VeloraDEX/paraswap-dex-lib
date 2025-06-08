@@ -1,4 +1,4 @@
-import { Interface } from '@ethersproject/abi';
+import { Interface } from 'ethers';
 import { NumberAsString } from '@paraswap/core';
 import { Address } from '../../types';
 

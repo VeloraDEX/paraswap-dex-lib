@@ -1,4 +1,3 @@
-import { Interface } from '@ethersproject/abi';
 import { BigNumber } from '@ethersproject/bignumber';
 
 import { BasePool } from '../balancer-v2-pool';
@@ -12,6 +11,7 @@ import { callData, SubgraphPoolBase, PoolState, TokenState } from '../../types';
 import { MathSol } from '../../balancer-v2-math';
 import { Gyro3Maths } from '@balancer-labs/sor';
 import { _addFee, _reduceFee } from './gyro-helpers';
+import { Interface } from 'ethers';
 
 // Swap Limit factor
 const SWAP_LIMIT_FACTOR = BigInt('999999000000000000');

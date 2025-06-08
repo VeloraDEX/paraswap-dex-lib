@@ -1,6 +1,4 @@
-import { defaultAbiCoder, Interface } from '@ethersproject/abi';
 import _ from 'lodash';
-import { pack } from '@ethersproject/solidity';
 import {
   Token,
   Address,
@@ -62,6 +60,7 @@ import {
   PancakeswapV3Factory,
 } from './pancakeswap-v3-factory';
 import { extractReturnAmountPosition } from '../../executor/utils';
+import { solidityPacked, Interface, AbiCoder } from 'ethers';
 import { uint256ToBigInt } from '../../lib/decoders';
 import { MultiCallParams } from '../../lib/multi-wrapper';
 
@@ -496,7 +495,7 @@ export class PancakeswapV3
       if (!data.returnData[j].success) {
         return 0n;
       }
-      const decoded = defaultAbiCoder.decode(
+      const decoded = AbiCoder.defaultAbiCoder().decode(
         ['uint256'],
         data.returnData[j].returnData,
       );
@@ -1233,8 +1232,8 @@ export class PancakeswapV3
     );
 
     return side === SwapSide.BUY
-      ? pack(types.reverse(), _path.reverse())
-      : pack(types, _path);
+      ? solidityPacked(types.reverse(), _path.reverse())
+      : solidityPacked(types, _path);
   }
 
   releaseResources() {

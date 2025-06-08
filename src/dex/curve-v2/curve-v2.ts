@@ -1,4 +1,3 @@
-import { Interface, JsonFragment } from '@ethersproject/abi';
 import { SwapSide } from '../../constants';
 import {
   AdapterExchangeParam,
@@ -23,7 +22,7 @@ import { IDexHelper } from '../../dex-helper';
 import { assert } from 'ts-essentials';
 import { Logger } from 'log4js';
 import { OptimalSwapExchange } from '@paraswap/core';
-import { isETHAddress, uuidToBytes16 } from '../../utils';
+import { encodeV6Metadata, isETHAddress, uuidToBytes16 } from '../../utils';
 import { DIRECT_METHOD_NAME_V6 } from './constants';
 import {
   CurveV2DirectSwap,
@@ -31,7 +30,7 @@ import {
   CurveV2SwapType,
 } from './types';
 import { packCurveData } from '../../lib/curve/encoder';
-import { hexConcat, hexZeroPad, hexlify } from 'ethers/lib/utils';
+import { Interface, JsonFragment } from 'ethers';
 
 const DIRECT_METHOD_NAME = 'directCurveV2Swap';
 
@@ -280,10 +279,7 @@ export class CurveV2
 
     assert(side === SwapSide.SELL, 'Buy not supported');
 
-    const metadata = hexConcat([
-      hexZeroPad(uuidToBytes16(uuid), 16),
-      hexZeroPad(hexlify(blockNumber), 16),
-    ]);
+    const metadata = encodeV6Metadata(uuid, blockNumber);
 
     const swapParams: CurveV2DirectSwapParam = [
       packCurveData(

@@ -5,7 +5,7 @@ import { amount1Delta, amount0Delta } from './math/delta';
 import { floatSqrtRatioToFixed } from './math/price';
 import { MIN_TICK, MAX_TICK, MIN_SQRT_RATIO, toSqrtRatio } from './math/tick';
 import { defaultAbiCoder } from '@ethersproject/abi';
-import { hexZeroPad, hexlify } from 'ethers/lib/utils';
+import { zeroPadValue, toBeHex } from 'ethers';
 import { keccak256 } from 'web3-utils';
 import { hexStringTokenPair } from '../utils';
 
@@ -23,11 +23,11 @@ export namespace PoolState {
   export function fromQuoter(data: QuoteData, isFullRange: boolean): Object {
     const sortedTicks = data.ticks.map(({ number, liquidityDelta }) => ({
       number,
-      liquidityDelta: liquidityDelta.toBigInt(),
+      liquidityDelta,
     }));
-    const liquidity = data.liquidity.toBigInt();
+    const liquidity = data.liquidity;
 
-    const sqrtRatioFloat = data.sqrtRatio.toBigInt();
+    const sqrtRatioFloat = data.sqrtRatio;
 
     const checkedTicksBounds: [number, number] = isFullRange
       ? [MIN_TICK, MAX_TICK]
@@ -254,8 +254,8 @@ export class PoolKey {
   public get string_id(): string {
     this._string_id ??= `${hexStringTokenPair(this.token0, this.token1)}_${
       this.config.fee
-    }_${this.config.tickSpacing}_${hexZeroPad(
-      hexlify(this.config.extension),
+    }_${this.config.tickSpacing}_${zeroPadValue(
+      toBeHex(this.config.extension),
       20,
     )}`;
 
@@ -268,9 +268,9 @@ export class PoolKey {
         defaultAbiCoder.encode(
           ['address', 'address', 'bytes32'],
           [
-            hexZeroPad(hexlify(this.token0), 20),
-            hexZeroPad(hexlify(this.token1), 20),
-            hexZeroPad(hexlify(this.config.compressed), 32),
+            zeroPadValue(toBeHex(this.token0), 20),
+            zeroPadValue(toBeHex(this.token1), 20),
+            zeroPadValue(toBeHex(this.config.compressed), 32),
           ],
         ),
       ),
@@ -281,9 +281,9 @@ export class PoolKey {
 
   public toAbi(): AbiPoolKey {
     return {
-      token0: hexZeroPad(hexlify(this.token0), 20),
-      token1: hexZeroPad(hexlify(this.token1), 20),
-      config: hexZeroPad(hexlify(this.config.compressed), 32),
+      token0: zeroPadValue(toBeHex(this.token0), 20),
+      token1: zeroPadValue(toBeHex(this.token1), 20),
+      config: zeroPadValue(toBeHex(this.config.compressed), 32),
     };
   }
 }

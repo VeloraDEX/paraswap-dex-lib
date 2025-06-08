@@ -1,4 +1,4 @@
-import { Interface } from 'ethers/lib/utils';
+import { Interface } from 'ethers';
 import wooPPV2ABI from '../../abi/woo-fi-v2/WooPPV2.abi.json';
 import wooOracleV2ABI from '../../abi/woo-fi-v2/WooOracleV2.abi.json';
 import wooIntegrationHelper from '../../abi/woo-fi-v2/IntegrationHelper.abi.json';

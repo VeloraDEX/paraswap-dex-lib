@@ -19,7 +19,7 @@ import { AngleTransmuterData, DexParams } from './types';
 import { SimpleExchange } from '../simple-exchange';
 import { AngleTransmuterConfig, Adapters } from './config';
 import { AngleTransmuterEventPool } from './angle-transmuter-pool';
-import { Interface, formatUnits, parseUnits } from 'ethers/lib/utils';
+import { Interface, formatUnits, parseUnits } from 'ethers';
 import { TransmuterSubscriber } from './transmuter';
 import ERC20ABI from '../../abi/erc20.json';
 import { extractReturnAmountPosition } from '../../executor/utils';

@@ -1,4 +1,4 @@
-import { hexlify, hexZeroPad } from 'ethers/lib/utils';
+import { toBeHex, zeroPadValue } from 'ethers';
 import { Token } from '../../types';
 import { isETHAddress } from '../../utils';
 import { ETHER_ADDRESS } from '../../constants';
@@ -12,7 +12,7 @@ export function convertParaSwapToEkubo(address: string): bigint {
 export function convertEkuboToParaSwap(address: bigint): string {
   return address === NATIVE_TOKEN_ADDRESS
     ? ETHER_ADDRESS
-    : hexZeroPad(hexlify(address), 20);
+    : zeroPadValue(toBeHex(address), 20);
 }
 
 export function sortAndConvertTokens(
@@ -27,8 +27,8 @@ export function sortAndConvertTokens(
 }
 
 export function hexStringTokenPair(token0: bigint, token1: bigint): string {
-  return `${hexZeroPad(hexlify(token0), 20)}/${hexZeroPad(
-    hexlify(token1),
+  return `${zeroPadValue(toBeHex(token0), 20)}/${zeroPadValue(
+    toBeHex(token1),
     20,
   )}`;
 }

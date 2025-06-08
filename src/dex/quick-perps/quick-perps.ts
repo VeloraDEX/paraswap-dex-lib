@@ -1,5 +1,3 @@
-import { Interface } from '@ethersproject/abi';
-import _ from 'lodash';
 import {
   Token,
   Address,
@@ -23,7 +21,7 @@ import { SimpleExchange } from '../simple-exchange';
 import { QuickPerpsConfig, Adapters } from './config';
 import { Vault } from './vault';
 import ERC20ABI from '../../abi/erc20.json';
-import { solidityPack } from 'ethers/lib/utils';
+import { Interface } from 'ethers';
 import { extractReturnAmountPosition } from '../../executor/utils';
 
 const QuickPerpsGasCost = 300 * 1000;

@@ -6,11 +6,10 @@ import { Network } from '../../../constants';
 import { DummyDexHelper } from '../../../dex-helper';
 import { SparkSDaiPoolState } from '../types';
 import { BlockHeader } from 'web3-eth';
-import { ethers } from 'ethers';
+import { Interface } from 'ethers';
 import { Spark } from '../spark';
 import { SDaiConfig } from '../config';
 import { getOnChainState } from '../utils';
-import { Interface } from '@ethersproject/abi';
 import PotAbi from '../../../abi/maker-psm/pot.json';
 
 const network = Network.MAINNET;
@@ -23,11 +22,7 @@ const dexHelper = new DummyDexHelper(network);
 const logger = dexHelper.getLogger(dexKey);
 
 function preprocessField(value: any): string {
-  if (
-    typeof value === 'bigint' ||
-    typeof value === 'number' ||
-    ethers.BigNumber.isBigNumber(value)
-  ) {
+  if (typeof value === 'bigint' || typeof value === 'number') {
     return value.toString();
   }
   return value;

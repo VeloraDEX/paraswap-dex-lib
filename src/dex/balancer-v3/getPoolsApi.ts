@@ -6,7 +6,7 @@ import {
   SUPPORTED_POOLS,
 } from './config';
 import { CommonImmutablePoolState, ImmutablePoolStateMap } from './types';
-import { parseUnits } from 'ethers/lib/utils';
+import { parseUnits } from 'ethers';
 import { HooksConfigMap } from './hooks/balancer-hook-event-subscriber';
 import { getUniqueHookNames } from './utils';
 import { GyroECLPImmutableString } from './gyroECLPPool';
@@ -154,7 +154,7 @@ function scaleOrDefault(
   decimals: number,
   defaultValue: bigint,
 ): bigint {
-  return original ? parseUnits(original, decimals).toBigInt() : defaultValue;
+  return original ? parseUnits(original, decimals) : defaultValue;
 }
 
 // Any data from API will be immutable. Mutable data such as balances, etc will be fetched via onchain/event state.

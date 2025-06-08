@@ -6,7 +6,7 @@ import {
   RfqResponse,
 } from '@hashflow/taker-js/dist/types/rest';
 import BigNumber from 'bignumber.js';
-import { Interface } from 'ethers/lib/utils';
+import { ethers, Interface } from 'ethers';
 import { assert } from 'ts-essentials';
 import routerAbi from '../../abi/hashflow/HashflowRouter.abi.json';
 import { BI_MAX_UINT256 } from '../../bigint-constants';
@@ -885,7 +885,7 @@ export class Hashflow extends SimpleExchange implements IDex<HashflowData> {
       `${this.dexKey}-${this.network}: quoteData undefined`,
     );
 
-    const payload = this.routerInterface._abiCoder.encode(
+    const payload = ethers.AbiCoder.defaultAbiCoder().encode(
       [
         'tuple(address pool, address quoteToken, address externalAccount, uint256 baseTokenAmount, uint256 quoteTokenAmount, uint256 quoteExpiry, uint256 nonce, bytes32 txid, bytes signature)',
       ],

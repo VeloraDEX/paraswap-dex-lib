@@ -1,10 +1,10 @@
-import { Interface } from '@ethersproject/abi';
 import { Contract } from 'web3-eth-contract';
 import { IDexHelper } from '../../dex-helper/idex-helper';
 import { Address, BlockHeader, Log, Logger } from '../../types';
 import { bigIntify } from '../../utils';
 import { AlgebraEventPoolV1_1 } from './algebra-pool-v1_1';
 import { PoolStateV1_1 } from './types';
+import { Interface } from 'ethers';
 
 export class AlgebraEventPoolV1_9_bidirectional_fee extends AlgebraEventPoolV1_1 {
   constructor(

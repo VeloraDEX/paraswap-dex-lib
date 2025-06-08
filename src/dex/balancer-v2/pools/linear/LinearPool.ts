@@ -1,5 +1,3 @@
-import { Interface } from '@ethersproject/abi';
-import { BigNumber } from '@ethersproject/bignumber';
 import { isSameAddress, decodeThrowError } from '../../utils';
 import * as LinearMath from './LinearMath';
 import { BasePool } from '../balancer-v2-pool';
@@ -7,6 +5,7 @@ import { callData, SubgraphPoolBase, PoolState } from '../../types';
 import LinearPoolABI from '../../../../abi/balancer-v2/linearPoolAbi.json';
 import { SwapSide } from '../../../../constants';
 import { keyBy } from 'lodash';
+import { Interface } from 'ethers';
 
 export enum PairTypes {
   BptToMainToken,
@@ -45,7 +44,7 @@ export class LinearPool extends BasePool {
   // and equal to _INITIAL_BPT_SUPPLY, but most of it remains in the Pool, waiting to be exchanged for tokens. The
   // actual amount of BPT in circulation is the total supply minus the amount held by the Pool, and is known as the
   // 'virtual supply'.
-  MAX_TOKEN_BALANCE = BigNumber.from('2').pow('112').sub('1');
+  MAX_TOKEN_BALANCE = 2n ** 112n - 1n;
   vaultAddress: string;
   vaultInterface: Interface;
   poolInterface: Interface;
@@ -134,9 +133,7 @@ export class LinearPool extends BasePool {
     );
 
     // VirtualBPTSupply must be used for the maths
-    const virtualBptSupply = this.MAX_TOKEN_BALANCE.sub(
-      balances[bptIndex],
-    ).toBigInt();
+    const virtualBptSupply = this.MAX_TOKEN_BALANCE - balances[bptIndex];
 
     const amountsIn = this._onSwapGivenOut(
       tokenAmountsOutScaled,
@@ -327,9 +324,7 @@ export class LinearPool extends BasePool {
     );
 
     // VirtualBPTSupply must be used for the maths
-    const virtualBptSupply = this.MAX_TOKEN_BALANCE.sub(
-      balances[bptIndex],
-    ).toBigInt();
+    const virtualBptSupply = this.MAX_TOKEN_BALANCE - balances[bptIndex];
 
     const amountsOut = this._onSwapGivenIn(
       tokenAmountsInScaled,

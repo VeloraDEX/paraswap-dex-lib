@@ -1,5 +1,4 @@
 import { Address } from '../../types';
-import { BigNumber } from 'ethers';
 
 export type PoolReserve = {
   pool: string;
@@ -16,10 +15,10 @@ export type PoolReserveResponse = [
   string,
   string,
   string,
-  BigNumber,
-  BigNumber,
-  BigNumber[],
-  BigNumber[],
+  bigint,
+  bigint,
+  bigint[],
+  bigint[],
   DexLimitResponse,
 ];
 

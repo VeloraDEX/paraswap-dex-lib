@@ -1,19 +1,15 @@
-import { ethers } from 'ethers';
+import { toBeHex, zeroPadValue } from 'ethers';
 import { Network } from '../constants';
-
-const {
-  utils: { hexlify, hexZeroPad },
-} = ethers;
 
 export const BYTES_28_LENGTH = 28;
 export const BYTES_64_LENGTH = 64;
 export const BYTES_96_LENGTH = 96;
 
-export const ZEROS_4_BYTES = hexZeroPad(hexlify(0), 4);
-export const ZEROS_12_BYTES = hexZeroPad(hexlify(0), 12);
-export const ZEROS_20_BYTES = hexZeroPad(hexlify(0), 20);
-export const ZEROS_28_BYTES = hexZeroPad(hexlify(0), 28);
-export const ZEROS_32_BYTES = hexZeroPad(hexlify(0), 32);
+export const ZEROS_4_BYTES = zeroPadValue(toBeHex(0), 4);
+export const ZEROS_12_BYTES = zeroPadValue(toBeHex(0), 12);
+export const ZEROS_20_BYTES = zeroPadValue(toBeHex(0), 20);
+export const ZEROS_28_BYTES = zeroPadValue(toBeHex(0), 28);
+export const ZEROS_32_BYTES = zeroPadValue(toBeHex(0), 32);
 
 export const SWAP_EXCHANGE_100_PERCENTAGE = 100;
 

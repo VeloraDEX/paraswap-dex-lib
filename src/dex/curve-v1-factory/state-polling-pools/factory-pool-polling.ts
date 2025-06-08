@@ -10,14 +10,9 @@ import {
 } from '../types';
 import { PoolPollingBase, MulticallReturnedTypes } from './pool-polling-base';
 import FactoryCurveV1ABI from '../../../abi/curve-v1-factory/FactoryCurveV1.json';
-import {
-  generalDecoder,
-  uint256DecodeToNumber,
-  uint256ToBigInt,
-} from '../../../lib/decoders';
-import { BytesLike } from 'ethers/lib/utils';
+import { generalDecoder, uint256ToBigInt } from '../../../lib/decoders';
+import { BytesLike } from 'ethers';
 import { Address } from '@paraswap/core';
-import { BigNumber } from 'ethers';
 
 const DEFAULT_2_ZERO_ARRAY = [0n, 0n];
 const DEFAULT_4_ZERO_ARRAY = [0n, 0n, 0n, 0n];
@@ -101,12 +96,7 @@ export class FactoryStateHandler extends PoolPollingBase {
           this.address,
         ]),
         decodeFunction: (result: MultiResult<BytesLike> | BytesLike) =>
-          generalDecoder(
-            result,
-            ['uint256', 'uint256'],
-            DEFAULT_2_ZERO_ARRAY,
-            parsed => parsed.map((p: BigNumber) => p.toBigInt()),
-          ),
+          generalDecoder(result, ['uint256', 'uint256'], DEFAULT_2_ZERO_ARRAY),
       },
       {
         target: this.factoryAddress,
@@ -118,7 +108,6 @@ export class FactoryStateHandler extends PoolPollingBase {
             result,
             [`uint256[${factoryConfig?.isStableNg ? '' : '4'}]`],
             DEFAULT_4_ZERO_ARRAY,
-            parsed => parsed[0].map((p: BigNumber) => p.toBigInt()),
           ),
       },
     ];
@@ -141,7 +130,6 @@ export class FactoryStateHandler extends PoolPollingBase {
               }]`,
             ],
             new Array(this.poolContextConstants.N_COINS).fill(0n),
-            parsed => parsed[0].map((p: BigNumber) => p.toBigInt()),
           ),
       });
     }
@@ -174,7 +162,7 @@ export class FactoryStateHandler extends PoolPollingBase {
           },
           [],
         ),
-        decodeFunction: uint256DecodeToNumber,
+        decodeFunction: uint256ToBigInt,
       });
     }
 

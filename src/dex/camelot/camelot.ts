@@ -31,7 +31,6 @@ import camelotPairABI from '../../abi/camelot/CamelotPair.json';
 import _ from 'lodash';
 import { AsyncOrSync, DeepReadonly } from 'ts-essentials';
 import { NumberAsString, SwapSide } from '@paraswap/core';
-import { Interface, AbiCoder } from '@ethersproject/abi';
 import { SolidlyStablePool } from '../solidly/solidly-stable-pool';
 import { Uniswapv2ConstantProductPool } from '../uniswap-v2/uniswap-v2-constant-product-pool';
 import { CamelotPoolState, CamelotPoolOrderedParams } from './types';
@@ -50,19 +49,17 @@ import {
   UniswapV2Factory,
 } from '../uniswap-v2/uniswap-v2-factory';
 import {
-  hexDataLength,
-  hexlify,
-  hexZeroPad,
-  id,
-  solidityPack,
-} from 'ethers/lib/utils';
-import { BigNumber } from 'ethers';
-import { Flag, SpecialDex } from '../../executor/types';
+  toBeHex,
+  Interface,
+  AbiCoder,
+  solidityPacked,
+  zeroPadValue,
+} from 'ethers';
+import { SpecialDex } from '../../executor/types';
 
 const DefaultCamelotPoolGasCost = 90 * 1000;
 
 const camelotPairIface = new Interface(camelotPairABI);
-const coder = new AbiCoder();
 
 const LogCallTopics = [
   '0x1c411e9a96e071241c2f21f7726b17ae89e3cab4c78be50e062b03a9fffbbad1', // event Sync(uint112 reserve0, uint112 reserve1) // uni-V2 and most forks
@@ -128,6 +125,9 @@ export class CamelotEventPool extends StatefulEventSubscriber<CamelotPoolState> 
     if (!LogCallTopics.includes(log.topics[0])) return null;
 
     const event = this.decoder(log);
+
+    if (!event) return null;
+
     switch (event.name) {
       case 'SetStableSwap':
         return {
@@ -299,7 +299,7 @@ export class Camelot
     ];
 
     const callDecoder = (data: any[]) => {
-      const info = coder.decode(
+      const info = AbiCoder.defaultAbiCoder().decode(
         ['uint112', 'uint112', 'uint16', 'uint16'],
         data[0],
       );
@@ -307,7 +307,10 @@ export class Camelot
       const reserve1: string = info[1].toString();
       const token0FeeCode: number = parseInt(info[2].toString());
       const token1FeeCode: number = parseInt(info[3].toString());
-      const stable: boolean = coder.decode(['bool'], data[1])[0];
+      const stable: boolean = AbiCoder.defaultAbiCoder().decode(
+        ['bool'],
+        data[1],
+      )[0];
 
       return { reserve0, reserve1, token0FeeCode, token1FeeCode, stable };
     };
@@ -844,26 +847,23 @@ export class Camelot
     if (side === SwapSide.BUY) throw new Error('Buy not supported');
     let exchangeDataTypes = ['bytes4', 'bytes32'];
 
-    const isStable = data.pools.some(pool => !!pool.stable);
+    const isStable = data.pools.some(pool => pool.stable);
     const isStablePoolAndPoolCount = isStable
-      ? BigNumber.from(1)
-          .shl(255)
-          .or(BigNumber.from(data.pools.length))
-          .toHexString()
-      : hexZeroPad(hexlify(data.pools.length), 32);
+      ? ((1n << 255n) | BigInt(data.pools.length)).toString()
+      : zeroPadValue(toBeHex(data.pools.length), 32);
 
     let exchangeDataToPack = [
-      hexZeroPad(hexlify(0), 4),
+      zeroPadValue(toBeHex(0), 4),
       isStablePoolAndPoolCount,
     ];
 
     const pools = encodePools(data.pools, this.feeFactor);
     pools.forEach(pool => {
       exchangeDataTypes.push('bytes32');
-      exchangeDataToPack.push(hexZeroPad(hexlify(BigNumber.from(pool)), 32));
+      exchangeDataToPack.push(zeroPadValue(pool, 32));
     });
 
-    const exchangeData = solidityPack(exchangeDataTypes, exchangeDataToPack);
+    const exchangeData = solidityPacked(exchangeDataTypes, exchangeDataToPack);
 
     return {
       needWrapNative: this.needWrapNative,

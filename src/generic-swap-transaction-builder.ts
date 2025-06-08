@@ -1,14 +1,13 @@
 import {
   Address,
   DexExchangeBuildParam,
-  DexExchangeParam,
   DexExchangeParamWithBooleanNeedWrapNative,
   OptimalRate,
   OptimalSwap,
   OptimalSwapExchange,
   TxObject,
 } from './types';
-import { BigNumber, ethers } from 'ethers';
+import { concat, toBeHex, zeroPadValue, AbiCoder, Interface } from 'ethers';
 import {
   ETHER_ADDRESS,
   FEE_PERCENT_IN_BASIS_POINTS_MASK,
@@ -20,7 +19,6 @@ import {
   IS_USER_SURPLUS_MASK,
   NULL_ADDRESS,
 } from './constants';
-import { AbiCoder, Interface } from '@ethersproject/abi';
 import AugustusV6ABI from './abi/augustus-v6/ABI.json';
 import { isETHAddress, uuidToBytes16 } from './utils';
 import {
@@ -34,10 +32,6 @@ import { ExecutorDetector } from './executor/ExecutorDetector';
 import { ExecutorBytecodeBuilder } from './executor/ExecutorBytecodeBuilder';
 import { IDexTxBuilder } from './dex/idex';
 import { ParaSwapVersion, SwapSide } from '@paraswap/core';
-
-const {
-  utils: { hexlify, hexConcat, hexZeroPad },
-} = ethers;
 
 interface FeeParams {
   partner: string;
@@ -277,9 +271,9 @@ export class GenericSwapTransactionBuilder {
         isSell ? priceRoute.srcAmount : minMaxAmount,
         isSell ? minMaxAmount : priceRoute.destAmount,
         quotedAmount,
-        hexConcat([
-          hexZeroPad(uuidToBytes16(uuid), 16),
-          hexZeroPad(hexlify(priceRoute.blockNumber), 16),
+        concat([
+          zeroPadValue(uuidToBytes16(uuid), 16),
+          zeroPadValue(toBeHex(priceRoute.blockNumber), 16),
         ]),
         beneficiary,
       ],
@@ -554,54 +548,43 @@ export class GenericSwapTransactionBuilder {
         : partner;
 
     // Partner address shifted left to make room for flags and fee percent
-    const partialFeeCodeWithPartnerAddress =
-      BigNumber.from(partnerAddress).shl(96);
-    let partialFeeCodeWithBitFlags = BigNumber.from(0); // default 0 is safe if none the conditions pass
+    const partialFeeCodeWithPartnerAddress = BigInt(partnerAddress) << 96n;
+    let partialFeeCodeWithBitFlags = 0n; // default 0 is safe if none the conditions pass
 
-    const isFixedFees = !BigNumber.from(feePercent).isZero();
+    const isFixedFees = feePercent !== '0';
 
     if (isFixedFees) {
       // Ensure feePercent fits within the FEE_PERCENT_IN_BASIS_POINTS_MASK range
-      partialFeeCodeWithBitFlags = BigNumber.from(feePercent).and(
-        FEE_PERCENT_IN_BASIS_POINTS_MASK,
-      );
+      partialFeeCodeWithBitFlags =
+        BigInt(feePercent) & FEE_PERCENT_IN_BASIS_POINTS_MASK;
 
       // Apply flags using bitwise OR with the appropriate masks
     } else {
       if (isTakeSurplus) {
-        partialFeeCodeWithBitFlags =
-          partialFeeCodeWithBitFlags.or(IS_TAKE_SURPLUS_MASK);
+        partialFeeCodeWithBitFlags |= IS_TAKE_SURPLUS_MASK;
       } else if (isReferral) {
-        partialFeeCodeWithBitFlags =
-          partialFeeCodeWithBitFlags.or(IS_REFERRAL_MASK);
+        partialFeeCodeWithBitFlags |= IS_REFERRAL_MASK;
       }
     }
 
     if (isSkipBlacklist) {
-      partialFeeCodeWithBitFlags = partialFeeCodeWithBitFlags.or(
-        IS_SKIP_BLACKLIST_MASK,
-      );
+      partialFeeCodeWithBitFlags |= IS_SKIP_BLACKLIST_MASK;
     }
 
     if (isCapSurplus) {
-      partialFeeCodeWithBitFlags =
-        partialFeeCodeWithBitFlags.or(IS_CAP_SURPLUS_MASK);
+      partialFeeCodeWithBitFlags |= IS_CAP_SURPLUS_MASK;
     }
 
     if (isSurplusToUser) {
-      partialFeeCodeWithBitFlags =
-        partialFeeCodeWithBitFlags.or(IS_USER_SURPLUS_MASK);
+      partialFeeCodeWithBitFlags |= IS_USER_SURPLUS_MASK;
     }
 
     if (isDirectFeeTransfer) {
-      partialFeeCodeWithBitFlags = partialFeeCodeWithBitFlags.or(
-        IS_DIRECT_TRANSFER_MASK,
-      );
+      partialFeeCodeWithBitFlags |= IS_DIRECT_TRANSFER_MASK;
     }
     // Combine partnerBigInt and feePercentBigInt
-    const feeCode = partialFeeCodeWithPartnerAddress.or(
-      partialFeeCodeWithBitFlags,
-    );
+    const feeCode =
+      partialFeeCodeWithPartnerAddress | partialFeeCodeWithBitFlags;
 
     return feeCode.toString();
   }

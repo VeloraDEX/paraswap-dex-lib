@@ -20,13 +20,12 @@ import { BalancerV3Config } from './config';
 import { BalancerV3EventPool } from './balancer-v3-pool';
 import { NumberAsString } from '@paraswap/core';
 import { SwapKind } from '@balancer-labs/balancer-maths';
-import { Interface } from '@ethersproject/abi';
+import { Interface, Block } from 'ethers';
 import { extractReturnAmountPosition } from '../../executor/utils';
 import { getTopPoolsApi } from './getTopPoolsApi';
 import balancerRouterAbi from '../../abi/balancer-v3/router.json';
 import balancerBatchRouterAbi from '../../abi/balancer-v3/batch-router.json';
 import { getGasCost } from './getGasCost';
-import { Block } from '@ethersproject/abstract-provider';
 import { BalancerEventHook } from './hooks/balancer-hook-event-subscriber';
 import { removeCircularStepPairs } from './utils';
 
@@ -159,6 +158,11 @@ export class BalancerV3 extends SimpleExchange implements IDex<BalancerV3Data> {
     }
 
     const block = await this.dexHelper.provider.getBlock(blockNumber);
+
+    if (!block) {
+      throw new Error('"provider.getBlock" returned null!');
+    }
+
     this.latestBlock = block;
     return block;
   }

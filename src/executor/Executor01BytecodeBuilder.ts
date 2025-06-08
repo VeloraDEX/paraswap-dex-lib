@@ -1,4 +1,11 @@
-import { ethers } from 'ethers';
+import {
+  concat,
+  dataLength,
+  ethers,
+  solidityPacked,
+  toBeHex,
+  zeroPadValue,
+} from 'ethers';
 import { DexExchangeBuildParam } from '../types';
 import { OptimalRate } from '@paraswap/core';
 import { isETHAddress } from '../utils';
@@ -10,10 +17,6 @@ import {
   ExecutorBytecodeBuilder,
   SingleSwapCallDataParams,
 } from './ExecutorBytecodeBuilder';
-
-const {
-  utils: { hexlify, hexDataLength, hexConcat, hexZeroPad, solidityPack },
-} = ethers;
 
 export type Executor01SingleSwapCallDataParams = {};
 export type Executor01DexCallDataParams = {};
@@ -244,9 +247,9 @@ export class Executor01BytecodeBuilder extends ExecutorBytecodeBuilder<
         this.getWETHAddress(curExchangeParam),
         curExchangeParam.preSwapUnwrapCalldata,
       );
-      swapCallData = hexConcat([withdrawCallData, dexCallData]);
+      swapCallData = concat([withdrawCallData, dexCallData]);
     } else {
-      swapCallData = hexConcat([dexCallData]);
+      swapCallData = concat([dexCallData]);
     }
 
     if (curExchangeParam.transferSrcTokenBeforeSwap) {
@@ -260,7 +263,7 @@ export class Executor01BytecodeBuilder extends ExecutorBytecodeBuilder<
           : swap.srcToken.toLowerCase(),
       );
 
-      swapCallData = hexConcat([transferCallData, swapCallData]);
+      swapCallData = concat([transferCallData, swapCallData]);
     }
 
     if (
@@ -278,7 +281,7 @@ export class Executor01BytecodeBuilder extends ExecutorBytecodeBuilder<
         curExchangeParam.permit2Approval,
       );
 
-      swapCallData = hexConcat([approveCallData, swapCallData]);
+      swapCallData = concat([approveCallData, swapCallData]);
     }
 
     if (curExchangeParam.needWrapNative && maybeWethCallData) {
@@ -309,7 +312,7 @@ export class Executor01BytecodeBuilder extends ExecutorBytecodeBuilder<
             Flag.SEND_ETH_EQUAL_TO_FROM_AMOUNT_DONT_CHECK_BALANCE_AFTER_SWAP,
           );
 
-          swapCallData = hexConcat([
+          swapCallData = concat([
             approveWethCalldata,
             depositCallData,
             swapCallData,
@@ -328,7 +331,7 @@ export class Executor01BytecodeBuilder extends ExecutorBytecodeBuilder<
             this.getWETHAddress(curExchangeParam),
             maybeWethCallData.withdraw.calldata,
           );
-          swapCallData = hexConcat([swapCallData, withdrawCallData]);
+          swapCallData = concat([swapCallData, withdrawCallData]);
         }
       }
     }
@@ -382,7 +385,7 @@ export class Executor01BytecodeBuilder extends ExecutorBytecodeBuilder<
       if (exchangeParam.insertFromAmountPos) {
         fromAmountPos = exchangeParam.insertFromAmountPos;
       } else {
-        const fromAmount = ethers.utils.defaultAbiCoder.encode(
+        const fromAmount = ethers.AbiCoder.defaultAbiCoder().encode(
           ['uint256'],
           [swap.swapExchanges[swapExchangeIndex].srcAmount],
         );
@@ -426,7 +429,7 @@ export class Executor01BytecodeBuilder extends ExecutorBytecodeBuilder<
 
     let swapsCalldata = exchangeParams.reduce<string>(
       (acc, ep, index) =>
-        hexConcat([
+        concat([
           acc,
           this.buildSingleSwapCallData({
             priceRoute,
@@ -452,7 +455,7 @@ export class Executor01BytecodeBuilder extends ExecutorBytecodeBuilder<
         priceRoute.destToken,
       );
 
-      swapsCalldata = hexConcat([swapsCalldata, transferCallData]);
+      swapsCalldata = concat([swapsCalldata, transferCallData]);
     }
 
     if (
@@ -461,15 +464,15 @@ export class Executor01BytecodeBuilder extends ExecutorBytecodeBuilder<
         isETHAddress(priceRoute.destToken))
     ) {
       const finalSpecialFlagCalldata = this.buildFinalSpecialFlagCalldata();
-      swapsCalldata = hexConcat([swapsCalldata, finalSpecialFlagCalldata]);
+      swapsCalldata = concat([swapsCalldata, finalSpecialFlagCalldata]);
     }
 
-    return solidityPack(
+    return solidityPacked(
       ['bytes32', 'bytes', 'bytes'],
       [
-        hexZeroPad(hexlify(32), 32), // calldata offset
-        hexZeroPad(
-          hexlify(hexDataLength(swapsCalldata) + BYTES_64_LENGTH), // calldata length  (64 bytes = bytes12(0) + msg.sender)
+        zeroPadValue(toBeHex(32), 32), // calldata offset
+        zeroPadValue(
+          toBeHex(dataLength(swapsCalldata) + BYTES_64_LENGTH), // calldata length  (64 bytes = bytes12(0) + msg.sender)
           32,
         ),
         swapsCalldata, // // calldata

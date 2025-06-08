@@ -1,5 +1,3 @@
-import { Interface, JsonFragment } from '@ethersproject/abi';
-import { pack } from '@ethersproject/solidity';
 import { Network, SwapSide } from '../constants';
 import {
   AdapterExchangeParam,
@@ -16,6 +14,7 @@ import UniswapV3RouterABI from '../abi/UniswapV3Router.json';
 import { NumberAsString } from '@paraswap/core';
 import { IDexHelper } from '../dex-helper';
 import { extractReturnAmountPosition } from '../executor/utils';
+import { solidityPacked, Interface, JsonFragment } from 'ethers';
 
 const UNISWAP_V3_ROUTER_ADDRESSES: { [network: number]: Address } = {
   [Network.MAINNET]: '0xE592427A0AEce92De3Edee1F18E0157C05861564',
@@ -108,8 +107,8 @@ export class UniswapV3
     );
 
     return side === SwapSide.BUY
-      ? pack(types.reverse(), _path.reverse())
-      : pack(types, _path);
+      ? solidityPacked(types.reverse(), _path.reverse())
+      : solidityPacked(types, _path);
   }
 
   getAdapterParam(

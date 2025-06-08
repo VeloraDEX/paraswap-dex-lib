@@ -1,4 +1,3 @@
-import { Interface } from '@ethersproject/abi';
 import { DeepReadonly } from 'ts-essentials';
 import { Log, Logger } from '../../types';
 import { bigIntify, catchParseLogError } from '../../utils';
@@ -13,7 +12,7 @@ import {
   PoolReserveResponse,
 } from './types';
 import { Address } from '../../types';
-import { Contract } from 'ethers';
+import { Contract, Interface } from 'ethers';
 
 export class FluidDexLiquidityProxy extends StatefulEventSubscriber<FluidDexLiquidityProxyState> {
   handlers: {
@@ -117,10 +116,9 @@ export class FluidDexLiquidityProxy extends StatefulEventSubscriber<FluidDexLiqu
   async generateState(
     blockNumber: number,
   ): Promise<DeepReadonly<FluidDexLiquidityProxyState>> {
-    const rawResult =
-      await this.resolverContract.callStatic.getAllPoolsReservesAdjusted({
-        blockTag: blockNumber,
-      });
+    const rawResult = await this.resolverContract.getAllPoolsReservesAdjusted({
+      blockTag: blockNumber,
+    });
 
     const convertedResult = this.convertToFluidDexPoolState(rawResult);
     this.logger.info(`${this.parentName}: ${this.name}: generating state...`);
