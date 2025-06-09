@@ -18,7 +18,7 @@ import { MMath } from './maverick-math/maverick-basic-math';
 
 import * as _ from 'lodash';
 import { BI_POWS } from '../../bigint-constants';
-import { getBigIntPow } from '../../utils';
+import { catchParseLogError, getBigIntPow } from '../../utils';
 
 (BigInt.prototype as any).toJSON = function () {
   return this.toString();
@@ -109,14 +109,15 @@ export class MaverickV1EventPool extends StatefulEventSubscriber<PoolState> {
   ): DeepReadonly<PoolState> | null {
     try {
       const event = this.logDecoder(log);
-      let output = _.cloneDeep(state) as PoolState;
       if (event.name in this.handlers) {
-        output = _.cloneDeep(this.handlers[event.name](event, state, log));
+        const _state = _.cloneDeep(state);
+        return this.handlers[event.name](event, _state, log);
       }
-      return output;
     } catch (e) {
-      return null;
+      catchParseLogError(e, this.logger);
     }
+
+    return null;
   }
 
   /**
