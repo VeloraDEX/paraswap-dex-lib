@@ -4,43 +4,11 @@ dotenv.config();
 
 import { UsdcTransmuterEventPool } from './usdc-transmuter-pool';
 import { Network } from '../../constants';
+import { Address } from '../../types';
 import { DummyDexHelper } from '../../dex-helper/index';
 import { testEventSubscriber } from '../../../tests/utils-events';
 import { PoolState } from './types';
-import { gnosisChainUsdcTransmuterAddress } from './constants';
-
-/*
-  README
-  ======
-
-  This test script adds unit tests for UsdcTransmuter event based
-  system. This is done by fetching the state on-chain before the
-  event block, manually pushing the block logs to the event-subscriber,
-  comparing the local state with on-chain state.
-
-  Most of the logic for testing is abstracted by `testEventSubscriber`.
-  You need to do two things to make the tests work:
-
-  1. Fetch the block numbers where certain events were released. You
-  can modify the `./scripts/fetch-event-blocknumber.ts` to get the
-  block numbers for different events. Make sure to get sufficient
-  number of blockNumbers to cover all possible cases for the event
-  mutations.
-
-  2. Complete the implementation for fetchPoolState function. The
-  function should fetch the on-chain state of the event subscriber
-  using just the blocknumber.
-
-  The template tests only include the test for a single event
-  subscriber. There can be cases where multiple event subscribers
-  exist for a single DEX. In such cases additional tests should be
-  added.
-
-  You can run this individual test script by running:
-  `npx jest src/dex/<dex-name>/<dex-name>-events.test.ts`
-
-  (This comment should be removed from the final implementation)
-*/
+import { UsdcTransmuterConfig } from './config';
 
 jest.setTimeout(50 * 1000);
 
@@ -49,11 +17,12 @@ async function fetchPoolState(
   blockNumber: number,
   poolAddress: string,
 ): Promise<PoolState> {
-  // Since the rate is always 1:1, we just need a simple state
-  return {
-    initialized: true,
-  };
+  const onChainState = await usdcTransmuterPools.generateState(blockNumber);
+  return onChainState;
 }
+
+// eventName -> blockNumbers
+type EventMappings = Record<string, number[]>;
 
 describe('UsdcTransmuter EventPool Gnosis Chain', function () {
   const dexKey = 'UsdcTransmuter';
@@ -62,12 +31,10 @@ describe('UsdcTransmuter EventPool Gnosis Chain', function () {
   const logger = dexHelper.getLogger(dexKey);
   let usdcTransmuterPool: UsdcTransmuterEventPool;
 
-  // Since the rate is always 1:1, we don't need to test specific events
-  // But we'll set up a basic test structure
-  const eventsToTest = {
-    [gnosisChainUsdcTransmuterAddress]: {
-      // We can use any block number for testing since the state is constant
-      Deposit: [15000000],
+  const eventsToTest: Record<Address, EventMappings> = {
+    [UsdcTransmuterConfig[dexKey][network].usdcTransmuterAddress]: {
+      Deposit: [40529616, 40529524, 40529345, 40529314, 40529296],
+      Withdraw: [40529605, 40529583, 40529575, 40529504, 40529487],
     },
   };
 
@@ -77,11 +44,13 @@ describe('UsdcTransmuter EventPool Gnosis Chain', function () {
       network,
       dexHelper,
       logger,
+      UsdcTransmuterConfig[dexKey][network].usdcTransmuterAddress,
+      UsdcTransmuterConfig[dexKey][network].usdcToken.address,
     );
   });
 
   Object.entries(eventsToTest).forEach(
-    ([poolAddress, events]: [string, Record<string, number[]>]) => {
+    ([poolAddress, events]: [string, EventMappings]) => {
       describe(`Events for ${poolAddress}`, () => {
         Object.entries(events).forEach(
           ([eventName, blockNumbers]: [string, number[]]) => {
