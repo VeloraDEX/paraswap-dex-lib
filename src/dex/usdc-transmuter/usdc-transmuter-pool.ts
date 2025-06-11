@@ -5,10 +5,9 @@ import { catchParseLogError } from '../../utils';
 import { StatefulEventSubscriber } from '../../stateful-event-subscriber';
 import { IDexHelper } from '../../dex-helper/idex-helper';
 import { PoolState } from './types';
-import {
-  gnosisChainUsdcTransmuterAbi,
-  gnosisChainUsdcTransmuterAddress,
-} from './constants';
+import UsdcTransmuterAbi from '../../abi/usdc-transmuter/usdc-transmuter.abi.json';
+import { erc20Iface } from '../../lib/tokens/utils';
+import { Contract } from 'ethers';
 
 export class UsdcTransmuterEventPool extends StatefulEventSubscriber<PoolState> {
   handlers: {
@@ -21,34 +20,29 @@ export class UsdcTransmuterEventPool extends StatefulEventSubscriber<PoolState> 
 
   logDecoder: (log: Log) => any;
 
-  addressesSubscribed: string[];
-
   constructor(
     readonly parentName: string,
     protected network: number,
     protected dexHelper: IDexHelper,
     logger: Logger,
-    protected usdcTransmuterIface = new Interface(gnosisChainUsdcTransmuterAbi),
+    protected usdcTransmuterAddress: string,
+    protected usdcAddress: string,
+    protected usdcTransmuterIface = new Interface(UsdcTransmuterAbi),
+    protected usdcContract = new Contract(
+      usdcAddress,
+      erc20Iface,
+      dexHelper.provider,
+    ),
   ) {
-    super(parentName, 'USDC_TRANSMUTER', dexHelper, logger);
+    super(parentName, 'usdc', dexHelper, logger);
 
     this.logDecoder = (log: Log) => this.usdcTransmuterIface.parseLog(log);
-    this.addressesSubscribed = [gnosisChainUsdcTransmuterAddress.toLowerCase()];
+    this.addressesSubscribed = [usdcTransmuterAddress];
 
-    // Add handlers - we don't need to handle any events since the rate is always 1:1
     this.handlers['Deposit'] = this.handleDeposit.bind(this);
     this.handlers['Withdraw'] = this.handleWithdrawal.bind(this);
   }
 
-  /**
-   * The function is called every time any of the subscribed
-   * addresses release log. The function accepts the current
-   * state, updates the state according to the log, and returns
-   * the updated state.
-   * @param state - Current state of event subscriber
-   * @param log - Log released by one of the subscribed addresses
-   * @returns Updates state of the event subscriber after the log
-   */
   protected processLog(
     state: DeepReadonly<PoolState>,
     log: Readonly<Log>,
@@ -65,29 +59,36 @@ export class UsdcTransmuterEventPool extends StatefulEventSubscriber<PoolState> 
     return null;
   }
 
-  /**
-   * The function generates state using on-chain calls. This
-   * function is called to regenerate state if the event based
-   * system fails to fetch events and the local state is no
-   * more correct.
-   * @param blockNumber - Blocknumber for which the state should
-   * should be generated
-   * @returns state of the event subscriber at blocknumber
-   */
-  async generateState(blockNumber: number): Promise<DeepReadonly<PoolState>> {
-    // Since the rate is always 1:1, we just need to mark the pool as initialized
+  async generateState(
+    blockNumber: number | 'latest' = 'latest',
+  ): Promise<DeepReadonly<PoolState>> {
+    const balance = await this.usdcContract.balanceOf(
+      this.usdcTransmuterAddress,
+      { blockTag: blockNumber },
+    );
+
     return {
-      initialized: true,
+      balance: balance.toBigInt(),
     };
   }
 
-  // These handlers don't need to do anything since the rate is always 1:1
+  async getOrGenerateState(blockNumber: number): Promise<PoolState> {
+    let state = this.getState(blockNumber);
+    if (!state) {
+      state = await this.generateState(blockNumber);
+      this.setState(state, blockNumber);
+    }
+    return state;
+  }
+
   handleDeposit(
     event: any,
     state: DeepReadonly<PoolState>,
     log: Readonly<Log>,
   ): DeepReadonly<PoolState> | null {
-    return null;
+    return {
+      balance: state.balance + event.args.amount.toBigInt(),
+    };
   }
 
   handleWithdrawal(
@@ -95,6 +96,8 @@ export class UsdcTransmuterEventPool extends StatefulEventSubscriber<PoolState> 
     state: DeepReadonly<PoolState>,
     log: Readonly<Log>,
   ): DeepReadonly<PoolState> | null {
-    return null;
+    return {
+      balance: state.balance - event.args.amount.toBigInt(),
+    };
   }
 }
