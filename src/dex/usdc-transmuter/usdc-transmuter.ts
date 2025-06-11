@@ -197,6 +197,12 @@ export class UsdcTransmuter
     if (this.isUSDC(tokenAddress) || this.isUSDCe(tokenAddress)) {
       const isUSDC = this.isUSDC(tokenAddress);
 
+      const { balance } = await this.eventPool.generateState();
+
+      const liquidityUSD = await this.dexHelper.getUsdTokenAmounts([
+        [tokenAddress, balance],
+      ]);
+
       return [
         {
           address: this.config.usdcTransmuterAddress,
@@ -204,7 +210,7 @@ export class UsdcTransmuter
             isUSDC ? this.config.usdceToken : this.config.usdcToken,
           ],
           exchange: this.dexKey,
-          liquidityUSD: 1000000, // Set a high value to prioritize this pool
+          liquidityUSD: liquidityUSD[0], // Set a high value to prioritize this pool
         },
       ];
     }
