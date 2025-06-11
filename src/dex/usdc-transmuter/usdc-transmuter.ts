@@ -5,7 +5,6 @@ import {
   ExchangePrices,
   PoolPrices,
   AdapterExchangeParam,
-  SimpleExchangeParam,
   PoolLiquidity,
   Logger,
   DexExchangeParam,
@@ -16,22 +15,20 @@ import * as CALLDATA_GAS_COST from '../../calldata-gas-cost';
 import { getDexKeysWithNetwork } from '../../utils';
 import { IDex } from '../../dex/idex';
 import { IDexHelper } from '../../dex-helper/idex-helper';
-import { UsdcTransmuterData } from './types';
+import { UsdcTransmuterData, UsdcTransmuterFunctions } from './types';
 import { SimpleExchange } from '../simple-exchange';
 import { UsdcTransmuterConfig } from './config';
 import { UsdcTransmuterEventPool } from './usdc-transmuter-pool';
-import {
-  gnosisChainUsdcTransmuterAddress,
-  gnosisChainUsdcTransmuterTokens,
-  gnosisChainUsdcTransmuterAbi,
-} from './constants';
 import { Interface } from '@ethersproject/abi';
+import UsdcTransmuterAbi from '../../abi/usdc-transmuter/usdc-transmuter.abi.json';
+import { BI_POWS } from '../../bigint-constants';
+import { USDC_TRANSMUTER_GAS_COST } from './constants';
 
 export class UsdcTransmuter
   extends SimpleExchange
   implements IDex<UsdcTransmuterData>
 {
-  protected eventPools: UsdcTransmuterEventPool;
+  protected eventPool: UsdcTransmuterEventPool;
   protected usdcTransmuterIface: Interface;
 
   readonly hasConstantPriceLargeAmounts = true;
@@ -48,72 +45,66 @@ export class UsdcTransmuter
     readonly network: Network,
     readonly dexKey: string,
     readonly dexHelper: IDexHelper,
+    protected config = UsdcTransmuterConfig[dexKey][network],
+    protected unitPrice = BI_POWS[6],
   ) {
     super(dexHelper, dexKey);
     this.logger = dexHelper.getLogger(dexKey);
-    this.usdcTransmuterIface = new Interface(gnosisChainUsdcTransmuterAbi);
-    this.eventPools = new UsdcTransmuterEventPool(
+    this.usdcTransmuterIface = new Interface(UsdcTransmuterAbi);
+    this.eventPool = new UsdcTransmuterEventPool(
       dexKey,
       network,
       dexHelper,
       this.logger,
+      this.config.usdcTransmuterAddress,
+      this.config.usdcToken.address,
     );
   }
 
-  // Initialize pricing is called once in the start of
-  // pricing service. It is intended to setup the integration
-  // for pricing requests. It is optional for a DEX to
-  // implement this function
-  async initializePricing(blockNumber: number) {
-    await this.eventPools.initialize(blockNumber, {
-      state: {
-        initialized: true,
-      },
-    });
+  isUSDC(tokenAddress: Address): boolean {
+    return (
+      tokenAddress.toLowerCase() === this.config.usdcToken.address.toLowerCase()
+    );
   }
 
-  // Legacy: was only used for V5
-  // Returns the list of contract adapters (name and index)
-  // for a buy/sell. Return null if there are no adapters.
+  isUSDCe(tokenAddress: Address): boolean {
+    return (
+      tokenAddress.toLowerCase() ===
+      this.config.usdceToken.address.toLowerCase()
+    );
+  }
+
+  isAppropriatePair(srcToken: Token, destToken: Token): boolean {
+    const srcTokenAddress = srcToken.address.toLowerCase();
+    const destTokenAddress = destToken.address.toLowerCase();
+
+    return (
+      (this.isUSDC(srcTokenAddress) && this.isUSDCe(destTokenAddress)) ||
+      (this.isUSDCe(srcTokenAddress) && this.isUSDC(destTokenAddress))
+    );
+  }
+
+  initializePricing(blockNumber: number): AsyncOrSync<void> {
+    return this.eventPool.initialize(blockNumber);
+  }
+
   getAdapters(side: SwapSide): { name: string; index: number }[] | null {
     return null;
   }
 
-  // Returns list of pool identifiers that can be used
-  // for a given swap. poolIdentifiers must be unique
-  // across DEXes. It is recommended to use
-  // ${dexKey}_${poolAddress} as a poolIdentifier
   async getPoolIdentifiers(
     srcToken: Token,
     destToken: Token,
     side: SwapSide,
     blockNumber: number,
   ): Promise<string[]> {
-    const srcTokenAddress = srcToken.address.toLowerCase();
-    const destTokenAddress = destToken.address.toLowerCase();
-
-    // Check if this is a valid pair for the transmuter
-    const validTokens = [
-      gnosisChainUsdcTransmuterTokens.USDC.address.toLowerCase(),
-      gnosisChainUsdcTransmuterTokens.USDCe.address.toLowerCase(),
-    ];
-
-    if (
-      validTokens.includes(srcTokenAddress) &&
-      validTokens.includes(destTokenAddress) &&
-      srcTokenAddress !== destTokenAddress &&
-      side === SwapSide.SELL
-    ) {
-      return [`${this.dexKey}_${gnosisChainUsdcTransmuterAddress}`];
+    if (this.isAppropriatePair(srcToken, destToken)) {
+      return [`${this.dexKey}_${srcToken.address}_${destToken.address}`];
     }
 
     return [];
   }
 
-  // Returns pool prices for amounts.
-  // If limitPools is defined only pools in limitPools
-  // should be used. If limitPools is undefined then
-  // any pools can be used.
   async getPricesVolume(
     srcToken: Token,
     destToken: Token,
@@ -122,63 +113,43 @@ export class UsdcTransmuter
     blockNumber: number,
     limitPools?: string[],
   ): Promise<null | ExchangePrices<UsdcTransmuterData>> {
-    if (side === SwapSide.BUY) {
+    if (!this.isAppropriatePair(srcToken, destToken)) {
       return null;
     }
 
-    const srcTokenAddress = srcToken.address.toLowerCase();
-    const destTokenAddress = destToken.address.toLowerCase();
+    const prices: bigint[] = [];
 
-    // Check if this is a valid pair for the transmuter
-    const validTokens = [
-      gnosisChainUsdcTransmuterTokens.USDC.address.toLowerCase(),
-      gnosisChainUsdcTransmuterTokens.USDCe.address.toLowerCase(),
-    ];
+    if (this.isUSDCe(srcToken.address)) {
+      // if srcToken is USDCe (withdraw), check the balance of the transmuter
+      const state = await this.eventPool.getOrGenerateState(blockNumber);
 
-    if (
-      !validTokens.includes(srcTokenAddress) ||
-      !validTokens.includes(destTokenAddress) ||
-      srcTokenAddress === destTokenAddress
-    ) {
-      return null;
+      for (const amount of amounts) {
+        const price = amount >= state.balance ? 0n : amount;
+        prices.push(price);
+      }
+    } else {
+      // otherwise, srcToken is USDC (deposit), so prices equal amounts 1:1
+      prices.push(...amounts);
     }
-
-    const poolIdentifier = `${this.dexKey}_${gnosisChainUsdcTransmuterAddress}`;
-
-    if (limitPools && !limitPools.includes(poolIdentifier)) {
-      return null;
-    }
-
-    // For USDC Transmuter, the exchange rate is always 1:1
-    // So the output amount is the same as the input amount
-    const prices = amounts.map(amount => amount);
 
     return [
       {
         prices,
-        unit: prices[0],
-        data: {
-          exchange: gnosisChainUsdcTransmuterAddress,
-        },
-        poolIdentifier,
+        unit: this.unitPrice,
+        data: null,
         exchange: this.dexKey,
-        gasCost: this.getCalldataGasCost(null),
-        poolAddresses: [gnosisChainUsdcTransmuterAddress],
+        gasCost: USDC_TRANSMUTER_GAS_COST,
+        poolAddresses: [this.config.usdcTransmuterAddress],
       },
     ];
   }
 
-  // Returns estimated gas cost of calldata for this DEX in multiSwap
   getCalldataGasCost(
     poolPrices: PoolPrices<UsdcTransmuterData> | null,
   ): number {
-    return CALLDATA_GAS_COST.DEX_NO_PAYLOAD;
+    return CALLDATA_GAS_COST.FUNCTION_SELECTOR + CALLDATA_GAS_COST.AMOUNT;
   }
 
-  // Encode params required by the exchange adapter
-  // V5: Used for multiSwap, buy & megaSwap
-  // V6: Not used, can be left blank
-  // Hint: abiCoder.encodeParameter() could be useful
   getAdapterParam(
     srcToken: string,
     destToken: string,
@@ -187,28 +158,13 @@ export class UsdcTransmuter
     data: UsdcTransmuterData,
     side: SwapSide,
   ): AdapterExchangeParam {
-    const { exchange } = data;
-
-    // Determine which function to call based on the source token
-    const srcTokenAddress = srcToken.toLowerCase();
-    const isDeposit =
-      srcTokenAddress ===
-      gnosisChainUsdcTransmuterTokens.USDC.address.toLowerCase();
-
-    // Encode the function call
-    const functionName = isDeposit ? 'deposit' : 'withdraw';
-    const payload = this.usdcTransmuterIface.encodeFunctionData(functionName, [
-      srcAmount,
-    ]);
-
     return {
-      targetExchange: exchange,
-      payload,
+      targetExchange: this.config.usdcTransmuterAddress,
+      payload: '0x',
       networkFee: '0',
     };
   }
 
-  // This method is required for building the transaction parameters
   getDexParam(
     srcToken: Address,
     destToken: Address,
@@ -218,65 +174,34 @@ export class UsdcTransmuter
     data: UsdcTransmuterData,
     side: SwapSide,
   ): DexExchangeParam {
-    const srcTokenAddress = srcToken.toLowerCase();
-    const isDeposit =
-      srcTokenAddress ===
-      gnosisChainUsdcTransmuterTokens.USDC.address.toLowerCase();
-
-    // Encode the function call
-    const functionName = isDeposit ? 'deposit' : 'withdraw';
-    const swapData = this.usdcTransmuterIface.encodeFunctionData(functionName, [
-      srcAmount,
-    ]);
+    const swapData = this.usdcTransmuterIface.encodeFunctionData(
+      this.isUSDC(srcToken)
+        ? UsdcTransmuterFunctions.deposit
+        : UsdcTransmuterFunctions.withdraw,
+      [srcAmount],
+    );
 
     return {
       needWrapNative: this.needWrapNative,
       dexFuncHasRecipient: false,
       exchangeData: swapData,
-      targetExchange: data.exchange,
+      targetExchange: this.config.usdcTransmuterAddress,
       returnAmountPos: undefined,
     };
   }
 
-  // This is called once before getTopPoolsForToken is
-  // called for multiple tokens. This can be helpful to
-  // update common state required for calculating
-  // getTopPoolsForToken. It is optional for a DEX
-  // to implement this
-  async updatePoolState(): Promise<void> {
-    // Nothing to update as the rate is always 1:1
-  }
-
-  // Returns list of top pools based on liquidity. Max
-  // limit number pools should be returned.
   async getTopPoolsForToken(
     tokenAddress: Address,
     limit: number,
   ): Promise<PoolLiquidity[]> {
-    const tokenAddressLower = tokenAddress.toLowerCase();
-
-    // Check if the token is either USDC or USDC.e
-    if (
-      tokenAddressLower ===
-        gnosisChainUsdcTransmuterTokens.USDC.address.toLowerCase() ||
-      tokenAddressLower ===
-        gnosisChainUsdcTransmuterTokens.USDCe.address.toLowerCase()
-    ) {
-      // Determine the connector token (the other token in the pair)
-      const connectorToken =
-        tokenAddressLower ===
-        gnosisChainUsdcTransmuterTokens.USDC.address.toLowerCase()
-          ? gnosisChainUsdcTransmuterTokens.USDCe
-          : gnosisChainUsdcTransmuterTokens.USDC;
+    if (this.isUSDC(tokenAddress) || this.isUSDCe(tokenAddress)) {
+      const isUSDC = this.isUSDC(tokenAddress);
 
       return [
         {
-          address: gnosisChainUsdcTransmuterAddress,
+          address: this.config.usdcTransmuterAddress,
           connectorTokens: [
-            {
-              address: connectorToken.address,
-              decimals: connectorToken.decimals,
-            },
+            isUSDC ? this.config.usdceToken : this.config.usdcToken,
           ],
           exchange: this.dexKey,
           liquidityUSD: 1000000, // Set a high value to prioritize this pool
@@ -285,11 +210,5 @@ export class UsdcTransmuter
     }
 
     return [];
-  }
-
-  // This is optional function in case if your implementation has acquired any resources
-  // you need to release for graceful shutdown. For example, it may be any interval timer
-  releaseResources(): AsyncOrSync<void> {
-    // No resources to release
   }
 }
