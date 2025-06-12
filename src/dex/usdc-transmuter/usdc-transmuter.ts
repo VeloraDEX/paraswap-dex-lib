@@ -157,7 +157,6 @@ export class UsdcTransmuter
       dexFuncHasRecipient: false,
       exchangeData: swapData,
       targetExchange: this.config.usdcTransmuterAddress,
-      returnAmountPos: undefined,
     };
   }
 
