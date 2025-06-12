@@ -18,7 +18,6 @@ import { IDexHelper } from '../../dex-helper/idex-helper';
 import { UsdcTransmuterData, UsdcTransmuterFunctions } from './types';
 import { SimpleExchange } from '../simple-exchange';
 import { UsdcTransmuterConfig } from './config';
-import { UsdcTransmuterEventPool } from './usdc-transmuter-pool';
 import { Interface } from '@ethersproject/abi';
 import UsdcTransmuterAbi from '../../abi/usdc-transmuter/usdc-transmuter.abi.json';
 import { BI_POWS } from '../../bigint-constants';
@@ -28,7 +27,6 @@ export class UsdcTransmuter
   extends SimpleExchange
   implements IDex<UsdcTransmuterData>
 {
-  protected eventPool: UsdcTransmuterEventPool;
   protected usdcTransmuterIface: Interface;
 
   readonly hasConstantPriceLargeAmounts = true;
@@ -51,14 +49,6 @@ export class UsdcTransmuter
     super(dexHelper, dexKey);
     this.logger = dexHelper.getLogger(dexKey);
     this.usdcTransmuterIface = new Interface(UsdcTransmuterAbi);
-    this.eventPool = new UsdcTransmuterEventPool(
-      dexKey,
-      network,
-      dexHelper,
-      this.logger,
-      this.config.usdcTransmuterAddress,
-      this.config.usdcToken.address,
-    );
   }
 
   isUSDC(tokenAddress: Address): boolean {
@@ -82,10 +72,6 @@ export class UsdcTransmuter
       (this.isUSDC(srcTokenAddress) && this.isUSDCe(destTokenAddress)) ||
       (this.isUSDCe(srcTokenAddress) && this.isUSDC(destTokenAddress))
     );
-  }
-
-  initializePricing(blockNumber: number): AsyncOrSync<void> {
-    return this.eventPool.initialize(blockNumber);
   }
 
   getAdapters(side: SwapSide): { name: string; index: number }[] | null {
@@ -117,24 +103,9 @@ export class UsdcTransmuter
       return null;
     }
 
-    const prices: bigint[] = [];
-
-    if (this.isUSDCe(srcToken.address)) {
-      // if srcToken is USDCe (withdraw), check the balance of the transmuter
-      const state = await this.eventPool.getOrGenerateState(blockNumber);
-
-      for (const amount of amounts) {
-        const price = amount >= state.balance ? 0n : amount;
-        prices.push(price);
-      }
-    } else {
-      // otherwise, srcToken is USDC (deposit), so prices equal amounts 1:1
-      prices.push(...amounts);
-    }
-
     return [
       {
-        prices,
+        prices: [...amounts],
         unit: this.unitPrice,
         data: null,
         exchange: this.dexKey,

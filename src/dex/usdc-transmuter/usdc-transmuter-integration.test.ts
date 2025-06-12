@@ -45,9 +45,6 @@ describe('UsdcTransmuter', function () {
     beforeAll(async () => {
       blockNumber = await dexHelper.web3Provider.eth.getBlockNumber();
       usdcTransmuter = new UsdcTransmuter(network, dexKey, dexHelper);
-      if (usdcTransmuter.initializePricing) {
-        await usdcTransmuter.initializePricing(blockNumber);
-      }
     });
 
     it('getPoolIdentifiers and getPricesVolume DEPOSIT', async function () {
