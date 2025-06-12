@@ -8,17 +8,17 @@ import {
 } from './tick';
 
 describe(toSqrtRatio, () => {
-  it('min tick', () => {
+  test('min tick', () => {
     expect(toSqrtRatio(MIN_TICK)).toEqual(MIN_SQRT_RATIO);
   });
-  it('max tick', () => {
+  test('max tick', () => {
     expect(toSqrtRatio(MAX_TICK)).toEqual(MAX_SQRT_RATIO);
   });
-  it('zero', () => {
+  test('zero', () => {
     expect(toSqrtRatio(0)).toEqual(1n << 128n);
   });
 
-  it('snapshots', () => {
+  test('snapshots', () => {
     expect(toSqrtRatio(1e6)).toMatchInlineSnapshot(
       `561030636129153856579134353873645338624n`,
     );
@@ -35,32 +35,32 @@ describe(toSqrtRatio, () => {
 });
 
 describe(approximateNumberOfTickSpacingsCrossed, () => {
-  it('same price', () => {
+  test('same price', () => {
     expect(
       approximateNumberOfTickSpacingsCrossed(1n << 128n, 1n << 128n, 1),
     ).toEqual(0);
   });
-  it('price doubling 1 tick spacing', () => {
+  test('price doubling 1 tick spacing', () => {
     expect(
       approximateNumberOfTickSpacingsCrossed(1n << 128n, 1n << 129n, 1),
     ).toMatchInlineSnapshot(`5415`);
   });
-  it('price doubling 1000 tick spacing', () => {
+  test('price doubling 1000 tick spacing', () => {
     expect(
       approximateNumberOfTickSpacingsCrossed(1n << 128n, 1n << 129n, 1000),
     ).toMatchInlineSnapshot(`5`);
   });
-  it('max to min', () => {
+  test('max to min', () => {
     expect(
       approximateNumberOfTickSpacingsCrossed(MAX_SQRT_RATIO, MIN_SQRT_RATIO, 1),
     ).toMatchInlineSnapshot(`693146`);
   });
-  it('min to max', () => {
+  test('min to max', () => {
     expect(
       approximateNumberOfTickSpacingsCrossed(MIN_SQRT_RATIO, MAX_SQRT_RATIO, 1),
     ).toMatchInlineSnapshot(`693146`);
   });
-  it('min to max 1k tick spacing', () => {
+  test('min to max 1k tick spacing', () => {
     expect(
       approximateNumberOfTickSpacingsCrossed(
         MIN_SQRT_RATIO,

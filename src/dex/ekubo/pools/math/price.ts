@@ -14,10 +14,10 @@ const BIT_MASK = 0xc00000000000000000000000n;
 const NOT_BIT_MASK = 0x3fffffffffffffffffffffffn;
 
 export function floatSqrtRatioToFixed(sqrtRatioFloat: bigint): bigint {
-  return (
-    (sqrtRatioFloat & NOT_BIT_MASK) <<
-    (2n + ((sqrtRatioFloat & BIT_MASK) >> 89n))
-  );
+  return sqrtRatioFloat === 0n
+    ? TWO_POW_128 // Default value for the case that the passed value comes from an uninitialized pool
+    : (sqrtRatioFloat & NOT_BIT_MASK) <<
+        (2n + ((sqrtRatioFloat & BIT_MASK) >> 89n));
 }
 
 export function fixedSqrtRatioToFloat(sqrtRatioFixed: bigint): bigint {

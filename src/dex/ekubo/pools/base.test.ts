@@ -1,6 +1,6 @@
+import { BasePoolState, Tick } from './base';
+import { TWO_POW_128 } from './math/constants';
 import { MAX_TICK, MIN_TICK } from './math/tick';
-import { Tick } from '../types';
-import { PoolState } from './pool-utils';
 
 const positiveLiquidity = 10n;
 
@@ -24,14 +24,14 @@ function poolState(
   activeTickIndex: number | null,
   liquidity: bigint,
   sortedTicks: Tick[],
-): PoolState.Object {
+): BasePoolState.Object {
   return {
     activeTick: activeTickNumber,
     activeTickIndex,
     checkedTicksBounds: checkedTickNumberBounds,
     liquidity,
     sortedTicks,
-    sqrtRatio: 0n, // Irrelevant for these tests
+    sqrtRatio: TWO_POW_128, // Irrelevant for these tests
   };
 }
 
@@ -39,7 +39,7 @@ describe('addLiquidityCutoffs', () => {
   test('empty ticks', () => {
     const state = poolState(null, 0n, []);
 
-    PoolState.addLiquidityCutoffs(state);
+    BasePoolState.addLiquidityCutoffs(state);
 
     expect(state.sortedTicks).toStrictEqual([
       minCheckedTickUninitialized,
@@ -60,7 +60,7 @@ describe('addLiquidityCutoffs', () => {
 
       const state = poolState(0, positiveLiquidity, sortedTicks);
 
-      PoolState.addLiquidityCutoffs(state);
+      BasePoolState.addLiquidityCutoffs(state);
 
       expect(sortedTicks).toEqual([
         minCheckedTickUninitialized,
@@ -82,7 +82,7 @@ describe('addLiquidityCutoffs', () => {
 
       const state = poolState(0, liquidityDelta, sortedTicks);
 
-      PoolState.addLiquidityCutoffs(state);
+      BasePoolState.addLiquidityCutoffs(state);
 
       expect(sortedTicks).toEqual([
         minCheckedTickInitialized,
@@ -103,7 +103,7 @@ describe('addLiquidityCutoffs', () => {
 
       const state = poolState(null, 0n, sortedTicks);
 
-      PoolState.addLiquidityCutoffs(state);
+      BasePoolState.addLiquidityCutoffs(state);
 
       expect(sortedTicks).toEqual([
         minCheckedTickUninitialized,
@@ -121,7 +121,7 @@ describe('addLiquidityCutoffs', () => {
 
       const state = poolState(0, liquidityDelta, sortedTicks);
 
-      PoolState.addLiquidityCutoffs(state);
+      BasePoolState.addLiquidityCutoffs(state);
 
       expect(sortedTicks).toEqual([
         minCheckedTickUninitialized,
@@ -143,7 +143,7 @@ describe('addLiquidityCutoffs', () => {
 
       const state = poolState(null, 0n, sortedTicks);
 
-      PoolState.addLiquidityCutoffs(state);
+      BasePoolState.addLiquidityCutoffs(state);
 
       expect(sortedTicks).toEqual([
         minCheckedTickUninitialized,
@@ -169,7 +169,7 @@ describe('addLiquidityCutoffs', () => {
 
       const state = poolState(0, 0n, sortedTicks);
 
-      PoolState.addLiquidityCutoffs(state);
+      BasePoolState.addLiquidityCutoffs(state);
 
       expect(sortedTicks).toEqual([
         {
@@ -191,7 +191,7 @@ describe('addLiquidityCutoffs', () => {
 
       const state = poolState(0, 0n, sortedTicks);
 
-      PoolState.addLiquidityCutoffs(state);
+      BasePoolState.addLiquidityCutoffs(state);
 
       expect(sortedTicks).toEqual([
         minCheckedTickUninitialized,
@@ -209,7 +209,7 @@ describe('addLiquidityCutoffs', () => {
 
       const state = poolState(null, -liquidityDelta, sortedTicks);
 
-      PoolState.addLiquidityCutoffs(state);
+      BasePoolState.addLiquidityCutoffs(state);
 
       expect(sortedTicks).toEqual([
         {
@@ -230,7 +230,7 @@ describe('addLiquidityCutoffs', () => {
 
       const state = poolState(0, 0n, sortedTicks);
 
-      PoolState.addLiquidityCutoffs(state);
+      BasePoolState.addLiquidityCutoffs(state);
 
       expect(sortedTicks).toEqual([
         {
@@ -252,7 +252,7 @@ describe('addLiquidityCutoffs', () => {
 
       const state = poolState(null, -liquidityDelta, sortedTicks);
 
-      PoolState.addLiquidityCutoffs(state);
+      BasePoolState.addLiquidityCutoffs(state);
 
       expect(sortedTicks).toEqual([
         {
@@ -275,7 +275,7 @@ describe('fromPositionUpdatedEvent', () => {
     ]);
 
     test('between checked bounds', () => {
-      const stateAfter = PoolState.fromPositionUpdatedEvent(
+      const stateAfter = BasePoolState.fromPositionUpdatedEvent(
         stateBefore,
         [betweenMinAndActiveTickNumber, betweenActiveAndMaxTickNumber],
         positiveLiquidity,
@@ -298,7 +298,7 @@ describe('fromPositionUpdatedEvent', () => {
     });
 
     test('upper in checked bounds', () => {
-      const stateAfter = PoolState.fromPositionUpdatedEvent(
+      const stateAfter = BasePoolState.fromPositionUpdatedEvent(
         stateBefore,
         [MIN_TICK, betweenActiveAndMaxTickNumber],
         positiveLiquidity,
@@ -320,7 +320,7 @@ describe('fromPositionUpdatedEvent', () => {
     });
 
     test('lower in checked bounds', () => {
-      const stateAfter = PoolState.fromPositionUpdatedEvent(
+      const stateAfter = BasePoolState.fromPositionUpdatedEvent(
         stateBefore,
         [betweenMinAndActiveTickNumber, MAX_TICK],
         positiveLiquidity,
@@ -342,7 +342,7 @@ describe('fromPositionUpdatedEvent', () => {
     });
 
     test('below checked bounds', () => {
-      const stateAfter = PoolState.fromPositionUpdatedEvent(
+      const stateAfter = BasePoolState.fromPositionUpdatedEvent(
         stateBefore,
         [MIN_TICK, MIN_TICK + 1],
         positiveLiquidity,
@@ -357,7 +357,7 @@ describe('fromPositionUpdatedEvent', () => {
     });
 
     test('above checked bounds', () => {
-      const stateAfter = PoolState.fromPositionUpdatedEvent(
+      const stateAfter = BasePoolState.fromPositionUpdatedEvent(
         stateBefore,
         [MAX_TICK - 1, MAX_TICK],
         positiveLiquidity,
@@ -372,7 +372,7 @@ describe('fromPositionUpdatedEvent', () => {
     });
 
     test('referenced lower bound', () => {
-      const stateAfter = PoolState.fromPositionUpdatedEvent(
+      const stateAfter = BasePoolState.fromPositionUpdatedEvent(
         stateBefore,
         [MIN_TICK, minCheckedTickNumber],
         positiveLiquidity,
@@ -387,7 +387,7 @@ describe('fromPositionUpdatedEvent', () => {
     });
 
     test('referenced upper bound', () => {
-      const stateAfter = PoolState.fromPositionUpdatedEvent(
+      const stateAfter = BasePoolState.fromPositionUpdatedEvent(
         stateBefore,
         [maxCheckedTickNumber, MAX_TICK],
         positiveLiquidity,
@@ -416,7 +416,7 @@ describe('fromPositionUpdatedEvent', () => {
     ]);
 
     test('modify delta', () => {
-      const stateAfter = PoolState.fromPositionUpdatedEvent(
+      const stateAfter = BasePoolState.fromPositionUpdatedEvent(
         stateBefore,
         [activeTickNumber, MAX_TICK],
         -positiveLiquidity / 2n,
@@ -438,7 +438,7 @@ describe('fromPositionUpdatedEvent', () => {
     });
 
     test('close position', () => {
-      const stateAfter = PoolState.fromPositionUpdatedEvent(
+      const stateAfter = BasePoolState.fromPositionUpdatedEvent(
         stateBefore,
         [activeTickNumber, MAX_TICK],
         -positiveLiquidity,
@@ -466,7 +466,7 @@ describe('fromPositionUpdatedEvent', () => {
     ]);
 
     test('modify delta', () => {
-      const stateAfter = PoolState.fromPositionUpdatedEvent(
+      const stateAfter = BasePoolState.fromPositionUpdatedEvent(
         stateBefore,
         [minCheckedTickNumber, MAX_TICK],
         -positiveLiquidity / 2n,
@@ -487,7 +487,7 @@ describe('fromPositionUpdatedEvent', () => {
     });
 
     test('close position', () => {
-      const stateAfter = PoolState.fromPositionUpdatedEvent(
+      const stateAfter = BasePoolState.fromPositionUpdatedEvent(
         stateBefore,
         [minCheckedTickNumber, MAX_TICK],
         -positiveLiquidity,
@@ -515,7 +515,7 @@ describe('fromPositionUpdatedEvent', () => {
     ]);
 
     test('modify delta', () => {
-      const stateAfter = PoolState.fromPositionUpdatedEvent(
+      const stateAfter = BasePoolState.fromPositionUpdatedEvent(
         stateBefore,
         [MIN_TICK, maxCheckedTickNumber],
         -positiveLiquidity / 2n,
@@ -536,7 +536,7 @@ describe('fromPositionUpdatedEvent', () => {
     });
 
     test('close position', () => {
-      const stateAfter = PoolState.fromPositionUpdatedEvent(
+      const stateAfter = BasePoolState.fromPositionUpdatedEvent(
         stateBefore,
         [MIN_TICK, maxCheckedTickNumber],
         -positiveLiquidity,
