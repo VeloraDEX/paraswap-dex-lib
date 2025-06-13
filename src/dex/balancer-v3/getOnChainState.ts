@@ -9,6 +9,7 @@ import { BalancerV3Config } from './config';
 import { Interface, Result } from '@ethersproject/abi';
 import { IDexHelper } from '../../dex-helper';
 import { WAD } from './balancer-v3-pool';
+import { ReClammMutableState } from './reClammPool';
 
 export interface callData {
   target: string;
@@ -262,6 +263,62 @@ const poolOnChain: Record<
       startIndex: number,
     ) => {
       return {};
+    },
+  },
+  ['RECLAMM']: {
+    count: 1,
+    ['encode']: (
+      network: number,
+      contractInterface: Interface,
+      address: string,
+    ): callData[] => {
+      return [
+        {
+          target: address,
+          callData: contractInterface.encodeFunctionData(
+            'getReClammPoolDynamicData',
+          ),
+        },
+      ];
+    },
+    ['decode']: (
+      contractInterface: Interface,
+      poolAddress: string,
+      data: any,
+      startIndex: number,
+    ): ReClammMutableState => {
+      const resultDynamicData = decodeThrowError(
+        contractInterface,
+        'getReClammPoolDynamicData',
+        data[startIndex++],
+        poolAddress,
+      );
+      if (!resultDynamicData)
+        throw new Error(
+          `Failed to get result for getReClammPoolDynamicData for ${poolAddress}`,
+        );
+
+      return {
+        lastTimestamp: BigInt(resultDynamicData[0].lastTimestamp),
+        lastVirtualBalances: resultDynamicData[0].lastVirtualBalances.map(
+          (b: any) => BigInt(b),
+        ),
+        dailyPriceShiftBase: BigInt(resultDynamicData[0].dailyPriceShiftBase),
+        centerednessMargin: BigInt(resultDynamicData[0].centerednessMargin),
+        startFourthRootPriceRatio: BigInt(
+          resultDynamicData[0].startFourthRootPriceRatio,
+        ),
+        endFourthRootPriceRatio: BigInt(
+          resultDynamicData[0].endFourthRootPriceRatio,
+        ),
+        priceRatioUpdateStartTime: BigInt(
+          resultDynamicData[0].priceRatioUpdateStartTime,
+        ),
+        priceRatioUpdateEndTime: BigInt(
+          resultDynamicData[0].priceRatioUpdateEndTime,
+        ),
+        currentTimestamp: 0n, // This will be updated at swap time
+      };
     },
   },
 };

@@ -537,6 +537,70 @@ describe('BalancerV3 EventPool', function () {
     );
   });
 
+  describe.only('ReClamm - Base', function () {
+    const network = Network.BASE;
+    const dexHelper = new DummyDexHelper(network);
+    const logger = dexHelper.getLogger(dexKey);
+    let balancerV3Pool: BalancerV3EventPool;
+
+    // vault -> EventMappings
+    const eventsToTest: Record<Address, EventMappings> = {
+      [BalancerV3Config.BalancerV3[network].vaultAddress]: {
+        VaultAuxiliary: {
+          // 31484163: LastTimestampUpdated, DailyPriceShiftExponentUpdated, https://basescan.org/tx/0x5fe5278427b2df26242347d94e3530b4a87bda39efb7f367cc1416edc3db5021
+          // 31484217: LastTimestampUpdated, PriceRatioStateUpdated, https://basescan.org/tx/0xade7cb54cb09e874737c2172ef74927e062cf8a5a6ac3bb6d8ae8efee5faf355
+          // 31483951: CenterednessMarginUpdated, VirtualBalancesUpdated, PriceRatioStateUpdated, DailyPriceShiftExponentUpdated, LastTimestampUpdated, https://basescan.org/tx/0x2ad9d79feae679cdf3b104643899501a1c44e56d19b06be59872ed0ae87b992c
+          blockNumbers: [31484163, 31484217, 31483951],
+          poolAddress: [
+            '0x97c4B3E63566D6Ece3c9BCE535EDc2CA52FC6d5B',
+            '0x97c4B3E63566D6Ece3c9BCE535EDc2CA52FC6d5B',
+            '0x97c4B3E63566D6Ece3c9BCE535EDc2CA52FC6d5B',
+          ],
+        },
+      },
+    };
+
+    beforeEach(async () => {
+      balancerV3Pool = new BalancerV3EventPool(
+        dexKey,
+        network,
+        dexHelper,
+        logger,
+      );
+    });
+
+    Object.entries(eventsToTest).forEach(
+      ([vaultAddress, events]: [string, EventMappings]) => {
+        describe(`Events for Vault: ${vaultAddress}`, () => {
+          Object.entries(events).forEach(
+            ([eventName, eventData]: [string, EventData]) => {
+              describe(`${eventName}`, () => {
+                eventData.blockNumbers.forEach((blockNumber: number, i) => {
+                  it(`Pool: ${eventData.poolAddress[i]} State after ${blockNumber}`, async function () {
+                    await testEventSubscriber(
+                      balancerV3Pool,
+                      balancerV3Pool.addressesSubscribed,
+                      (_blockNumber: number) =>
+                        fetchPoolState(
+                          balancerV3Pool,
+                          _blockNumber,
+                          eventData.poolAddress[i],
+                        ),
+                      blockNumber,
+                      `${dexKey}_${vaultAddress}`,
+                      dexHelper.provider,
+                      stateCompare,
+                    );
+                  });
+                });
+              });
+            },
+          );
+        });
+      },
+    );
+  });
+
   // If need to run through block interval up to a block number
   // describe.skip('Base', function () {
   //   const network = Network.BASE;

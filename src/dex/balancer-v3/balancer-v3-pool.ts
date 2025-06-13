@@ -1,5 +1,6 @@
 import _ from 'lodash';
-import { Interface, defaultAbiCoder } from '@ethersproject/abi';
+import { Interface } from '@ethersproject/abi';
+import { parseBytes32String } from '@ethersproject/strings';
 import { DeepReadonly } from 'ts-essentials';
 import { Log, Logger } from '../../types';
 import { catchParseLogError } from '../../utils';
@@ -34,6 +35,15 @@ import {
   HooksConfigMap,
 } from './hooks/balancer-hook-event-subscriber';
 import { StableSurge, StableSurgeHookState } from './hooks/stableSurgeHook';
+import {
+  centerednessMarginUpdatedEvent,
+  isReClammPool,
+  lastTimestampUpdatedEvent,
+  priceRatioStateUpdatedEvent,
+  dailyPriceShiftExponentUpdatedEvent,
+  ReClammPoolState,
+  virtualBalancesUpdatedEvent,
+} from './reClammPool';
 
 export const WAD = BI_POWS[18];
 const FEE_SCALING_FACTOR = BI_POWS[11];
@@ -80,6 +90,9 @@ export class BalancerV3EventPool extends StatefulEventSubscriber<PoolStateMap> {
         'function convertToAssets(uint256 shares) external view returns (uint256 assets)',
         'function maxDeposit(address receiver) external view returns (uint256 maxAssets)',
         'function maxMint(address receiver) external view returns (uint256 maxShares)',
+      ]),
+      ['RECLAMM']: new Interface([
+        'function getReClammPoolDynamicData() external view returns (tuple(uint256[] balancesLiveScaled18, uint256[] tokenRates, uint256 staticSwapFeePercentage, uint256 totalSupply, uint256 lastTimestamp, uint256[] lastVirtualBalances, uint256 dailyPriceShiftExponent, uint256 dailyPriceShiftBase, uint256 centerednessMargin, uint256 currentPriceRatio, uint256 currentFourthRootPriceRatio, uint256 startFourthRootPriceRatio, uint256 endFourthRootPriceRatio, uint32 priceRatioUpdateStartTime, uint32 priceRatioUpdateEndTime, bool isPoolInitialized, bool isPoolPaused, bool isPoolInRecoveryMode) data)',
       ]),
     };
 
@@ -315,13 +328,43 @@ export class BalancerV3EventPool extends StatefulEventSubscriber<PoolStateMap> {
       return null;
     }
 
+    // Convert bytes32 eventKey to string
+    const eventKeyString = parseBytes32String(event.args.eventKey);
+
     const newState = _.cloneDeep(state) as PoolStateMap;
-    switch (event.args.eventKey) {
+    switch (eventKeyString) {
       case 'AmpUpdateStarted':
         ampUpdateStartedEvent(newState[poolAddress], event.args.eventData);
         return newState;
       case 'AmpUpdateStopped':
         ampUpdateStoppedEvent(newState[poolAddress], event.args.eventData);
+        return newState;
+      case 'LastTimestampUpdated':
+        lastTimestampUpdatedEvent(newState[poolAddress], event.args.eventData);
+        return newState;
+      case 'PriceRatioStateUpdated':
+        priceRatioStateUpdatedEvent(
+          newState[poolAddress],
+          event.args.eventData,
+        );
+        return newState;
+      case 'DailyPriceShiftExponentUpdated':
+        dailyPriceShiftExponentUpdatedEvent(
+          newState[poolAddress],
+          event.args.eventData,
+        );
+        return newState;
+      case 'CenterednessMarginUpdated':
+        centerednessMarginUpdatedEvent(
+          newState[poolAddress],
+          event.args.eventData,
+        );
+        return newState;
+      case 'VirtualBalancesUpdated':
+        virtualBalancesUpdatedEvent(
+          newState[poolAddress],
+          event.args.eventData,
+        );
         return newState;
       default:
         return null;
@@ -387,8 +430,15 @@ export class BalancerV3EventPool extends StatefulEventSubscriber<PoolStateMap> {
     tokenIn: TokenInfo,
     tokenOut: TokenInfo,
     swapKind: SwapKind,
+    timestamp: number,
   ): bigint {
     // Find the maximum swap amount the pool will support
+
+    // Update ReClamm pool state with latest block timestamp
+    if (isReClammPool(pool)) {
+      (pool as ReClammPoolState).currentTimestamp = BigInt(timestamp);
+    }
+
     const maxSwapAmount = this.vault.getMaxSwapAmount(
       {
         swapKind,
@@ -466,6 +516,13 @@ export class BalancerV3EventPool extends StatefulEventSubscriber<PoolStateMap> {
           };
         }
       }
+
+      // Update ReClamm pool state with latest block timestamp
+      if (isReClammPool(step.poolState)) {
+        (step.poolState as ReClammPoolState).currentTimestamp =
+          BigInt(timestamp);
+      }
+
       // try/catch as the swap can fail for e.g. wrapAmountTooSmall, etc
       try {
         outputAmountRaw = this.vault.swap(
