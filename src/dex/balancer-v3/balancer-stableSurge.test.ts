@@ -8,16 +8,16 @@ import { BalancerV3 } from './balancer-v3';
 import { testPricesVsOnchain } from './balancer-test-helpers';
 
 const dexKey = 'BalancerV3';
-const blockNumber = 22086000;
+const blockNumber = 22630600;
 let balancerV3: BalancerV3;
 const network = Network.MAINNET;
 const dexHelper = new DummyDexHelper(network);
 const tokens = Tokens[network];
-const usdc = tokens['USDC'];
-const weth = tokens['WETH'];
-// https://etherscan.io/address/0x6b49054c350b47ca9aa1331ab156a1eedbe94e79
+const tBTC = tokens['tBTCv2'];
+const baoBTC = tokens['baoBTC'];
+// https://balancer.fi/pools/ethereum/v3/0xb22bd670c6e57c5fb486914dc478ae668507ddc8
 const stableSurgePool =
-  '0x6b49054c350b47ca9aa1331ab156a1eedbe94e79'.toLowerCase();
+  '0xb22bd670c6e57c5fb486914dc478ae668507ddc8'.toLowerCase();
 
 describe('BalancerV3 stableSurge hook tests', function () {
   beforeAll(async () => {
@@ -30,8 +30,8 @@ describe('BalancerV3 stableSurge hook tests', function () {
   describe('pool with stableSurge hook should be returned', function () {
     it('getPoolIdentifiers', async function () {
       const pools = await balancerV3.getPoolIdentifiers(
-        usdc,
-        weth,
+        tBTC,
+        baoBTC,
         SwapSide.SELL,
         blockNumber,
       );
@@ -39,7 +39,7 @@ describe('BalancerV3 stableSurge hook tests', function () {
     });
 
     it('getTopPoolsForToken', async function () {
-      const pools = await balancerV3.getTopPoolsForToken(weth.address, 10);
+      const pools = await balancerV3.getTopPoolsForToken(baoBTC.address, 10);
       expect(pools.some(pool => pool.address === stableSurgePool)).toBe(true);
     });
   });
@@ -49,29 +49,26 @@ describe('BalancerV3 stableSurge hook tests', function () {
       it('SELL', async function () {
         const amounts = [0n, 100000000n];
         const side = SwapSide.SELL;
-        // await testPricesVsOnchain(amounts, usdc, weth, side, blockNumber, [
-        //   stableSurgePool,
-        // ]);
         await testPricesVsOnchain(
           balancerV3,
           network,
           amounts,
-          usdc,
-          weth,
+          tBTC,
+          baoBTC,
           side,
           blockNumber,
           [stableSurgePool],
         );
       });
       it('BUY', async function () {
-        const amounts = [0n, 500000n];
+        const amounts = [0n, 50000000n];
         const side = SwapSide.BUY;
         await testPricesVsOnchain(
           balancerV3,
           network,
           amounts,
-          weth,
-          usdc,
+          baoBTC,
+          tBTC,
           side,
           blockNumber,
           [stableSurgePool],
@@ -86,8 +83,8 @@ describe('BalancerV3 stableSurge hook tests', function () {
           balancerV3,
           network,
           amounts,
-          weth,
-          usdc,
+          baoBTC,
+          tBTC,
           side,
           blockNumber,
           [stableSurgePool],
@@ -100,8 +97,8 @@ describe('BalancerV3 stableSurge hook tests', function () {
           balancerV3,
           network,
           amounts,
-          weth,
-          usdc,
+          baoBTC,
+          tBTC,
           side,
           blockNumber,
           [stableSurgePool],

@@ -518,6 +518,30 @@ describe('BalancerV3 E2E', () => {
         false,
       );
     });
+
+    describe.only('reClamm Pool', function () {
+      const tokenASymbol: string = 'WETH';
+      const tokenBSymbol: string = 'USDC';
+
+      const tokenAAmount: string = '10000000000000000';
+      const tokenBAmount: string = '10000000';
+      const nativeTokenAmount = '0';
+      // Filter to known reClamm pool to make sure its picked up
+      // https://balancer.fi/pools/base/v3/0x9AbBeF96e52bA8F6b063633F365385B3E15B84F1
+      const reClammPool =
+        '0x9AbBeF96e52bA8F6b063633F365385B3E15B84F1'.toLowerCase();
+      testForNetwork(
+        network,
+        dexKey,
+        tokenASymbol,
+        tokenBSymbol,
+        tokenAAmount,
+        tokenBAmount,
+        nativeTokenAmount,
+        false,
+        [reClammPool],
+      );
+    });
   });
 
   describe('Avalanche', () => {

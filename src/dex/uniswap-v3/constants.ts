@@ -54,3 +54,5 @@ export enum DirectMethodsV6 {
   directSell = 'swapExactAmountInOnUniswapV3',
   directBuy = 'swapExactAmountOutOnUniswapV3',
 }
+
+export const INACTIVE_POOL_AGE_MS = 3 * 30 * 24 * 60 * 60 * 1000; // 3 months

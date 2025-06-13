@@ -2,7 +2,7 @@ import axios from 'axios';
 import { apiUrl, BalancerV3Config, disabledPoolIds } from './config';
 import { HooksConfigMap } from './hooks/balancer-hook-event-subscriber';
 import { getUniqueHookNames } from './utils';
-
+import { ReClammApiName } from './reClammPool';
 interface PoolToken {
   address: string;
   decimals: number;
@@ -15,6 +15,7 @@ interface PoolToken {
 
 export interface Pool {
   address: string;
+  type: string;
   poolTokens: PoolToken[];
   dynamicData: {
     totalLiquidity: string;
@@ -64,6 +65,7 @@ function createQuery(
         orderDirection: desc
       ) {
         address
+        type
         poolTokens {
           address
           decimals
@@ -113,6 +115,7 @@ export async function getTopPoolsApi(
       .filter(
         pool =>
           !pool.hook ||
+          pool.type === ReClammApiName || // In reClamm the pool is also its own hook. We don't track hook state as its not needed for pricing
           (pool.hook && pool.hook.address.toLowerCase() in hooksConfigMap),
       )
       .map(pool => ({
