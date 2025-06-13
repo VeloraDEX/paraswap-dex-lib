@@ -13,6 +13,7 @@ import { VelodromeSlipstreamFactory } from './forks/velodrome-slipstream/velodro
 
 const SUPPORTED_FEES = [10000n, 3000n, 500n, 100n];
 const RAMSES_FORKS_FEES = [...SUPPORTED_FEES, 50n, 250n];
+const PANGOLIN_SUPPORTED_FEES = [8000n, 2500n, 500n, 100n];
 
 // Pools that will be initialized on app startup
 // They are added for testing
@@ -413,6 +414,21 @@ export const UniswapV3Config: DexConfigMap<DexParams> = {
       initRetryFrequency: 10,
       initHash: '0xeC8E5342B19977B4eF8892e02D8DAEcfa1315831', // pool implementation address from factory contract is used instead of initHash here
       subgraphURL: 'GENunSHWLBXm59mBSgPzQ8metBEp9YDfdqwFr91Av1UM',
+    },
+  },
+  PangolinV3: {
+    [Network.AVALANCHE]: {
+      factory: '0x1128F23D0bc0A8396E9FBC3c0c68f5EA228B8256',
+      quoter: '0xA86522CCc412dBC4FA10991900FE46De95983822',
+      router: '0x5485A0751a249225D3bA2f6f296551507e22547f',
+      supportedFees: PANGOLIN_SUPPORTED_FEES,
+      stateMulticall: '0x30F6B9b6485ff0B67E881f5ac80D3F1c70A4B23d',
+      uniswapMulticall: '0x0139141Cd4Ee88dF3Cdb65881D411bAE271Ef0C2',
+      chunksCount: 10,
+      initRetryFrequency: 10,
+      initHash:
+        '0xa9bb1321d78097b23af97a9c07d5ec13e1adc404334585171c54ecccb5ad93b2',
+      subgraphURL: 'EMnAvnfc1fwGSU6ToqYJCeEkXmSgmDmhwtyaha1tM5oi',
     },
   },
 };
