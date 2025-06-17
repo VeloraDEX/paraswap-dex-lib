@@ -146,6 +146,20 @@ describe('Tenderly', () => {
       );
       // assert
       expect(foundSlot.slot).toEqual(expectedSlot);
+      expect(foundSlot.stateProxy).toBeUndefined();
+    });
+
+    it('should find Mainnet SNX `allowance` storage slot', async () => {
+      const expectedSlot = ethers.utils.defaultAbiCoder.encode(['uint'], [4]);
+      const foundSlot = await tenderly.findTokenAllowanceSlot(
+        1,
+        '0xc011a73ee8576fb46f5e1c5751ca3b9fe0af2a6f', // SNX
+      );
+      // assert
+      expect(foundSlot.slot).toEqual(expectedSlot);
+      expect(foundSlot.stateProxy).toEqual(
+        '0x5b1b5fea1b99d83ad479df0c222f0492385381dd',
+      );
     });
   });
 });
