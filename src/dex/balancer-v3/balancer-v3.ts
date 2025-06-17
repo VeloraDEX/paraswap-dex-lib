@@ -276,6 +276,7 @@ export class BalancerV3 extends SimpleExchange implements IDex<BalancerV3Data> {
             tokenInInfo,
             tokenOutInfo,
             swapKind,
+            block.timestamp,
           );
 
           let unit = 0n;

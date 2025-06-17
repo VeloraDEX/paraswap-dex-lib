@@ -537,6 +537,72 @@ describe('BalancerV3 EventPool', function () {
     );
   });
 
+  describe.only('ReClamm - Base', function () {
+    const network = Network.BASE;
+    const dexHelper = new DummyDexHelper(network);
+    const logger = dexHelper.getLogger(dexKey);
+    let balancerV3Pool: BalancerV3EventPool;
+
+    // vault -> EventMappings
+    const eventsToTest: Record<Address, EventMappings> = {
+      [BalancerV3Config.BalancerV3[network].vaultAddress]: {
+        VaultAuxiliary: {
+          // 31048956: LastTimestampUpdated, CenterednessMarginUpdated, DailyPriceShiftExponentUpdated, PriceRatioStateUpdated, VirtualBalancesUpdated, https://basescan.org/tx/0x0089a058e988ef5ff9b6be42a622bd0a1fad678180c13d061a6a03cdced4f0a7
+          // 31094652: CenterednessMarginUpdated, LastTimestampUpdated, https://basescan.org/tx/0xbc3371bb0c995e7decdeb04aee2a829e424056aad63258fdeedc77de2ab64154
+          // 31094625: VirtualBalancesUpdated, https://basescan.org/tx/0x3d3b6e47728b6ec0a95422ee0a35dce43cbdef03b8ac65f6647d0178ba62a64c
+          // 31094562: PriceRatioStateUpdated, https://basescan.org/tx/0xe59aa545143e358279b784756f1984595a22adfc74616f612cb75e5cd6d18bbc
+          blockNumbers: [31048956, 31094652, 31094625, 31094562],
+          poolAddress: [
+            '0xba615a0a9237b64bfb3051f8160483c10dde0012',
+            '0xba615a0a9237b64bfb3051f8160483c10dde0012',
+            '0xba615a0a9237b64bfb3051f8160483c10dde0012',
+            '0xba615a0a9237b64bfb3051f8160483c10dde0012',
+          ],
+        },
+      },
+    };
+
+    beforeEach(async () => {
+      balancerV3Pool = new BalancerV3EventPool(
+        dexKey,
+        network,
+        dexHelper,
+        logger,
+      );
+    });
+
+    Object.entries(eventsToTest).forEach(
+      ([vaultAddress, events]: [string, EventMappings]) => {
+        describe(`Events for Vault: ${vaultAddress}`, () => {
+          Object.entries(events).forEach(
+            ([eventName, eventData]: [string, EventData]) => {
+              describe(`${eventName}`, () => {
+                eventData.blockNumbers.forEach((blockNumber: number, i) => {
+                  it(`Pool: ${eventData.poolAddress[i]} State after ${blockNumber}`, async function () {
+                    await testEventSubscriber(
+                      balancerV3Pool,
+                      balancerV3Pool.addressesSubscribed,
+                      (_blockNumber: number) =>
+                        fetchPoolState(
+                          balancerV3Pool,
+                          _blockNumber,
+                          eventData.poolAddress[i],
+                        ),
+                      blockNumber,
+                      `${dexKey}_${vaultAddress}`,
+                      dexHelper.provider,
+                      stateCompare,
+                    );
+                  });
+                });
+              });
+            },
+          );
+        });
+      },
+    );
+  });
+
   // If need to run through block interval up to a block number
   // describe.skip('Base', function () {
   //   const network = Network.BASE;

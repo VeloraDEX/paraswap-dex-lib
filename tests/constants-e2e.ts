@@ -29,6 +29,15 @@ export const Tokens: {
       address: '0x9f8f72aa9304c8b593d555f12ef6589cc3a579a2',
       decimals: 18,
     },
+    // Pendle PT tokens for testing AaveV3PtRollOver
+    'PT-sUSDe-29MAY2025': {
+      address: '0xb7de5dfcb74d25c2f21841fbd6230355c50d9308',
+      decimals: 18,
+    },
+    'PT-sUSDe-31JUL2025': {
+      address: '0x3b3fb9c57858ef816833dc91565efcd85d96f634',
+      decimals: 18,
+    },
     AA_wstETH: {
       decimals: 18,
       address: '0x2688fc68c4eac90d9e5e1b94776cf14eade8d877',
@@ -586,6 +595,14 @@ export const Tokens: {
       address: '0x0bfc9d54Fc184518A81162F8fB99c2eACa081202',
       decimals: 18,
     },
+    baoBTC: {
+      address: '0x22d76e6e1d9ab4072522c1bc60c85a0d5626ca2d',
+      decimals: 18,
+    },
+    cbBTC: {
+      address: `0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf`,
+      decimals: 8,
+    },
   },
   [Network.POLYGON]: {
     jGBP: {
@@ -670,6 +687,10 @@ export const Tokens: {
     MUST: {
       address: '0x9C78EE466D6Cb57A4d01Fd887D2b5dFb2D46288f',
       decimals: 18,
+    },
+    WOLF: {
+      address: '0x8f18dC399594b451EdA8c5da02d0563c0b2d0f16',
+      decimals: 9,
     },
     AMDAI: {
       address: '0x27F8D03b3a2196956ED754baDc28D73be8830A6e',
@@ -1924,6 +1945,9 @@ export const Holders: {
     wUSDL: '0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb',
     UsualM: '0xE3f7A0c4a44b740328157A5152A85c3bCB54DA09',
     EKUBO: '0xF5b6Ee2CAEb6769659f6C091D209DfdCaF3F69Eb',
+    cbBTC: '0x5c647cE0Ae10658ec44FA4E11A51c96e94efd1Dd',
+    'PT-sUSDe-29MAY2025': '0x1234567890123456789012345678901234567890',
+    'PT-sUSDe-31JUL2025': '0x2345678901234567890123456789012345678901',
   },
   [Network.POLYGON]: {
     jGBP: '0x02aa0B826c7BA6386DdBE04C0a8715A1c0A16B24',
@@ -1958,6 +1982,7 @@ export const Holders: {
     amUSDC: '0x6e7f19cd23049c7118e14470e2bf85d2e26ee0ae',
     MAI: '0x9a8cf02f3e56c664ce75e395d0e4f3dc3dafe138',
     SDEX: '0xB0470cF15B22a6A32c49a7C20E3821B944A76058',
+    WOLF: '0x4aa6907Fa9F1BC2Be15158897E0138E947C86956',
     CRV: '0x2151578e1fEc29361bB0481312Ea6b935014D636',
     SUSHI: '0x1605CE87dD176b38a17d30e8926370ffD5268bf6',
     EURA: '0x9A760aa1Fe631fD9aC0Aee0965736121c7c132cc',

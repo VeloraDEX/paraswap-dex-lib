@@ -1,49 +1,50 @@
-import {
-  Token,
-  Address,
-  ExchangePrices,
-  PoolPrices,
-  AdapterExchangeParam,
-  PoolLiquidity,
-  DexExchangeParam,
-  NumberAsString,
-} from '../../types';
-import { SwapSide, Network, ETHER_ADDRESS } from '../../constants';
+import { Interface } from '@ethersproject/abi';
+import Joi from 'joi';
 import * as CALLDATA_GAS_COST from '../../calldata-gas-cost';
-import { getBigIntPow, getDexKeysWithNetwork } from '../../utils';
-import { Context, IDex } from '../../dex/idex';
+import { Network, SwapSide } from '../../constants';
 import { IDexHelper } from '../../dex-helper/idex-helper';
+import { Context, IDex } from '../../dex/idex';
 import {
-  EkuboData,
-  GetQuoteDataResponse,
-  VanillaPoolParameters,
-} from './types';
+  AdapterExchangeParam,
+  Address,
+  DexExchangeParam,
+  ExchangePrices,
+  NumberAsString,
+  PoolLiquidity,
+  PoolPrices,
+  Token,
+} from '../../types';
+import { getBigIntPow, getDexKeysWithNetwork } from '../../utils';
 import { SimpleExchange } from '../simple-exchange';
 import { EkuboConfig } from './config';
-import { BasePool } from './pools/base-pool';
+import { BasePool, BasePoolState } from './pools/base';
 import {
-  convertEkuboToParaSwap,
+  BasicQuoteData,
+  EkuboData,
+  TwammQuoteData,
+  VanillaPoolParameters,
+} from './types';
+import {
   convertParaSwapToEkubo,
   hexStringTokenPair,
   NATIVE_TOKEN_ADDRESS,
-  sortAndConvertTokens,
+  convertAndSortTokens,
+  contractsFromDexParams,
 } from './utils';
-import Joi from 'joi';
-import { Interface } from '@ethersproject/abi';
 
-import CoreABI from '../../abi/ekubo/core.json';
-import DataFetcherABI from '../../abi/ekubo/data-fetcher.json';
-import { BigNumber, Contract } from 'ethers';
-import { FULL_RANGE_TICK_SPACING } from './pools/math/tick';
+import { BigNumber } from 'ethers';
 import { hexlify } from 'ethers/lib/utils';
+import { AsyncOrSync, DeepReadonly } from 'ts-essentials';
 import RouterABI from '../../abi/ekubo/router.json';
-import { isPriceIncreasing } from './pools/math/swap';
-import { OraclePool } from './pools/oracle-pool';
-import { erc20Iface } from '../../lib/tokens/utils';
-import { AsyncOrSync } from 'ts-essentials';
-import { MAX_SQRT_RATIO_FLOAT, MIN_SQRT_RATIO_FLOAT } from './pools/math/price';
+import { FullRangePool, FullRangePoolState } from './pools/full-range';
+import { EkuboPool, IEkuboPool } from './pools/iface';
 import { MIN_I256 } from './pools/math/constants';
-import { PoolKey, PoolConfig, PoolState } from './pools/pool-utils';
+import { MAX_SQRT_RATIO_FLOAT, MIN_SQRT_RATIO_FLOAT } from './pools/math/price';
+import { isPriceIncreasing } from './pools/math/swap';
+import { FULL_RANGE_TICK_SPACING } from './pools/math/tick';
+import { OraclePool } from './pools/oracle';
+import { TwammPool, TwammPoolState } from './pools/twamm';
+import { PoolConfig, PoolKey } from './pools/utils';
 
 const FALLBACK_POOL_PARAMETERS: VanillaPoolParameters[] = [
   {
@@ -126,24 +127,23 @@ export class Ekubo extends SimpleExchange implements IDex<EkuboData> {
     getDexKeysWithNetwork(EkuboConfig);
 
   private poolKeys: PoolKey[] = [];
-  private readonly pools: Map<string, BasePool> = new Map();
+  private readonly pools: Map<string, IEkuboPool> = new Map();
 
   public logger;
 
   public readonly config;
-  public readonly routerIface;
 
-  private readonly core;
-  private readonly coreIface;
-  private readonly dataFetcher;
+  public readonly routerIface;
+  private readonly contracts;
+
   private readonly supportedExtensions;
 
   private interval?: NodeJS.Timeout;
 
   // Caches the number of decimals for TVL computation purposes
-  private readonly decimals: Record<string, number> = {
+  /*private readonly decimals: Record<string, number> = {
     [ETHER_ADDRESS]: 18,
-  };
+  };*/
 
   public constructor(
     readonly network: Network,
@@ -154,17 +154,16 @@ export class Ekubo extends SimpleExchange implements IDex<EkuboData> {
 
     this.logger = dexHelper.getLogger(dexKey);
     this.config = EkuboConfig[dexKey][network];
-    this.core = new Contract(this.config.core, CoreABI, dexHelper.provider);
-    this.coreIface = new Interface(CoreABI);
-    this.dataFetcher = new Contract(
-      this.config.dataFetcher,
-      DataFetcherABI,
-      dexHelper.provider,
-    );
+
+    this.contracts = contractsFromDexParams(this.config, dexHelper.provider);
     this.routerIface = new Interface(RouterABI);
 
     // 0 are vanilla pools
-    this.supportedExtensions = [0n, BigInt(this.config.oracle)];
+    this.supportedExtensions = [
+      0n,
+      BigInt(this.config.oracle),
+      BigInt(this.config.twamm),
+    ];
   }
 
   // Periodically schedules fetching pool keys from the Ekubo API and filling in details with the quote data fetcher
@@ -187,9 +186,9 @@ export class Ekubo extends SimpleExchange implements IDex<EkuboData> {
     srcToken: Token,
     destToken: Token,
     _side: SwapSide,
-    blockNumber: number,
+    _blockNumber: number,
   ): Promise<string[]> {
-    const [token0, token1] = sortAndConvertTokens(srcToken, destToken);
+    const [token0, token1] = convertAndSortTokens(srcToken, destToken);
     const pair = hexStringTokenPair(token0, token1);
 
     let poolKeys: PoolKey[];
@@ -201,14 +200,18 @@ export class Ekubo extends SimpleExchange implements IDex<EkuboData> {
         `Pool keys for token pair ${pair} not found, falling back to default pool parameters`,
       );
 
-      poolKeys = FALLBACK_POOL_PARAMETERS.map(
-        params =>
-          new PoolKey(
-            token0,
-            token1,
-            new PoolConfig(params.tickSpacing, params.fee, 0n),
-          ),
-      );
+      poolKeys = FALLBACK_POOL_PARAMETERS.flatMap(params => [
+        new PoolKey(
+          token0,
+          token1,
+          new PoolConfig(params.tickSpacing, params.fee, 0n),
+        ),
+        new PoolKey(
+          token0,
+          token1,
+          new PoolConfig(0, params.fee, BigInt(this.config.twamm)),
+        ),
+      ]);
 
       if ([token0, token1].includes(NATIVE_TOKEN_ADDRESS)) {
         poolKeys.push(
@@ -252,23 +255,13 @@ export class Ekubo extends SimpleExchange implements IDex<EkuboData> {
     const amountTokenAddress = convertParaSwapToEkubo(amountToken.address);
     const unitAmount = getBigIntPow(amountToken.decimals);
 
-    const [token0, token1] = sortAndConvertTokens(srcToken, destToken);
+    const token1 = convertAndSortTokens(srcToken, destToken)[1];
 
     const exchangePrices = [];
 
     // eslint-disable-next-line no-restricted-syntax
     poolLoop: for (const pool of pools) {
       const poolId = pool.key.string_id;
-
-      if (pool.key.token0 !== token0 || pool.key.token1 !== token1) {
-        // this.logger.error(
-        //   `Can't quote pair ${hexStringTokenPair(
-        //     token0,
-        //     token1,
-        //   )} on pool ${poolId}`,
-        // );
-        continue;
-      }
 
       try {
         const quotes = [];
@@ -472,9 +465,9 @@ export class Ekubo extends SimpleExchange implements IDex<EkuboData> {
     tokenA: Token,
     tokenB: Token,
     limitPools: string[] | undefined,
-  ): BasePool[] {
+  ): IEkuboPool[] {
     if (typeof limitPools === 'undefined') {
-      const [token0, token1] = sortAndConvertTokens(tokenA, tokenB);
+      const [token0, token1] = convertAndSortTokens(tokenA, tokenB);
 
       return Array.from(
         this.pools
@@ -526,17 +519,53 @@ export class Ekubo extends SimpleExchange implements IDex<EkuboData> {
   ): Promise<string[]>[] {
     const promises = [];
 
+    const [normalPoolKeys, twammPoolKeys] = poolKeys.reduce(
+      ([normalPoolKeys, twammPoolKeys], poolKey) => {
+        if (poolKey.config.extension == BigInt(this.config.twamm)) {
+          twammPoolKeys.push(poolKey);
+        } else {
+          normalPoolKeys.push(poolKey);
+        }
+
+        return [normalPoolKeys, twammPoolKeys];
+      },
+      [[], []] as [PoolKey[], PoolKey[]],
+    );
+
+    const commonArgs = [
+      this.dexKey,
+      this.dexHelper,
+      this.logger,
+      this.contracts,
+    ] as const;
+
+    function constructAndInitialize<S, P extends EkuboPool<S>>(
+      constructor: { new (...args: [...typeof commonArgs, PoolKey]): P },
+      initialState: DeepReadonly<S>,
+      poolKey: PoolKey,
+    ): P {
+      const pool = new constructor(...commonArgs, poolKey);
+
+      // This is fulfilled immediately
+      pool.initialize(blockNumber, { state: initialState });
+
+      return pool;
+    }
+
     for (
       let batchStart = 0;
-      batchStart < poolKeys.length;
+      batchStart < normalPoolKeys.length;
       batchStart += MAX_BATCH_SIZE
     ) {
-      const batch = poolKeys.slice(batchStart, batchStart + MAX_BATCH_SIZE);
+      const batch = normalPoolKeys.slice(
+        batchStart,
+        batchStart + MAX_BATCH_SIZE,
+      );
 
       promises.push(
         (async () => {
-          const fetchedData: GetQuoteDataResponse =
-            await this.dataFetcher.getQuoteData(
+          const fetchedData: BasicQuoteData[] =
+            await this.contracts.core.dataFetcher.getQuoteData(
               batch.map(poolKey => poolKey.toAbi()),
               MIN_TICK_SPACINGS_PER_POOL,
               {
@@ -545,40 +574,40 @@ export class Ekubo extends SimpleExchange implements IDex<EkuboData> {
             );
 
           return fetchedData.map((data, i) => {
-            const poolKey = poolKeys[batchStart + i];
-            const initialState = PoolState.fromQuoter(
-              data,
-              poolKey.config.tickSpacing === FULL_RANGE_TICK_SPACING,
-            );
-            const poolId = poolKey.string_id;
+            const poolKey = normalPoolKeys[batchStart + i];
             const extension = poolKey.config.extension;
 
-            let poolConstructor;
-            if (extension === 0n) {
-              poolConstructor = BasePool;
-            } else if (extension === BigInt(this.config.oracle)) {
-              poolConstructor = OraclePool;
-            } else {
-              throw new Error(`Unknown pool extension ${hexlify(extension)}`);
+            let pool: IEkuboPool;
+            switch (extension) {
+              case 0n: {
+                if (poolKey.config.tickSpacing === 0) {
+                  pool = constructAndInitialize(
+                    FullRangePool,
+                    FullRangePoolState.fromQuoter(data),
+                    poolKey,
+                  );
+                } else {
+                  pool = constructAndInitialize(
+                    BasePool,
+                    BasePoolState.fromQuoter(data),
+                    poolKey,
+                  );
+                }
+                break;
+              }
+              case BigInt(this.config.oracle): {
+                pool = constructAndInitialize(
+                  OraclePool,
+                  FullRangePoolState.fromQuoter(data),
+                  poolKey,
+                );
+                break;
+              }
+              default:
+                throw new Error(`Unknown pool extension ${hexlify(extension)}`);
             }
 
-            const pool = new poolConstructor(
-              this.dexKey,
-              this.network,
-              this.dexHelper,
-              this.logger,
-              this.coreIface,
-              this.dataFetcher,
-              poolKey,
-              this.core,
-            );
-
-            this.pools.set(poolId, pool);
-
-            // This is fulfilled immediately
-            pool.initialize(blockNumber, { state: initialState });
-
-            return poolId;
+            return pool;
           });
         })().catch(err => {
           throw {
@@ -589,7 +618,39 @@ export class Ekubo extends SimpleExchange implements IDex<EkuboData> {
       );
     }
 
-    return promises;
+    promises.push(
+      ...twammPoolKeys.map(poolKey =>
+        (async () => {
+          const quoteData: TwammQuoteData =
+            await this.contracts.twamm.dataFetcher.getPoolState(
+              poolKey.toAbi(),
+              {
+                blockTag: blockNumber,
+              },
+            );
+
+          return [
+            constructAndInitialize(
+              TwammPool,
+              TwammPoolState.fromQuoter(quoteData),
+              poolKey,
+            ),
+          ];
+        })(),
+      ),
+    );
+
+    return promises.map(promise =>
+      promise.then(pools =>
+        pools.map(pool => {
+          const poolId = pool.key.string_id;
+
+          this.pools.set(poolId, pool);
+
+          return poolId;
+        }),
+      ),
+    );
   }
 
   private async fetchAllPoolKeys(): Promise<PoolKey[]> {
@@ -610,7 +671,8 @@ export class Ekubo extends SimpleExchange implements IDex<EkuboData> {
       .filter(
         res =>
           this.supportedExtensions.includes(BigInt(res.extension)) &&
-          BigInt(res.core_address) === BigInt(this.core.address),
+          BigInt(res.core_address) ===
+            BigInt(this.contracts.core.contract.address),
       )
       .map(
         info =>
