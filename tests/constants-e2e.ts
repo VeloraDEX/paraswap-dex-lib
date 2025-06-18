@@ -1512,6 +1512,14 @@ export const Tokens: {
       address: '0x6ab707aca953edaefbc4fd23ba73294241490620',
       decimals: 6,
     },
+    testPSP: {
+      address: '0x326Aec8d7d99d1D6022c57C5f6194D2a7867227d',
+      decimals: 18,
+    },
+    testXYZ: {
+      address: '0xa2781111f824ca1cd98454b2c9722baefc898e99',
+      decimals: 18,
+    },
     waOptWETH: {
       address: '0x464b808c2c7e04b07e860fdf7a91870620246148',
       decimals: 18,
