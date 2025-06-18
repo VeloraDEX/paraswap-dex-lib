@@ -310,6 +310,7 @@ export type Config = {
   adapterAddresses: { [name: string]: Address };
   executorsAddresses?: { [name: string]: Address };
   uniswapV2ExchangeRouterAddress: Address;
+  airSwapOverrideServerURLs: string[];
   rfqConfigs: Record<string, RFQConfig>;
   rpcPollingMaxAllowedStateDelayInBlocks: number;
   rpcPollingBlocksBackToTriggerUpdate: number;
