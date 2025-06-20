@@ -1,6 +1,7 @@
 import { BufferState, GyroECLPImmutable } from '@balancer-labs/balancer-maths';
 import { Address } from '../../types';
 import { HookConfig } from './hooks/balancer-hook-event-subscriber';
+import { QauntAMMPoolState } from './quantAMMPool';
 
 // Immutable data types available on all pools (Available from API)
 export type CommonImmutablePoolState = {
@@ -33,11 +34,12 @@ export interface CommonMutableState {
   scalingFactors: bigint[];
 }
 
-type CommonPoolState = CommonImmutablePoolState & CommonMutableState;
+export type CommonPoolState = CommonImmutablePoolState & CommonMutableState;
 
 export type PoolState =
   | CommonPoolState
-  | (CommonPoolState & StableMutableState);
+  | (CommonPoolState & StableMutableState)
+  | QauntAMMPoolState;
 
 // Stable Pool specific mutable data
 export interface StableMutableState {
@@ -80,6 +82,7 @@ export type DexParams = {
   balancerRouterAddress: string;
   balancerBatchRouterAddress: string;
   hooks?: HookConfig[];
+  quantAmmUpdateWeightRunnerAddress?: string;
 };
 
 export type TokenInfo = {
