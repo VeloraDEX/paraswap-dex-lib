@@ -1053,7 +1053,7 @@ export class SwaapV2 extends SimpleExchange implements IDex<SwaapV2Data> {
     return {
       url: `${SWAAP_RFQ_API_URL}/${endpoint}`,
       params: {
-        networkId: this.network,
+        network_id: this.network,
       },
       headers: { 'x-api-key': this.swaapV2AuthToken },
       method: method,
