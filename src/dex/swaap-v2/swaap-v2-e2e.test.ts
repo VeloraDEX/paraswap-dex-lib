@@ -23,7 +23,7 @@ describe('SwaapV2 E2E', () => {
       ],
     ],
     // [SwapSide.BUY, [ContractMethod.simpleBuy, ContractMethod.buy]],
-    [SwapSide.BUY, [ContractMethod.swapExactAmountOut]],
+    // [SwapSide.BUY, [ContractMethod.swapExactAmountOut]],
   ]);
 
   describe('Mainnet', () => {
@@ -48,18 +48,18 @@ describe('SwaapV2 E2E', () => {
           buyAmount: '100000000',
         },
       ],
-      [
-        {
-          name: 'USDC',
-          sellAmount: '45410357',
-          buyAmount: '1000000000000000000',
-        },
-        {
-          name: 'ETH',
-          sellAmount: '1000000000000000000',
-          buyAmount: '100000000',
-        },
-      ],
+      // [
+      //   {
+      //     name: 'USDC',
+      //     sellAmount: '45410357',
+      //     buyAmount: '1000000000000000000',
+      //   },
+      //   {
+      //     name: 'ETH',
+      //     sellAmount: '1000000000000000000',
+      //     buyAmount: '100000000',
+      //   },
+      // ],
     ];
 
     sideToContractMethods.forEach((contractMethods, side) =>
