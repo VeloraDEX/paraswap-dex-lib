@@ -1,4 +1,3 @@
-import _ from 'lodash';
 import { Interface } from '@ethersproject/abi';
 import { DeepReadonly } from 'ts-essentials';
 import { PartialEventSubscriber } from '../../composed-event-subscriber';
@@ -42,15 +41,16 @@ export class ChainLinkPriceFeed<State> extends PartialEventSubscriber<
   ): DeepReadonly<ChainLinkPriceFeedState> | null {
     try {
       const parsed = this.chainLinkInterface.parseLog(log);
-      const _state: ChainLinkPriceFeedState = _.cloneDeep(state);
+
       switch (parsed.name) {
         case 'AnswerUpdated': {
-          _state.usdcPrice = convertToNewDecimals(
-            bigIntify(parsed.args.current.toString()),
-            8,
-            18,
-          );
-          return _state;
+          return {
+            usdcPrice: convertToNewDecimals(
+              bigIntify(parsed.args.current.toString()),
+              8,
+              18,
+            ),
+          };
         }
         default:
           return null;
