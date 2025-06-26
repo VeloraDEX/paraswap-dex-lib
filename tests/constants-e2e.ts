@@ -595,6 +595,10 @@ export const Tokens: {
       address: '0x0bfc9d54Fc184518A81162F8fB99c2eACa081202',
       decimals: 18,
     },
+    RLUSD: {
+      address: '0x8292Bb45bf1Ee4d140127049757C2E0fF06317eD',
+      decimals: 18,
+    },
     baoBTC: {
       address: '0x22d76e6e1d9ab4072522c1bc60c85a0d5626ca2d',
       decimals: 18,
@@ -1813,6 +1817,10 @@ export const Tokens: {
     DAI: {
       address: `0xB77EB1A70A96fDAAeB31DB1b42F2b8b5846b2613`,
       decimals: 18,
+    },
+    WBTC: {
+      address: `0x29f2d40b0605204364af54ec677bd022da425d03`,
+      decimals: 8,
     },
   },
 };
