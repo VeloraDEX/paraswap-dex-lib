@@ -54,5 +54,12 @@ export const UniswapV4Config: DexConfigMap<DexParams> = {
       router: '0x1906c1d672b88cd1b9ac7593301ca990f94eae07',
       stateView: '0xd13dd3d6e93f276fafc9db9e6bb47c1180aee0c4',
     },
+    [Network.UNICHAIN]: {
+      poolManager: '0x1f98400000000000000000000000000000000004',
+      subgraphURL: 'Bd8UnJU8jCRJKVjcW16GHM3FNdfwTojmWb3QwSAmv8Uc',
+      quoter: '0x333e3c607b141b18ff6de9f258db6e77fe7491e0',
+      router: '0xef740bf23acae26f6492b10de645d6b98dc8eaf3',
+      stateView: '0x86e8631a016f9068c3f085faf484ee3f5fdee8f2',
+    },
   },
 };

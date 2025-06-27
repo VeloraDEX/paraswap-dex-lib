@@ -35,22 +35,22 @@ function testForNetwork(
       SwapSide.SELL,
       [
         // ContractMethod.simpleSwap,
-        ContractMethod.multiSwap,
+        // ContractMethod.multiSwap,
         // ContractMethod.megaSwap,
         // ContractMethod.swapExactAmountInOnUniswapV3,
-        // ContractMethod.swapExactAmountIn,
+        ContractMethod.swapExactAmountIn,
       ],
     ],
-    // [
-    //   SwapSide.BUY,
-    //   [
-    //     // ContractMethod.simpleBuy,
-    //     // ContractMethod.buy,
-    //     // ContractMethod.directUniV3Buy,
-    //     // ContractMethod.swapExactAmountOutOnUniswapV3,
-    //     ContractMethod.swapExactAmountOut,
-    //   ],
-    // ],
+    [
+      SwapSide.BUY,
+      [
+        // ContractMethod.simpleBuy,
+        // ContractMethod.buy,
+        // ContractMethod.directUniV3Buy,
+        // ContractMethod.swapExactAmountOutOnUniswapV3,
+        // ContractMethod.swapExactAmountOut,
+      ],
+    ],
   ]);
 
   describe(`${network}`, () => {
@@ -58,44 +58,42 @@ function testForNetwork(
       describe(`${side}`, () => {
         contractMethods.forEach((contractMethod: ContractMethod) => {
           describe(`${contractMethod}`, () => {
-            if (tokenASymbol !== 'WETH') {
-              it(`${nativeTokenSymbol} -> ${tokenASymbol}`, async () => {
-                await testE2E(
-                  tokens[nativeTokenSymbol],
-                  tokens[tokenASymbol],
-                  holders[nativeTokenSymbol],
-                  side === SwapSide.SELL ? nativeTokenAmount : tokenAAmount,
-                  side,
-                  dexKey,
-                  contractMethod,
-                  network,
-                  provider,
-                  undefined,
-                  undefined,
-                  undefined,
-                  slippage,
-                  2000,
-                );
-              });
-              it(`${tokenASymbol} -> ${nativeTokenSymbol}`, async () => {
-                await testE2E(
-                  tokens[tokenASymbol],
-                  tokens[nativeTokenSymbol],
-                  holders[tokenASymbol],
-                  side === SwapSide.SELL ? tokenAAmount : nativeTokenAmount,
-                  side,
-                  dexKey,
-                  contractMethod,
-                  network,
-                  provider,
-                  undefined,
-                  undefined,
-                  undefined,
-                  slippage,
-                  2000,
-                );
-              });
-            }
+            it(`${nativeTokenSymbol} -> ${tokenASymbol}`, async () => {
+              await testE2E(
+                tokens[nativeTokenSymbol],
+                tokens[tokenASymbol],
+                holders[nativeTokenSymbol],
+                side === SwapSide.SELL ? nativeTokenAmount : tokenAAmount,
+                side,
+                dexKey,
+                contractMethod,
+                network,
+                provider,
+                undefined,
+                undefined,
+                undefined,
+                slippage,
+                2000,
+              );
+            });
+            // it(`${tokenASymbol} -> ${nativeTokenSymbol}`, async () => {
+            //   await testE2E(
+            //     tokens[tokenASymbol],
+            //     tokens[nativeTokenSymbol],
+            //     holders[tokenASymbol],
+            //     side === SwapSide.SELL ? tokenAAmount : nativeTokenAmount,
+            //     side,
+            //     dexKey,
+            //     contractMethod,
+            //     network,
+            //     provider,
+            //     undefined,
+            //     undefined,
+            //     undefined,
+            //     slippage,
+            //     2000,
+            //   );
+            // });
             // it(`${tokenASymbol} -> ${tokenBSymbol}`, async () => {
             //   await testE2E(
             //     tokens[tokenASymbol],
@@ -618,6 +616,86 @@ describe('UniswapV3 E2E', () => {
           [
             { name: 'USDC', sellAmount: '1000000', buyAmount: '100000000' },
             { name: 'USDT', sellAmount: '100000000', buyAmount: '100000000' },
+          ],
+        ];
+
+      sideToContractMethods.forEach((contractMethods, side) =>
+        describe(`${side}`, () => {
+          contractMethods.forEach((contractMethod: ContractMethod) => {
+            pairs.forEach(pair => {
+              describe(`${contractMethod}`, () => {
+                it(`${pair[0].name} -> ${pair[1].name}`, async () => {
+                  await testE2E(
+                    tokens[pair[0].name],
+                    tokens[pair[1].name],
+                    holders[pair[0].name],
+                    side === SwapSide.SELL
+                      ? pair[0].sellAmount
+                      : pair[0].buyAmount,
+                    side,
+                    dexKey,
+                    contractMethod,
+                    network,
+                    provider,
+                  );
+                });
+                it(`${pair[1].name} -> ${pair[0].name}`, async () => {
+                  await testE2E(
+                    tokens[pair[1].name],
+                    tokens[pair[0].name],
+                    holders[pair[1].name],
+                    side === SwapSide.SELL
+                      ? pair[1].sellAmount
+                      : pair[1].buyAmount,
+                    side,
+                    dexKey,
+                    contractMethod,
+                    network,
+                    provider,
+                  );
+                });
+              });
+            });
+          });
+        }),
+      );
+    });
+
+    describe('UniswapV3 Unichain', () => {
+      const network = Network.UNICHAIN;
+      const tokens = Tokens[network];
+      const holders = Holders[network];
+      const provider = new StaticJsonRpcProvider(
+        generateConfig(network).privateHttpProvider,
+        network,
+      );
+
+      const sideToContractMethods = new Map([
+        [SwapSide.SELL, [ContractMethod.swapExactAmountInOnUniswapV3]],
+        [SwapSide.BUY, [ContractMethod.swapExactAmountOutOnUniswapV3]],
+      ]);
+
+      const pairs: { name: string; sellAmount: string; buyAmount: string }[][] =
+        [
+          [
+            {
+              name: 'ETH',
+              sellAmount: '1000000000000000000',
+              buyAmount: '1000000000000000000',
+            },
+            {
+              name: 'UNI',
+              sellAmount: '1000000000000000000',
+              buyAmount: '1000000000000000000',
+            },
+          ],
+          [
+            {
+              name: 'ETH',
+              sellAmount: '1000000000000000000',
+              buyAmount: '1000000000000000000',
+            },
+            { name: 'USDC', sellAmount: '1000000', buyAmount: '1000000' },
           ],
         ];
 

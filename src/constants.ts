@@ -46,6 +46,7 @@ export enum Network {
   BASE = 8453,
   SEPOLIA = 11155111,
   GNOSIS = 100,
+  UNICHAIN = 130,
 }
 export const SUBGRAPH_TIMEOUT = 20 * 1000;
 

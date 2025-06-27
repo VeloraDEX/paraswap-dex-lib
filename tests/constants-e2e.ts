@@ -1815,6 +1815,33 @@ export const Tokens: {
       decimals: 18,
     },
   },
+  [Network.UNICHAIN]: {
+    ETH: { address: ETHER_ADDRESS, decimals: 18 },
+    WETH: {
+      address: '0x4200000000000000000000000000000000000006',
+      decimals: 18,
+    },
+    USDC: {
+      address: '0x078D782b760474a361dDA0AF3839290b0EF57AD6',
+      decimals: 6,
+    },
+    DAI: {
+      address: '0x20CAb320A855b39F724131C69424240519573f81',
+      decimals: 18,
+    },
+    DMC: {
+      address: '0x076f42d9374a2DCC98255A96bA460d7178f3cf26',
+      decimals: 9,
+    },
+    MGO: {
+      address: '0x3874BA75513f17DEFFFd784eE0c9e2158d4AF253',
+      decimals: 9,
+    },
+    UNI: {
+      address: '0x8f187aA05619a017077f5308904739877ce9eA21',
+      decimals: 18,
+    },
+  },
 };
 
 export const Holders: {
@@ -2240,6 +2267,7 @@ export const Holders: {
     usdcAave: '0xdD5De55eA6804EFb283f43b0C091C25000a6486c',
     DAI: '0x90347b9CC81a4a28aAc74E8B134040d5ce2eaB6D',
   },
+  [Network.UNICHAIN]: {},
 };
 
 export const NativeTokenSymbols: { [network: number]: string } = {
@@ -2253,6 +2281,7 @@ export const NativeTokenSymbols: { [network: number]: string } = {
   [Network.BASE]: 'ETH',
   [Network.SEPOLIA]: 'ETH',
   [Network.GNOSIS]: 'XDAI',
+  [Network.UNICHAIN]: 'ETH',
 };
 
 export const WrappedNativeTokenSymbols: { [network: number]: string } = {

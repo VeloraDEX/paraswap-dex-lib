@@ -681,6 +681,85 @@ describe('UniswapV4 events', () => {
       });
     });
   });
+
+  describe('Unichain', () => {
+    const network = Network.UNICHAIN;
+    const config = UniswapV4Config[dexKey][network];
+
+    describe('UniswapV4Pool USDC / ETH (0x3258F413C7A88CDA2FA8709A589D221A80F6574F63DF5A5B6774485D8ACC39D9)', () => {
+      const blockNumbers: { [eventName: string]: number[] } = {
+        // ['Donate']: // Donate event was never triggered
+        // ['ProtocolFeeUpdated']: // Donate event was never triggered
+        ['ModifyLiquidity']: [
+          19679409, // https://uniscan.xyz/tx/0x3c3509ef0ea75ecdfe86ef9cf4880b6dc117ca0f56fe18f394632226343ccb2a#eventlog
+          19679408, // https://uniscan.xyz/tx/0xf84747d8b67f10b83f51785baabfb1c00f7265de74a7223fbaa97ba55d12f6ef#eventlog
+          19679407, // https://uniscan.xyz/tx/0x813213dfa30b693b0c6123f538d7d5ca8b586a30b29bb8eb09f0eb460f920fcc#eventlog
+          19679406, // https://uniscan.xyz/tx/0x81a4e72ae33dee231d4bf046b51256a190536d817af3e697bc5d4d2b1ac9f7d6#eventlog
+          19679401, // https://uniscan.xyz/tx/0x8b36aa3433067e536b4d5752f0f9b1c52bb9d3cd1a95e94a7a9896735d0119a2#eventlog
+          19679495, // https://uniscan.xyz/tx/0xc367905a57ba99f29824e16e017d11321c2994d75ba82ded8d7cbcbfc21d1a21#eventlog
+          19679493, // https://uniscan.xyz/tx/0x6cc863f285f0d4024371aed29ce13b3df67ace157219b3cfc4321b20d3669be8#eventlog
+          19679474, // https://uniscan.xyz/tx/0x06586bc5e7b50bc434a44d0b39210d20aa600040b1364c3a78134696a55afa62#eventlog
+          19679469, // https://uniscan.xyz/tx/0x13a93b61b5b0fae402194ab9fccaec1fdf4efd911779128a41ac112c7b39fbcb#eventlog
+          19679462, // https://uniscan.xyz/tx/0x5eb065d3774481ac2c992faa52b714946eca32af047c00d796fb3ffb99f6a323#eventlog
+        ],
+        ['Swap']: [
+          19679406, // https://uniscan.xyz/tx/0x2b21ee54d38259940972fd8b538bf3ab3f89e8a7aa81c7f53d2f6b929fdd65e7#eventlog
+          19679403, // https://uniscan.xyz/tx/0x8ae69730f1e3eb284c8cd2a216a649987d8adf64229c9cb5d6a432a1b86a4842#eventlog
+          19679402, // https://uniscan.xyz/tx/0xfd3d1234261758e82077fdb2b3562acf323e28730c93191815c43aa05db6b1dd#eventlog
+          19679401, // https://uniscan.xyz/tx/0x0550387cc82035b703fcb796e4282871a7ec8ccc212c974b233d1e31516a9061#eventlog
+          19679400, // https://uniscan.xyz/tx/0x3537325fe6613eed52fb4364d6cca5e960850779604b74bfe56523db3c6684d2#eventlog
+          19679494, // https://uniscan.xyz/tx/0x533290b32858ccaee585bec2b6fade47279d2bff7837a3c91219ac74362a7c81#eventlog
+          19679481, // https://uniscan.xyz/tx/0x72d345d69edd7d75eee0bc7e8a6316b7a4e9b00e8ccb24f3f047634b42f519b3#eventlog
+          19679466, // https://uniscan.xyz/tx/0xdd7f5477772853d5e83916856cfa2383fbccfab1fa97f8e683d87237be240e16#eventlog
+          19679464, // https://uniscan.xyz/tx/0x90cc965830976628c2bb34aea5827e3005ca0f249ffc1ea59d0af98c2f038b58#eventlog
+          19679463, // https://uniscan.xyz/tx/0xedc8371a89bd9896412e62e856efd2da62e9f4e6d48dd22d1069fb6f30c29aa3#eventlog
+        ],
+      };
+
+      Object.keys(blockNumbers).forEach((event: string) => {
+        blockNumbers[event].forEach((blockNumber: number) => {
+          it(`${event}:${blockNumber} - should return correct state`, async function () {
+            const dexHelper = new DummyDexHelper(network);
+
+            const logger = dexHelper.getLogger(dexKey);
+
+            const uniswapV4Pool = new UniswapV4Pool(
+              dexHelper,
+              dexKey,
+              network,
+              config,
+              logger,
+              '',
+              '0x3258f413c7a88cda2fa8709a589d221a80f6574f63df5a5b6774485d8acc39d9', // initial params from Initialize event https://uniscan.xyz/tx/0xe3a62e7bce32734b1ee15051862e4d379c6f3c9d82c17241d07cfd55e1b7f99a#eventlog
+              '0x0000000000000000000000000000000000000000',
+              '0x078d782b760474a361dda0af3839290b0ef57ad6',
+              '500',
+              '0x0000000000000000000000000000000000000000',
+              4083811512172838615060060n,
+              '-197471',
+              '10',
+            );
+
+            await uniswapV4Pool.initialize(blockNumber);
+
+            await testEventSubscriber(
+              uniswapV4Pool,
+              uniswapV4Pool.addressesSubscribed,
+              (_blockNumber: number) =>
+                fetchPoolStateFromContract(
+                  uniswapV4Pool,
+                  _blockNumber,
+                  config.poolManager,
+                ),
+              blockNumber,
+              `${dexKey}_${config.poolManager}`,
+              dexHelper.provider,
+            );
+          });
+        });
+      });
+    });
+  });
 });
 
 // describe('UniswapV4PoolManager', () => {

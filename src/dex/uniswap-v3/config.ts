@@ -119,6 +119,18 @@ export const UniswapV3Config: DexConfigMap<DexParams> = {
       initHash: `0xe34f199b19b2b4f47f68442619d555527d244f78a3297ea89325f843f87b8b54`,
       subgraphURL: 'GqzP4Xaehti8KSfQmv3ZctFSjnSUYZ4En5NRsiTbvZpz',
     },
+    [Network.UNICHAIN]: {
+      factory: '0x1f98400000000000000000000000000000000003',
+      quoter: '0x385a5cf5f83e99f7bb2852b6a19c3538b9fa7658',
+      router: '0x73855d06de49d0fe4a9c42636ba96c62da12ff9c',
+      supportedFees: SUPPORTED_FEES,
+      stateMulticall: '0xCd8eA16F74d96E1000df8a57267e098c58399e8b',
+      uniswapMulticall: '0xB7610f9b733e7d45184be3a1bc966960ccc54f0B',
+      chunksCount: 10,
+      initRetryFrequency: 10,
+      initHash: `0xe34f199b19b2b4f47f68442619d555527d244f78a3297ea89325f843f87b8b54`,
+      subgraphURL: 'Eeg7Gq1ofowbpdTHcNYs4FotnHSddkz5iTNiQQVq7Q6K',
+    },
   },
   SushiSwapV3: {
     [Network.MAINNET]: {

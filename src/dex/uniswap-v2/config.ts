@@ -172,6 +172,13 @@ export const UniswapV2Config: DexConfigMap<DexParams> = {
       poolGasCost: 80 * 1000,
       feeCode: 30,
     },
+    [Network.UNICHAIN]: {
+      factoryAddress: '0x1f98400000000000000000000000000000000002',
+      initCode:
+        '0x96e8ac4277198ff8b6f785478aa9a39f403cb768dd02cbee326c3e7da348845f',
+      poolGasCost: 80 * 1000,
+      feeCode: 30,
+    },
   },
   ApeSwap: {
     [Network.BSC]: {

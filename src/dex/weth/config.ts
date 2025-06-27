@@ -28,6 +28,9 @@ export const WethConfig: DexConfigMap<DexParams> = {
     [Network.SEPOLIA]: {
       poolGasCost: WethGasCost,
     },
+    [Network.UNICHAIN]: {
+      poolGasCost: WethGasCost,
+    },
   },
   Wbnb: {
     [Network.BSC]: {
