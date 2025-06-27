@@ -481,6 +481,14 @@ export const UniswapV2Config: DexConfigMap<DexParams> = {
         '0x96e8ac4277198ff8b6f785478aa9a39f403cb768dd02cbee326c3e7da348845f',
       feeCode: 30,
     },
+    [Network.BASE]: {
+      subgraphURL:
+        'https://api.studio.thegraph.com/query/113693/quickswap-v-2-base/version/latest',
+      factoryAddress: '0xEC6540261aaaE13F236A032d454dc9287E52e56A',
+      initCode:
+        '0xa18736c3ee97fe3c96c9428c0cc2a9116facec18e84f95f9da30543f8238a782',
+      feeCode: 30,
+    },
   },
   SpookySwap: {
     [Network.FANTOM]: {
