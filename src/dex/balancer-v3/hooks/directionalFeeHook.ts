@@ -14,7 +14,7 @@ export const DirectionalFee = {
 export type DirectionalFeeConfig = {
   type: typeof DirectionalFee.type;
   apiName: typeof DirectionalFee.apiName;
-  address: string;
+  hookAddress: string;
 };
 
 export type DirectionalFeeHookState = {

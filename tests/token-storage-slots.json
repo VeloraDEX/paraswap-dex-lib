@@ -573,6 +573,10 @@
           }
         }
       }
+    },
+    "0x8292bb45bf1ee4d140127049757c2e0ff06317ed": {
+      "balanceSlot": "0x52c63247e1f47db19d5ce0460030c497f067ca4cebf71ba98eeadabe20bace00",
+      "allowanceSlot": "0x52c63247e1f47db19d5ce0460030c497f067ca4cebf71ba98eeadabe20bace01"
     }
   },
   "10": {
@@ -869,6 +873,14 @@
     "0x04c0599ae5a44757c0af6f9ec3b93da8976c150a": {
       "balanceSlot": "0x52c63247e1f47db19d5ce0460030c497f067ca4cebf71ba98eeadabe20bace00",
       "allowanceSlot": "0x52c63247e1f47db19d5ce0460030c497f067ca4cebf71ba98eeadabe20bace01"
+    },
+    "0xcbb7c0000ab88b473b1f5afd9ef808440eed33bf": {
+      "balanceSlot": "0x0000000000000000000000000000000000000000000000000000000000000009",
+      "allowanceSlot": "0x000000000000000000000000000000000000000000000000000000000000000a"
+    },
+    "0xbcbc8cb4d1e8ed048a6276a5e94a3e952660bcbc": {
+      "balanceSlot": "0x52c63247e1f47db19d5ce0460030c497f067ca4cebf71ba98eeadabe20bace00",
+      "allowanceSlot": "0x52c63247e1f47db19d5ce0460030c497f067ca4cebf71ba98eeadabe20bace01"
     }
   },
   "42161": {
@@ -915,6 +927,18 @@
     "0xba5ddd1f9d7f570dc94a51479a000e3bce967196": {
       "balanceSlot": "0x0000000000000000000000000000000000000000000000000000000000000033",
       "allowanceSlot": "0x0000000000000000000000000000000000000000000000000000000000000034"
+    },
+    "0x7f6501d3b98ee91f9b9535e4b0ac710fb0f9e0bc": {
+      "balanceSlot": "0x52c63247e1f47db19d5ce0460030c497f067ca4cebf71ba98eeadabe20bace00",
+      "allowanceSlot": "0x52c63247e1f47db19d5ce0460030c497f067ca4cebf71ba98eeadabe20bace01"
+    },
+    "0x0a1a1a107e45b7ced86833863f482bc5f4ed82ef": {
+      "balanceSlot": "0x52c63247e1f47db19d5ce0460030c497f067ca4cebf71ba98eeadabe20bace00",
+      "allowanceSlot": "0x52c63247e1f47db19d5ce0460030c497f067ca4cebf71ba98eeadabe20bace01"
+    },
+    "0xa6d12574efb239fc1d2099732bd8b5dc6306897f": {
+      "balanceSlot": "0x52c63247e1f47db19d5ce0460030c497f067ca4cebf71ba98eeadabe20bace00",
+      "allowanceSlot": "0x52c63247e1f47db19d5ce0460030c497f067ca4cebf71ba98eeadabe20bace01"
     }
   },
   "43114": {

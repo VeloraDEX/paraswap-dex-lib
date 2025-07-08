@@ -23,6 +23,7 @@ interface PoolToken {
 type Pool = {
   id: string;
   type: string;
+  version: number;
   poolTokens: PoolToken[];
   hook: {
     address: string;
@@ -68,6 +69,7 @@ function createQuery(
       ) {
         id
         type
+        version
         poolTokens {
           address
           weight
@@ -111,6 +113,8 @@ function toImmutablePoolStateMap(
           pool.type === ReClammApiName || // In reClamm the pool is also its own hook. We don't track hook state as its not needed for pricing
           pool.hook.address.toLowerCase() in hooksConfigMap,
       )
+      // Filter out ReClamm pools that don't have version 1
+      .filter(pool => pool.type !== ReClammApiName || pool.version === 1)
       .reduce((map, pool) => {
         const immutablePoolState: CommonImmutablePoolState = {
           poolAddress: pool.id,
