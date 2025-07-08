@@ -7,7 +7,6 @@ import { Network, SwapSide } from '../../../../constants';
 import { IDexHelper } from '../../../../dex-helper';
 import { Adapters, UniswapV3Config } from '../../config';
 import { Interface } from '@ethersproject/abi';
-import UniswapV3RouterABI from '../../../../abi/uniswap-v3/UniswapV3Router.abi.json';
 import UniswapV3QuoterV2ABI from '../../../../abi/uniswap-v3/UniswapV3QuoterV2.abi.json';
 import { getDexKeysWithNetwork } from '../../../../utils';
 import _ from 'lodash';
@@ -16,10 +15,7 @@ import { pack } from '@ethersproject/solidity';
 import { PoolState } from '../../types';
 import { VelodromeSlipstreamEventPool } from './velodrome-slipstream-pool';
 import { UniswapV3EventPool } from '../../uniswap-v3-pool';
-import {
-  OnPoolCreatedCallback,
-  UniswapV3Factory,
-} from '../../uniswap-v3-factory';
+import { OnPoolCreatedCallback } from '../../uniswap-v3-factory';
 
 type VelodromeSlipstreamData = {
   path: {
@@ -40,7 +36,6 @@ export class VelodromeSlipstream extends UniswapV3 {
     dexKey: string,
     protected dexHelper: IDexHelper,
     protected adapters = Adapters[network] || {},
-    readonly routerIface = new Interface(UniswapV3RouterABI),
     readonly quoterIface = new Interface(UniswapV3QuoterV2ABI),
     protected config = UniswapV3Config[dexKey][network],
     protected poolsToPreload = [],
@@ -50,7 +45,6 @@ export class VelodromeSlipstream extends UniswapV3 {
       dexKey,
       dexHelper,
       adapters,
-      routerIface,
       quoterIface,
       config,
       poolsToPreload,

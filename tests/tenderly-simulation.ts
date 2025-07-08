@@ -10,6 +10,7 @@ import { merge } from 'lodash';
 const TENDERLY_TOKEN = process.env.TENDERLY_TOKEN!;
 const TENDERLY_ACCOUNT_ID = process.env.TENDERLY_ACCOUNT_ID!;
 const TENDERLY_PROJECT = process.env.TENDERLY_PROJECT!;
+const TENDERLY_VNET_ID = process.env.TENDERLY_VNET_ID!;
 
 interface StateObject {
   // Overrides of storage slots.
@@ -211,6 +212,17 @@ export class TenderlySimulator {
 
   public async simulateTransaction(
     request: SimulateTransactionRequest,
+    forceSimulationAPI = false,
+  ): Promise<Simulation> {
+    if (TENDERLY_VNET_ID && !forceSimulationAPI) {
+      return this.simulateWithTenderlyVNet(request);
+    } else {
+      return this.simulateWithTenderlySimulationAPI(request);
+    }
+  }
+
+  private async simulateWithTenderlySimulationAPI(
+    request: SimulateTransactionRequest,
   ): Promise<Simulation> {
     const data = {
       network_id: request.chainId,
@@ -227,22 +239,56 @@ export class TenderlySimulator {
     console.log('Sending transaction simulation with params:');
     console.log(JSON.stringify(data, null, 2));
 
-    const response = await axios.request({
-      method: 'POST',
-      url: `https://api.tenderly.co/api/v1/account/${TENDERLY_ACCOUNT_ID}/project/${TENDERLY_PROJECT}/simulate`,
-      headers: {
-        'X-Access-Key': TENDERLY_TOKEN,
-      },
+    const response = await axios.post(
+      `https://api.tenderly.co/api/v1/account/${TENDERLY_ACCOUNT_ID}/project/${TENDERLY_PROJECT}/simulate`,
       data,
-    });
+      {
+        headers: {
+          'X-Access-Key': TENDERLY_TOKEN,
+        },
+      },
+    );
 
-    const simulation = response.data.simulation as Simulation;
-    const url = `https://dashboard.tenderly.co/${TENDERLY_ACCOUNT_ID}/${TENDERLY_PROJECT}/simulator/${simulation.id}`;
-
+    const url = `https://dashboard.tenderly.co/${TENDERLY_ACCOUNT_ID}/${TENDERLY_PROJECT}/simulator/${response.data.simulation.id}`;
     console.log('Successfully simulated a transaction:');
     console.log(`Simulation URL - ${url}`);
 
-    return simulation;
+    return response.data.simulation;
+  }
+
+  private async simulateWithTenderlyVNet(
+    request: SimulateTransactionRequest,
+  ): Promise<Simulation> {
+    const data = {
+      network_id: request.chainId,
+      from: request.from,
+      to: request.to,
+      input: request.data,
+      value: request.value,
+      save: true,
+      save_if_fails: true,
+      state_objects: request.stateOverride,
+      block_number: request.blockNumber,
+    };
+
+    console.log('Sending transaction simulation with params:');
+    console.log(JSON.stringify(data, null, 2));
+
+    const response = await axios.post(
+      `https://api.tenderly.co/api/v1/account/${TENDERLY_ACCOUNT_ID}/project/${TENDERLY_PROJECT}/testnet/${TENDERLY_VNET_ID}/simulate`,
+      data,
+      {
+        headers: {
+          'X-Access-Key': TENDERLY_TOKEN,
+        },
+      },
+    );
+
+    const url = `https://dashboard.tenderly.co/${TENDERLY_ACCOUNT_ID}/${TENDERLY_PROJECT}/testnet/${TENDERLY_VNET_ID}/simulator/${response.data.simulation.id}`;
+    console.log('Successfully simulated a transaction:');
+    console.log(`Simulation URL - ${url}`);
+
+    return response.data.simulation;
   }
 
   public async getSimulatedTransactionDetails(
@@ -442,6 +488,7 @@ export class TenderlySimulator {
 
     const { id: simulationId } = await this.simulateTransaction(
       balanceOfSimulationRequest,
+      true, // force Tenderly simulation API
     );
 
     const simulationDetails = await this.getSimulatedTransactionDetails(
@@ -542,6 +589,7 @@ export class TenderlySimulator {
 
     const { id: simulationId } = await this.simulateTransaction(
       allowanceSimulationRequest,
+      true, // force Tenderly simulation API
     );
 
     const simulationDetails = await this.getSimulatedTransactionDetails(

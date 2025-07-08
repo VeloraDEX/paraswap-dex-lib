@@ -34,7 +34,7 @@ export function testForNetwork(
     network,
   );
   const tokens = Tokens[network];
-  const holders = Holders[network];
+  const holders = Holders[network] ?? {};
 
   describe(`${network}`, () => {
     sideToContractMethods.forEach((contractMethods, side) =>

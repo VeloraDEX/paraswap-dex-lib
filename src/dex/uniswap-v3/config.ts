@@ -1,4 +1,4 @@
-import { DexParams } from './types';
+import { DexParams, UniswapV3Router } from './types';
 import { DexConfigMap, AdapterMappings } from '../../types';
 import { Network, SwapSide } from '../../constants';
 import { Address } from '../../types';
@@ -119,6 +119,32 @@ export const UniswapV3Config: DexConfigMap<DexParams> = {
       initHash: `0xe34f199b19b2b4f47f68442619d555527d244f78a3297ea89325f843f87b8b54`,
       subgraphURL: 'GqzP4Xaehti8KSfQmv3ZctFSjnSUYZ4En5NRsiTbvZpz',
     },
+    [Network.UNICHAIN]: {
+      factory: '0x1f98400000000000000000000000000000000003',
+      quoter: '0x385a5cf5f83e99f7bb2852b6a19c3538b9fa7658',
+      router: '0x73855d06de49d0fe4a9c42636ba96c62da12ff9c',
+      routerType: UniswapV3Router.SwapRouter02,
+      supportedFees: SUPPORTED_FEES,
+      stateMulticall: '0xCd8eA16F74d96E1000df8a57267e098c58399e8b',
+      uniswapMulticall: '0xB7610f9b733e7d45184be3a1bc966960ccc54f0B',
+      chunksCount: 10,
+      initRetryFrequency: 10,
+      initHash: `0xe34f199b19b2b4f47f68442619d555527d244f78a3297ea89325f843f87b8b54`,
+      subgraphURL: 'Eeg7Gq1ofowbpdTHcNYs4FotnHSddkz5iTNiQQVq7Q6K',
+    },
+    [Network.SONIC]: {
+      factory: '0xcb2436774C3e191c85056d248EF4260ce5f27A9D',
+      quoter: '0x5911cB3633e764939edc2d92b7e1ad375Bb57649',
+      router: '0xaa52bB8110fE38D0d2d2AF0B85C3A3eE622CA455',
+      routerType: UniswapV3Router.SwapRouter02,
+      supportedFees: SUPPORTED_FEES,
+      stateMulticall: '0xd9aF38beD4dC67CD8aA6b40be0FeeE6E122Eb8Bc',
+      uniswapMulticall: '0x5d6b0f5335ec95cD2aB7E52f2A0750dd86502435',
+      chunksCount: 10,
+      initRetryFrequency: 10,
+      initHash: `0xe34f199b19b2b4f47f68442619d555527d244f78a3297ea89325f843f87b8b54`,
+      subgraphURL: '9memxmbdvEaCBGvbtLh3MMGcLiMEHN6ooUSBiFU93g5T',
+    },
   },
   SushiSwapV3: {
     [Network.MAINNET]: {
@@ -169,17 +195,17 @@ export const UniswapV3Config: DexConfigMap<DexParams> = {
       initHash: `0xe34f199b19b2b4f47f68442619d555527d244f78a3297ea89325f843f87b8b54`,
       subgraphURL: '4BxsTB5ADnYdgJgdmzyddmnDGCauctDia28uxB1hgTBE',
     },
-    [Network.FANTOM]: {
-      factory: '0x7770978eED668a3ba661d51a773d3a992Fc9DDCB',
-      quoter: '0xb1E835Dc2785b52265711e17fCCb0fd018226a6e',
-      router: '0xDCf4EE5B700e2a5Fec458e06B763A4a3E3004494',
+    [Network.SONIC]: {
+      factory: '0x46B3fDF7b5CDe91Ac049936bF0bDb12c5d22202e',
+      quoter: '0x5911cB3633e764939edc2d92b7e1ad375Bb57649',
+      router: '0x1400feFD6F9b897970f00Df6237Ff2B8b27Dc82C',
       supportedFees: SUPPORTED_FEES,
-      stateMulticall: '0x30F6B9b6485ff0B67E881f5ac80D3F1c70A4B23d',
-      uniswapMulticall: '0xB1395e098c0a847CC719Bcf1Fc8114421a9F8232',
+      stateMulticall: '0xd9aF38beD4dC67CD8aA6b40be0FeeE6E122Eb8Bc',
+      uniswapMulticall: '0x5d6b0f5335ec95cD2aB7E52f2A0750dd86502435',
       chunksCount: 10,
       initRetryFrequency: 10,
       initHash: `0xe34f199b19b2b4f47f68442619d555527d244f78a3297ea89325f843f87b8b54`,
-      subgraphURL: '4BzEvR229mwKjneCbJTDM8dsS3rjgoKcXt5C7J1DaUxK',
+      subgraphURL: '5ijXw9MafwFkXgoHmUiWsWHvRyYAL3RD4smnmBLmNPnw',
     },
     [Network.ARBITRUM]: {
       factory: '0x1af415a1eba07a4986a52b6f2e7de7003d82231e',
@@ -289,18 +315,19 @@ export const UniswapV3Config: DexConfigMap<DexParams> = {
     },
   },
   SpookySwapV3: {
-    [Network.FANTOM]: {
-      factory: '0x7928a2c48754501f3a8064765ECaE541daE5c3E6',
-      quoter: '0xB9507f2ED171D52c5c2EFaeAbdE440d264504A92',
-      router: '0x765132A0630Cd4401b971706Bb21c0FB5Ab547ad',
+    [Network.SONIC]: {
+      factory: '0x3D91B700252e0E3eE7805d12e048a988Ab69C8ad',
+      quoter: '0x593856bbfd6Aaf0b714277c0BF06307900d1Aa68',
+      router: '0x0C2BC01d435CfEb2DC6Ad7cEC0E473e2DBaBdd87',
+      routerType: UniswapV3Router.SwapRouter02,
       supportedFees: SUPPORTED_FEES,
-      stateMulticall: '0x2cc482a66dd677ad33900018f774052717c533fb',
-      uniswapMulticall: '0x96a7F0E4905F39508b17Faef5aC456C72a4E1319',
+      stateMulticall: '0xd9aF38beD4dC67CD8aA6b40be0FeeE6E122Eb8Bc',
+      uniswapMulticall: '0x5d6b0f5335ec95cD2aB7E52f2A0750dd86502435',
       chunksCount: 5,
       initRetryFrequency: 30,
       initHash:
         '0xe34f199b19b2b4f47f68442619d555527d244f78a3297ea89325f843f87b8b54',
-      subgraphURL: '6WBxx3gYia4oCLsYMFTZs6HLEnEqVMdpeZDCABnM1tj2',
+      // subgraphURL: '', deployed on 0xgraph
     },
   },
   Retro: {
@@ -386,6 +413,30 @@ export const UniswapV3Config: DexConfigMap<DexParams> = {
       initHash: '0xc28ad28853a547556780bebf7847628501a3bcbb', // pool implementation address from factory contract is used instead of initHash here
       subgraphURL: 'BsBDqDf6rJJyxKACZrCHAa8Gaf384cmL2hxfLaDuB8XM',
     },
+    // [Network.UNICHAIN]: {
+    //   factory: '0x04625B046C69577EfC40e6c0Bb83CDBAfab5a55F',
+    //   quoter: '0x3FA596fAC2D6f7d16E01984897Ac04200Cb9cA05',
+    //   router: '0x63951637d667f23D5251DEdc0f9123D22d8595be',
+    //   supportedFees: SUPPORTED_FEES,
+    //   tickSpacings: [1n, 50n, 100n, 200n, 2000n],
+    //   tickSpacingsToFees: {
+    //     '1': 100n,
+    //     '50': 500n,
+    //     '100': 500n,
+    //     '200': 3000n,
+    //     '2000': 10000n,
+    //   },
+    //   stateMulticall: '0x9f52C4fd5cD2134F755c6C5f0098c9575197d5ad',
+    //   stateMultiCallAbi: VelodromeSlipstreamMulticallABi as AbiItem[],
+    //   eventPoolImplementation: VelodromeSlipstreamEventPool,
+    //   factoryImplementation: VelodromeSlipstreamFactory,
+    //   decodeStateMultiCallResultWithRelativeBitmaps:
+    //     decodeStateMultiCallResultWithRelativeBitmapsForVelodromeSlipstream,
+    //   uniswapMulticall: '0xB7610f9b733e7d45184be3a1bc966960ccc54f0B',
+    //   chunksCount: 10,
+    //   initRetryFrequency: 10,
+    //   initHash: '0x321f7dfb9b2ea9131b8c17691cf6e01e5c149ca8', // pool implementation address from factory contract is used instead of initHash here
+    // },
   },
   AerodromeSlipstream: {
     [Network.BASE]: {
@@ -415,6 +466,19 @@ export const UniswapV3Config: DexConfigMap<DexParams> = {
       subgraphURL: 'GENunSHWLBXm59mBSgPzQ8metBEp9YDfdqwFr91Av1UM',
     },
   },
+  Wagmi: {
+    [Network.SONIC]: {
+      factory: '0x56CFC796bC88C9c7e1b38C2b0aF9B7120B079aef',
+      quoter: '0x5973C9E4cC849140cfd1c9dFc75D54D804B5a2fE',
+      router: '0x9282a6C62932431B127753C1CD2ac4F6cC4CFD49',
+      supportedFees: SUPPORTED_FEES,
+      stateMulticall: '0xd9aF38beD4dC67CD8aA6b40be0FeeE6E122Eb8Bc',
+      uniswapMulticall: '0x5d6b0f5335ec95cD2aB7E52f2A0750dd86502435',
+      chunksCount: 10,
+      initRetryFrequency: 10,
+      initHash: `0x30146866f3a846fe3c636beb2756dbd24cf321bc52c9113c837c21f47470dfeb`,
+    },
+  },
 };
 
 export const Adapters: Record<number, AdapterMappings> = {
@@ -437,10 +501,6 @@ export const Adapters: Record<number, AdapterMappings> = {
   [Network.OPTIMISM]: {
     [SwapSide.SELL]: [{ name: 'OptimismAdapter01', index: 3 }],
     [SwapSide.BUY]: [{ name: 'OptimismBuyAdapter', index: 2 }],
-  },
-  [Network.FANTOM]: {
-    [SwapSide.SELL]: [{ name: 'FantomAdapter01', index: 11 }],
-    [SwapSide.BUY]: [{ name: 'FantomBuyAdapter', index: 3 }],
   },
   [Network.ZKEVM]: {
     [SwapSide.SELL]: [{ name: 'PolygonZkEvmAdapter01', index: 1 }],

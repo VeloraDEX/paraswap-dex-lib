@@ -16,6 +16,8 @@ const SUPPORTED_NETWORKS = [
   Network.OPTIMISM,
   Network.ZKEVM,
   Network.GNOSIS,
+  Network.UNICHAIN,
+  Network.SONIC,
 ];
 const SUPPORTED_EXCHANGES = Object.keys(WethConfig);
 

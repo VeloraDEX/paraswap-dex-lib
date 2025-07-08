@@ -24,7 +24,7 @@ export const CURVE_API_URL = 'https://api.curve.finance/v1/getPools';
 export const NETWORK_ID_TO_NAME: Record<number, string> = {
   [Network.MAINNET]: 'ethereum',
   [Network.POLYGON]: 'polygon',
-  [Network.FANTOM]: 'fantom',
+  [Network.SONIC]: 'sonic',
   [Network.AVALANCHE]: 'avalanche',
   [Network.ARBITRUM]: 'arbitrum',
   [Network.OPTIMISM]: 'optimism',

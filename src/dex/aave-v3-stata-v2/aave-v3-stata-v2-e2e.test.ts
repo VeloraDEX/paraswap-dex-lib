@@ -40,7 +40,7 @@ function testForNetwork(
             await testE2E(
               tokens[tokenASymbol],
               tokens[tokenBSymbol],
-              holders[tokenASymbol],
+              holders?.[tokenASymbol],
               side === SwapSide.SELL ? tokenAAmount : tokenBAmount,
               side,
               dexKey,
@@ -53,7 +53,7 @@ function testForNetwork(
             await testE2E(
               tokens[tokenBSymbol],
               tokens[tokenASymbol],
-              holders[tokenBSymbol],
+              holders?.[tokenBSymbol],
               side === SwapSide.SELL ? tokenBAmount : tokenAAmount,
               side,
               dexKey,
@@ -373,4 +373,43 @@ describe('AaveV3Stata E2E', () => {
   //     );
   //   });
   // });
+
+  describe('Sonic', () => {
+    const network = Network.SONIC;
+
+    const pairs: { name: string; amount: string; skipBuy?: boolean }[][] = [
+      [
+        {
+          name: 'USDCe',
+          amount: '100000',
+        },
+        {
+          name: 'waSonUSDC',
+          amount: '100000',
+        },
+      ],
+      [
+        {
+          name: 'aSonwS',
+          amount: '1000000000000000',
+        },
+        {
+          name: 'waSonwS',
+          amount: '1000000000000000',
+        },
+      ],
+    ];
+
+    pairs.forEach(pair => {
+      testForNetwork(
+        network,
+        dexKey,
+        pair[0].name,
+        pair[1].name,
+        pair[0].amount,
+        pair[1].amount,
+        pair[0].skipBuy,
+      );
+    });
+  });
 });

@@ -86,9 +86,6 @@ export const Adapters: Record<number, AdapterMappings> = {
   [Network.POLYGON]: {
     [SwapSide.SELL]: [{ name: 'PolygonAdapter02', index: 4 }],
   },
-  [Network.FANTOM]: {
-    [SwapSide.SELL]: [{ name: 'FantomAdapter01', index: 8 }],
-  },
   [Network.ARBITRUM]: {
     [SwapSide.SELL]: [{ name: 'ArbitrumAdapter02', index: 3 }],
   },

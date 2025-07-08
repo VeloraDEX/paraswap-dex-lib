@@ -852,49 +852,11 @@ describe('BalancerV2', function () {
 });
 
 describe('BeetsFi', () => {
-  it('FTM -> BOO: getPoolIdentifiers and getPricesVolume', async () => {
+  it('S -> stS: getPoolIdentifiers and getPricesVolume', async () => {
     const dexKey = 'BeetsFi';
-    const network = Network.FANTOM;
-    const srcToken = Tokens[network]['FTM'];
-    const destToken = Tokens[network]['BOO'];
-    const amounts = [0n, BI_POWS[18]];
-
-    const dexHelper = new DummyDexHelper(network);
-    const blockNumber = await dexHelper.web3Provider.eth.getBlockNumber();
-    const beetsFi = new BalancerV2(network, dexKey, dexHelper);
-
-    await beetsFi.initializePricing(blockNumber);
-
-    const pools = await beetsFi.getPoolIdentifiers(
-      srcToken,
-      destToken,
-      SwapSide.SELL,
-      blockNumber,
-    );
-    console.log('Pool Identifiers: ', pools);
-
-    expect(pools.length).toBeGreaterThan(0);
-
-    const poolPrices = await beetsFi.getPricesVolume(
-      srcToken,
-      destToken,
-      amounts,
-      SwapSide.SELL,
-      blockNumber,
-      pools,
-    );
-    console.log('Pool Prices: ', poolPrices);
-
-    expect(poolPrices).not.toBeNull();
-    checkPoolPrices(poolPrices!, amounts, SwapSide.SELL, dexKey);
-
-    await beetsFi.releaseResources();
-  });
-  it('WETH -> FTM: getPoolIdentifiers and getPricesVolume', async () => {
-    const dexKey = 'BeetsFi';
-    const network = Network.FANTOM;
-    const srcToken = Tokens[network]['WETH'];
-    const destToken = Tokens[network]['FTM'];
+    const network = Network.SONIC;
+    const srcToken = Tokens[network]['S'];
+    const destToken = Tokens[network]['stS'];
     const amounts = [0n, BI_POWS[18]];
 
     const dexHelper = new DummyDexHelper(network);

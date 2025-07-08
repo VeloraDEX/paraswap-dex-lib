@@ -6,61 +6,83 @@ import { Network, SwapSide } from '../../constants';
 import { UniswapV2 } from './uniswap-v2';
 import { checkPoolPrices, checkPoolsLiquidity } from '../../../tests/utils';
 import { BI_POWS } from '../../bigint-constants';
-
-const WETH = {
-  address: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2',
-  decimals: 18,
-};
-
-const DAI = {
-  address: '0x6B175474E89094C44Da98b954EedeAC495271d0F',
-  decimals: 18,
-};
+import { Tokens } from '../../../tests/constants-e2e';
 
 const amounts = [0n, BI_POWS[18], 2000000000000000000n];
 
-const dexKey = 'UniswapV2';
-
 describe('UniswapV2', function () {
-  it('getPoolIdentifiers and getPricesVolume', async function () {
-    const dexHelper = new DummyDexHelper(Network.MAINNET);
-    const blocknumber = await dexHelper.web3Provider.eth.getBlockNumber();
-    const uniswapV2 = new UniswapV2(Network.MAINNET, dexKey, dexHelper);
+  const dexKey = 'UniswapV2';
+  const network = Network.MAINNET;
+  const dexHelper = new DummyDexHelper(network);
+  const uniswapV2 = new UniswapV2(network, dexKey, dexHelper);
+
+  const tokenASymbol = 'USDC';
+  const tokenBSymbol = 'DAI';
+
+  const tokenA = Tokens[network][tokenASymbol];
+  const tokenB = Tokens[network][tokenBSymbol];
+
+  it(`${tokenASymbol} <> ${tokenBSymbol} getPoolIdentifiers and getPricesVolume SELL`, async function () {
+    const blockNumber = await dexHelper.web3Provider.eth.getBlockNumber();
 
     const pools = await uniswapV2.getPoolIdentifiers(
-      WETH,
-      DAI,
+      tokenA,
+      tokenB,
       SwapSide.SELL,
-      blocknumber,
+      blockNumber,
     );
-    console.log('WETH <> DAI Pool Identifiers: ', pools);
+    console.log(`${tokenASymbol} <> ${tokenBSymbol} Pool Identifiers: `, pools);
 
     expect(pools.length).toBeGreaterThan(0);
 
     const poolPrices = await uniswapV2.getPricesVolume(
-      WETH,
-      DAI,
+      tokenA,
+      tokenB,
       amounts,
       SwapSide.SELL,
-      blocknumber,
+      blockNumber,
       pools,
     );
-    console.log('WETH <> DAI Pool Prices: ', poolPrices);
+    console.log(`${tokenASymbol} <> ${tokenBSymbol} Pool Prices: `, poolPrices);
 
     expect(poolPrices).not.toBeNull();
     checkPoolPrices(poolPrices!, amounts, SwapSide.SELL, dexKey);
   });
 
-  it.only('getTopPoolsForToken', async function () {
-    const dexHelper = new DummyDexHelper(Network.BASE);
-    const uniswapV2 = new UniswapV2(Network.BASE, dexKey, dexHelper);
+  it(`${tokenASymbol} <> ${tokenBSymbol} getPoolIdentifiers and getPricesVolume BUY`, async function () {
+    const blockNumber = await dexHelper.web3Provider.eth.getBlockNumber();
 
+    const pools = await uniswapV2.getPoolIdentifiers(
+      tokenA,
+      tokenB,
+      SwapSide.BUY,
+      blockNumber,
+    );
+    console.log(`${tokenASymbol} <> ${tokenBSymbol} Pool Identifiers: `, pools);
+
+    expect(pools.length).toBeGreaterThan(0);
+
+    const poolPrices = await uniswapV2.getPricesVolume(
+      tokenA,
+      tokenB,
+      amounts,
+      SwapSide.BUY,
+      blockNumber,
+      pools,
+    );
+    console.log(`${tokenASymbol} <> ${tokenBSymbol} Pool Prices: `, poolPrices);
+
+    expect(poolPrices).not.toBeNull();
+    checkPoolPrices(poolPrices!, amounts, SwapSide.BUY, dexKey);
+  });
+
+  it('getTopPoolsForToken', async function () {
     const poolLiquidity = await uniswapV2.getTopPoolsForToken(
-      '0xca72827a3d211cfd8f6b00ac98824872b72cab49',
+      tokenA.address,
       10,
     );
-    console.log('WETH Top Pools:', poolLiquidity);
+    console.log(`${tokenASymbol} Top Pools:`, poolLiquidity);
 
-    checkPoolsLiquidity(poolLiquidity, WETH.address, dexKey);
+    checkPoolsLiquidity(poolLiquidity, tokenA.address, dexKey);
   });
 });

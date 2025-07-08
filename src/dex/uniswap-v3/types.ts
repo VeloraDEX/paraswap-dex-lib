@@ -6,6 +6,13 @@ import { MultiResult } from '../../lib/multi-wrapper';
 import { UniswapV3EventPool } from './uniswap-v3-pool';
 import { UniswapV3Factory } from './uniswap-v3-factory';
 
+export const UniswapV3Router = {
+  SwapRouter02: 'SwapRouter02',
+} as const;
+
+export type UniswapV3Router =
+  (typeof UniswapV3Router)[keyof typeof UniswapV3Router];
+
 export type OracleObservation = {
   blockTimestamp: bigint;
   tickCumulative: bigint;
@@ -73,6 +80,7 @@ export type DecodeStateMultiCallFunc = (
 ) => DecodedStateMultiCallResultWithRelativeBitmaps;
 
 export type DexParams = {
+  routerType?: UniswapV3Router;
   subgraphType?: 'subgraphs' | 'deployments';
   router: Address;
   quoter: Address;
