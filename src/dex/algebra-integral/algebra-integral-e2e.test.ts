@@ -36,10 +36,8 @@ function testForNetwork(
   const holders = Holders[network];
   const nativeTokenSymbol = NativeTokenSymbols[network];
 
-  // TODO: Add any direct swap contractMethod name if it exists
   const sideToContractMethods = new Map([
     [SwapSide.SELL, [ContractMethod.swapExactAmountIn]],
-    // TODO: If buy is not supported remove the buy contract methods
     [SwapSide.BUY, [ContractMethod.swapExactAmountOut]],
   ]);
 
@@ -156,6 +154,29 @@ describe('QuickSwapV4 E2E', () => {
           srcDexFee: 200,
           destDexFee: 0,
         } as any,
+      );
+    });
+  });
+
+  describe('Base', () => {
+    const network = Network.BASE;
+
+    describe('USDC -> WETH', () => {
+      const tokenASymbol: string = 'USDC';
+      const tokenBSymbol: string = 'WETH';
+
+      const tokenAAmount: string = '1000000';
+      const tokenBAmount: string = '100000000000000000';
+      const nativeTokenAmount = '100000000000000000';
+
+      testForNetwork(
+        network,
+        dexKey,
+        tokenASymbol,
+        tokenBSymbol,
+        tokenAAmount,
+        tokenBAmount,
+        nativeTokenAmount,
       );
     });
   });
