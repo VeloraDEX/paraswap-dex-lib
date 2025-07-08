@@ -413,30 +413,32 @@ export const UniswapV3Config: DexConfigMap<DexParams> = {
       initHash: '0xc28ad28853a547556780bebf7847628501a3bcbb', // pool implementation address from factory contract is used instead of initHash here
       subgraphURL: 'BsBDqDf6rJJyxKACZrCHAa8Gaf384cmL2hxfLaDuB8XM',
     },
-    // [Network.UNICHAIN]: {
-    //   factory: '0x04625B046C69577EfC40e6c0Bb83CDBAfab5a55F',
-    //   quoter: '0x3FA596fAC2D6f7d16E01984897Ac04200Cb9cA05',
-    //   router: '0x63951637d667f23D5251DEdc0f9123D22d8595be',
-    //   supportedFees: SUPPORTED_FEES,
-    //   tickSpacings: [1n, 50n, 100n, 200n, 2000n],
-    //   tickSpacingsToFees: {
-    //     '1': 100n,
-    //     '50': 500n,
-    //     '100': 500n,
-    //     '200': 3000n,
-    //     '2000': 10000n,
-    //   },
-    //   stateMulticall: '0x9f52C4fd5cD2134F755c6C5f0098c9575197d5ad',
-    //   stateMultiCallAbi: VelodromeSlipstreamMulticallABi as AbiItem[],
-    //   eventPoolImplementation: VelodromeSlipstreamEventPool,
-    //   factoryImplementation: VelodromeSlipstreamFactory,
-    //   decodeStateMultiCallResultWithRelativeBitmaps:
-    //     decodeStateMultiCallResultWithRelativeBitmapsForVelodromeSlipstream,
-    //   uniswapMulticall: '0xB7610f9b733e7d45184be3a1bc966960ccc54f0B',
-    //   chunksCount: 10,
-    //   initRetryFrequency: 10,
-    //   initHash: '0x321f7dfb9b2ea9131b8c17691cf6e01e5c149ca8', // pool implementation address from factory contract is used instead of initHash here
-    // },
+  },
+  VelodromeSlipstream: {
+    [Network.UNICHAIN]: {
+      factory: '0x04625B046C69577EfC40e6c0Bb83CDBAfab5a55F',
+      quoter: '0x3FA596fAC2D6f7d16E01984897Ac04200Cb9cA05',
+      router: '0x63951637d667f23D5251DEdc0f9123D22d8595be',
+      supportedFees: SUPPORTED_FEES,
+      tickSpacings: [1n, 50n, 100n, 200n, 2000n],
+      tickSpacingsToFees: {
+        '1': 100n,
+        '50': 500n,
+        '100': 500n,
+        '200': 3000n,
+        '2000': 10000n,
+      },
+      stateMulticall: '0x9f52C4fd5cD2134F755c6C5f0098c9575197d5ad',
+      stateMultiCallAbi: VelodromeSlipstreamMulticallABi as AbiItem[],
+      eventPoolImplementation: VelodromeSlipstreamEventPool,
+      factoryImplementation: VelodromeSlipstreamFactory,
+      decodeStateMultiCallResultWithRelativeBitmaps:
+        decodeStateMultiCallResultWithRelativeBitmapsForVelodromeSlipstream,
+      uniswapMulticall: '0xB7610f9b733e7d45184be3a1bc966960ccc54f0B',
+      chunksCount: 10,
+      initRetryFrequency: 10,
+      initHash: '0x321f7dfb9b2ea9131b8c17691cf6e01e5c149ca8', // pool implementation address from factory contract is used instead of initHash here
+    },
   },
   AerodromeSlipstream: {
     [Network.BASE]: {

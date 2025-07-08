@@ -1290,6 +1290,10 @@ describe('UniswapV3 E2E', () => {
           );
         });
       });
+    });
+
+    describe.only('VelodromeSlipstream', () => {
+      const dexKey = 'VelodromeSlipstream';
 
       describe('Unichain', () => {
         const network = Network.UNICHAIN;
@@ -1299,6 +1303,44 @@ describe('UniswapV3 E2E', () => {
           const tokenBSymbol: string = 'USDC';
 
           const tokenAAmount: string = '1000000000000000000';
+          const tokenBAmount: string = '1000000';
+          const nativeTokenAmount = '1000000000000000000';
+
+          testForNetwork(
+            network,
+            dexKey,
+            tokenASymbol,
+            tokenBSymbol,
+            tokenAAmount,
+            tokenBAmount,
+            nativeTokenAmount,
+          );
+        });
+
+        describe('WETH -> USDT0', () => {
+          const tokenASymbol: string = 'WETH';
+          const tokenBSymbol: string = 'USD₮0';
+
+          const tokenAAmount: string = '1000000000000000000';
+          const tokenBAmount: string = '1000000';
+          const nativeTokenAmount = '1000000000000000000';
+
+          testForNetwork(
+            network,
+            dexKey,
+            tokenASymbol,
+            tokenBSymbol,
+            tokenAAmount,
+            tokenBAmount,
+            nativeTokenAmount,
+          );
+        });
+
+        describe('USDC -> USDT0', () => {
+          const tokenASymbol: string = 'USDC';
+          const tokenBSymbol: string = 'USD₮0';
+
+          const tokenAAmount: string = '1000000';
           const tokenBAmount: string = '1000000';
           const nativeTokenAmount = '1000000000000000000';
 
