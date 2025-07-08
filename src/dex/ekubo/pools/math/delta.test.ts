@@ -2,7 +2,7 @@ import { amount0Delta, amount1Delta } from './delta';
 import { MAX_SQRT_RATIO, MIN_SQRT_RATIO } from './tick';
 
 describe(amount0Delta, () => {
-  it('price_down', () => {
+  test('price_down', () => {
     expect(
       amount0Delta(
         339942424496442021441932674757011200255n,
@@ -13,7 +13,7 @@ describe(amount0Delta, () => {
     ).toMatchInlineSnapshot(`1000n`);
   });
 
-  it('price_down_reverse', () => {
+  test('price_down_reverse', () => {
     expect(
       amount0Delta(
         0x100000000000000000000000000000000n,
@@ -24,7 +24,7 @@ describe(amount0Delta, () => {
     ).toMatchInlineSnapshot(`1000n`);
   });
 
-  it('price example down', () => {
+  test('price example down', () => {
     expect(
       amount0Delta(
         0x100000000000000000000000000000000n,
@@ -34,7 +34,7 @@ describe(amount0Delta, () => {
       ),
     ).toMatchInlineSnapshot(`90909090909090909n`);
   });
-  it('price example up', () => {
+  test('price example up', () => {
     expect(
       amount0Delta(
         0x100000000000000000000000000000000n,
@@ -47,7 +47,7 @@ describe(amount0Delta, () => {
 });
 
 describe(amount1Delta, () => {
-  it('price_down', () => {
+  test('price_down', () => {
     expect(
       amount1Delta(
         339942424496442021441932674757011200255n,
@@ -57,7 +57,7 @@ describe(amount1Delta, () => {
       ),
     ).toMatchInlineSnapshot(`999n`);
   });
-  it('price_down_reverse', () => {
+  test('price_down_reverse', () => {
     expect(
       amount1Delta(
         0x100000000000000000000000000000000n,
@@ -67,7 +67,7 @@ describe(amount1Delta, () => {
       ),
     ).toMatchInlineSnapshot(`999n`);
   });
-  it('price_up', () => {
+  test('price_up', () => {
     expect(
       amount1Delta(
         340622989910849312776150758189957120n + (1n << 128n),
@@ -77,7 +77,7 @@ describe(amount1Delta, () => {
       ),
     ).toMatchInlineSnapshot(`1001n`);
   });
-  it('price_up_reverse', () => {
+  test('price_up_reverse', () => {
     expect(
       amount1Delta(
         0x100000000000000000000000000000000n,
@@ -87,7 +87,7 @@ describe(amount1Delta, () => {
       ),
     ).toMatchInlineSnapshot(`1000n`);
   });
-  it('price_example_down', () => {
+  test('price_example_down', () => {
     expect(
       amount1Delta(
         0x100000000000000000000000000000000n,
@@ -97,7 +97,7 @@ describe(amount1Delta, () => {
       ),
     ).toMatchInlineSnapshot(`90909090909090909n`);
   });
-  it('price_example_up', () => {
+  test('price_example_up', () => {
     expect(
       amount1Delta(
         0x100000000000000000000000000000000n,
@@ -107,7 +107,7 @@ describe(amount1Delta, () => {
       ),
     ).toMatchInlineSnapshot(`90909090909090910n`);
   });
-  it('no overflow half price range', () => {
+  test('no overflow half price range', () => {
     expect(
       amount1Delta(
         0x100000000000000000000000000000000n,

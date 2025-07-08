@@ -50,14 +50,32 @@ describe('BalancerEventHook', function () {
         ThresholdSurgePercentageChanged: {
           blockNumbers: [
             21824387, 21825432, 21825615, 21825831, 21830728, 21830728,
+            22442595,
           ],
-          hookAddress: ['0xb18fA0cb5DE8cecB8899AAE6e38b1B7ed77885dA'],
+          hookAddress: [
+            '0xb18fA0cb5DE8cecB8899AAE6e38b1B7ed77885dA',
+            '0xb18fA0cb5DE8cecB8899AAE6e38b1B7ed77885dA',
+            '0xb18fA0cb5DE8cecB8899AAE6e38b1B7ed77885dA',
+            '0xb18fA0cb5DE8cecB8899AAE6e38b1B7ed77885dA',
+            '0xb18fA0cb5DE8cecB8899AAE6e38b1B7ed77885dA',
+            '0xb18fA0cb5DE8cecB8899AAE6e38b1B7ed77885dA',
+            '0xBDbADc891BB95DEE80eBC491699228EF0f7D6fF1',
+          ],
         },
         MaxSurgeFeePercentageChanged: {
           blockNumbers: [
             21824387, 21825432, 21825615, 21825831, 21830728, 21830728,
+            22442435,
           ],
-          hookAddress: ['0xb18fA0cb5DE8cecB8899AAE6e38b1B7ed77885dA'],
+          hookAddress: [
+            '0xb18fA0cb5DE8cecB8899AAE6e38b1B7ed77885dA',
+            '0xb18fA0cb5DE8cecB8899AAE6e38b1B7ed77885dA',
+            '0xb18fA0cb5DE8cecB8899AAE6e38b1B7ed77885dA',
+            '0xb18fA0cb5DE8cecB8899AAE6e38b1B7ed77885dA',
+            '0xb18fA0cb5DE8cecB8899AAE6e38b1B7ed77885dA',
+            '0xb18fA0cb5DE8cecB8899AAE6e38b1B7ed77885dA',
+            '0xBDbADc891BB95DEE80eBC491699228EF0f7D6fF1',
+          ],
         },
       },
     };
@@ -86,7 +104,7 @@ describe('BalancerEventHook', function () {
                         fetchHookState(
                           balancerEventHook,
                           _blockNumber,
-                          eventData.hookAddress[0],
+                          eventData.hookAddress[i],
                         ),
                       blockNumber,
                       `${dexKey}_${hookAddress}`,

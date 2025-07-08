@@ -211,8 +211,16 @@ export const Tokens: {
       address: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2',
       decimals: 18,
     },
+    VLR: {
+      address: '0x4e107a0000DB66f0E9Fd2039288Bf811dD1f9c74',
+      decimals: 18,
+    },
     PSP: {
       address: '0xcafe001067cdef266afb7eb5a286dcfd277f3de5',
+      decimals: 18,
+    },
+    sePSP1: {
+      address: '0x716fBC68E0c761684D9280484243FF094CC5FfAB',
       decimals: 18,
     },
     SETH: {
@@ -595,9 +603,17 @@ export const Tokens: {
       address: '0x0bfc9d54Fc184518A81162F8fB99c2eACa081202',
       decimals: 18,
     },
+    RLUSD: {
+      address: '0x8292Bb45bf1Ee4d140127049757C2E0fF06317eD',
+      decimals: 18,
+    },
     baoBTC: {
       address: '0x22d76e6e1d9ab4072522c1bc60c85a0d5626ca2d',
       decimals: 18,
+    },
+    cbBTC: {
+      address: `0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf`,
+      decimals: 8,
     },
   },
   [Network.POLYGON]: {
@@ -1172,6 +1188,10 @@ export const Tokens: {
       address: '0x4ce13a79f45c1be00bdabd38b764ac28c082704e',
       decimals: 18,
     },
+    waArbUSDCn: {
+      address: '0x7F6501d3B98eE91f9b9535E4b0ac710Fb0f9e0bc',
+      decimals: 6,
+    },
     ETH: { address: ETHER_ADDRESS, decimals: 18 },
     USDCe: {
       address: '0xFF970A61A04b1cA14834A43f5dE4533eBDDB5CC8',
@@ -1201,6 +1221,10 @@ export const Tokens: {
     USDT: {
       address: '0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9',
       decimals: 6,
+    },
+    USDai: {
+      address: '0x0a1a1a107e45b7ced86833863f482bc5f4ed82ef',
+      decimals: 18,
     },
     waArbUSDT: {
       address: '0xa6D12574eFB239FC1D2099732bd8b5dC6306897F',
@@ -1469,6 +1493,18 @@ export const Tokens: {
       address: '0x6ab707aca953edaefbc4fd23ba73294241490620',
       decimals: 6,
     },
+    VLR: {
+      address: '0x4e107a0000DB66f0E9Fd2039288Bf811dD1f9c74',
+      decimals: 18,
+    },
+    PSP: {
+      address: '0xd3594E879B358F430E20F82bea61e83562d49D48',
+      decimals: 18,
+    },
+    sePSP1: {
+      address: '0x8C934b7dBc782568d14ceaBbEAeDF37cB6348615',
+      decimals: 18,
+    },
     waOptWETH: {
       address: '0x464b808c2c7e04b07e860fdf7a91870620246148',
       decimals: 18,
@@ -1589,6 +1625,10 @@ export const Tokens: {
     },
     cbBTC: {
       address: '0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf',
+      decimals: 8,
+    },
+    yoBTC: {
+      address: '0xbCbc8cb4D1e8ED048a6276a5E94A3e952660BcbC',
       decimals: 8,
     },
     WETH: {
@@ -1754,6 +1794,10 @@ export const Tokens: {
       address: `0xB77EB1A70A96fDAAeB31DB1b42F2b8b5846b2613`,
       decimals: 18,
     },
+    WBTC: {
+      address: `0x29f2d40b0605204364af54ec677bd022da425d03`,
+      decimals: 8,
+    },
   },
   [Network.UNICHAIN]: {
     ETH: { address: ETHER_ADDRESS, decimals: 18 },
@@ -1912,6 +1956,9 @@ export const Holders: {
     wUSDL: '0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb',
     UsualM: '0xE3f7A0c4a44b740328157A5152A85c3bCB54DA09',
     EKUBO: '0xF5b6Ee2CAEb6769659f6C091D209DfdCaF3F69Eb',
+    cbBTC: '0x5c647cE0Ae10658ec44FA4E11A51c96e94efd1Dd',
+    'PT-sUSDe-29MAY2025': '0x1234567890123456789012345678901234567890', // Mock holder for testing
+    'PT-sUSDe-31JUL2025': '0x2345678901234567890123456789012345678901', // Mock holder for testing
   },
   [Network.POLYGON]: {
     jGBP: '0x02aa0B826c7BA6386DdBE04C0a8715A1c0A16B24',
