@@ -1,6 +1,6 @@
 import { BufferState } from '@balancer-labs/balancer-maths';
-import { CommonPoolState, PoolState } from './types';
-import { defaultAbiCoder } from '@ethersproject/abi';
+import { CommonPoolState, PoolState, callData } from './types';
+import { defaultAbiCoder, Interface } from '@ethersproject/abi';
 
 export const ReClammApiName = 'RECLAMM';
 
@@ -41,7 +41,10 @@ export function isReClammMutableState(
 }
 
 export function isReClammPool(poolState: PoolState | BufferState) {
-  return poolState.poolType === 'RECLAMM' && isReClammMutableState(poolState);
+  return (
+    (poolState.poolType === 'RECLAMM' || poolState.poolType === 'RECLAMM_V2') &&
+    isReClammMutableState(poolState)
+  );
 }
 
 export function lastTimestampUpdatedEvent(
@@ -114,4 +117,66 @@ export function virtualBalancesUpdatedEvent(
     ];
   } else
     throw new Error("Can't update lastVirtualBalances on non-reClamm pool");
+}
+
+// Shared encoding function for ReClamm pools
+export function encodeReClammOnChainData(
+  contractInterface: Interface,
+  address: string,
+): callData[] {
+  return [
+    {
+      target: address,
+      callData: contractInterface.encodeFunctionData(
+        'getReClammPoolDynamicData',
+      ),
+    },
+  ];
+}
+
+// Shared decoding function for ReClamm pools
+export function decodeReClammOnChainData(
+  contractInterface: Interface,
+  poolAddress: string,
+  data: any,
+  startIndex: number,
+  decodeThrowError: (
+    contractInterface: Interface,
+    functionName: string,
+    resultEntry: { success: boolean; returnData: any },
+    poolAddress: string,
+  ) => any,
+): ReClammMutableState {
+  const resultDynamicData = decodeThrowError(
+    contractInterface,
+    'getReClammPoolDynamicData',
+    data[startIndex],
+    poolAddress,
+  );
+  if (!resultDynamicData)
+    throw new Error(
+      `Failed to get result for getReClammPoolDynamicData for ${poolAddress}`,
+    );
+
+  return {
+    lastTimestamp: BigInt(resultDynamicData[0].lastTimestamp),
+    lastVirtualBalances: resultDynamicData[0].lastVirtualBalances.map(
+      (b: any) => BigInt(b),
+    ),
+    dailyPriceShiftBase: BigInt(resultDynamicData[0].dailyPriceShiftBase),
+    centerednessMargin: BigInt(resultDynamicData[0].centerednessMargin),
+    startFourthRootPriceRatio: BigInt(
+      resultDynamicData[0].startFourthRootPriceRatio,
+    ),
+    endFourthRootPriceRatio: BigInt(
+      resultDynamicData[0].endFourthRootPriceRatio,
+    ),
+    priceRatioUpdateStartTime: BigInt(
+      resultDynamicData[0].priceRatioUpdateStartTime,
+    ),
+    priceRatioUpdateEndTime: BigInt(
+      resultDynamicData[0].priceRatioUpdateEndTime,
+    ),
+    currentTimestamp: 0n, // This will be updated at swap time
+  };
 }

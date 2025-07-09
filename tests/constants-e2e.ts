@@ -595,6 +595,10 @@ export const Tokens: {
       address: '0x0bfc9d54Fc184518A81162F8fB99c2eACa081202',
       decimals: 18,
     },
+    RLUSD: {
+      address: '0x8292Bb45bf1Ee4d140127049757C2E0fF06317eD',
+      decimals: 18,
+    },
     baoBTC: {
       address: '0x22d76e6e1d9ab4072522c1bc60c85a0d5626ca2d',
       decimals: 18,
@@ -1172,6 +1176,10 @@ export const Tokens: {
       address: '0x4ce13a79f45c1be00bdabd38b764ac28c082704e',
       decimals: 18,
     },
+    waArbUSDCn: {
+      address: '0x7F6501d3B98eE91f9b9535E4b0ac710Fb0f9e0bc',
+      decimals: 6,
+    },
     ETH: { address: ETHER_ADDRESS, decimals: 18 },
     USDCe: {
       address: '0xFF970A61A04b1cA14834A43f5dE4533eBDDB5CC8',
@@ -1201,6 +1209,10 @@ export const Tokens: {
     USDT: {
       address: '0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9',
       decimals: 6,
+    },
+    USDai: {
+      address: '0x0a1a1a107e45b7ced86833863f482bc5f4ed82ef',
+      decimals: 18,
     },
     waArbUSDT: {
       address: '0xa6D12574eFB239FC1D2099732bd8b5dC6306897F',
@@ -1591,6 +1603,10 @@ export const Tokens: {
       address: '0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf',
       decimals: 8,
     },
+    yoBTC: {
+      address: '0xbCbc8cb4D1e8ED048a6276a5E94A3e952660BcbC',
+      decimals: 8,
+    },
     WETH: {
       address: '0x4200000000000000000000000000000000000006',
       decimals: 18,
@@ -1715,6 +1731,10 @@ export const Tokens: {
       address: `0x04C0599Ae5A44757c0af6F9eC3b93da8976c150A`,
       decimals: 18,
     },
+    EURC: {
+      address: `0x60a3e35cc302bfa44cb288bc5a4f316fdb1adb42`,
+      decimals: 6,
+    },
   },
   [Network.SEPOLIA]: {
     ETH: { address: ETHER_ADDRESS, decimals: 18 },
@@ -1753,6 +1773,10 @@ export const Tokens: {
     DAI: {
       address: `0xB77EB1A70A96fDAAeB31DB1b42F2b8b5846b2613`,
       decimals: 18,
+    },
+    WBTC: {
+      address: `0x29f2d40b0605204364af54ec677bd022da425d03`,
+      decimals: 8,
     },
   },
   [Network.UNICHAIN]: {
