@@ -34,17 +34,16 @@ export const WooFiV2Config: DexConfigMap<DexParams> = {
         decimals: 6,
       },
     },
-    // deprecated
-    // [Network.FANTOM]: {
-    //   wooPPV2Address: '0x5520385bFcf07Ec87C4c53A7d8d65595Dff69FA4',
-    //   wooOracleV2Address: '0xB1d022F8F3e43868DaaDfa7040e63781C16aB4A6',
-    //   integrationHelperAddress: '0x6641959FE5EED7166F2254cF04b0d20c96776D9A',
-    //   // USDC
-    //   quoteToken: {
-    //     address: '0x04068DA6C83AFCFA0e13ba15A6696662335D5B75',
-    //     decimals: 6,
-    //   },
-    // },
+    [Network.SONIC]: {
+      wooPPV2Address: '0x5520385bFcf07Ec87C4c53A7d8d65595Dff69FA4',
+      wooOracleV2Address: '0x2A375567f5E13F6bd74fDa7627Df3b1Af6BfA5a6',
+      integrationHelperAddress: '0xc8521e41DE46036A61c562062862681f0060CD7E',
+      // USDC
+      quoteToken: {
+        address: '0x29219dd400f2bf60e5a23d13be72b486d4038894',
+        decimals: 6,
+      },
+    },
     [Network.ARBITRUM]: {
       wooPPV2Address: '0x5520385bFcf07Ec87C4c53A7d8d65595Dff69FA4',
       wooOracleV2Address: '0xCf4EA1688bc23DD93D933edA535F8B72FC8934Ec',

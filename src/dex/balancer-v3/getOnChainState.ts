@@ -4,18 +4,18 @@ import {
   CommonMutableState,
   PoolStateMap,
   StableMutableState,
+  callData,
 } from './types';
 import { BalancerV3Config } from './config';
 import { Interface, Result } from '@ethersproject/abi';
 import { IDexHelper } from '../../dex-helper';
 import { WAD } from './balancer-v3-pool';
 import { QuantAmmImmutable, QuantAMMMutableState } from './quantAMMPool';
-import { ReClammMutableState } from './reClammPool';
-
-export interface callData {
-  target: string;
-  callData: string;
-}
+import {
+  ReClammMutableState,
+  encodeReClammOnChainData,
+  decodeReClammOnChainData,
+} from './reClammPool';
 
 // Encoding & Decoding for onchain calls to fetch mutable pool data
 // Each supported pool type should have its own specific calls if needed
@@ -273,14 +273,7 @@ const poolOnChain: Record<
       contractInterface: Interface,
       address: string,
     ): callData[] => {
-      return [
-        {
-          target: address,
-          callData: contractInterface.encodeFunctionData(
-            'getReClammPoolDynamicData',
-          ),
-        },
-      ];
+      return encodeReClammOnChainData(contractInterface, address);
     },
     ['decode']: (
       contractInterface: Interface,
@@ -288,38 +281,37 @@ const poolOnChain: Record<
       data: any,
       startIndex: number,
     ): ReClammMutableState => {
-      const resultDynamicData = decodeThrowError(
+      return decodeReClammOnChainData(
         contractInterface,
-        'getReClammPoolDynamicData',
-        data[startIndex++],
         poolAddress,
+        data,
+        startIndex,
+        decodeThrowError,
       );
-      if (!resultDynamicData)
-        throw new Error(
-          `Failed to get result for getReClammPoolDynamicData for ${poolAddress}`,
-        );
-
-      return {
-        lastTimestamp: BigInt(resultDynamicData[0].lastTimestamp),
-        lastVirtualBalances: resultDynamicData[0].lastVirtualBalances.map(
-          (b: any) => BigInt(b),
-        ),
-        dailyPriceShiftBase: BigInt(resultDynamicData[0].dailyPriceShiftBase),
-        centerednessMargin: BigInt(resultDynamicData[0].centerednessMargin),
-        startFourthRootPriceRatio: BigInt(
-          resultDynamicData[0].startFourthRootPriceRatio,
-        ),
-        endFourthRootPriceRatio: BigInt(
-          resultDynamicData[0].endFourthRootPriceRatio,
-        ),
-        priceRatioUpdateStartTime: BigInt(
-          resultDynamicData[0].priceRatioUpdateStartTime,
-        ),
-        priceRatioUpdateEndTime: BigInt(
-          resultDynamicData[0].priceRatioUpdateEndTime,
-        ),
-        currentTimestamp: 0n, // This will be updated at swap time
-      };
+    },
+  },
+  ['RECLAMM_V2']: {
+    count: 1,
+    ['encode']: (
+      network: number,
+      contractInterface: Interface,
+      address: string,
+    ): callData[] => {
+      return encodeReClammOnChainData(contractInterface, address);
+    },
+    ['decode']: (
+      contractInterface: Interface,
+      poolAddress: string,
+      data: any,
+      startIndex: number,
+    ): ReClammMutableState => {
+      return decodeReClammOnChainData(
+        contractInterface,
+        poolAddress,
+        data,
+        startIndex,
+        decodeThrowError,
+      );
     },
   },
   ['QUANT_AMM_WEIGHTED']: {

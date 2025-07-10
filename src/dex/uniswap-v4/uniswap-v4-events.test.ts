@@ -131,7 +131,8 @@ describe('UniswapV4 events', () => {
               '200',
             );
 
-            await uniswapV4Pool.initialize(blockNumber);
+            // no need to initialize pool, as state is set on testEventSubscriber eventSubscriber.setState(
+            // await uniswapV4Pool.initialize(blockNumber);
 
             await testEventSubscriber(
               uniswapV4Pool,
@@ -143,7 +144,7 @@ describe('UniswapV4 events', () => {
                   config.poolManager,
                 ),
               blockNumber,
-              `${dexKey}_${config.poolManager}`,
+              `${dexKey}_${config.poolManager}_${uniswapV4Pool.poolId}`,
               dexHelper.provider,
             );
           });
@@ -227,7 +228,8 @@ describe('UniswapV4 events', () => {
               '10',
             );
 
-            await uniswapV4Pool.initialize(blockNumber);
+            // no need to initialize pool, as state is set on testEventSubscriber eventSubscriber.setState(
+            // await uniswapV4Pool.initialize(blockNumber);
 
             await testEventSubscriber(
               uniswapV4Pool,
@@ -239,7 +241,7 @@ describe('UniswapV4 events', () => {
                   config.poolManager,
                 ),
               blockNumber,
-              `${dexKey}_${config.poolManager}`,
+              `${dexKey}_${config.poolManager}_${uniswapV4Pool.poolId}`,
               dexHelper.provider,
             );
           });
@@ -287,7 +289,8 @@ describe('UniswapV4 events', () => {
               '10',
             );
 
-            await uniswapV4Pool.initialize(blockNumber);
+            // no need to initialize pool, as state is set on testEventSubscriber eventSubscriber.setState(
+            // await uniswapV4Pool.initialize(blockNumber);
 
             await testEventSubscriber(
               uniswapV4Pool,
@@ -299,7 +302,7 @@ describe('UniswapV4 events', () => {
                   config.poolManager,
                 ),
               blockNumber,
-              `${dexKey}_${config.poolManager}`,
+              `${dexKey}_${config.poolManager}_${uniswapV4Pool.poolId}`,
               dexHelper.provider,
             );
           });
@@ -344,7 +347,8 @@ describe('UniswapV4 events', () => {
               '60',
             );
 
-            await uniswapV4Pool.initialize(blockNumber);
+            // no need to initialize pool, as state is set on testEventSubscriber eventSubscriber.setState(
+            // await uniswapV4Pool.initialize(blockNumber);
 
             await testEventSubscriber(
               uniswapV4Pool,
@@ -356,7 +360,71 @@ describe('UniswapV4 events', () => {
                   config.poolManager,
                 ),
               blockNumber,
-              `${dexKey}_${config.poolManager}`,
+              `${dexKey}_${config.poolManager}_${uniswapV4Pool.poolId}`,
+              dexHelper.provider,
+            );
+          });
+        });
+      });
+    });
+
+    describe('UniswapV4Pool ETH / USDC (0x21c67e77068de97969ba93d4aab21826d33ca12bb9f565d8496e8fda8a82ca27)', () => {
+      const blockNumbers: { [eventName: string]: number[] } = {
+        ['ModifyLiquidity']: [],
+        ['Swap']: [
+          22846995, 22846988, 22846978, 22846976, 22846968, 22846952, 22846949,
+          22846945, 22846944, 22846940, 22846937, 22846935, 22846928, 22846920,
+          22846915, 22846910, 22846905, 22846899, 22846888, 22846874, 22846868,
+          22846856, 22846834, 22846824, 22846807, 22846773, 22846771, 22846770,
+          22846763, 22846762, 22846760, 22846757, 22846749, 22846746, 22846736,
+          22846733, 22846722, 22846717, 22846692, 22846686, 22846671, 22846645,
+          22846637, 22846635, 22846632, 22846618, 22846598, 22846568, 22846555,
+          22846543, 22846535, 22846533, 22846528, 22846524, 22846517, 22846502,
+          22846496, 22846490, 22846471, 22846462, 22846442, 22846433, 22846429,
+          22846428, 22846426, 22846409, 22846382, 22846368, 22846353, 22846348,
+          22846350, 22846349, 22846341, 22846339, 22846338, 22846336, 22846327,
+          22846324, 22846318, 22846309, 22846304, 22846294, 22846291, 22846279,
+          22846274, 22846269, 22846247, 22846242, 22846226, 22846221, 22846217,
+          22846205, 22846198, 22846176, 22846163, 22846135, 22846133, 22846106,
+          22846080, 22846066,
+        ],
+      };
+
+      Object.keys(blockNumbers).forEach((event: string) => {
+        blockNumbers[event].forEach((blockNumber: number) => {
+          it(`${event}:${blockNumber} - should return correct state`, async function () {
+            const dexHelper = new DummyDexHelper(network);
+
+            const logger = dexHelper.getLogger(dexKey);
+
+            const uniswapV4Pool = new UniswapV4Pool(
+              dexHelper,
+              dexKey,
+              network,
+              config,
+              logger,
+              '',
+              '0x21c67e77068de97969ba93d4aab21826d33ca12bb9f565d8496e8fda8a82ca27',
+              '0x0000000000000000000000000000000000000000',
+              '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
+              '500',
+              '0x0000000000000000000000000000000000000000',
+              0n,
+              '0',
+              '10',
+            );
+
+            await testEventSubscriber(
+              uniswapV4Pool,
+              uniswapV4Pool.addressesSubscribed,
+              (_blockNumber: number) =>
+                fetchPoolStateFromContract(
+                  uniswapV4Pool,
+                  _blockNumber,
+                  config.poolManager,
+                ),
+              blockNumber,
+              `${dexKey}_${config.poolManager}_${uniswapV4Pool.poolId}`,
               dexHelper.provider,
             );
           });
@@ -451,7 +519,8 @@ describe('UniswapV4 events', () => {
               '60',
             );
 
-            await uniswapV4Pool.initialize(blockNumber);
+            // no need to initialize pool, as state is set on testEventSubscriber eventSubscriber.setState(
+            // await uniswapV4Pool.initialize(blockNumber);
 
             await testEventSubscriber(
               uniswapV4Pool,
@@ -463,7 +532,111 @@ describe('UniswapV4 events', () => {
                   config.poolManager,
                 ),
               blockNumber,
-              `${dexKey}_${config.poolManager}`,
+              `${dexKey}_${config.poolManager}_${uniswapV4Pool.poolId}`,
+              dexHelper.provider,
+            );
+          });
+        });
+      });
+    });
+
+    describe('UniswapV4Pool USDC / USD1 (0xaa1e84de6a89656e07eb098d53d004c9d1f6716a1d3bb4be54cfdd40e781b7a2)', () => {
+      const blockNumbers: { [eventName: string]: number[] } = {
+        ['Swap']: [
+          32601138, // https://bscscan.com/tx/0xba3da8e821fffc3e11fd04053ee5b3df6f5a6a25383d5cc69c3e406f89a1607b
+        ],
+      };
+
+      Object.keys(blockNumbers).forEach((event: string) => {
+        blockNumbers[event].forEach((blockNumber: number) => {
+          it(`${event}:${blockNumber} - should return correct state`, async function () {
+            const dexHelper = new DummyDexHelper(network);
+
+            const logger = dexHelper.getLogger(dexKey);
+
+            const uniswapV4Pool = new UniswapV4Pool(
+              dexHelper,
+              dexKey,
+              network,
+              config,
+              logger,
+              '',
+              '0xaa1e84de6a89656e07eb098d53d004c9d1f6716a1d3bb4be54cfdd40e781b7a2', // initial params from Initialize event
+              '0x0000000000000000000000000000000000000000',
+              '0x616b416f777e3dc904a44aa259a475bf26d06ef9',
+              '100000',
+              '0x0000000000000000000000000000000000000000',
+              0n,
+              '0',
+              '2000',
+            );
+
+            // no need to initialize pool, as state is set on testEventSubscriber eventSubscriber.setState(
+            // await uniswapV4Pool.initialize(blockNumber);
+
+            await testEventSubscriber(
+              uniswapV4Pool,
+              uniswapV4Pool.addressesSubscribed,
+              (_blockNumber: number) =>
+                fetchPoolStateFromContract(
+                  uniswapV4Pool,
+                  _blockNumber,
+                  config.poolManager,
+                ),
+              blockNumber,
+              `${dexKey}_${config.poolManager}_${uniswapV4Pool.poolId}`,
+              dexHelper.provider,
+            );
+          });
+        });
+      });
+    });
+
+    describe.only('UniswapV4Pool USDC / USD1 (0x5bd7db5892be4b43834d9c35960e112d08ba89f45c2da8d286661c9352b814bc)', () => {
+      const blockNumbers: { [eventName: string]: number[] } = {
+        ['Swap']: [
+          32601921, // https://basescan.org/tx/0xebb99cc21ce04ec12de8134d639250eba7a128d90705371a655966e44c842d4c
+        ],
+      };
+
+      Object.keys(blockNumbers).forEach((event: string) => {
+        blockNumbers[event].forEach((blockNumber: number) => {
+          it(`${event}:${blockNumber} - should return correct state`, async function () {
+            const dexHelper = new DummyDexHelper(network);
+
+            const logger = dexHelper.getLogger(dexKey);
+
+            const uniswapV4Pool = new UniswapV4Pool(
+              dexHelper,
+              dexKey,
+              network,
+              config,
+              logger,
+              '',
+              '0x5bd7db5892be4b43834d9c35960e112d08ba89f45c2da8d286661c9352b814bc', // initial params from Initialize event
+              '0x0000000000000000000000000000000000000000',
+              '0x616b416f777e3dc904a44aa259a475bf26d06ef9',
+              '100',
+              '0x0000000000000000000000000000000000000000',
+              0n,
+              '0',
+              '1',
+            );
+
+            // no need to initialize pool, as state is set on testEventSubscriber eventSubscriber.setState(
+            // await uniswapV4Pool.initialize(blockNumber);
+
+            await testEventSubscriber(
+              uniswapV4Pool,
+              uniswapV4Pool.addressesSubscribed,
+              (_blockNumber: number) =>
+                fetchPoolStateFromContract(
+                  uniswapV4Pool,
+                  _blockNumber,
+                  config.poolManager,
+                ),
+              blockNumber,
+              `${dexKey}_${config.poolManager}_${uniswapV4Pool.poolId}`,
               dexHelper.provider,
             );
           });
@@ -567,7 +740,8 @@ describe('UniswapV4 events', () => {
               '60',
             );
 
-            await uniswapV4Pool.initialize(blockNumber);
+            // no need to initialize pool, as state is set on testEventSubscriber eventSubscriber.setState(
+            // await uniswapV4Pool.initialize(blockNumber);
 
             await testEventSubscriber(
               uniswapV4Pool,
@@ -579,7 +753,7 @@ describe('UniswapV4 events', () => {
                   config.poolManager,
                 ),
               blockNumber,
-              `${dexKey}_${config.poolManager}`,
+              `${dexKey}_${config.poolManager}_${uniswapV4Pool.poolId}`,
               dexHelper.provider,
             );
           });
@@ -661,7 +835,8 @@ describe('UniswapV4 events', () => {
               '1',
             );
 
-            await uniswapV4Pool.initialize(blockNumber);
+            // no need to initialize pool, as state is set on testEventSubscriber eventSubscriber.setState(
+            // await uniswapV4Pool.initialize(blockNumber);
 
             await testEventSubscriber(
               uniswapV4Pool,
@@ -673,7 +848,136 @@ describe('UniswapV4 events', () => {
                   config.poolManager,
                 ),
               blockNumber,
-              `${dexKey}_${config.poolManager}`,
+              `${dexKey}_${config.poolManager}_${uniswapV4Pool.poolId}`,
+              dexHelper.provider,
+            );
+          });
+        });
+      });
+    });
+
+    describe('UniswapV4Pool LINK / WETH (0xf9848d3a80d85e12b9015989c288c005eeffcae46c9a092273483f01612e2a24)', () => {
+      const blockNumbers: { [eventName: string]: number[] } = {
+        ['ModifyLiquidity']: [],
+        ['Swap']: [
+          73729039, 73726799, 73724666, 73724657, 73724125, 73724095, 73724039,
+          73723376, 73721660, 73721549, 73720114, 73719970, 73719669, 73716277,
+          73711305, 73707400, 73705027, 73704594, 73703042, 73701038, 73700870,
+          73700098, 73699901, 73698721, 73695966, 73694431, 73693480, 73693028,
+          73692825, 73692672, 73692575, 73692120, 73691388, 73690807, 73690771,
+          73689408, 73689406, 73689378, 73689275, 73689196, 73688820, 73688819,
+          73688801, 73687865, 73687815, 73687266, 73685898, 73685872, 73685681,
+          73684670, 73684530, 73684521, 73683880, 73683797, 73683060, 73682587,
+          73680855, 73680606, 73680429, 73680359, 73679931, 73679882, 73678540,
+          73677406, 73675903, 73675111, 73674815, 73673774, 73673730, 73671513,
+          73670156, 73669717, 73669411, 73669258, 73668563, 73668125, 73665134,
+          73664147, 73663586, 73662886, 73662325, 73660078, 73659890, 73653226,
+          73652080, 73651774, 73649294,
+        ],
+      };
+
+      Object.keys(blockNumbers).forEach((event: string) => {
+        blockNumbers[event].forEach((blockNumber: number) => {
+          it(`${event}:${blockNumber} - should return correct state`, async function () {
+            const dexHelper = new DummyDexHelper(network);
+
+            const logger = dexHelper.getLogger(dexKey);
+
+            const uniswapV4Pool = new UniswapV4Pool(
+              dexHelper,
+              dexKey,
+              network,
+              config,
+              logger,
+              '',
+              '0xf9848d3a80d85e12b9015989c288c005eeffcae46c9a092273483f01612e2a24',
+              '0x53e0bca35ec356bd5dddfebbd1fc0fd03fabad39',
+              '0x7ceb23fd6bc0add59e62ac25578270cff1b9f619',
+              '500',
+              '0x0000000000000000000000000000000000000000',
+              0n,
+              '0',
+              '10',
+            );
+
+            // await uniswapV4Pool.initialize(blockNumber - 1);
+
+            await testEventSubscriber(
+              uniswapV4Pool,
+              uniswapV4Pool.addressesSubscribed,
+              (_blockNumber: number) =>
+                fetchPoolStateFromContract(
+                  uniswapV4Pool,
+                  _blockNumber,
+                  config.poolManager,
+                ),
+              blockNumber,
+              `${dexKey}_${config.poolManager}_${uniswapV4Pool.poolId}`,
+              dexHelper.provider,
+            );
+          });
+        });
+      });
+    });
+
+    describe('UniswapV4Pool USDCe / WETH (0xdb26d6f2af41f431d447f292d9d96950f3d3a86cdfc321673301d029412502a1)', () => {
+      const blockNumbers: { [eventName: string]: number[] } = {
+        ['Swap']: [
+          73730314, 73730254, 73730251, 73730250, 73730244, 73730235, 73730231,
+          73730214, 73730213, 73730206, 73730205, 73730204, 73730201, 73730184,
+          73730183, 73730181, 73730118, 73730059, 73730022, 73730021, 73730013,
+          73730012, 73729917, 73729916, 73729914, 73729890, 73729888, 73729866,
+          73729861, 73729860, 73729859, 73729856, 73729852, 73729846, 73729845,
+          73729844, 73729712, 73729691, 73729687, 73729686, 73729671, 73729524,
+          73729520, 73729470, 73729467, 73729466, 73729464, 73729462, 73729461,
+          73729456, 73729452, 73729392, 73729303, 73729301, 73729135, 73729131,
+          73729130, 73728954, 73728953, 73728933, 73728917, 73728915, 73728748,
+          73728747, 73728682, 73728457, 73728374, 73728373, 73728370, 73728116,
+          73728112, 73728102, 73728101, 73728100, 73727982, 73727800, 73727796,
+          73727795, 73727794, 73727792, 73727785, 73727784, 73727672, 73727671,
+          73727670, 73727668, 73727662, 73727661, 73727659, 73727652, 73727647,
+          73727644, 73727640, 73727552, 73727527, 73727522, 73727496, 73727491,
+          73727486, 73727485,
+        ],
+      };
+
+      Object.keys(blockNumbers).forEach((event: string) => {
+        blockNumbers[event].forEach((blockNumber: number) => {
+          it(`${event}:${blockNumber} - should return correct state`, async function () {
+            const dexHelper = new DummyDexHelper(network);
+
+            const logger = dexHelper.getLogger(dexKey);
+
+            const uniswapV4Pool = new UniswapV4Pool(
+              dexHelper,
+              dexKey,
+              network,
+              config,
+              logger,
+              '',
+              '0xdb26d6f2af41f431d447f292d9d96950f3d3a86cdfc321673301d029412502a1',
+              '0x3c499c542cef5e3811e1192ce70d8cc03d5c3359',
+              '0x7ceb23fd6bc0add59e62ac25578270cff1b9f619',
+              '10',
+              '0x0000000000000000000000000000000000000000',
+              0n,
+              '0',
+              '10',
+            );
+
+            // await uniswapV4Pool.initialize(blockNumber - 1);
+
+            await testEventSubscriber(
+              uniswapV4Pool,
+              uniswapV4Pool.addressesSubscribed,
+              (_blockNumber: number) =>
+                fetchPoolStateFromContract(
+                  uniswapV4Pool,
+                  _blockNumber,
+                  config.poolManager,
+                ),
+              blockNumber,
+              `${dexKey}_${config.poolManager}_${uniswapV4Pool.poolId}`,
               dexHelper.provider,
             );
           });
@@ -740,7 +1044,8 @@ describe('UniswapV4 events', () => {
               '10',
             );
 
-            await uniswapV4Pool.initialize(blockNumber);
+            // no need to initialize pool, as state is set on testEventSubscriber eventSubscriber.setState(
+            // await uniswapV4Pool.initialize(blockNumber);
 
             await testEventSubscriber(
               uniswapV4Pool,
@@ -752,7 +1057,116 @@ describe('UniswapV4 events', () => {
                   config.poolManager,
                 ),
               blockNumber,
-              `${dexKey}_${config.poolManager}`,
+              `${dexKey}_${config.poolManager}_${uniswapV4Pool.poolId}`,
+              dexHelper.provider,
+            );
+          });
+        });
+      });
+    });
+  });
+
+  describe('BSC', () => {
+    const network = Network.BSC;
+    const config = UniswapV4Config[dexKey][network];
+
+    describe('UniswapV4Pool USDC / USD1 (0xd6183866d971fadce6225b1e3b21226b8879d344fac4074569dd7c26367b0fbc)', () => {
+      const blockNumbers: { [eventName: string]: number[] } = {
+        ['Swap']: [
+          53323488, // https://bscscan.com/tx/0xba3da8e821fffc3e11fd04053ee5b3df6f5a6a25383d5cc69c3e406f89a1607b
+        ],
+      };
+
+      Object.keys(blockNumbers).forEach((event: string) => {
+        blockNumbers[event].forEach((blockNumber: number) => {
+          it(`${event}:${blockNumber} - should return correct state`, async function () {
+            const dexHelper = new DummyDexHelper(network);
+
+            const logger = dexHelper.getLogger(dexKey);
+
+            const uniswapV4Pool = new UniswapV4Pool(
+              dexHelper,
+              dexKey,
+              network,
+              config,
+              logger,
+              '',
+              '0xd6183866d971fadce6225b1e3b21226b8879d344fac4074569dd7c26367b0fbc', // initial params from Initialize event
+              '0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d',
+              '0x8d0d000ee44948fc98c9b98a4fa4921476f08b0d',
+              '65',
+              '0x0000000000000000000000000000000000000000',
+              0n,
+              '0',
+              '1',
+            );
+
+            // no need to initialize pool, as state is set on testEventSubscriber eventSubscriber.setState(
+            // await uniswapV4Pool.initialize(blockNumber);
+
+            await testEventSubscriber(
+              uniswapV4Pool,
+              uniswapV4Pool.addressesSubscribed,
+              (_blockNumber: number) =>
+                fetchPoolStateFromContract(
+                  uniswapV4Pool,
+                  _blockNumber,
+                  config.poolManager,
+                ),
+              blockNumber,
+              `${dexKey}_${config.poolManager}_${uniswapV4Pool.poolId}`,
+              dexHelper.provider,
+            );
+          });
+        });
+      });
+    });
+
+    describe('UniswapV4Pool USDC / USD1 (0xa7e4b8ebc6fa9f4c12b0ab806e263e0fc2ca944e9287ba1e68b36b1a0dfca024)', () => {
+      const blockNumbers: { [eventName: string]: number[] } = {
+        ['ModifyLiquidity']: [
+          53326437, // https://bscscan.com/tx/0xba3da8e821fffc3e11fd04053ee5b3df6f5a6a25383d5cc69c3e406f89a1607b
+        ],
+      };
+
+      Object.keys(blockNumbers).forEach((event: string) => {
+        blockNumbers[event].forEach((blockNumber: number) => {
+          it(`${event}:${blockNumber} - should return correct state`, async function () {
+            const dexHelper = new DummyDexHelper(network);
+
+            const logger = dexHelper.getLogger(dexKey);
+
+            const uniswapV4Pool = new UniswapV4Pool(
+              dexHelper,
+              dexKey,
+              network,
+              config,
+              logger,
+              '',
+              '0xa7e4b8ebc6fa9f4c12b0ab806e263e0fc2ca944e9287ba1e68b36b1a0dfca024', // initial params from Initialize event
+              '0x0000000000000000000000000000000000000000',
+              '0x7352cdbca63f62358f08f6514d3b7ff2a2872aad',
+              '880000',
+              '0x0000000000000000000000000000000000000000',
+              0n,
+              '0',
+              '17600',
+            );
+
+            // no need to initialize pool, as state is set on testEventSubscriber eventSubscriber.setState(
+            // await uniswapV4Pool.initialize(blockNumber);
+
+            await testEventSubscriber(
+              uniswapV4Pool,
+              uniswapV4Pool.addressesSubscribed,
+              (_blockNumber: number) =>
+                fetchPoolStateFromContract(
+                  uniswapV4Pool,
+                  _blockNumber,
+                  config.poolManager,
+                ),
+              blockNumber,
+              `${dexKey}_${config.poolManager}_${uniswapV4Pool.poolId}`,
               dexHelper.provider,
             );
           });
@@ -787,7 +1201,7 @@ describe('UniswapV4 events', () => {
 //               config.poolManager,
 //             ),
 //           blockNumber,
-//           `${dexKey}_${config.poolManager}`,
+//           `${dexKey}_${config.poolManager}_${uniswapV4Pool.poolId}`,,
 //           dexHelper.provider,
 //         );
 //       });

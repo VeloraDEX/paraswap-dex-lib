@@ -280,7 +280,9 @@ export class UniswapV3
     if (pool === null) return null;
 
     if (pool) {
-      if (!pool.initFailed) {
+      if (pool.isInactive()) {
+        return null;
+      } else if (!pool.initFailed) {
         return pool;
       } else {
         // if init failed then prefer to early return pool with empty state to fallback to rpc call

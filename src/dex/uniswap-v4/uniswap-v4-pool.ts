@@ -502,10 +502,7 @@ export class UniswapV4Pool extends StatefulEventSubscriber<PoolState> {
           this.logger.error(
             `${this.parentName}: PoolManager ${this.config.poolManager} (pool id ${this.poolId}), ` +
               `network=${this.dexHelper.config.data.network}: Unexpected ` +
-              `error while handling event on blockNumber=${blockHeader.number}, ` +
-              `blockHash=${blockHeader.hash} and parentHash=${
-                blockHeader.parentHash
-              } for ${this.parentName}, ${JSON.stringify(event)}`,
+              `error while handling event on blockNumber=${blockHeader.number} for ${this.parentName}, txHash=${log.transactionHash}, logIndex=${log.logIndex}, event=${event?.name}`,
             e,
           );
 

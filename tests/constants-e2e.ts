@@ -1755,6 +1755,10 @@ export const Tokens: {
       address: `0x04C0599Ae5A44757c0af6F9eC3b93da8976c150A`,
       decimals: 18,
     },
+    EURC: {
+      address: `0x60a3e35cc302bfa44cb288bc5a4f316fdb1adb42`,
+      decimals: 6,
+    },
   },
   [Network.SEPOLIA]: {
     ETH: { address: ETHER_ADDRESS, decimals: 18 },

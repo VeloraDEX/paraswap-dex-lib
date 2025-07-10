@@ -625,9 +625,7 @@ class UniswapV4PoolMath {
         : ProtocolFeeLibrary.calculateSwapFee(protocolFee, lpFee);
 
     const paramsTickSpacing = poolState.tickSpacing;
-    const paramsSqrtPriceLimitX96 = zeroForOne
-      ? TickMath.MIN_SQRT_PRICE + 1n
-      : TickMath.MAX_SQRT_PRICE - 1n;
+    const paramsSqrtPriceLimitX96 = newSqrtPriceX96;
 
     let step = {
       feeGrowthGlobalX128: zeroForOne

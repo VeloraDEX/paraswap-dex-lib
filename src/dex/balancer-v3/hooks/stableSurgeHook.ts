@@ -5,7 +5,8 @@ import { HookStateMap } from './balancer-hook-event-subscriber';
 import { Interface } from '@ethersproject/abi';
 import { Contract } from 'ethers';
 import { IDexHelper } from '../../../dex-helper';
-import { callData, decodeThrowError } from '../getOnChainState';
+import { callData } from '../types';
+import { decodeThrowError } from '../getOnChainState';
 import { Logger } from 'log4js';
 
 export const StableSurge = {
