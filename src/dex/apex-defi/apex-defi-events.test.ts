@@ -50,7 +50,14 @@ async function fetchPoolState(
   poolAddress: string,
 ): Promise<PoolState> {
   // TODO: complete me!
-  return {};
+  return {
+    pool: poolAddress,
+    fee: 0,
+    tradingFee: 0,
+    blockTimestamp: 0n,
+    reserve0: 0n,
+    reserve1: 0n,
+  };
 }
 
 // eventName -> blockNumbers
@@ -58,7 +65,7 @@ type EventMappings = Record<string, number[]>;
 
 describe('ApexDefi EventPool Mainnet', function () {
   const dexKey = 'ApexDefi';
-  const network = Network.MAINNET;
+  const network = Network.AVALANCHE;
   const dexHelper = new DummyDexHelper(network);
   const logger = dexHelper.getLogger(dexKey);
   let apexDefiPool: ApexDefiEventPool;
@@ -73,6 +80,9 @@ describe('ApexDefi EventPool Mainnet', function () {
       dexKey,
       network,
       dexHelper,
+      '0x0000000000000000000000000000000000000000', // token0
+      '0x0000000000000000000000000000000000000000', // token1
+      '0x0000000000000000000000000000000000000000', // poolAddress
       logger,
       /* TODO: Put here additional constructor arguments if needed */
     );

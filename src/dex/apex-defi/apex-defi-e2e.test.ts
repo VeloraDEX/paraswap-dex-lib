@@ -71,8 +71,6 @@ function testForNetwork(
   // TODO: Add any direct swap contractMethod name if it exists
   const sideToContractMethods = new Map([
     [SwapSide.SELL, [ContractMethod.swapExactAmountIn]],
-    // TODO: If buy is not supported remove the buy contract methods
-    [SwapSide.BUY, [ContractMethod.swapExactAmountOut]],
   ]);
 
   describe(`${network}`, () => {
@@ -130,7 +128,7 @@ describe('ApexDefi E2E', () => {
   const dexKey = 'ApexDefi';
 
   describe('Mainnet', () => {
-    const network = Network.MAINNET;
+    const network = Network.AVALANCHE;
 
     // TODO: Modify the tokenASymbol, tokenBSymbol, tokenAAmount;
     const tokenASymbol: string = 'tokenASymbol';

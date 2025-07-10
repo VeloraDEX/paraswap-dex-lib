@@ -20,14 +20,17 @@ import { ApexDefiConfig } from './config';
 import { ApexDefiEventPool } from './apex-defi-pool';
 import { Interface } from '@ethersproject/abi';
 import ApexDefiRouterABI from '../../abi/apex-defi/ApexDefiRouter.abi.json';
+import ERC20ABI from '../../abi/erc20.json';
 import { ApexDefiFactory, OnPoolCreatedCallback } from './apex-defi-factory';
 
 export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
   readonly eventPools: Record<string, ApexDefiEventPool | null> = {};
+  protected supportedTokensMap: { [address: string]: Token } = {};
 
   protected readonly factory: ApexDefiFactory;
 
   readonly routerIface: Interface;
+  readonly erc20Iface: Interface;
 
   feeFactor = 10000;
 
@@ -49,6 +52,7 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
   ) {
     super(dexHelper, dexKey);
     this.routerIface = new Interface(ApexDefiRouterABI);
+    this.erc20Iface = new Interface(ERC20ABI);
     this.logger = dexHelper.getLogger(dexKey + '-' + network);
 
     this.factory = this.getFactoryInstance();
@@ -65,7 +69,7 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
   }
 
   protected onPoolCreated(): OnPoolCreatedCallback {
-    return async ({ pairAddress }) => {
+    return async ({ pairAddress, blockNumber }) => {
       const logPrefix = '[onPoolCreated]';
       const poolKey = this.getPoolIdentifier(pairAddress);
 
@@ -73,7 +77,7 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
         `${logPrefix} add pool=${poolKey}; pairAddress=${pairAddress}`,
       );
 
-      this.eventPools[poolKey] = new ApexDefiEventPool(
+      const eventPool = new ApexDefiEventPool(
         this.dexKey,
         this.network,
         this.dexHelper,
@@ -81,6 +85,22 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
         pairAddress,
         pairAddress,
         this.logger,
+      );
+
+      // TODO: complete me!
+      await eventPool.initialize(blockNumber, {
+        state: {
+          reserve0: 0n,
+          reserve1: 0n,
+          fee: 0,
+          tradingFee: 0,
+        },
+      });
+
+      this.eventPools[poolKey] = eventPool;
+
+      this.logger.info(
+        `${logPrefix} pool=${poolKey}; pairAddress=${pairAddress} initialized`,
       );
     };
   }
@@ -90,7 +110,75 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
   // for pricing requests. It is optional for a DEX to
   // implement this function
   async initializePricing(blockNumber: number) {
-    // TODO: complete me!
+    try {
+      // Get all supported tokens from the router
+      const tokenAddresses = await this.dexHelper.multiContract.methods
+        .aggregate([
+          {
+            target: ApexDefiConfig[this.dexKey][this.network].routerAddress,
+            callData: this.routerIface.encodeFunctionData('getAllTokens', []),
+          },
+        ])
+        .call({}, blockNumber);
+
+      const tokens = this.routerIface.decodeFunctionResult(
+        'getAllTokens',
+        tokenAddresses.returnData[0],
+      )[0] as Address[];
+
+      if (!tokens.length) {
+        this.logger.info('No tokens found in ApexDefi router');
+        return;
+      }
+
+      // Get decimals for all tokens using multicall
+      const decimalsCallData = this.erc20Iface.encodeFunctionData('decimals');
+      const tokenDecimalsMultiCall = tokens.map(token => ({
+        target: token,
+        callData: decimalsCallData,
+      }));
+
+      const decimalsResult = await this.dexHelper.multiContract.methods
+        .aggregate(tokenDecimalsMultiCall)
+        .call({}, blockNumber);
+
+      // Create Token objects and add to supportedTokensMap
+      const tokenDecimals = decimalsResult.returnData.map((r: any) =>
+        parseInt(
+          this.erc20Iface.decodeFunctionResult('decimals', r)[0].toString(),
+        ),
+      );
+
+      tokens.forEach((token, i) => {
+        const tokenObj: Token = {
+          address: token.toLowerCase(),
+          decimals: tokenDecimals[i],
+        };
+        this.supportedTokensMap[token.toLowerCase()] = tokenObj;
+
+        // Create event pool for each token
+        const poolKey = this.getPoolIdentifier(token);
+        if (!this.eventPools[poolKey]) {
+          const eventPool = new ApexDefiEventPool(
+            this.dexKey,
+            this.network,
+            this.dexHelper,
+            this.dexHelper.config.data.wrappedNativeTokenAddress,
+            token,
+            token,
+            this.logger,
+          );
+
+          this.eventPools[poolKey] = eventPool;
+        }
+      });
+
+      this.logger.info(
+        `Initialized ${tokens.length} tokens for ApexDefi on network ${this.network}`,
+      );
+    } catch (error) {
+      this.logger.error('Error initializing ApexDefi pricing:', error);
+    }
   }
 
   // Legacy: was only used for V5
@@ -147,6 +235,9 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
     limitPools?: string[],
   ): Promise<null | ExchangePrices<ApexDefiData>> {
     // TODO: complete me!
+
+    // if the pool is not found, we need to fallback to rpc
+
     return null;
   }
 
@@ -169,13 +260,13 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
     side: SwapSide,
   ): AdapterExchangeParam {
     // TODO: complete me!
-    const { exchange } = data;
+    const { path } = data;
 
     // Encode here the payload for adapter
     const payload = '';
 
     return {
-      targetExchange: exchange,
+      targetExchange: ApexDefiConfig[this.dexKey][this.network].routerAddress,
       payload,
       networkFee: '0',
     };
@@ -187,7 +278,7 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
   // getTopPoolsForToken. It is optional for a DEX
   // to implement this
   async updatePoolState(): Promise<void> {
-    // TODO: complete me!
+    return Promise.resolve();
   }
 
   // Returns list of top pools based on liquidity. Max

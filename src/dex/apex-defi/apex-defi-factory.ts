@@ -10,8 +10,10 @@ export type FactoryState = Record<string, never>;
 
 export type OnPoolCreatedCallback = ({
   pairAddress,
+  blockNumber,
 }: {
   pairAddress: string;
+  blockNumber: number;
 }) => Promise<void>;
 
 /*
@@ -20,7 +22,7 @@ export type OnPoolCreatedCallback = ({
  */
 export class ApexDefiFactory extends StatefulEventSubscriber<FactoryState> {
   handlers: {
-    [event: string]: (event: any) => Promise<void>;
+    [event: string]: (event: any, log: Readonly<Log>) => Promise<void>;
   } = {};
 
   logDecoder: (log: Log) => any;
@@ -53,15 +55,15 @@ export class ApexDefiFactory extends StatefulEventSubscriber<FactoryState> {
   ): Promise<FactoryState> {
     const event = this.logDecoder(log);
     if (event.name in this.handlers) {
-      await this.handlers[event.name](event);
+      await this.handlers[event.name](event, log);
     }
 
     return {};
   }
 
-  async handleTokenCreated(event: LogDescription) {
+  async handleTokenCreated(event: LogDescription, log: Readonly<Log>) {
     const pairAddress = event.args.ammAddress.toLowerCase();
 
-    await this.onPoolCreated({ pairAddress });
+    await this.onPoolCreated({ pairAddress, blockNumber: log.blockNumber });
   }
 }
