@@ -41,6 +41,16 @@ describe('AavePtToUsdc', () => {
   describe('Mainnet', () => {
     let aavePtToUsdc: AavePtToUsdc;
     let blockNumber = 0; // Not used by this dex, but required by interfaces
+    const ptSusdeToken: Token = {
+      address: '0x3b3fb9c57858ef816833dc91565efcd85d96f634',
+      decimals: 18,
+      symbol: 'PT-sUSDe-31JUL2025',
+    };
+    const sUsdeToken: Token = {
+      address: '0x9D39A5DE30e57443BfF2A8307A4256c8797A3497', // sUSDe
+      decimals: 18,
+      symbol: 'sUSDe',
+    };
 
     beforeAll(() => {
       const network = Network.MAINNET;
@@ -56,27 +66,27 @@ describe('AavePtToUsdc', () => {
 
     it('getPoolIdentifiers and getPricesVolume SELL', async () => {
       const pools = await aavePtToUsdc.getPoolIdentifiers(
-        PT_SUSDE_TOKEN,
-        SUSDE_TOKEN,
+        ptSusdeToken,
+        sUsdeToken,
         SwapSide.SELL,
         blockNumber,
       );
       console.log(
-        `${PT_SUSDE_TOKEN.symbol} <> ${SUSDE_TOKEN.symbol} Pool Identifiers: `,
+        `${ptSusdeToken.symbol} <> ${sUsdeToken.symbol} Pool Identifiers: `,
         pools,
       );
       expect(pools.length).toBeGreaterThan(0);
 
       const poolPrices = await aavePtToUsdc.getPricesVolume(
-        PT_SUSDE_TOKEN,
-        SUSDE_TOKEN,
+        ptSusdeToken,
+        sUsdeToken,
         amounts,
         SwapSide.SELL,
         blockNumber,
         pools,
       );
       console.log(
-        `${PT_SUSDE_TOKEN.symbol} <> ${SUSDE_TOKEN.symbol} Pool Prices: `,
+        `${ptSusdeToken.symbol} <> ${sUsdeToken.symbol} Pool Prices: `,
         poolPrices,
       );
       expect(poolPrices).not.toBeNull();
@@ -85,34 +95,33 @@ describe('AavePtToUsdc', () => {
 
     it('getPoolIdentifiers and getPricesVolume BUY', async () => {
       const pools = await aavePtToUsdc.getPoolIdentifiers(
-        SUSDE_TOKEN,
-        PT_SUSDE_TOKEN,
+        sUsdeToken,
+        ptSusdeToken,
         SwapSide.BUY,
         blockNumber,
       );
       console.log(
-        `${SUSDE_TOKEN.symbol} <> ${PT_SUSDE_TOKEN.symbol} Pool Identifiers: `,
+        `${sUsdeToken.symbol} <> ${ptSusdeToken.symbol} Pool Identifiers: `,
         pools,
       );
       expect(pools.length).toBeGreaterThan(0);
 
       const poolPrices = await aavePtToUsdc.getPricesVolume(
-        SUSDE_TOKEN,
-        PT_SUSDE_TOKEN,
+        sUsdeToken,
+        ptSusdeToken,
         amounts,
         SwapSide.BUY,
         blockNumber,
         pools,
       );
       console.log(
-        `${SUSDE_TOKEN.symbol} <> ${PT_SUSDE_TOKEN.symbol} Pool Prices: `,
+        `${sUsdeToken.symbol} <> ${ptSusdeToken.symbol} Pool Prices: `,
         poolPrices,
       );
-      expect(poolPrices).not.toBeNull();
-      checkPoolPrices(poolPrices!, amounts, SwapSide.BUY, dexKey);
+      expect(poolPrices).toBeNull();
     });
 
-    it('getTopPoolsForToken', async function () {
+    it('getTopPoolsForToken', async () => {
       const rpcUrl = 'https://rpc.ankr.com/eth';
       const network = Network.MAINNET;
       const dexHelper = new DummyDexHelper(network, rpcUrl);
@@ -126,13 +135,13 @@ describe('AavePtToUsdc', () => {
         await newAavePtToUsdc.updatePoolState();
       }
       const poolLiquidity = await newAavePtToUsdc.getTopPoolsForToken(
-        PT_SUSDE_TOKEN.address,
+        ptSusdeToken.address,
         1,
       );
-      console.log(`${PT_SUSDE_TOKEN.symbol} Top Pools:`, poolLiquidity);
+      console.log(`${ptSusdeToken.symbol} Top Pools:`, poolLiquidity);
 
       if (!newAavePtToUsdc.hasConstantPriceLargeAmounts) {
-        checkPoolsLiquidity(poolLiquidity, PT_SUSDE_TOKEN.address, dexKey);
+        checkPoolsLiquidity(poolLiquidity, ptSusdeToken.address, dexKey);
       }
     });
   });
