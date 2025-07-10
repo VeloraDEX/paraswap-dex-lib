@@ -1,22 +1,37 @@
 import { Address } from '../../types';
 
-export type PoolState = {
-  // TODO: poolState is the state of event
-  // subscriber. This should be the minimum
-  // set of parameters required to compute
-  // pool prices. Complete me!
+// Pendle SDK related types
+export type PendleSDKMarket = {
+  address: string;
+  ptAddress: string;
+  ptDecimals: number;
+  ytAddress: string;
+  underlyingAssetAddress: string;
+  name: string;
+  expiry: number;
+  chainId: number;
 };
 
 export type AavePtToUsdcData = {
-  // TODO: AavePtToUsdcData is the dex data that is
-  // returned by the API that can be used for
-  // tx building. The data structure should be minimal.
-  // Complete me!
-  exchange: Address;
+  marketAddress: Address;
+  ptAddress: Address;
 };
 
-export type DexParams = {
-  // TODO: DexParams is set of parameters the can
-  // be used to initiate a DEX fork.
-  // Complete me!
-};
+export interface PendleToken {
+  address: string;
+  decimals: number;
+  name: string;
+  expiry: number;
+}
+
+export interface SupportedPt {
+  pt: PendleToken;
+  marketAddress: string;
+  underlyingAssetAddress: string;
+}
+
+export interface DexParams {
+  pendleRouterAddress: string;
+  oracleAddress: string;
+  supportedPts: SupportedPt[];
+}

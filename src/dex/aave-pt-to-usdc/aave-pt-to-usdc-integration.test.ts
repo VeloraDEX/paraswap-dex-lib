@@ -2,249 +2,137 @@
 import dotenv from 'dotenv';
 dotenv.config();
 
-import { Interface, Result } from '@ethersproject/abi';
-import { DummyDexHelper } from '../../dex-helper/index';
+import { getDexKeysWithNetwork } from '../../utils';
+import { checkPoolPrices, checkPoolsLiquidity } from '../../../tests/utils';
+import { GIFTER_ADDRESS, Tokens } from '../../../tests/constants-e2e';
+import { Token } from '../../types';
+import { IDexHelper } from '../../dex-helper/idex-helper';
+import { AavePtToUsdcData } from './types';
+
+import { DummyDexHelper } from '../../dex-helper/dummy-dex-helper';
 import { Network, SwapSide } from '../../constants';
 import { BI_POWS } from '../../bigint-constants';
 import { AavePtToUsdc } from './aave-pt-to-usdc';
-import {
-  checkPoolPrices,
-  checkPoolsLiquidity,
-  checkConstantPoolPrices,
-} from '../../../tests/utils';
-import { Tokens } from '../../../tests/constants-e2e';
+import { AavePtToUsdcConfig } from './config';
 
-/*
-  README
-  ======
+const dexKey = 'AavePtToUsdc';
 
-  This test script adds tests for AavePtToUsdc general integration
-  with the DEX interface. The test cases below are example tests.
-  It is recommended to add tests which cover AavePtToUsdc specific
-  logic.
+const PT_SUSDE_TOKEN: Token = {
+  address: '0x3b3fb9c57858ef816833dc91565efcd85d96f634',
+  decimals: 18,
+  symbol: 'PT-sUSDe-31JUL2025',
+};
 
-  You can run this individual test script by running:
-  `npx jest src/dex/<dex-name>/<dex-name>-integration.test.ts`
+const USDC_TOKEN: Token = {
+  address: '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
+  decimals: 6,
+  symbol: 'USDC',
+};
 
-  (This comment should be removed from the final implementation)
-*/
+const SUSDE_TOKEN: Token = {
+  address: '0x9D39A5DE30e57443BfF2A8307A4256c8797A3497',
+  decimals: 18,
+  symbol: 'sUSDe',
+};
 
-function getReaderCalldata(
-  exchangeAddress: string,
-  readerIface: Interface,
-  amounts: bigint[],
-  funcName: string,
-  // TODO: Put here additional arguments you need
-) {
-  return amounts.map(amount => ({
-    target: exchangeAddress,
-    callData: readerIface.encodeFunctionData(funcName, [
-      // TODO: Put here additional arguments to encode them
-      amount,
-    ]),
-  }));
-}
+const amounts = [0n, 10n * 10n ** 18n, 100n * 10n ** 18n];
 
-function decodeReaderResult(
-  results: Result,
-  readerIface: Interface,
-  funcName: string,
-) {
-  // TODO: Adapt this function for your needs
-  return results.map(result => {
-    const parsed = readerIface.decodeFunctionResult(funcName, result);
-    return BigInt(parsed[0]._hex);
-  });
-}
-
-async function checkOnChainPricing(
-  aavePtToUsdc: AavePtToUsdc,
-  funcName: string,
-  blockNumber: number,
-  prices: bigint[],
-  amounts: bigint[],
-) {
-  const exchangeAddress = ''; // TODO: Put here the real exchange address
-
-  // TODO: Replace dummy interface with the real one
-  // Normally you can get it from aavePtToUsdc.Iface or from eventPool.
-  // It depends on your implementation
-  const readerIface = new Interface('');
-
-  const readerCallData = getReaderCalldata(
-    exchangeAddress,
-    readerIface,
-    amounts.slice(1),
-    funcName,
-  );
-  const readerResult = (
-    await aavePtToUsdc.dexHelper.multiContract.methods
-      .aggregate(readerCallData)
-      .call({}, blockNumber)
-  ).returnData;
-
-  const expectedPrices = [0n].concat(
-    decodeReaderResult(readerResult, readerIface, funcName),
-  );
-
-  expect(prices).toEqual(expectedPrices);
-}
-
-async function testPricingOnNetwork(
-  aavePtToUsdc: AavePtToUsdc,
-  network: Network,
-  dexKey: string,
-  blockNumber: number,
-  srcTokenSymbol: string,
-  destTokenSymbol: string,
-  side: SwapSide,
-  amounts: bigint[],
-  funcNameToCheck: string,
-) {
-  const networkTokens = Tokens[network];
-
-  const pools = await aavePtToUsdc.getPoolIdentifiers(
-    networkTokens[srcTokenSymbol],
-    networkTokens[destTokenSymbol],
-    side,
-    blockNumber,
-  );
-  console.log(
-    `${srcTokenSymbol} <> ${destTokenSymbol} Pool Identifiers: `,
-    pools,
-  );
-
-  expect(pools.length).toBeGreaterThan(0);
-
-  const poolPrices = await aavePtToUsdc.getPricesVolume(
-    networkTokens[srcTokenSymbol],
-    networkTokens[destTokenSymbol],
-    amounts,
-    side,
-    blockNumber,
-    pools,
-  );
-  console.log(
-    `${srcTokenSymbol} <> ${destTokenSymbol} Pool Prices: `,
-    poolPrices,
-  );
-
-  expect(poolPrices).not.toBeNull();
-  if (aavePtToUsdc.hasConstantPriceLargeAmounts) {
-    checkConstantPoolPrices(poolPrices!, amounts, dexKey);
-  } else {
-    checkPoolPrices(poolPrices!, amounts, side, dexKey);
-  }
-
-  // Check if onchain pricing equals to calculated ones
-  await checkOnChainPricing(
-    aavePtToUsdc,
-    funcNameToCheck,
-    blockNumber,
-    poolPrices![0].prices,
-    amounts,
-  );
-}
-
-describe('AavePtToUsdc', function () {
-  const dexKey = 'AavePtToUsdc';
-  let blockNumber: number;
-  let aavePtToUsdc: AavePtToUsdc;
-
+describe('AavePtToUsdc', () => {
   describe('Mainnet', () => {
-    const network = Network.MAINNET;
-    const dexHelper = new DummyDexHelper(network);
+    let aavePtToUsdc: AavePtToUsdc;
+    let blockNumber = 0; // Not used by this dex, but required by interfaces
 
-    const tokens = Tokens[network];
-
-    // TODO: Put here token Symbol to check against
-    // Don't forget to update relevant tokens in constant-e2e.ts
-    const srcTokenSymbol = 'srcTokenSymbol';
-    const destTokenSymbol = 'destTokenSymbol';
-
-    const amountsForSell = [
-      0n,
-      1n * BI_POWS[tokens[srcTokenSymbol].decimals],
-      2n * BI_POWS[tokens[srcTokenSymbol].decimals],
-      3n * BI_POWS[tokens[srcTokenSymbol].decimals],
-      4n * BI_POWS[tokens[srcTokenSymbol].decimals],
-      5n * BI_POWS[tokens[srcTokenSymbol].decimals],
-      6n * BI_POWS[tokens[srcTokenSymbol].decimals],
-      7n * BI_POWS[tokens[srcTokenSymbol].decimals],
-      8n * BI_POWS[tokens[srcTokenSymbol].decimals],
-      9n * BI_POWS[tokens[srcTokenSymbol].decimals],
-      10n * BI_POWS[tokens[srcTokenSymbol].decimals],
-    ];
-
-    const amountsForBuy = [
-      0n,
-      1n * BI_POWS[tokens[destTokenSymbol].decimals],
-      2n * BI_POWS[tokens[destTokenSymbol].decimals],
-      3n * BI_POWS[tokens[destTokenSymbol].decimals],
-      4n * BI_POWS[tokens[destTokenSymbol].decimals],
-      5n * BI_POWS[tokens[destTokenSymbol].decimals],
-      6n * BI_POWS[tokens[destTokenSymbol].decimals],
-      7n * BI_POWS[tokens[destTokenSymbol].decimals],
-      8n * BI_POWS[tokens[destTokenSymbol].decimals],
-      9n * BI_POWS[tokens[destTokenSymbol].decimals],
-      10n * BI_POWS[tokens[destTokenSymbol].decimals],
-    ];
-
-    beforeAll(async () => {
-      blockNumber = await dexHelper.web3Provider.eth.getBlockNumber();
-      aavePtToUsdc = new AavePtToUsdc(network, dexKey, dexHelper);
-      if (aavePtToUsdc.initializePricing) {
-        await aavePtToUsdc.initializePricing(blockNumber);
-      }
+    beforeAll(() => {
+      const network = Network.MAINNET;
+      const rpcUrl = 'https://rpc.ankr.com/eth';
+      const dexHelper = new DummyDexHelper(network, rpcUrl);
+      (dexHelper.config as any).data = {
+        ...AavePtToUsdcConfig.AavePtToUsdc[network],
+        network,
+        augustusAddress: GIFTER_ADDRESS, // Dummy address
+      };
+      aavePtToUsdc = new AavePtToUsdc(dexHelper);
     });
 
-    it('getPoolIdentifiers and getPricesVolume SELL', async function () {
-      await testPricingOnNetwork(
-        aavePtToUsdc,
-        network,
-        dexKey,
-        blockNumber,
-        srcTokenSymbol,
-        destTokenSymbol,
+    it('getPoolIdentifiers and getPricesVolume SELL', async () => {
+      const pools = await aavePtToUsdc.getPoolIdentifiers(
+        PT_SUSDE_TOKEN,
+        SUSDE_TOKEN,
         SwapSide.SELL,
-        amountsForSell,
-        '', // TODO: Put here proper function name to check pricing
+        blockNumber,
       );
+      console.log(
+        `${PT_SUSDE_TOKEN.symbol} <> ${SUSDE_TOKEN.symbol} Pool Identifiers: `,
+        pools,
+      );
+      expect(pools.length).toBeGreaterThan(0);
+
+      const poolPrices = await aavePtToUsdc.getPricesVolume(
+        PT_SUSDE_TOKEN,
+        SUSDE_TOKEN,
+        amounts,
+        SwapSide.SELL,
+        blockNumber,
+        pools,
+      );
+      console.log(
+        `${PT_SUSDE_TOKEN.symbol} <> ${SUSDE_TOKEN.symbol} Pool Prices: `,
+        poolPrices,
+      );
+      expect(poolPrices).not.toBeNull();
+      checkPoolPrices(poolPrices!, amounts, SwapSide.SELL, dexKey);
     });
 
-    it('getPoolIdentifiers and getPricesVolume BUY', async function () {
-      await testPricingOnNetwork(
-        aavePtToUsdc,
-        network,
-        dexKey,
-        blockNumber,
-        srcTokenSymbol,
-        destTokenSymbol,
+    it('getPoolIdentifiers and getPricesVolume BUY', async () => {
+      const pools = await aavePtToUsdc.getPoolIdentifiers(
+        SUSDE_TOKEN,
+        PT_SUSDE_TOKEN,
         SwapSide.BUY,
-        amountsForBuy,
-        '', // TODO: Put here proper function name to check pricing
+        blockNumber,
       );
+      console.log(
+        `${SUSDE_TOKEN.symbol} <> ${PT_SUSDE_TOKEN.symbol} Pool Identifiers: `,
+        pools,
+      );
+      expect(pools.length).toBeGreaterThan(0);
+
+      const poolPrices = await aavePtToUsdc.getPricesVolume(
+        SUSDE_TOKEN,
+        PT_SUSDE_TOKEN,
+        amounts,
+        SwapSide.BUY,
+        blockNumber,
+        pools,
+      );
+      console.log(
+        `${SUSDE_TOKEN.symbol} <> ${PT_SUSDE_TOKEN.symbol} Pool Prices: `,
+        poolPrices,
+      );
+      expect(poolPrices).not.toBeNull();
+      checkPoolPrices(poolPrices!, amounts, SwapSide.BUY, dexKey);
     });
 
     it('getTopPoolsForToken', async function () {
-      // We have to check without calling initializePricing, because
-      // pool-tracker is not calling that function
-      const newAavePtToUsdc = new AavePtToUsdc(network, dexKey, dexHelper);
+      const rpcUrl = 'https://rpc.ankr.com/eth';
+      const network = Network.MAINNET;
+      const dexHelper = new DummyDexHelper(network, rpcUrl);
+      (dexHelper.config as any).data = {
+        ...AavePtToUsdcConfig.AavePtToUsdc[network],
+        network,
+        augustusAddress: GIFTER_ADDRESS, // Dummy address
+      };
+      const newAavePtToUsdc = new AavePtToUsdc(dexHelper);
       if (newAavePtToUsdc.updatePoolState) {
         await newAavePtToUsdc.updatePoolState();
       }
       const poolLiquidity = await newAavePtToUsdc.getTopPoolsForToken(
-        tokens[srcTokenSymbol].address,
-        10,
+        PT_SUSDE_TOKEN.address,
+        1,
       );
-      console.log(`${srcTokenSymbol} Top Pools:`, poolLiquidity);
+      console.log(`${PT_SUSDE_TOKEN.symbol} Top Pools:`, poolLiquidity);
 
       if (!newAavePtToUsdc.hasConstantPriceLargeAmounts) {
-        checkPoolsLiquidity(
-          poolLiquidity,
-          Tokens[network][srcTokenSymbol].address,
-          dexKey,
-        );
+        checkPoolsLiquidity(poolLiquidity, PT_SUSDE_TOKEN.address, dexKey);
       }
     });
   });
