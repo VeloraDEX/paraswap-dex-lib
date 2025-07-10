@@ -20,9 +20,12 @@ import { ApexDefiConfig } from './config';
 import { ApexDefiEventPool } from './apex-defi-pool';
 import { Interface } from '@ethersproject/abi';
 import ApexDefiRouterABI from '../../abi/apex-defi/ApexDefiRouter.abi.json';
+import { ApexDefiFactory, OnPoolCreatedCallback } from './apex-defi-factory';
 
 export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
   readonly eventPools: Record<string, ApexDefiEventPool | null> = {};
+
+  protected readonly factory: ApexDefiFactory;
 
   readonly routerIface: Interface;
 
@@ -47,6 +50,39 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
     super(dexHelper, dexKey);
     this.routerIface = new Interface(ApexDefiRouterABI);
     this.logger = dexHelper.getLogger(dexKey + '-' + network);
+
+    this.factory = this.getFactoryInstance();
+  }
+
+  protected getFactoryInstance(): ApexDefiFactory {
+    return new ApexDefiFactory(
+      this.dexHelper,
+      this.dexKey,
+      ApexDefiConfig[this.dexKey][this.network].factoryAddress,
+      this.logger,
+      this.onPoolCreated().bind(this),
+    );
+  }
+
+  protected onPoolCreated(): OnPoolCreatedCallback {
+    return async ({ pairAddress }) => {
+      const logPrefix = '[onPoolCreated]';
+      const poolKey = this.getPoolIdentifier(pairAddress);
+
+      this.logger.info(
+        `${logPrefix} add pool=${poolKey}; pairAddress=${pairAddress}`,
+      );
+
+      this.eventPools[poolKey] = new ApexDefiEventPool(
+        this.dexKey,
+        this.network,
+        this.dexHelper,
+        this.dexHelper.config.data.wrappedNativeTokenAddress,
+        pairAddress,
+        pairAddress,
+        this.logger,
+      );
+    };
   }
 
   // Initialize pricing is called once in the start of
@@ -78,12 +114,12 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
       return [];
     }
 
-    return [this.getPoolIdentifier(srcToken, destToken).toLowerCase()];
-  }
-
-  protected getPoolIdentifier(srcToken: Token, destToken: Token): string {
     const pairAddress = this.getPoolAddress(srcToken, destToken);
 
+    return [this.getPoolIdentifier(pairAddress).toLowerCase()];
+  }
+
+  protected getPoolIdentifier(pairAddress: string): string {
     return `${this.dexKey}_${pairAddress}`.toLowerCase();
   }
 

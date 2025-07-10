@@ -16,7 +16,6 @@ export type ApexDefiData = {
 };
 
 export type DexParams = {
-  // TODO: DexParams is set of parameters the can
-  // be used to initiate a DEX fork.
-  // Complete me!
+  factoryAddress: Address;
+  routerAddress: Address;
 };
