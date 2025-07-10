@@ -1221,17 +1221,12 @@ export class UniswapV3
 
     const _tokenAddress = tokenAddress.toLowerCase();
 
-    let liquidityField = 'totalValueLockedUSD';
-
-    if (this.dexKey === 'AlienBaseV3') {
-      liquidityField = 'liquidity';
-    }
+    const liquidityField = this.config.liquidityField ?? 'totalValueLockedUSD';
 
     const res = await this._querySubgraph(
       `query ($token: Bytes!, $count: Int) {
                 pools0: pools(first: $count, orderBy: ${liquidityField}, orderDirection: desc, where: {token0: $token}) {
                 id
-                feeTier
                 token0 {
                   id
                   decimals
@@ -1244,7 +1239,6 @@ export class UniswapV3
               }
               pools1: pools(first: $count, orderBy: ${liquidityField}, orderDirection: desc, where: {token1: $token}) {
                 id
-                feeTier
                 token0 {
                   id
                   decimals
@@ -1272,12 +1266,6 @@ export class UniswapV3
     const pools0: PoolLiquidity[] = _.map(res.pools0, pool => ({
       exchange: this.dexKey,
       address: pool.id.toLowerCase(),
-      poolIdentifier: this.getPoolIdentifier(
-        pool.token0.id,
-        pool.token1.id,
-        pool.feeTier,
-        // TODO-ap: add tickSpacing for Velodrome/Aerodrome dexs
-      ),
       connectorTokens: [
         {
           address: pool.token1.id.toLowerCase(),
@@ -1290,12 +1278,6 @@ export class UniswapV3
     const pools1: PoolLiquidity[] = _.map(res.pools1, pool => ({
       exchange: this.dexKey,
       address: pool.id.toLowerCase(),
-      poolIdentifier: this.getPoolIdentifier(
-        pool.token0.id,
-        pool.token1.id,
-        pool.feeTier,
-        // TODO-ap: add tickSpacing for Velodrome/Aerodrome dexs
-      ),
       connectorTokens: [
         {
           address: pool.token0.id.toLowerCase(),

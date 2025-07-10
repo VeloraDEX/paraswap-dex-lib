@@ -1292,7 +1292,7 @@ describe('UniswapV3 E2E', () => {
       });
     });
 
-    describe.only('VelodromeSlipstream', () => {
+    describe('VelodromeSlipstream', () => {
       const dexKey = 'VelodromeSlipstream';
 
       describe('Unichain', () => {

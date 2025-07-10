@@ -371,6 +371,7 @@ export const UniswapV3Config: DexConfigMap<DexParams> = {
       initRetryFrequency: 10,
       initHash: `0xe34f199b19b2b4f47f68442619d555527d244f78a3297ea89325f843f87b8b54`,
       subgraphURL: '6Cz9KkQ7mj4B3DCKorR4W9y72ice2wCTD2qU68tAhJnp',
+      liquidityField: 'liquidity',
     },
   },
   OkuTradeV3: {
@@ -438,6 +439,8 @@ export const UniswapV3Config: DexConfigMap<DexParams> = {
       chunksCount: 10,
       initRetryFrequency: 10,
       initHash: '0x321f7dfb9b2ea9131b8c17691cf6e01e5c149ca8', // pool implementation address from factory contract is used instead of initHash here
+      subgraphURL: '3xqRjKD8dQhWnennAswpff5AFcYYXudFA4UWch4AB2Hb',
+      liquidityField: 'liquidity',
     },
   },
   AerodromeSlipstream: {

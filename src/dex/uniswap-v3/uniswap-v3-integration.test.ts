@@ -2728,7 +2728,7 @@ describe('Slipstream', () => {
         );
         console.log(`${TokenASymbol} Top Pools:`, poolLiquidity);
 
-        expect(poolLiquidity).toEqual([]); // no subgraph
+        checkPoolsLiquidity(poolLiquidity, TokenB.address, dexKey);
       });
     });
   });
