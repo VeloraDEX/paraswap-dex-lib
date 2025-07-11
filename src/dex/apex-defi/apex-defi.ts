@@ -20,6 +20,8 @@ import { ApexDefiConfig } from './config';
 import { ApexDefiEventPool } from './apex-defi-pool';
 import { Interface } from '@ethersproject/abi';
 import ApexDefiRouterABI from '../../abi/apex-defi/ApexDefiRouter.abi.json';
+import ApexDefiTokenABI from '../../abi/apex-defi/ApexDefiToken.abi.json';
+import ApexDefiFactoryABI from '../../abi/apex-defi/ApexDefiFactory.abi.json';
 import ERC20ABI from '../../abi/erc20.json';
 import { ApexDefiFactory, OnPoolCreatedCallback } from './apex-defi-factory';
 
@@ -31,6 +33,8 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
 
   readonly routerIface: Interface;
   readonly erc20Iface: Interface;
+  readonly tokenIface: Interface;
+  readonly factoryIface: Interface;
 
   feeFactor = 10000;
 
@@ -53,6 +57,8 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
     super(dexHelper, dexKey);
     this.routerIface = new Interface(ApexDefiRouterABI);
     this.erc20Iface = new Interface(ERC20ABI);
+    this.tokenIface = new Interface(ApexDefiTokenABI);
+    this.factoryIface = new Interface(ApexDefiFactoryABI);
     this.logger = dexHelper.getLogger(dexKey + '-' + network);
 
     this.factory = this.getFactoryInstance();
@@ -115,13 +121,13 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
       const tokenAddresses = await this.dexHelper.multiContract.methods
         .aggregate([
           {
-            target: ApexDefiConfig[this.dexKey][this.network].routerAddress,
-            callData: this.routerIface.encodeFunctionData('getAllTokens', []),
+            target: ApexDefiConfig[this.dexKey][this.network].factoryAddress,
+            callData: this.factoryIface.encodeFunctionData('getAllTokens', []),
           },
         ])
         .call({}, blockNumber);
 
-      const tokens = this.routerIface.decodeFunctionResult(
+      const tokens = this.factoryIface.decodeFunctionResult(
         'getAllTokens',
         tokenAddresses.returnData[0],
       )[0] as Address[];
@@ -131,25 +137,76 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
         return;
       }
 
-      // Get decimals for all tokens using multicall
+      // Get decimals, reserves, trading fee rate, and base swap rate for all tokens using multicall
       const decimalsCallData = this.erc20Iface.encodeFunctionData('decimals');
-      const tokenDecimalsMultiCall = tokens.map(token => ({
-        target: token,
-        callData: decimalsCallData,
-      }));
+      const reservesCallData = this.tokenIface.encodeFunctionData(
+        'getReserves',
+        [],
+      );
+      const tradingFeeRateCallData =
+        this.tokenIface.encodeFunctionData('tradingFeeRate');
 
-      const decimalsResult = await this.dexHelper.multiContract.methods
-        .aggregate(tokenDecimalsMultiCall)
+      const tokenMultiCall = tokens.flatMap(token => [
+        {
+          target: token,
+          callData: decimalsCallData,
+        },
+        {
+          target: token, // The pool address is the same as the token address for ApexDefi
+          callData: reservesCallData,
+        },
+        {
+          target: token,
+          callData: tradingFeeRateCallData,
+        },
+        {
+          target: ApexDefiConfig[this.dexKey][this.network].factoryAddress,
+          callData: this.factory.factoryIface.encodeFunctionData(
+            'getBaseSwapRate',
+            [token],
+          ),
+        },
+      ]);
+
+      const result = await this.dexHelper.multiContract.methods
+        .aggregate(tokenMultiCall)
         .call({}, blockNumber);
 
-      // Create Token objects and add to supportedTokensMap
-      const tokenDecimals = decimalsResult.returnData.map((r: any) =>
-        parseInt(
-          this.erc20Iface.decodeFunctionResult('decimals', r)[0].toString(),
-        ),
-      );
+      // Process results - each token has 4 calls (decimals + reserves + tradingFeeRate + baseSwapRate)
+      const tokenDecimals: number[] = [];
+      const tokenReserves: { amountNative: bigint; amountToken: bigint }[] = [];
+      const tokenTradingFeeRates: bigint[] = [];
+      const tokenBaseSwapRates: bigint[] = [];
 
-      tokens.forEach((token, i) => {
+      for (let i = 0; i < result.returnData.length; i += 4) {
+        const decimals = parseInt(
+          this.erc20Iface
+            .decodeFunctionResult('decimals', result.returnData[i])[0]
+            .toString(),
+        );
+        const reserves = this.tokenIface.decodeFunctionResult(
+          'getReserves',
+          result.returnData[i + 1],
+        );
+        const tradingFeeRate = this.tokenIface.decodeFunctionResult(
+          'tradingFeeRate',
+          result.returnData[i + 2],
+        )[0];
+        const baseSwapRate = this.factory.factoryIface.decodeFunctionResult(
+          'getBaseSwapRate',
+          result.returnData[i + 3],
+        )[0];
+
+        tokenDecimals.push(decimals);
+        tokenReserves.push({
+          amountNative: reserves[0],
+          amountToken: reserves[1],
+        });
+        tokenTradingFeeRates.push(tradingFeeRate);
+        tokenBaseSwapRates.push(baseSwapRate);
+      }
+
+      tokens.forEach(async (token, i) => {
         const tokenObj: Token = {
           address: token.toLowerCase(),
           decimals: tokenDecimals[i],
@@ -170,6 +227,14 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
           );
 
           this.eventPools[poolKey] = eventPool;
+          await eventPool.initialize(blockNumber, {
+            state: {
+              reserve0: tokenReserves[i].amountNative,
+              reserve1: tokenReserves[i].amountToken,
+              fee: Number(tokenBaseSwapRates[i]),
+              tradingFee: Number(tokenTradingFeeRates[i]),
+            },
+          });
         }
       });
 

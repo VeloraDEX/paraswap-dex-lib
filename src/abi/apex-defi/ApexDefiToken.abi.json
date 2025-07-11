@@ -1,5 +1,18 @@
 [
   {
+    "inputs": [],
+    "name": "tradingFeeRate",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
     "anonymous": false,
     "inputs": [
       {
@@ -41,5 +54,23 @@
     ],
     "name": "Swap",
     "type": "event"
+  },
+  {
+    "inputs": [],
+    "name": "getReserves",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "amountNative",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "amountToken",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
   }
 ]

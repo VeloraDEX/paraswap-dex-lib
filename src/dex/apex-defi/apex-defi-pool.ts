@@ -5,7 +5,7 @@ import { catchParseLogError } from '../../utils';
 import { StatefulEventSubscriber } from '../../stateful-event-subscriber';
 import { IDexHelper } from '../../dex-helper/idex-helper';
 import { PoolState } from './types';
-import ApexDefiPoolABI from '../../abi/apex-defi/ApexDefiPool.abi.json';
+import ApexDefiTokenABI from '../../abi/apex-defi/ApexDefiToken.abi.json';
 
 export class ApexDefiEventPool extends StatefulEventSubscriber<PoolState> {
   handlers: {
@@ -34,14 +34,14 @@ export class ApexDefiEventPool extends StatefulEventSubscriber<PoolState> {
     token1: Address,
     poolAddress: Address,
     logger: Logger,
-    protected apexDefiIface = new Interface(ApexDefiPoolABI),
+    protected apexDefiTokenIface = new Interface(ApexDefiTokenABI),
   ) {
     super(parentName, poolAddress, dexHelper, logger);
 
     this.token0 = token0.toLowerCase();
     this.token1 = token1.toLowerCase();
     this._poolAddress = poolAddress.toLowerCase();
-    this.logDecoder = (log: Log) => this.apexDefiIface.parseLog(log);
+    this.logDecoder = (log: Log) => this.apexDefiTokenIface.parseLog(log);
     this.addressesSubscribed = new Array<Address>(1).fill(poolAddress);
 
     // Add handlers

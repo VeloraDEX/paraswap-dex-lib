@@ -17,4 +17,5 @@ export type ApexDefiData = {
 export type DexParams = {
   factoryAddress: Address;
   routerAddress: Address;
+  wrapperFactoryAddress: Address;
 };
