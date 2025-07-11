@@ -7,7 +7,7 @@ import {
 import { MAX_SQRT_RATIO, MIN_SQRT_RATIO } from './tick';
 
 describe(isPriceIncreasing, () => {
-  it('many cases', () => {
+  test('many cases', () => {
     expect(isPriceIncreasing(0n, false)).toBe(false);
     expect(isPriceIncreasing(1n, false)).toBe(false);
     expect(isPriceIncreasing(-1n, false)).toBe(true);
@@ -35,7 +35,7 @@ describe(computeFee, () => {
 });
 
 describe(computeStep, () => {
-  it('zero_amount_token0', () => {
+  test('zero_amount_token0', () => {
     expect(
       computeStep({
         sqrtRatio: 0x100000000000000000000000000000000n,
@@ -54,7 +54,7 @@ describe(computeStep, () => {
 }
 `);
   });
-  it('zero_amount_token1', () => {
+  test('zero_amount_token1', () => {
     expect(
       computeStep({
         sqrtRatio: 0x100000000000000000000000000000000n,
@@ -73,7 +73,7 @@ describe(computeStep, () => {
 }
 `);
   });
-  it('swap_ratio_equal_limit_token1', () => {
+  test('swap_ratio_equal_limit_token1', () => {
     expect(
       computeStep({
         sqrtRatio: 0x100000000000000000000000000000000n,
@@ -93,7 +93,7 @@ describe(computeStep, () => {
 `);
   });
 
-  it('max limit token0 input', () => {
+  test('max limit token0 input', () => {
     expect(
       computeStep({
         sqrtRatio: 0x100000000000000000000000000000000n,
@@ -113,7 +113,7 @@ describe(computeStep, () => {
 `);
   });
 
-  it('max limit token1 input', () => {
+  test('max limit token1 input', () => {
     expect(
       computeStep({
         sqrtRatio: 0x100000000000000000000000000000000n,
@@ -133,7 +133,7 @@ describe(computeStep, () => {
 `);
   });
 
-  it('max limit token0 output', () => {
+  test('max limit token0 output', () => {
     expect(
       computeStep({
         sqrtRatio: 0x100000000000000000000000000000000n,
@@ -153,7 +153,7 @@ describe(computeStep, () => {
 `);
   });
 
-  it('max limit token1 output', () => {
+  test('max limit token1 output', () => {
     expect(
       computeStep({
         sqrtRatio: 0x100000000000000000000000000000000n,
@@ -173,7 +173,7 @@ describe(computeStep, () => {
 `);
   });
 
-  it('limited token0 output', () => {
+  test('limited token0 output', () => {
     expect(
       computeStep({
         sqrtRatio: 0x100000000000000000000000000000000n,
@@ -193,7 +193,7 @@ describe(computeStep, () => {
 `);
   });
 
-  it('limited token1 output', () => {
+  test('limited token1 output', () => {
     expect(
       computeStep({
         sqrtRatio: 0x100000000000000000000000000000000n,
