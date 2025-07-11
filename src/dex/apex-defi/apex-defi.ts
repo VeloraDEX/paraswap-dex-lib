@@ -11,7 +11,7 @@ import {
 } from '../../types';
 import { SwapSide, Network } from '../../constants';
 import * as CALLDATA_GAS_COST from '../../calldata-gas-cost';
-import { getDexKeysWithNetwork } from '../../utils';
+import { getBigIntPow, getDexKeysWithNetwork } from '../../utils';
 import { IDex } from '../../dex/idex';
 import { IDexHelper } from '../../dex-helper/idex-helper';
 import { ApexDefiData } from './types';
@@ -83,6 +83,39 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
         `${logPrefix} add pool=${poolKey}; pairAddress=${pairAddress}`,
       );
 
+      // Get the actual reserves and fees for the new pool
+      const poolData = await this.dexHelper.multiContract.methods
+        .aggregate([
+          {
+            target: pairAddress,
+            callData: this.tokenIface.encodeFunctionData('getReserves', []),
+          },
+          {
+            target: pairAddress,
+            callData: this.tokenIface.encodeFunctionData('tradingFeeRate'),
+          },
+          {
+            target: ApexDefiConfig[this.dexKey][this.network].factoryAddress,
+            callData: this.factoryIface.encodeFunctionData('getBaseSwapRate', [
+              pairAddress,
+            ]),
+          },
+        ])
+        .call({}, blockNumber);
+
+      const reserves = this.tokenIface.decodeFunctionResult(
+        'getReserves',
+        poolData.returnData[0],
+      );
+      const tradingFeeRate = this.tokenIface.decodeFunctionResult(
+        'tradingFeeRate',
+        poolData.returnData[1],
+      )[0];
+      const baseSwapRate = this.factoryIface.decodeFunctionResult(
+        'getBaseSwapRate',
+        poolData.returnData[2],
+      )[0];
+
       const eventPool = new ApexDefiEventPool(
         this.dexKey,
         this.network,
@@ -91,15 +124,15 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
         pairAddress,
         pairAddress,
         this.logger,
+        ApexDefiConfig[this.dexKey][this.network].factoryAddress,
       );
 
-      // TODO: complete me!
       await eventPool.initialize(blockNumber, {
         state: {
-          reserve0: 0n,
-          reserve1: 0n,
-          fee: 0,
-          tradingFee: 0,
+          reserve0: reserves[0],
+          reserve1: reserves[1],
+          fee: Number(baseSwapRate),
+          tradingFee: Number(tradingFeeRate),
         },
       });
 
@@ -224,6 +257,7 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
             token,
             token,
             this.logger,
+            ApexDefiConfig[this.dexKey][this.network].factoryAddress,
           );
 
           this.eventPools[poolKey] = eventPool;
@@ -299,11 +333,56 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
     blockNumber: number,
     limitPools?: string[],
   ): Promise<null | ExchangePrices<ApexDefiData>> {
-    // TODO: complete me!
+    try {
+      const [_srcAddress, _destAddress] = this._getLoweredAddresses(
+        srcToken,
+        destToken,
+      );
 
-    // if the pool is not found, we need to fallback to rpc
+      if (_srcAddress === _destAddress) return null;
 
-    return null;
+      const poolIdentifier = await this.getPoolIdentifiers(
+        srcToken,
+        destToken,
+        side,
+        blockNumber,
+      );
+
+      if (limitPools && limitPools.every(p => p !== poolIdentifier[0])) {
+        return null;
+      }
+
+      // I think the flow of this section needs to be refactored
+      // Need to add pool if it is not found
+      // Otherwise we need to get the state from the pool
+      // If state is not found, we need to generate it
+      const pool = this.eventPools[poolIdentifier[0]];
+
+      if (!pool) {
+        return null;
+      }
+
+      let state = await pool.getStateOrGenerate(blockNumber);
+
+      if (!state) {
+        return null;
+      }
+
+      const unitAmount = getBigIntPow(
+        side === SwapSide.SELL ? srcToken.decimals : destToken.decimals,
+      );
+
+      return null;
+    } catch (e) {
+      // if the pool is not found, we need to fallback to rpc
+      this.logger.error(
+        `Error_getPricesVolume ${srcToken.symbol || srcToken.address}, ${
+          destToken.symbol || destToken.address
+        }, ${side}:`,
+        e,
+      );
+      return null;
+    }
   }
 
   // Returns estimated gas cost of calldata for this DEX in multiSwap
@@ -360,5 +439,9 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
   // you need to release for graceful shutdown. For example, it may be any interval timer
   releaseResources(): AsyncOrSync<void> {
     // TODO: complete me!
+  }
+
+  protected _getLoweredAddresses(srcToken: Token, destToken: Token) {
+    return [srcToken.address.toLowerCase(), destToken.address.toLowerCase()];
   }
 }

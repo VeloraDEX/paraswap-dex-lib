@@ -977,6 +977,10 @@ export const Tokens: {
       address: '0x5947bb275c521040051d82396192181b413227a3',
       decimals: 18,
     },
+    APEX: {
+      address: '0x98B172A09102869adD73116FC92A0A60BFF4778F',
+      decimals: 18,
+    },
     PHAR: {
       address: '0xAAAB9D12A30504559b0C5a9A5977fEE4A6081c6b',
       decimals: 18,
@@ -996,6 +1000,10 @@ export const Tokens: {
     USDT: {
       address: '0x9702230A8Ea53601f5cD2dc00fDBc13d4dF4A8c7',
       decimals: 6,
+    },
+    BENSI: {
+      address: '0x00697F5F6dc2CA0A17e6c89bCcd1173A61eA24a6',
+      decimals: 18,
     },
     POPS: {
       address: '0x240248628B7B6850352764C5dFa50D1592A033A8',
@@ -2050,6 +2058,7 @@ export const Holders: {
     YUSD: '0x86D0c0e4B8CC5409144f66E6E76b904bb9ce9cDb',
     BTCb: '0x2446bEb3905CfFbd2c5eB18F1f9c2996B05257c4',
     AMPL: '0xfcaA5ea7F8eb0631BcA72C345025C0A5a6D93f0E',
+    APEX: '0x98B172A09102869adD73116FC92A0A60BFF4778F',
     PHAR: '0x654296D56532f62B7d91d335791d3c364a9385b5',
     stataUSDT: '', // no holders yet
     aaveUSDT: '0xB2d3ad6e99D2A043EF77e3812461Ad2D4Ae3da8B',

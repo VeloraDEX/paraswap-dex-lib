@@ -13,6 +13,7 @@ import {
   checkConstantPoolPrices,
 } from '../../../tests/utils';
 import { Tokens } from '../../../tests/constants-e2e';
+import { Address } from '@paraswap/core';
 
 /*
   README
@@ -34,13 +35,14 @@ function getReaderCalldata(
   readerIface: Interface,
   amounts: bigint[],
   funcName: string,
-  // TODO: Put here additional arguments you need
+  tokenIn: Address,
+  tokenOut: Address,
 ) {
   return amounts.map(amount => ({
     target: exchangeAddress,
     callData: readerIface.encodeFunctionData(funcName, [
-      // TODO: Put here additional arguments to encode them
-      amount,
+      amount, // amountIn
+      [tokenIn, tokenOut], // path array
     ]),
   }));
 }
@@ -50,10 +52,12 @@ function decodeReaderResult(
   readerIface: Interface,
   funcName: string,
 ) {
-  // TODO: Adapt this function for your needs
   return results.map(result => {
     const parsed = readerIface.decodeFunctionResult(funcName, result);
-    return BigInt(parsed[0]._hex);
+    // getAmountsOut returns uint256[] memory amounts
+    // We want the last amount (amountOut) from the path
+    const amounts = parsed[0] as bigint[];
+    return amounts[amounts.length - 1]; // Return the output amount
   });
 }
 
@@ -63,19 +67,20 @@ async function checkOnChainPricing(
   blockNumber: number,
   prices: bigint[],
   amounts: bigint[],
+  tokenIn: Address,
+  tokenOut: Address,
 ) {
-  const exchangeAddress = ''; // TODO: Put here the real exchange address
+  const exchangeAddress = '0x5d2dDA02280F55A9D4529eadFA45Ff032928082B';
 
-  // TODO: Replace dummy interface with the real one
-  // Normally you can get it from apexDefi.Iface or from eventPool.
-  // It depends on your implementation
-  const readerIface = new Interface('');
+  const readerIface = apexDefi.routerIface;
 
   const readerCallData = getReaderCalldata(
     exchangeAddress,
     readerIface,
     amounts.slice(1),
     funcName,
+    tokenIn,
+    tokenOut,
   );
   const readerResult = (
     await apexDefi.dexHelper.multiContract.methods
@@ -143,6 +148,8 @@ async function testPricingOnNetwork(
     blockNumber,
     poolPrices![0].prices,
     amounts,
+    networkTokens[srcTokenSymbol].address,
+    networkTokens[destTokenSymbol].address,
   );
 }
 
@@ -152,15 +159,13 @@ describe('ApexDefi', function () {
   let apexDefi: ApexDefi;
 
   describe('Mainnet', () => {
-    const network = Network.MAINNET;
+    const network = Network.AVALANCHE;
     const dexHelper = new DummyDexHelper(network);
 
     const tokens = Tokens[network];
 
-    // TODO: Put here token Symbol to check against
-    // Don't forget to update relevant tokens in constant-e2e.ts
-    const srcTokenSymbol = 'srcTokenSymbol';
-    const destTokenSymbol = 'destTokenSymbol';
+    const srcTokenSymbol = 'AVAX';
+    const destTokenSymbol = 'APEX';
 
     const amountsForSell = [
       0n,
@@ -208,7 +213,7 @@ describe('ApexDefi', function () {
         destTokenSymbol,
         SwapSide.SELL,
         amountsForSell,
-        '', // TODO: Put here proper function name to check pricing
+        'getAmountsOut',
       );
     });
 
@@ -222,7 +227,7 @@ describe('ApexDefi', function () {
         destTokenSymbol,
         SwapSide.BUY,
         amountsForBuy,
-        '', // TODO: Put here proper function name to check pricing
+        'getAmountsIn',
       );
     });
 

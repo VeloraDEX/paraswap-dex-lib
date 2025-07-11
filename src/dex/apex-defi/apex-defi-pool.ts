@@ -6,6 +6,7 @@ import { StatefulEventSubscriber } from '../../stateful-event-subscriber';
 import { IDexHelper } from '../../dex-helper/idex-helper';
 import { PoolState } from './types';
 import ApexDefiTokenABI from '../../abi/apex-defi/ApexDefiToken.abi.json';
+import ApexDefiFactoryABI from '../../abi/apex-defi/ApexDefiFactory.abi.json';
 
 export class ApexDefiEventPool extends StatefulEventSubscriber<PoolState> {
   handlers: {
@@ -34,6 +35,8 @@ export class ApexDefiEventPool extends StatefulEventSubscriber<PoolState> {
     token1: Address,
     poolAddress: Address,
     logger: Logger,
+    protected apexDefiFactoryAddress: Address,
+    protected apexDefiFactoryIface = new Interface(ApexDefiFactoryABI),
     protected apexDefiTokenIface = new Interface(ApexDefiTokenABI),
   ) {
     super(parentName, poolAddress, dexHelper, logger);
@@ -93,6 +96,14 @@ export class ApexDefiEventPool extends StatefulEventSubscriber<PoolState> {
     return null;
   }
 
+  async getStateOrGenerate(blockNumber: number): Promise<Readonly<PoolState>> {
+    const evenState = this.getState(blockNumber);
+    if (evenState) return evenState;
+    const onChainState = await this.generateState(blockNumber);
+    this.setState(onChainState, blockNumber);
+    return onChainState;
+  }
+
   /**
    * The function generates state using on-chain calls. This
    * function is called to regenerate state if the event based
@@ -103,12 +114,49 @@ export class ApexDefiEventPool extends StatefulEventSubscriber<PoolState> {
    * @returns state of the event subscriber at blocknumber
    */
   async generateState(blockNumber: number): Promise<DeepReadonly<PoolState>> {
-    // TODO: complete me!
+    // Get reserves, trading fee rate, and base swap rate for the pool
+    const poolData = await this.dexHelper.multiContract.methods
+      .aggregate([
+        {
+          target: this.poolAddress,
+          callData: this.apexDefiTokenIface.encodeFunctionData(
+            'getReserves',
+            [],
+          ),
+        },
+        {
+          target: this.poolAddress,
+          callData:
+            this.apexDefiTokenIface.encodeFunctionData('tradingFeeRate'),
+        },
+        {
+          target: this.apexDefiFactoryAddress,
+          callData: this.apexDefiFactoryIface.encodeFunctionData(
+            'getBaseSwapRate',
+            [this.poolAddress],
+          ),
+        },
+      ])
+      .call({}, blockNumber);
+
+    const reserves = this.apexDefiTokenIface.decodeFunctionResult(
+      'getReserves',
+      poolData.returnData[0],
+    );
+    const tradingFeeRate = this.apexDefiTokenIface.decodeFunctionResult(
+      'tradingFeeRate',
+      poolData.returnData[1],
+    )[0];
+    const baseSwapRate = this.apexDefiFactoryIface.decodeFunctionResult(
+      'getBaseSwapRate',
+      poolData.returnData[2],
+    )[0];
+
     return {
-      fee: 0,
-      tradingFee: 0,
-      reserve0: 0n,
-      reserve1: 0n,
+      fee: Number(baseSwapRate),
+      tradingFee: Number(tradingFeeRate),
+      reserve0: reserves[0],
+      reserve1: reserves[1],
     };
   }
 

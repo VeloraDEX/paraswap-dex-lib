@@ -127,16 +127,16 @@ function testForNetwork(
 describe('ApexDefi E2E', () => {
   const dexKey = 'ApexDefi';
 
-  describe('Mainnet', () => {
+  describe('Avalanche', () => {
     const network = Network.AVALANCHE;
 
     // TODO: Modify the tokenASymbol, tokenBSymbol, tokenAAmount;
-    const tokenASymbol: string = 'tokenASymbol';
-    const tokenBSymbol: string = 'tokenBSymbol';
+    const tokenASymbol: string = 'BENSI';
+    const tokenBSymbol: string = 'APEX';
 
-    const tokenAAmount: string = 'tokenAAmount';
-    const tokenBAmount: string = 'tokenBAmount';
-    const nativeTokenAmount = '1000000000000000000';
+    const tokenAAmount: string = '100000000000000000000'; // 100 BENSI
+    const tokenBAmount: string = '100000000000000000000'; // 100 APEX
+    const nativeTokenAmount = '1000000000000000000'; // 1 AVAX
 
     testForNetwork(
       network,
