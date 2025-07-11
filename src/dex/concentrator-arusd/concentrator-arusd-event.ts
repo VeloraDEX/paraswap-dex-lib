@@ -1,4 +1,3 @@
-import _ from 'lodash';
 import { Interface } from '@ethersproject/abi';
 import { IDexHelper } from '../../dex-helper';
 import { StatefulEventSubscriber } from '../../stateful-event-subscriber';
@@ -27,24 +26,27 @@ export class ConcentratorArusdEvent extends StatefulEventSubscriber<Concentrator
     log: Readonly<Log>,
   ): AsyncOrSync<DeepReadonly<ConcentratorArusdState> | null> {
     const event = this.decoder(log);
-    const _state: ConcentratorArusdState = _.cloneDeep(state);
+
     if (event.name === 'Deposit') {
-      _state.totalSupply = (
-        BigInt(_state.totalSupply) + BigInt(event.args.amountSyOut)
-      ).toString();
-      _state.totalAssets = (
-        BigInt(_state.totalAssets) + BigInt(event.args.amountDeposited)
-      ).toString();
-      return _state;
+      return {
+        totalSupply: (
+          BigInt(state.totalSupply) + BigInt(event.args.amountSyOut)
+        ).toString(),
+        totalAssets: (
+          BigInt(state.totalAssets) + BigInt(event.args.amountDeposited)
+        ).toString(),
+      };
     } else if (event.name === 'Redeem') {
-      _state.totalSupply = (
-        BigInt(_state.totalSupply) - BigInt(event.args.amountSyToRedeem)
-      ).toString();
-      _state.totalAssets = (
-        BigInt(_state.totalAssets) - BigInt(event.args.amountTokenOut)
-      ).toString();
-      return _state;
+      return {
+        totalSupply: (
+          BigInt(state.totalSupply) - BigInt(event.args.amountSyToRedeem)
+        ).toString(),
+        totalAssets: (
+          BigInt(state.totalAssets) - BigInt(event.args.amountTokenOut)
+        ).toString(),
+      };
     }
+
     return null;
   }
 

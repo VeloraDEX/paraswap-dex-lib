@@ -1,4 +1,3 @@
-import _ from 'lodash';
 import { Interface } from '@ethersproject/abi';
 import { DeepReadonly } from 'ts-essentials';
 import { PartialEventSubscriber } from '../../composed-event-subscriber';
@@ -37,17 +36,20 @@ export class USDQ<State> extends PartialEventSubscriber<State, USDQState> {
   ): DeepReadonly<USDQState> | null {
     try {
       const parsed = USDQ.interface.parseLog(log);
-      const _state: USDQState = _.cloneDeep(state);
+
       switch (parsed.name) {
         case 'Transfer': {
           const fromAddress = parsed.args.src;
           const toAddress = parsed.args.dst;
+          const amount = parsed.args.wad.toBigInt();
+
           if (fromAddress === NULL_ADDRESS) {
-            _state.totalSupply += BigInt(parsed.args.wad.toString());
+            return { totalSupply: state.totalSupply + amount };
           } else if (toAddress === NULL_ADDRESS) {
-            _state.totalSupply -= BigInt(parsed.args.wad.toString());
+            return { totalSupply: state.totalSupply - amount };
           }
-          return _state;
+
+          return null;
         }
         default:
           return null;
