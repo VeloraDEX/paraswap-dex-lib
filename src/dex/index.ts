@@ -98,6 +98,7 @@ import { balancerV3Merge } from './balancer-v3/optimizer';
 import { SkyConverter } from './sky-converter/sky-converter';
 import { Cables } from './cables/cables';
 import { Stader } from './stader/stader';
+import { Kelp } from './kelp/kelp';
 import { UsualBond } from './usual/usual-bond';
 import { UsualMWrappedM } from './usual/usual-m-wrapped-m';
 import { UsualMUsd0 } from './usual/usual-m-usd0';
@@ -132,6 +133,7 @@ const LegacyDexes = [
 
 const Dexes = [
   Stader,
+  Kelp,
   Bebop,
   Dexalot,
   CurveV1,

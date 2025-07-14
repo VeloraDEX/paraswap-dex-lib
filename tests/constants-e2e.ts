@@ -114,6 +114,10 @@ export const Tokens: {
       address: '0xFAe103DC9cf190eD75350761e95403b7b8aFa6c0',
       decimals: 18,
     },
+    rsETH: {
+      address: '0xA1290d69c65A6Fe4DF752f95823fae25cB99e5A7',
+      decimals: 18,
+    },
     REQ: {
       address: '0x8f8221aFbB33998d8584A2B05749bA73c37a938a',
       decimals: 18,
@@ -1912,6 +1916,8 @@ export const Holders: {
     wUSDL: '0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb',
     UsualM: '0xE3f7A0c4a44b740328157A5152A85c3bCB54DA09',
     EKUBO: '0xF5b6Ee2CAEb6769659f6C091D209DfdCaF3F69Eb',
+    ETHx: '0xaDFf77c3b3204d6371d3C037CF0988ab34444CA3',
+    rsETH: '0x22162DbBa43fE0477cdC5234E248264eC7C6EA7c',
   },
   [Network.POLYGON]: {
     jGBP: '0x02aa0B826c7BA6386DdBE04C0a8715A1c0A16B24',

@@ -1,0 +1,679 @@
+[
+  { "inputs": [], "stateMutability": "nonpayable", "type": "constructor" },
+  { "inputs": [], "name": "AssetNotSupported", "type": "error" },
+  { "inputs": [], "name": "CallerNotLRTConfigAdmin", "type": "error" },
+  { "inputs": [], "name": "CallerNotLRTConfigManager", "type": "error" },
+  { "inputs": [], "name": "CallerNotLRTConfigOperator", "type": "error" },
+  { "inputs": [], "name": "EthTransferFailed", "type": "error" },
+  { "inputs": [], "name": "InvalidAmountToDeposit", "type": "error" },
+  { "inputs": [], "name": "InvalidMaximumNodeDelegatorLimit", "type": "error" },
+  { "inputs": [], "name": "MaximumDepositLimitReached", "type": "error" },
+  { "inputs": [], "name": "MaximumNodeDelegatorLimitReached", "type": "error" },
+  { "inputs": [], "name": "MinimumAmountToReceiveNotMet", "type": "error" },
+  {
+    "inputs": [
+      { "internalType": "address", "name": "assetAddress", "type": "address" },
+      { "internalType": "uint256", "name": "assetBalance", "type": "uint256" }
+    ],
+    "name": "NodeDelegatorHasAssetBalance",
+    "type": "error"
+  },
+  { "inputs": [], "name": "NodeDelegatorHasETH", "type": "error" },
+  {
+    "inputs": [],
+    "name": "NodeDelegatorHasUnaccountedWithdrawals",
+    "type": "error"
+  },
+  { "inputs": [], "name": "NodeDelegatorNotFound", "type": "error" },
+  { "inputs": [], "name": "NotEnoughAssetToTransfer", "type": "error" },
+  { "inputs": [], "name": "ValueAlreadyInUse", "type": "error" },
+  { "inputs": [], "name": "ZeroAddressNotAllowed", "type": "error" },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "depositor",
+        "type": "address"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "asset",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "depositAmount",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "rsethMintAmount",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "string",
+        "name": "referralId",
+        "type": "string"
+      }
+    ],
+    "name": "AssetDeposit",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "depositor",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "depositAmount",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "rsethMintAmount",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "string",
+        "name": "referralId",
+        "type": "string"
+      }
+    ],
+    "name": "ETHDeposit",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "ethAmount",
+        "type": "uint256"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "toAsset",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "returnAmount",
+        "type": "uint256"
+      }
+    ],
+    "name": "ETHSwappedForLST",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "address",
+        "name": "to",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "amount",
+        "type": "uint256"
+      }
+    ],
+    "name": "EthTransferred",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "uint8",
+        "name": "version",
+        "type": "uint8"
+      }
+    ],
+    "name": "Initialized",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "maxNegligibleAmount",
+        "type": "uint256"
+      }
+    ],
+    "name": "MaxNegligibleAmountUpdated",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "maxNodeDelegatorLimit",
+        "type": "uint256"
+      }
+    ],
+    "name": "MaxNodeDelegatorLimitUpdated",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "minAmountToDeposit",
+        "type": "uint256"
+      }
+    ],
+    "name": "MinAmountToDepositUpdated",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "address[]",
+        "name": "nodeDelegatorContracts",
+        "type": "address[]"
+      }
+    ],
+    "name": "NodeDelegatorAddedinQueue",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "address",
+        "name": "nodeDelegatorContracts",
+        "type": "address"
+      }
+    ],
+    "name": "NodeDelegatorRemovedFromQueue",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "address",
+        "name": "account",
+        "type": "address"
+      }
+    ],
+    "name": "Paused",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "address",
+        "name": "account",
+        "type": "address"
+      }
+    ],
+    "name": "Unpaused",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "lrtConfig",
+        "type": "address"
+      }
+    ],
+    "name": "UpdatedLRTConfig",
+    "type": "event"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address[]",
+        "name": "nodeDelegatorContracts",
+        "type": "address[]"
+      }
+    ],
+    "name": "addNodeDelegatorContractToQueue",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "address", "name": "asset", "type": "address" },
+      { "internalType": "uint256", "name": "depositAmount", "type": "uint256" },
+      {
+        "internalType": "uint256",
+        "name": "minRSETHAmountExpected",
+        "type": "uint256"
+      },
+      { "internalType": "string", "name": "referralId", "type": "string" }
+    ],
+    "name": "depositAsset",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "minRSETHAmountExpected",
+        "type": "uint256"
+      },
+      { "internalType": "string", "name": "referralId", "type": "string" }
+    ],
+    "name": "depositETH",
+    "outputs": [],
+    "stateMutability": "payable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "address", "name": "asset", "type": "address" }
+    ],
+    "name": "getAssetCurrentLimit",
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "address", "name": "asset", "type": "address" }
+    ],
+    "name": "getAssetDistributionData",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "assetLyingInDepositPool",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "assetLyingInNDCs",
+        "type": "uint256"
+      },
+      {
+        "internalType": "int256",
+        "name": "assetStakedInEigenLayer",
+        "type": "int256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "assetUnstakingFromEigenLayer",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "assetLyingInConverter",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "assetLyingUnstakingVault",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "getETHDistributionData",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "ethLyingInDepositPool",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "ethLyingInNDCs",
+        "type": "uint256"
+      },
+      {
+        "internalType": "int256",
+        "name": "ethStakedInEigenLayer",
+        "type": "int256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "ethUnstakingFromEigenLayer",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "ethLyingInConverter",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "ethLyingInUnstakingVault",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "getNodeDelegatorQueue",
+    "outputs": [
+      { "internalType": "address[]", "name": "", "type": "address[]" }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "address", "name": "asset", "type": "address" },
+      { "internalType": "uint256", "name": "amount", "type": "uint256" }
+    ],
+    "name": "getRsETHAmountToMint",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "rsethAmountToMint",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "address", "name": "toAsset", "type": "address" },
+      {
+        "internalType": "uint256",
+        "name": "ethAmountToSend",
+        "type": "uint256"
+      }
+    ],
+    "name": "getSwapETHToAssetReturnAmount",
+    "outputs": [
+      { "internalType": "uint256", "name": "returnAmount", "type": "uint256" }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "address", "name": "asset", "type": "address" }
+    ],
+    "name": "getTotalAssetDeposits",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "totalAssetDeposit",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "address", "name": "lrtConfigAddr", "type": "address" }
+    ],
+    "name": "initialize",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [{ "internalType": "address", "name": "", "type": "address" }],
+    "name": "isNodeDelegator",
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "lrtConfig",
+    "outputs": [
+      { "internalType": "contract ILRTConfig", "name": "", "type": "address" }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "address", "name": "asset", "type": "address" }
+    ],
+    "name": "maxApproveToLRTConverter",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "maxNegligibleAmount",
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "maxNodeDelegatorLimit",
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "minAmountToDeposit",
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "name": "nodeDelegatorQueue",
+    "outputs": [{ "internalType": "address", "name": "", "type": "address" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "pause",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "paused",
+    "outputs": [{ "internalType": "bool", "name": "", "type": "bool" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "receiveFromLRTConverter",
+    "outputs": [],
+    "stateMutability": "payable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "receiveFromNodeDelegator",
+    "outputs": [],
+    "stateMutability": "payable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "receiveFromRewardReceiver",
+    "outputs": [],
+    "stateMutability": "payable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address[]",
+        "name": "nodeDelegatorContracts",
+        "type": "address[]"
+      }
+    ],
+    "name": "removeManyNodeDelegatorContractsFromQueue",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "nodeDelegatorAddress",
+        "type": "address"
+      }
+    ],
+    "name": "removeNodeDelegatorContractFromQueue",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "maxNegligibleAmount_",
+        "type": "uint256"
+      }
+    ],
+    "name": "setMaxNegligibleAmount",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "minAmountToDeposit_",
+        "type": "uint256"
+      }
+    ],
+    "name": "setMinAmountToDeposit",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "address", "name": "toAsset", "type": "address" },
+      {
+        "internalType": "uint256",
+        "name": "minToAssetAmount",
+        "type": "uint256"
+      }
+    ],
+    "name": "swapETHForAssetWithinDepositPool",
+    "outputs": [],
+    "stateMutability": "payable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "address", "name": "asset", "type": "address" },
+      { "internalType": "uint256", "name": "amount", "type": "uint256" }
+    ],
+    "name": "transferAssetToLRTUnstakingVault",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "uint256", "name": "ndcIndex", "type": "uint256" },
+      { "internalType": "address", "name": "asset", "type": "address" },
+      { "internalType": "uint256", "name": "amount", "type": "uint256" }
+    ],
+    "name": "transferAssetToNodeDelegator",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "uint256", "name": "amount", "type": "uint256" }
+    ],
+    "name": "transferETHToLRTUnstakingVault",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "uint256", "name": "ndcIndex", "type": "uint256" },
+      { "internalType": "uint256", "name": "amount", "type": "uint256" }
+    ],
+    "name": "transferETHToNodeDelegator",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "unpause",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "address", "name": "lrtConfigAddr", "type": "address" }
+    ],
+    "name": "updateLRTConfig",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "maxNodeDelegatorLimit_",
+        "type": "uint256"
+      }
+    ],
+    "name": "updateMaxNodeDelegatorLimit",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  { "stateMutability": "payable", "type": "receive" }
+]
