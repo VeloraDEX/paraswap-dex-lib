@@ -2150,7 +2150,7 @@ describe('BaseswapV3', () => {
 describe('SpookySwapV3', () => {
   const dexKey = 'SpookySwapV3';
 
-  describe('Sonic', () => {
+  describe('Fantom', () => {
     const network = Network.SONIC;
     const dexHelper = new DummyDexHelper(network);
 
