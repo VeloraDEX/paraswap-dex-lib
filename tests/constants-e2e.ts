@@ -1762,8 +1762,12 @@ export const Tokens: {
       decimals: 18,
     },
     USDC: {
-      address: '0x078D782b760474a361dDA0AF3839290b0EF57AD6',
+      address: '0x078d782b760474a361dda0af3839290b0ef57ad6',
       decimals: 6,
+    },
+    WBTC: {
+      address: '0x0555e30da8f98308edb960aa94c0db47230d2b9c',
+      decimals: 8,
     },
     'USD₮0': {
       address: '0x9151434b16b9763660705744891fA906F660EcC5',
