@@ -39,18 +39,19 @@ import axios from 'axios';
 import { extractReturnAmountPosition } from '../../executor/utils';
 
 type ExitResp = {
-  success: boolean;
-  data: { amountOut: string };
-  error?: string;
+  data: {
+    amountOut: string;
+    priceImpact: number;
+  };
+  tx: { to: string; data: string };
+  tokenApprovals: Array<{ token: string; amount: string }>;
 };
 
 type SwapResp = {
-  success: boolean;
   data: {
     amountOut: string;
-    tx: { to: string; data: string };
   };
-  error?: string;
+  tx: { to: string; data: string };
 };
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -270,10 +271,13 @@ export class AavePtToUsdc
         continue;
       }
       const swapData = result.value;
-      if (!swapData?.success || !swapData?.data?.amountOut) {
+
+      // ✅ FIXED: Access amountOut from data object
+      if (!swapData?.data?.amountOut) {
         underlyingAmounts.push('0');
         continue;
       }
+
       underlyingAmounts.push(swapData.data.amountOut);
     }
 
@@ -296,11 +300,11 @@ export class AavePtToUsdc
       );
       const swapResults = await Promise.allSettled(swapPromises);
       finalPrices = swapResults.map(r =>
-        r.status === 'fulfilled' && r.value?.success && r.value?.data?.amountOut
+        r.status === 'fulfilled' && r.value?.data?.amountOut // ✅ Added .data
           ? BigInt(r.value.data.amountOut)
           : 0n,
       );
-      gasCost += 120_000;
+      gasCost += 250_000;
     } else {
       // single hop: PT -> underlying
       finalPrices = underlyingAmounts.map(amt =>
@@ -308,6 +312,7 @@ export class AavePtToUsdc
       );
     }
 
+    // Return all prices including zeros - test expects same number of prices as amounts
     if (finalPrices.every(p => p === 0n)) return null;
 
     return [
@@ -315,7 +320,7 @@ export class AavePtToUsdc
         exchange: this.dexKey,
         poolIdentifier: this.getPoolIdentifier(marketAddress),
         poolAddresses: [marketAddress, 'PendleSwap'],
-        prices: finalPrices,
+        prices: finalPrices, // Include all prices including zeros
         unit: 1n,
         gasCost,
         data: {
@@ -413,9 +418,7 @@ export class AavePtToUsdc
       },
     );
 
-    if (!exitResp.success) {
-      throw new Error(`Pendle exit failed: ${exitResp.error}`);
-    }
+    // Exit response is valid if we reach here (no exception thrown)
 
     // 2) underlying -> USDC
     const swapResp: SwapResp = await this.callPendleSwapApi({
@@ -428,10 +431,7 @@ export class AavePtToUsdc
     });
 
     // Pendle already returns the batched tx; just forward it
-    if (!swapResp.success) {
-      throw new Error(`Pendle swap failed: ${swapResp.error}`);
-    }
-    const tx = swapResp.data.tx;
+    const tx = swapResp.tx;
     return {
       targetExchange: tx.to,
       exchangeData: tx.data,
@@ -464,20 +464,14 @@ export class AavePtToUsdc
         },
       );
 
-      return {
-        success: true,
-        data: response,
-      };
+      return response as any;
     } catch (error: any) {
       this.logger.error(
         `${this.dexKey}-${this.network}: Pendle SDK API call failed:`,
         error,
       );
 
-      return {
-        success: false,
-        error: error?.message || 'Unknown error',
-      };
+      throw error;
     }
   }
 
@@ -492,20 +486,14 @@ export class AavePtToUsdc
         },
       );
 
-      return {
-        success: true,
-        data: response,
-      };
+      return response as any;
     } catch (error: any) {
       this.logger.error(
         `${this.dexKey}-${this.network}: Pendle Swap API call failed:`,
         error,
       );
 
-      return {
-        success: false,
-        error: error?.message || 'Unknown error',
-      };
+      throw error;
     }
   }
 
