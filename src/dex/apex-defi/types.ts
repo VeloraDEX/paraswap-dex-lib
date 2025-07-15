@@ -1,4 +1,4 @@
-import { Address } from '../../types';
+import { Address, NumberAsString } from '../../types';
 
 export type PoolState = {
   reserve0: bigint;
@@ -19,3 +19,9 @@ export type DexParams = {
   routerAddress: Address;
   wrapperFactoryAddress: Address;
 };
+
+export type ApexDefiParam = [
+  amountIn: NumberAsString,
+  amountOutMin: NumberAsString,
+  path: Address[],
+];

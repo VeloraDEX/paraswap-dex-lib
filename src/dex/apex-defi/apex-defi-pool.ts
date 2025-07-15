@@ -160,12 +160,47 @@ export class ApexDefiEventPool extends StatefulEventSubscriber<PoolState> {
     };
   }
 
-  // Its just a dummy example
+  // Handle swap events to update pool state
   handleSwap(
     event: any,
     state: DeepReadonly<PoolState>,
     log: Readonly<Log>,
   ): DeepReadonly<PoolState> | null {
-    return null;
+    // Parse the Swap event which contains:
+    // - amountTokenIn: amount of tokens swapped in
+    // - amountNativeIn: amount of native tokens (AVAX) swapped in
+    // - amountTokenOut: amount of tokens swapped out
+    // - amountNativeOut: amount of native tokens (AVAX) swapped out
+    const { amountTokenIn, amountNativeIn, amountTokenOut, amountNativeOut } =
+      event.args;
+
+    // Calculate new reserves
+    // For ApexDefi, reserve0 is always native (AVAX) and reserve1 is always the token
+    const newReserve0 =
+      state.reserve0 + BigInt(amountNativeIn) - BigInt(amountNativeOut);
+    const newReserve1 =
+      state.reserve1 + BigInt(amountTokenIn) - BigInt(amountTokenOut);
+
+    // Ensure reserves don't go negative (shouldn't happen in practice)
+    if (newReserve0 < 0n || newReserve1 < 0n) {
+      this.logger.warn(
+        'Negative reserves detected in swap event, ignoring state update',
+      );
+      return null;
+    }
+
+    return {
+      ...state,
+      reserve0: newReserve0,
+      reserve1: newReserve1,
+    };
+  }
+
+  /**
+   * Release any resources held by this event pool
+   */
+  releaseResources(): void {
+    // Clean up any subscriptions or timers if needed
+    this.addressesSubscribed = [];
   }
 }

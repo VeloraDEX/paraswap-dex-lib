@@ -158,7 +158,7 @@ describe('ApexDefi', function () {
   let blockNumber: number;
   let apexDefi: ApexDefi;
 
-  describe('Mainnet', () => {
+  describe('Avalanche', () => {
     const network = Network.AVALANCHE;
     const dexHelper = new DummyDexHelper(network);
 

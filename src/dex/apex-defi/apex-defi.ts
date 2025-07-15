@@ -8,13 +8,16 @@ import {
   SimpleExchangeParam,
   PoolLiquidity,
   Logger,
+  NumberAsString,
+  TxInfo,
+  DexExchangeParam,
 } from '../../types';
 import { SwapSide, Network } from '../../constants';
 import * as CALLDATA_GAS_COST from '../../calldata-gas-cost';
 import { getBigIntPow, getDexKeysWithNetwork } from '../../utils';
 import { IDex } from '../../dex/idex';
 import { IDexHelper } from '../../dex-helper/idex-helper';
-import { ApexDefiData } from './types';
+import { ApexDefiData, ApexDefiParam } from './types';
 import { SimpleExchange } from '../simple-exchange';
 import { ApexDefiConfig } from './config';
 import { ApexDefiEventPool } from './apex-defi-pool';
@@ -306,8 +309,28 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
     return [this.getPoolIdentifier(pairAddress).toLowerCase()];
   }
 
-  protected getPoolIdentifier(pairAddress: string): string {
-    return `${this.dexKey}_${pairAddress}`.toLowerCase();
+  protected getPoolIdentifier(pairAddress: string): string;
+  protected getPoolIdentifier(token0: string, token1: string): string;
+  protected getPoolIdentifier(
+    pairAddressOrToken0: string,
+    token1?: string,
+  ): string {
+    if (token1 !== undefined) {
+      // Called with two parameters (token0, token1)
+      // For ApexDefi, we need to determine which token is the pool address
+      // The pool address is always the non-WETH token
+      const wethAddress =
+        this.dexHelper.config.data.wrappedNativeTokenAddress.toLowerCase();
+      const poolAddress =
+        pairAddressOrToken0.toLowerCase() === wethAddress
+          ? token1
+          : pairAddressOrToken0;
+
+      return `${this.dexKey}_${poolAddress}`.toLowerCase();
+    } else {
+      // Called with one parameter (pairAddress)
+      return `${this.dexKey}_${pairAddressOrToken0}`.toLowerCase();
+    }
   }
 
   protected getPoolAddress(srcToken: Token, destToken: Token): string {
@@ -352,14 +375,90 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
         return null;
       }
 
-      // I think the flow of this section needs to be refactored
-      // Need to add pool if it is not found
-      // Otherwise we need to get the state from the pool
-      // If state is not found, we need to generate it
+      const unitAmount = getBigIntPow(
+        side === SwapSide.SELL ? srcToken.decimals : destToken.decimals,
+      );
+
+      // Get the pool for this token pair
       const pool = this.eventPools[poolIdentifier[0]];
 
       if (!pool) {
-        return null;
+        // Try to discover the pool
+        const discoveredPool = await this.discoverPool(
+          srcToken,
+          destToken,
+          blockNumber,
+        );
+        if (!discoveredPool) {
+          return null;
+        }
+        // Use the discovered pool
+        const discoveredState = await discoveredPool.getStateOrGenerate(
+          blockNumber,
+        );
+        if (!discoveredState) {
+          return null;
+        }
+
+        // Calculate prices using the constant product formula
+        const prices = await Promise.all(
+          amounts.map(amount => {
+            if (amount === 0n) return 0n;
+
+            if (side === SwapSide.SELL) {
+              return this.getSellPrice(
+                discoveredState,
+                amount,
+                srcToken,
+                destToken,
+              );
+            } else {
+              return this.getBuyPrice(
+                discoveredState,
+                amount,
+                srcToken,
+                destToken,
+              );
+            }
+          }),
+        );
+
+        const unit =
+          side === SwapSide.SELL
+            ? this.getSellPrice(
+                discoveredState,
+                unitAmount,
+                srcToken,
+                destToken,
+              )
+            : this.getBuyPrice(
+                discoveredState,
+                unitAmount,
+                srcToken,
+                destToken,
+              );
+
+        // Prepare the exchange data
+        const exchangeData: ApexDefiData = {
+          path: [
+            {
+              tokenIn: srcToken.address.toLowerCase(),
+              tokenOut: destToken.address.toLowerCase(),
+            },
+          ],
+        };
+
+        return [
+          {
+            prices,
+            unit,
+            data: exchangeData,
+            exchange: this.dexKey,
+            poolIdentifier: poolIdentifier[0],
+            gasCost: 0, // Will be calculated by getCalldataGasCost
+            poolAddresses: [discoveredPool.poolAddress],
+          },
+        ];
       }
 
       let state = await pool.getStateOrGenerate(blockNumber);
@@ -368,11 +467,45 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
         return null;
       }
 
-      const unitAmount = getBigIntPow(
-        side === SwapSide.SELL ? srcToken.decimals : destToken.decimals,
+      // Calculate prices using the constant product formula
+      const prices = await Promise.all(
+        amounts.map(amount => {
+          if (amount === 0n) return 0n;
+
+          if (side === SwapSide.SELL) {
+            return this.getSellPrice(state, amount, srcToken, destToken);
+          } else {
+            return this.getBuyPrice(state, amount, srcToken, destToken);
+          }
+        }),
       );
 
-      return null;
+      const unit =
+        side === SwapSide.SELL
+          ? this.getSellPrice(state, unitAmount, srcToken, destToken)
+          : this.getBuyPrice(state, unitAmount, srcToken, destToken);
+
+      // Prepare the exchange data
+      const exchangeData: ApexDefiData = {
+        path: [
+          {
+            tokenIn: srcToken.address.toLowerCase(),
+            tokenOut: destToken.address.toLowerCase(),
+          },
+        ],
+      };
+
+      return [
+        {
+          prices,
+          unit,
+          data: exchangeData,
+          exchange: this.dexKey,
+          poolIdentifier: poolIdentifier[0],
+          gasCost: 0, // Will be calculated by getCalldataGasCost
+          poolAddresses: [pool.poolAddress],
+        },
+      ];
     } catch (e) {
       // if the pool is not found, we need to fallback to rpc
       this.logger.error(
@@ -385,10 +518,209 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
     }
   }
 
-  // Returns estimated gas cost of calldata for this DEX in multiSwap
+  /**
+   * Discover and add a pool for a given token pair
+   * This method is called when a pool is not found in the eventPools map
+   */
+  private async discoverPool(
+    srcToken: Token,
+    destToken: Token,
+    blockNumber: number,
+  ): Promise<ApexDefiEventPool | null> {
+    try {
+      const pairAddress = this.getPoolAddress(srcToken, destToken);
+      const poolKey = this.getPoolIdentifier(pairAddress);
+
+      // Check if pool already exists
+      if (this.eventPools[poolKey]) {
+        return this.eventPools[poolKey];
+      }
+
+      // Get pool data from on-chain
+      const poolData = await this.dexHelper.multiContract.methods
+        .aggregate([
+          {
+            target: pairAddress,
+            callData: this.tokenIface.encodeFunctionData('getReserves', []),
+          },
+          {
+            target: pairAddress,
+            callData: this.tokenIface.encodeFunctionData('tradingFeeRate'),
+          },
+          {
+            target: ApexDefiConfig[this.dexKey][this.network].factoryAddress,
+            callData: this.factoryIface.encodeFunctionData('getBaseSwapRate', [
+              pairAddress,
+            ]),
+          },
+        ])
+        .call({}, blockNumber);
+
+      const reserves = this.tokenIface.decodeFunctionResult(
+        'getReserves',
+        poolData.returnData[0],
+      );
+      const tradingFeeRate = this.tokenIface.decodeFunctionResult(
+        'tradingFeeRate',
+        poolData.returnData[1],
+      )[0];
+      const baseSwapRate = this.factoryIface.decodeFunctionResult(
+        'getBaseSwapRate',
+        poolData.returnData[2],
+      )[0];
+
+      // Create new event pool
+      const eventPool = new ApexDefiEventPool(
+        this.dexKey,
+        this.network,
+        this.dexHelper,
+        this.dexHelper.config.data.wrappedNativeTokenAddress,
+        pairAddress,
+        pairAddress,
+        this.logger,
+        ApexDefiConfig[this.dexKey][this.network].factoryAddress,
+      );
+
+      await eventPool.initialize(blockNumber, {
+        state: {
+          reserve0: reserves[0],
+          reserve1: reserves[1],
+          fee: Number(baseSwapRate),
+          tradingFee: Number(tradingFeeRate),
+        },
+      });
+
+      this.eventPools[poolKey] = eventPool;
+
+      this.logger.info(
+        `Discovered new pool: ${poolKey} for ${
+          srcToken.symbol || srcToken.address
+        } -> ${destToken.symbol || destToken.address}`,
+      );
+
+      return eventPool;
+    } catch (error) {
+      this.logger.error('Error discovering pool:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Calculate the output amount for a sell (exact input) swap
+   * Uses the constant product formula: amountOut = (amountIn * reserveOut) / (reserveIn + amountIn)
+   */
+  private getSellPrice(
+    state: any,
+    amountIn: bigint,
+    srcToken: Token,
+    destToken: Token,
+  ): bigint {
+    const { reserve0, reserve1, fee, tradingFee } = state;
+
+    // Validate state
+    if (
+      !reserve0 ||
+      !reserve1 ||
+      fee === undefined ||
+      tradingFee === undefined
+    ) {
+      this.logger.warn('Invalid pool state for pricing calculation');
+      return 0n;
+    }
+
+    // Determine which reserve is for input and which is for output
+    const isSrcToken0 = this.dexHelper.config.isWETH(srcToken.address);
+    const reserveIn = BigInt(isSrcToken0 ? reserve0 : reserve1);
+    const reserveOut = BigInt(isSrcToken0 ? reserve1 : reserve0);
+
+    if (reserveIn === 0n || reserveOut === 0n) return 0n;
+
+    // Apply fees (base swap rate + trading fee)
+    const feeNum = typeof fee === 'bigint' ? Number(fee) : fee;
+    const tradingFeeNum =
+      typeof tradingFee === 'bigint' ? Number(tradingFee) : tradingFee;
+    const totalFee = feeNum + tradingFeeNum;
+
+    // Validate fee range
+    if (totalFee >= this.feeFactor) {
+      this.logger.warn('Invalid fee rate detected');
+      return 0n;
+    }
+
+    const amountInWithFee = amountIn * BigInt(this.feeFactor - totalFee);
+
+    const numerator = amountInWithFee * reserveOut;
+    const denominator = reserveIn * BigInt(this.feeFactor) + amountInWithFee;
+
+    return denominator === 0n ? 0n : numerator / denominator;
+  }
+
+  /**
+   * Calculate the input amount for a buy (exact output) swap
+   * Uses the constant product formula: amountIn = (amountOut * reserveIn) / (reserveOut - amountOut)
+   */
+  private getBuyPrice(
+    state: any,
+    amountOut: bigint,
+    srcToken: Token,
+    destToken: Token,
+  ): bigint {
+    const { reserve0, reserve1, fee, tradingFee } = state;
+
+    // Validate state
+    if (
+      !reserve0 ||
+      !reserve1 ||
+      fee === undefined ||
+      tradingFee === undefined
+    ) {
+      this.logger.warn('Invalid pool state for pricing calculation');
+      return 0n;
+    }
+
+    // Determine which reserve is for input and which is for output
+    const isSrcToken0 = this.dexHelper.config.isWETH(srcToken.address);
+    const reserveIn = BigInt(isSrcToken0 ? reserve0 : reserve1);
+    const reserveOut = BigInt(isSrcToken0 ? reserve1 : reserve0);
+
+    if (reserveIn === 0n || reserveOut === 0n) return 0n;
+    if (amountOut >= reserveOut) return 0n;
+
+    // Apply fees (base swap rate + trading fee)
+    const feeNum = typeof fee === 'bigint' ? Number(fee) : fee;
+    const tradingFeeNum =
+      typeof tradingFee === 'bigint' ? Number(tradingFee) : tradingFee;
+    const totalFee = feeNum + tradingFeeNum;
+
+    // Validate fee range
+    if (totalFee >= this.feeFactor) {
+      this.logger.warn('Invalid fee rate detected');
+      return 0n;
+    }
+
+    const numerator = reserveIn * amountOut * BigInt(this.feeFactor);
+    const denominator =
+      BigInt(this.feeFactor - totalFee) * (reserveOut - amountOut);
+
+    if (denominator <= 0n) return 0n;
+    return numerator === 0n ? 0n : 1n + numerator / denominator;
+  }
+
   getCalldataGasCost(poolPrices: PoolPrices<ApexDefiData>): number | number[] {
-    // TODO: update if there is any payload in getAdapterParam
-    return CALLDATA_GAS_COST.DEX_NO_PAYLOAD;
+    return (
+      CALLDATA_GAS_COST.DEX_OVERHEAD +
+      CALLDATA_GAS_COST.LENGTH_SMALL +
+      // ParentStruct header
+      CALLDATA_GAS_COST.OFFSET_SMALL +
+      // ParentStruct -> weth
+      CALLDATA_GAS_COST.ADDRESS +
+      // ParentStruct -> pools[] header
+      CALLDATA_GAS_COST.OFFSET_SMALL +
+      // ParentStruct -> pools[]
+      CALLDATA_GAS_COST.LENGTH_SMALL +
+      // ParentStruct -> pools[0]
+      CALLDATA_GAS_COST.wordNonZeroBytes(22)
+    );
   }
 
   // Encode params required by the exchange adapter
@@ -416,13 +748,216 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
     };
   }
 
+  // Encode params required by the exchange adapter for V6
+  // This is the main method used for swaps in V6
+  getDexParam(
+    srcToken: Address,
+    destToken: Address,
+    srcAmount: NumberAsString,
+    destAmount: NumberAsString,
+    recipient: Address,
+    data: ApexDefiData,
+    side: SwapSide,
+  ): DexExchangeParam {
+    const { path } = data;
+
+    // Determine the swap function based on the side and token types
+    let swapFunction: string;
+    let swapParams: any[];
+
+    const isSrcAVAX = this.dexHelper.config.isWETH(srcToken);
+    const isDestAVAX = this.dexHelper.config.isWETH(destToken);
+
+    if (isSrcAVAX && !isDestAVAX) {
+      // AVAX -> Token
+      swapFunction = 'swapExactAVAXForTokens';
+      swapParams = [
+        destAmount, // amountOutMin - will be set by the router
+        path.map(p => p.tokenIn).concat(path[path.length - 1].tokenOut),
+        recipient,
+        Math.floor(Date.now() / 1000) + 300, // deadline: 5 minutes from now
+      ];
+    } else if (!isSrcAVAX && isDestAVAX) {
+      // Token -> AVAX
+      swapFunction = 'swapExactTokensForAVAX';
+      swapParams = [
+        srcAmount,
+        destAmount, // amountOutMin - will be set by the router
+        path.map(p => p.tokenIn).concat(path[path.length - 1].tokenOut),
+        recipient,
+        Math.floor(Date.now() / 1000) + 300, // deadline: 5 minutes from now
+      ];
+    } else {
+      // Token -> Token
+      swapFunction = 'swapExactTokensForTokens';
+      swapParams = [
+        srcAmount,
+        destAmount, // amountOutMin - will be set by the router
+        path.map(p => p.tokenIn).concat(path[path.length - 1].tokenOut),
+        recipient,
+        Math.floor(Date.now() / 1000) + 300, // deadline: 5 minutes from now
+      ];
+    }
+
+    const exchangeData = this.routerIface.encodeFunctionData(
+      swapFunction,
+      swapParams,
+    );
+
+    return {
+      needWrapNative: this.needWrapNative,
+      dexFuncHasRecipient: true,
+      exchangeData,
+      targetExchange: ApexDefiConfig[this.dexKey][this.network].routerAddress,
+      returnAmountPos: undefined, // ApexDefi returns amounts array, we'll get the last element
+    };
+  }
+
+  // Encode params for simple swap (V5)
+  async getSimpleParam(
+    srcToken: Address,
+    destToken: Address,
+    srcAmount: NumberAsString,
+    destAmount: NumberAsString,
+    data: ApexDefiData,
+    side: SwapSide,
+  ): Promise<SimpleExchangeParam> {
+    const { path } = data;
+
+    // Determine the swap function based on the token types
+    let swapFunction: string;
+    let swapParams: any[];
+
+    const isSrcAVAX = this.dexHelper.config.isWETH(srcToken);
+    const isDestAVAX = this.dexHelper.config.isWETH(destToken);
+
+    if (isSrcAVAX && !isDestAVAX) {
+      // AVAX -> Token
+      swapFunction = 'swapExactAVAXForTokens';
+      swapParams = [
+        destAmount,
+        path.map(p => p.tokenIn).concat(path[path.length - 1].tokenOut),
+        this.augustusAddress, // recipient - will be set by the router
+        Math.floor(Date.now() / 1000) + 300, // deadline: 5 minutes from now
+      ];
+    } else if (!isSrcAVAX && isDestAVAX) {
+      // Token -> AVAX
+      swapFunction = 'swapExactTokensForAVAX';
+      swapParams = [
+        srcAmount,
+        destAmount,
+        path.map(p => p.tokenIn).concat(path[path.length - 1].tokenOut),
+        this.augustusAddress, // recipient - will be set by the router
+        Math.floor(Date.now() / 1000) + 300, // deadline: 5 minutes from now
+      ];
+    } else {
+      // Token -> Token
+      swapFunction = 'swapExactTokensForTokens';
+      swapParams = [
+        srcAmount,
+        destAmount,
+        path.map(p => p.tokenIn).concat(path[path.length - 1].tokenOut),
+        this.augustusAddress, // recipient - will be set by the router
+        Math.floor(Date.now() / 1000) + 300, // deadline: 5 minutes from now
+      ];
+    }
+
+    const swapData = this.routerIface.encodeFunctionData(
+      swapFunction,
+      swapParams,
+    );
+
+    return this.buildSimpleParamWithoutWETHConversion(
+      srcToken,
+      srcAmount,
+      destToken,
+      destAmount,
+      swapData,
+      ApexDefiConfig[this.dexKey][this.network].routerAddress,
+      ApexDefiConfig[this.dexKey][this.network].routerAddress,
+      '0',
+    );
+  }
+
+  // Direct swap methods for V5
+  getDirectParam(
+    srcToken: Address,
+    destToken: Address,
+    srcAmount: NumberAsString,
+    destAmount: NumberAsString,
+    expectedAmount: NumberAsString,
+    data: ApexDefiData,
+    side: SwapSide,
+    permit: string,
+    uuid: string,
+    feePercent: NumberAsString,
+    deadline: NumberAsString,
+    partner: string,
+    beneficiary: string,
+    contractMethod: string,
+  ): TxInfo<null> {
+    // ApexDefi doesn't support direct swaps in the same way as UniswapV2
+    // This method is not implemented for ApexDefi
+    throw new Error('Direct swaps not supported for ApexDefi');
+  }
+
+  // Direct swap methods for V6
+  getDirectParamV6(
+    srcToken: Address,
+    destToken: Address,
+    fromAmount: NumberAsString,
+    toAmount: NumberAsString,
+    quotedAmount: NumberAsString,
+    data: ApexDefiData,
+    side: SwapSide,
+    permit: string,
+    uuid: string,
+    partnerAndFee: string,
+    beneficiary: string,
+    blockNumber: number,
+    contractMethod: string,
+  ): TxInfo<null> {
+    // ApexDefi doesn't support direct swaps in the same way as UniswapV2
+    // This method is not implemented for ApexDefi
+    throw new Error('Direct swaps not supported for ApexDefi');
+  }
+
+  // Static methods for direct function names
+  static getDirectFunctionName(): string[] {
+    // ApexDefi doesn't support direct swaps
+    return [];
+  }
+
+  static getDirectFunctionNameV6(): string[] {
+    // ApexDefi doesn't support direct swaps
+    return [];
+  }
+
   // This is called once before getTopPoolsForToken is
   // called for multiple tokens. This can be helpful to
   // update common state required for calculating
   // getTopPoolsForToken. It is optional for a DEX
   // to implement this
   async updatePoolState(): Promise<void> {
-    return Promise.resolve();
+    // Update all existing pools to their latest state
+    const blockNumber = await this.dexHelper.web3Provider.eth.getBlockNumber();
+
+    const poolUpdatePromises = Object.values(this.eventPools).map(
+      async pool => {
+        if (pool) {
+          try {
+            await pool.getStateOrGenerate(blockNumber);
+          } catch (error) {
+            this.logger.error(
+              `Error updating pool state for ${pool.poolAddress}:`,
+              error,
+            );
+          }
+        }
+      },
+    );
+
+    await Promise.all(poolUpdatePromises);
   }
 
   // Returns list of top pools based on liquidity. Max
@@ -431,14 +966,113 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
     tokenAddress: Address,
     limit: number,
   ): Promise<PoolLiquidity[]> {
-    //TODO: complete me!
-    return [];
+    try {
+      // For ApexDefi, we need to get all tokens and their reserves
+      // Since ApexDefi uses ERC314 tokens where each token is its own pool,
+      // we'll return the token itself as a pool with AVAX
+
+      const blockNumber =
+        await this.dexHelper.web3Provider.eth.getBlockNumber();
+
+      // Get all tokens from the factory
+      const tokenAddresses = await this.dexHelper.multiContract.methods
+        .aggregate([
+          {
+            target: ApexDefiConfig[this.dexKey][this.network].factoryAddress,
+            callData: this.factoryIface.encodeFunctionData('getAllTokens', []),
+          },
+        ])
+        .call({}, blockNumber);
+
+      const tokens = this.factoryIface.decodeFunctionResult(
+        'getAllTokens',
+        tokenAddresses.returnData[0],
+      )[0] as Address[];
+
+      if (!tokens.length) {
+        return [];
+      }
+
+      // Filter tokens that match the input token address
+      const matchingTokens = tokens.filter(
+        token => token.toLowerCase() === tokenAddress.toLowerCase(),
+      );
+
+      if (!matchingTokens.length) {
+        return [];
+      }
+
+      // Get reserves for the matching tokens
+      const reservesCallData = this.tokenIface.encodeFunctionData(
+        'getReserves',
+        [],
+      );
+
+      const multiCall = matchingTokens.map(token => ({
+        target: token,
+        callData: reservesCallData,
+      }));
+
+      const result = await this.dexHelper.multiContract.methods
+        .aggregate(multiCall)
+        .call({}, blockNumber);
+
+      const pools: PoolLiquidity[] = [];
+
+      for (let i = 0; i < matchingTokens.length && pools.length < limit; i++) {
+        const token = matchingTokens[i];
+        const reserves = this.tokenIface.decodeFunctionResult(
+          'getReserves',
+          result.returnData[i],
+        );
+
+        // Calculate liquidity in USD (simplified - using AVAX as base)
+        // In a real implementation, you might want to get token prices from a price feed
+        const liquidityUSD = Number(reserves[0]) / 1e18; // AVAX reserve in USD (simplified)
+
+        pools.push({
+          exchange: this.dexKey,
+          address: token.toLowerCase(),
+          connectorTokens: [
+            {
+              address:
+                this.dexHelper.config.data.wrappedNativeTokenAddress.toLowerCase(),
+              decimals: 18,
+            },
+          ],
+          liquidityUSD,
+        });
+      }
+
+      // Sort by liquidity and return top pools
+      return pools
+        .sort((a, b) => b.liquidityUSD - a.liquidityUSD)
+        .slice(0, limit);
+    } catch (error) {
+      this.logger.error('Error getting top pools for token:', error);
+      return [];
+    }
   }
 
   // This is optional function in case if your implementation has acquired any resources
   // you need to release for graceful shutdown. For example, it may be any interval timer
   releaseResources(): AsyncOrSync<void> {
-    // TODO: complete me!
+    // Clean up event pools
+    Object.values(this.eventPools).forEach(pool => {
+      if (pool) {
+        pool.releaseResources();
+      }
+    });
+
+    // Clear the pools map
+    Object.keys(this.eventPools).forEach(key => {
+      delete this.eventPools[key];
+    });
+
+    // Clear supported tokens map
+    Object.keys(this.supportedTokensMap).forEach(key => {
+      delete this.supportedTokensMap[key];
+    });
   }
 
   protected _getLoweredAddresses(srcToken: Token, destToken: Token) {
