@@ -21,7 +21,7 @@ function testForNetwork(
     network,
   );
   const tokens = Tokens[network];
-  const holders = Holders[network];
+  const holders = Holders[network] ?? {};
 
   const sideToContractMethods = new Map([
     [SwapSide.SELL, [ContractMethod.swapExactAmountIn]],
@@ -204,6 +204,27 @@ describe('WooFiV2 E2E', () => {
       quoteTokenSymbol,
       tokenBaseAAmount,
       tokenBaseBAmount,
+    );
+  });
+
+  describe('Sonic', () => {
+    const network = Network.SONIC;
+
+    const baseATokenSymbol = 'WETH';
+    const baseBTokenSymbol = 'WS';
+    const quoteTokenSymbol = 'USDCe';
+
+    const tokenBaseAmount = '1000000000000000000';
+    const tokenQuoteAmount = '1000000';
+
+    testForNetwork(
+      network,
+      dexKey,
+      baseATokenSymbol,
+      baseBTokenSymbol,
+      quoteTokenSymbol,
+      tokenBaseAmount,
+      tokenQuoteAmount,
     );
   });
 });

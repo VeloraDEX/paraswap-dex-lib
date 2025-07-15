@@ -405,6 +405,8 @@ class UniswapV3Math {
     const state = {
       // Because I don't have the exact amount user used, set this number to MAX_NUMBER to proceed
       // with calculations. I think it is not a problem since in loop I don't rely on this value
+      // TODO: not sure if this is correct as original `amountSpecifiedRemaining` might be negative for buy cases
+      // which then affects `if (amountRemaining >= 0n)` cases on `SwapMath.computeSwapStep`
       amountSpecifiedRemaining: BI_MAX_INT,
       amountCalculated: 0n,
       sqrtPriceX96: slot0Start.sqrtPriceX96,

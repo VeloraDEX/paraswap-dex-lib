@@ -316,10 +316,7 @@ export class UniswapV3EventPool extends StatefulEventSubscriber<PoolState> {
       resState.returnData,
     ] as [bigint, bigint, DecodedStateMultiCallResultWithRelativeBitmaps];
 
-    const inactiveTimestampMs = Date.now() - INACTIVE_POOL_AGE_MS;
-    const isActive =
-      inactiveTimestampMs < _state.observation.blockTimestamp * 1000;
-    assert(isActive, 'Pool is inactive');
+    this._assertActivePool(_state);
 
     const tickBitmap = {};
     const ticks = {};
@@ -566,5 +563,18 @@ export class UniswapV3EventPool extends StatefulEventSubscriber<PoolState> {
       encodedKey,
       this.poolInitCodeHash,
     );
+  }
+
+  protected _assertActivePool(
+    state: Readonly<DecodedStateMultiCallResultWithRelativeBitmaps>,
+  ) {
+    const inactiveTimestampMs = Date.now() - INACTIVE_POOL_AGE_MS;
+    const isActive =
+      inactiveTimestampMs < state.observation.blockTimestamp * 1000;
+
+    if (!isActive) {
+      this.inactivate();
+      throw new Error('Pool is inactive');
+    }
   }
 }

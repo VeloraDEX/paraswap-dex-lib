@@ -97,7 +97,7 @@ export class MultiWrapper {
       if (!undecodedElement.success) {
         if (reportFails) {
           this.logger.error(
-            `Multicall request number ${i} for ${calls[i].target} failed`,
+            `Multicall request number ${i} for ${calls[i].target} with data ${calls[i].callData} on ${blockNumber} failed`,
           );
         }
 
