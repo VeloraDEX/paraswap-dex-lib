@@ -40,6 +40,7 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
   readonly factoryIface: Interface;
 
   feeFactor = 10000;
+  DefaultApexDefiPoolGasCost = 90 * 1000;
 
   readonly hasConstantPriceLargeAmounts = false;
 
@@ -153,6 +154,8 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
   // implement this function
   async initializePricing(blockNumber: number) {
     try {
+      await this.factory.initialize(blockNumber);
+
       // Get all supported tokens from the router
       const tokenAddresses = await this.dexHelper.multiContract.methods
         .aggregate([
@@ -250,6 +253,7 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
         this.supportedTokensMap[token.toLowerCase()] = tokenObj;
 
         // Create event pool for each token
+        // Since we got all tokens from the factory the token address is also the pair address
         const poolKey = this.getPoolIdentifier(token);
         if (!this.eventPools[poolKey]) {
           const eventPool = new ApexDefiEventPool(
@@ -309,28 +313,8 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
     return [this.getPoolIdentifier(pairAddress).toLowerCase()];
   }
 
-  protected getPoolIdentifier(pairAddress: string): string;
-  protected getPoolIdentifier(token0: string, token1: string): string;
-  protected getPoolIdentifier(
-    pairAddressOrToken0: string,
-    token1?: string,
-  ): string {
-    if (token1 !== undefined) {
-      // Called with two parameters (token0, token1)
-      // For ApexDefi, we need to determine which token is the pool address
-      // The pool address is always the non-WETH token
-      const wethAddress =
-        this.dexHelper.config.data.wrappedNativeTokenAddress.toLowerCase();
-      const poolAddress =
-        pairAddressOrToken0.toLowerCase() === wethAddress
-          ? token1
-          : pairAddressOrToken0;
-
-      return `${this.dexKey}_${poolAddress}`.toLowerCase();
-    } else {
-      // Called with one parameter (pairAddress)
-      return `${this.dexKey}_${pairAddressOrToken0}`.toLowerCase();
-    }
+  protected getPoolIdentifier(pairAddress: Address): string {
+    return `${this.dexKey}_${pairAddress}`.toLowerCase();
   }
 
   protected getPoolAddress(srcToken: Token, destToken: Token): string {
@@ -455,7 +439,7 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
             data: exchangeData,
             exchange: this.dexKey,
             poolIdentifier: poolIdentifier[0],
-            gasCost: 0, // Will be calculated by getCalldataGasCost
+            gasCost: this.DefaultApexDefiPoolGasCost, // Will be calculated by getCalldataGasCost
             poolAddresses: [discoveredPool.poolAddress],
           },
         ];
@@ -592,7 +576,7 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
 
       this.eventPools[poolKey] = eventPool;
 
-      this.logger.info(
+      this.logger.debug(
         `Discovered new pool: ${poolKey} for ${
           srcToken.symbol || srcToken.address
         } -> ${destToken.symbol || destToken.address}`,
@@ -657,7 +641,7 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
 
   /**
    * Calculate the input amount for a buy (exact output) swap
-   * Uses the constant product formula: amountIn = (amountOut * reserveIn) / (reserveOut - amountOut)
+   * Uses the constant product formula: amountIn = (amountOut * reserveIn * feeFactor) / ((reserveOut - amountOut) * (feeFactor - totalFee))
    */
   private getBuyPrice(
     state: any,
@@ -698,9 +682,11 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
       return 0n;
     }
 
+    // Use the same formula as UniswapV2: numerator = reserveIn * amountOut * feeFactor
+    // denominator = (feeFactor - totalFee) * (reserveOut - amountOut)
     const numerator = reserveIn * amountOut * BigInt(this.feeFactor);
     const denominator =
-      BigInt(this.feeFactor - totalFee) * (reserveOut - amountOut);
+      (BigInt(this.feeFactor) - BigInt(totalFee)) * (reserveOut - amountOut);
 
     if (denominator <= 0n) return 0n;
     return numerator === 0n ? 0n : 1n + numerator / denominator;
@@ -962,100 +948,171 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
 
   // Returns list of top pools based on liquidity. Max
   // limit number pools should be returned.
+  // ApexDefi is a single pool DEX, so we return the token itself as a pool with AVAX
   async getTopPoolsForToken(
     tokenAddress: Address,
     limit: number,
   ): Promise<PoolLiquidity[]> {
     try {
-      // For ApexDefi, we need to get all tokens and their reserves
-      // Since ApexDefi uses ERC314 tokens where each token is its own pool,
-      // we'll return the token itself as a pool with AVAX
-
       const blockNumber =
         await this.dexHelper.web3Provider.eth.getBlockNumber();
 
-      // Get all tokens from the factory
-      const tokenAddresses = await this.dexHelper.multiContract.methods
-        .aggregate([
-          {
-            target: ApexDefiConfig[this.dexKey][this.network].factoryAddress,
-            callData: this.factoryIface.encodeFunctionData('getAllTokens', []),
-          },
-        ])
-        .call({}, blockNumber);
+      // Check if the input token is WAVAX
+      const isWAVAX = this.dexHelper.config.isWETH(tokenAddress);
 
-      const tokens = this.factoryIface.decodeFunctionResult(
-        'getAllTokens',
-        tokenAddresses.returnData[0],
-      )[0] as Address[];
-
-      if (!tokens.length) {
-        return [];
-      }
-
-      // Filter tokens that match the input token address
-      const matchingTokens = tokens.filter(
-        token => token.toLowerCase() === tokenAddress.toLowerCase(),
-      );
-
-      if (!matchingTokens.length) {
-        return [];
-      }
-
-      // Get reserves for the matching tokens
-      const reservesCallData = this.tokenIface.encodeFunctionData(
-        'getReserves',
-        [],
-      );
-
-      const multiCall = matchingTokens.map(token => ({
-        target: token,
-        callData: reservesCallData,
-      }));
-
-      const result = await this.dexHelper.multiContract.methods
-        .aggregate(multiCall)
-        .call({}, blockNumber);
-
-      const pools: PoolLiquidity[] = [];
-
-      for (let i = 0; i < matchingTokens.length && pools.length < limit; i++) {
-        const token = matchingTokens[i];
-        const reserves = this.tokenIface.decodeFunctionResult(
-          'getReserves',
-          result.returnData[i],
-        );
-
-        // Calculate liquidity in USD (simplified - using AVAX as base)
-        // In a real implementation, you might want to get token prices from a price feed
-        const liquidityUSD = Number(reserves[0]) / 1e18; // AVAX reserve in USD (simplified)
-
-        pools.push({
-          exchange: this.dexKey,
-          address: token.toLowerCase(),
-          connectorTokens: [
+      if (isWAVAX) {
+        // If asking for WAVAX pools, return all tokens that have WAVAX pairs
+        const tokenAddresses = await this.dexHelper.multiContract.methods
+          .aggregate([
             {
-              address:
-                this.dexHelper.config.data.wrappedNativeTokenAddress.toLowerCase(),
+              target: ApexDefiConfig[this.dexKey][this.network].factoryAddress,
+              callData: this.factoryIface.encodeFunctionData(
+                'getAllTokens',
+                [],
+              ),
+            },
+          ])
+          .call({}, blockNumber);
+
+        const tokens = this.factoryIface.decodeFunctionResult(
+          'getAllTokens',
+          tokenAddresses.returnData[0],
+        )[0] as Address[];
+
+        if (!tokens.length) {
+          return [];
+        }
+
+        // Get reserves for all tokens (limit to requested limit)
+        const reservesCallData = this.tokenIface.encodeFunctionData(
+          'getReserves',
+          [],
+        );
+        const multiCall = tokens.map(token => ({
+          target: token,
+          callData: reservesCallData,
+        }));
+
+        const result = await this.dexHelper.multiContract.methods
+          .aggregate(multiCall)
+          .call({}, blockNumber);
+
+        const pools: PoolLiquidity[] = [];
+
+        for (let i = 0; i < tokens.length; i++) {
+          const token = tokens[i];
+          const reserves = this.tokenIface.decodeFunctionResult(
+            'getReserves',
+            result.returnData[i],
+          );
+
+          // If reserves are 0, skip this pool
+          if (reserves[0] === 0n && reserves[1] === 0n) {
+            continue;
+          }
+
+          // Calculate liquidity in USD using getTokenUSDPrice
+          const liquidityUSD = await this.dexHelper.getTokenUSDPrice(
+            {
+              address: this.dexHelper.config.data.wrappedNativeTokenAddress,
               decimals: 18,
             },
-          ],
-          liquidityUSD,
-        });
-      }
+            reserves[0], // AVAX reserves in wei
+          );
 
-      // Sort by liquidity and return top pools
-      return pools
-        .sort((a, b) => b.liquidityUSD - a.liquidityUSD)
-        .slice(0, limit);
+          pools.push({
+            exchange: this.dexKey,
+            address: token.toLowerCase(),
+            poolIdentifier: this.getPoolIdentifier(token),
+            connectorTokens: [
+              {
+                address:
+                  this.dexHelper.config.data.wrappedNativeTokenAddress.toLowerCase(),
+                decimals: 18,
+              },
+            ],
+            liquidityUSD,
+          });
+        }
+
+        // Sort by liquidity and return top pools
+        return pools
+          .sort((a, b) => b.liquidityUSD - a.liquidityUSD)
+          .slice(0, limit);
+      } else {
+        // For non-WAVAX tokens, check if they exist as a pool
+        const tokenInfo = await this.dexHelper.multiContract.methods
+          .aggregate([
+            {
+              target: ApexDefiConfig[this.dexKey][this.network].factoryAddress,
+              callData: this.factoryIface.encodeFunctionData(
+                'tokenInfoByTokenAddress',
+                [tokenAddress],
+              ),
+            },
+            {
+              target: tokenAddress,
+              callData: this.tokenIface.encodeFunctionData('getReserves', []),
+            },
+          ])
+          .call({}, blockNumber);
+
+        // Decode token info
+        const tokenData = this.factoryIface.decodeFunctionResult(
+          'tokenInfoByTokenAddress',
+          tokenInfo.returnData[0],
+        );
+
+        // If name is empty, the token doesn't exist in the factory
+        if (!tokenData[0] || tokenData[0] === '') {
+          return [];
+        }
+
+        // Decode reserves
+        const reserves = this.tokenIface.decodeFunctionResult(
+          'getReserves',
+          tokenInfo.returnData[1],
+        );
+
+        // If reserves are 0, the pool has no liquidity
+        if (reserves[0] === 0n && reserves[1] === 0n) {
+          return [];
+        }
+
+        // Calculate liquidity in USD using getTokenUSDPrice
+        const liquidityUSD = await this.dexHelper.getTokenUSDPrice(
+          {
+            address: this.dexHelper.config.data.wrappedNativeTokenAddress,
+            decimals: 18,
+          },
+          reserves[0], // AVAX reserves in wei
+        );
+
+        return [
+          {
+            exchange: this.dexKey,
+            address: tokenAddress.toLowerCase(),
+            poolIdentifier: this.getPoolIdentifier(tokenAddress),
+            connectorTokens: [
+              {
+                address:
+                  this.dexHelper.config.data.wrappedNativeTokenAddress.toLowerCase(),
+                decimals: 18,
+              },
+            ],
+            liquidityUSD,
+          },
+        ];
+      }
     } catch (error) {
-      this.logger.error('Error getting top pools for token:', error);
+      // If the call fails, the token doesn't exist as a pool
+      this.logger.debug(
+        `Token ${tokenAddress} is not a valid ApexDefi pool: ${error}`,
+      );
       return [];
     }
   }
 
-  // This is optional function in case if your implementation has acquired any resources
-  // you need to release for graceful shutdown. For example, it may be any interval timer
   releaseResources(): AsyncOrSync<void> {
     // Clean up event pools
     Object.values(this.eventPools).forEach(pool => {
@@ -1073,6 +1130,11 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
     Object.keys(this.supportedTokensMap).forEach(key => {
       delete this.supportedTokensMap[key];
     });
+
+    // Clean up factory if it has releaseResources
+    if (this.factory && this.factory.releaseResources) {
+      this.factory.releaseResources();
+    }
   }
 
   protected _getLoweredAddresses(srcToken: Token, destToken: Token) {

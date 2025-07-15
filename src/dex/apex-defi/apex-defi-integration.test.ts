@@ -54,10 +54,15 @@ function decodeReaderResult(
 ) {
   return results.map(result => {
     const parsed = readerIface.decodeFunctionResult(funcName, result);
-    // getAmountsOut returns uint256[] memory amounts
-    // We want the last amount (amountOut) from the path
-    const amounts = parsed[0] as bigint[];
-    return amounts[amounts.length - 1]; // Return the output amount
+    const amounts = parsed[0] as any[];
+
+    // For getAmountsIn, we want the first amount (input amount needed)
+    // For getAmountsOut, we want the last amount (output amount received)
+    if (funcName === 'getAmountsIn') {
+      return BigInt(amounts[0]._hex);
+    } else {
+      return BigInt(amounts[amounts.length - 1]._hex);
+    }
   });
 }
 
@@ -164,7 +169,7 @@ describe('ApexDefi', function () {
 
     const tokens = Tokens[network];
 
-    const srcTokenSymbol = 'AVAX';
+    const srcTokenSymbol = 'WAVAX';
     const destTokenSymbol = 'APEX';
 
     const amountsForSell = [
@@ -197,6 +202,7 @@ describe('ApexDefi', function () {
 
     beforeAll(async () => {
       blockNumber = await dexHelper.web3Provider.eth.getBlockNumber();
+      console.log('blockNumber', blockNumber);
       apexDefi = new ApexDefi(network, dexKey, dexHelper);
       if (apexDefi.initializePricing) {
         await apexDefi.initializePricing(blockNumber);

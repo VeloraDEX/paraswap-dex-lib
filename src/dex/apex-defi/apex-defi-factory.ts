@@ -66,4 +66,13 @@ export class ApexDefiFactory extends StatefulEventSubscriber<FactoryState> {
 
     await this.onPoolCreated({ pairAddress, blockNumber: log.blockNumber });
   }
+
+  // Add this method
+  releaseResources(): void {
+    // Clear handlers
+    this.handlers = {};
+
+    // Clear addresses subscribed
+    this.addressesSubscribed = [];
+  }
 }
