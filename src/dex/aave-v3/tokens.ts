@@ -3,14 +3,18 @@ import { Network } from '../../constants';
 
 import { AaveToken } from './types';
 
-export const Tokens: { [network: number]: { [symbol: string]: aToken } } = {};
+export const Tokens: {
+  [network: number]: { [dexKey: string]: { [symbol: string]: aToken } };
+} = {};
 
-const TokensByAddress: { [network: number]: { [address: string]: aToken } } =
-  {};
+export const TokensByAddress: {
+  [network: number]: { [dexKey: string]: { [address: string]: aToken } };
+} = {};
 
 // return null if the pair does not exists otherwise return the aToken
 export function getATokenIfAaveV3Pair(
   network: number,
+  dexKey: string,
   src: Token,
   dst: Token,
 ): Token | null {
@@ -21,8 +25,8 @@ export function getATokenIfAaveV3Pair(
     return null;
   }
 
-  const _src = TokensByAddress[network][srcAddr];
-  const _dst = TokensByAddress[network][dstAddr];
+  const _src = TokensByAddress[network][dexKey][srcAddr];
+  const _dst = TokensByAddress[network][dexKey][dstAddr];
 
   if (_src && _src.address.toLowerCase() == dstAddr) {
     return src;
@@ -37,9 +41,10 @@ export function getATokenIfAaveV3Pair(
 
 export function getTokenFromASymbol(
   network: number,
+  dexKey: string,
   symbol: string,
 ): Token | null {
-  const aToken = Tokens[network][symbol];
+  const aToken = Tokens[network][dexKey][symbol];
 
   if (!aToken) return null;
 
@@ -50,19 +55,29 @@ export function getTokenFromASymbol(
   };
 }
 
-export function setTokensOnNetwork(network: Network, tokens: AaveToken[]) {
+export function setTokensOnNetwork(
+  network: Network,
+  dexKey: string,
+  tokens: AaveToken[],
+) {
   if (Tokens[network] === undefined) {
     Tokens[network] = {};
   }
+  if (Tokens[network][dexKey] === undefined) {
+    Tokens[network][dexKey] = {};
+  }
   if (TokensByAddress[network] === undefined) {
     TokensByAddress[network] = {};
+  }
+  if (TokensByAddress[network][dexKey] === undefined) {
+    TokensByAddress[network][dexKey] = {};
   }
 
   for (let token of tokens) {
     token.address = token.address.toLowerCase();
     token.aAddress = token.aAddress.toLowerCase();
-    Tokens[network][token.aSymbol] = token;
-    TokensByAddress[network][token.aAddress] = token;
-    TokensByAddress[network][token.address] = token;
+    Tokens[network][dexKey][token.aSymbol] = token;
+    TokensByAddress[network][dexKey][token.aAddress] = token;
+    TokensByAddress[network][dexKey][token.address] = token;
   }
 }

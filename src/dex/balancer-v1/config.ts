@@ -6,7 +6,8 @@ export const MAX_POOL_CNT = 1000;
 export const MIN_USD_LIQUIDITY_TO_FETCH = 100;
 export const BALANCES_MULTICALL_POOLS_LIMIT = 200;
 export const MAX_POOLS_FOR_PRICING = 5;
-export const BALANCER_SWAP_GAS_COST = 120 * 1000;
+// https://dashboard.tenderly.co/paraswap/paraswap/simulator/2ae61b00-ad00-41e7-bfcd-a7e4fb3534ca?trace=0.3.0.0
+export const BALANCER_SWAP_GAS_COST = 150 * 1000;
 
 export const BalancerV1Config: DexConfigMap<DexParams> = {
   BalancerV1: {

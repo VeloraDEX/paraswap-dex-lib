@@ -18,7 +18,6 @@ import {
   Vector2,
 } from '@balancer-labs/sor';
 import GyroEAbi from '../../../../abi/balancer-v2/gyro-e.abi.json';
-import * as util from 'util';
 
 // Swap Limit factor
 const SWAP_LIMIT_FACTOR = BigInt('999999000000000000');

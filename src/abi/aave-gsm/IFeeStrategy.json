@@ -1,0 +1,78 @@
+[
+  {
+    "constant": true,
+    "inputs": [
+      {
+        "name": "grossAmount",
+        "type": "uint256"
+      }
+    ],
+    "name": "getBuyFee",
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "payable": false,
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "constant": true,
+    "inputs": [
+      {
+        "name": "grossAmount",
+        "type": "uint256"
+      }
+    ],
+    "name": "getSellFee",
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "payable": false,
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "constant": true,
+    "inputs": [
+      {
+        "name": "totalAmount",
+        "type": "uint256"
+      }
+    ],
+    "name": "getGrossAmountFromTotalBought",
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "payable": false,
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "constant": true,
+    "inputs": [
+      {
+        "name": "totalAmount",
+        "type": "uint256"
+      }
+    ],
+    "name": "getGrossAmountFromTotalSold",
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "payable": false,
+    "stateMutability": "view",
+    "type": "function"
+  }
+]

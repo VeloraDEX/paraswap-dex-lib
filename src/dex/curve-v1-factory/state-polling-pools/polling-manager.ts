@@ -1,9 +1,9 @@
 import { Logger } from 'log4js';
-import { Network } from '../../../constants';
 import { IDexHelper } from '../../../dex-helper';
 import { Utils, _require } from '../../../utils';
 import { PoolState } from '../types';
 import { MulticallReturnedTypes, PoolPollingBase } from './pool-polling-base';
+import { ExpHashPubSub } from '../../../lib/pub-sub';
 
 /*
  * Since we are updating all pools state at once, I need some generalized iterator without state,
@@ -11,7 +11,17 @@ import { MulticallReturnedTypes, PoolPollingBase } from './pool-polling-base';
  */
 
 export class StatePollingManager {
-  static async fetchAndSetStatesFromRPC(
+  private pubSub: ExpHashPubSub;
+
+  constructor(dexHelper: IDexHelper, cacheKey: string, ttl: number) {
+    this.pubSub = new ExpHashPubSub(dexHelper, cacheKey, ttl);
+  }
+
+  subscribe() {
+    this.pubSub.subscribe();
+  }
+
+  async fetchAndSetStatesFromRPC(
     dexHelper: IDexHelper,
     pools: PoolPollingBase[],
     blockNumber?: number,
@@ -94,7 +104,7 @@ export class StatePollingManager {
     return newStates;
   }
 
-  static async masterUpdatePoolsInBatch(
+  async masterUpdatePoolsInBatch(
     logger: Logger,
     dexHelper: IDexHelper,
     pools: PoolPollingBase[],
@@ -102,7 +112,7 @@ export class StatePollingManager {
   ) {
     const dexKey = pools.length > 0 ? pools[0].dexKey : 'CurveV1Factory';
     try {
-      const newStates = await StatePollingManager.fetchAndSetStatesFromRPC(
+      const newStates = await this.fetchAndSetStatesFromRPC(
         dexHelper,
         pools,
         blockNumber,
@@ -113,6 +123,17 @@ export class StatePollingManager {
         { poolLength: pools.length, newStatesLength: newStates.length },
         'newStates.length === pools.length',
       );
+
+      const dataToPublish: Record<string, PoolState | null> = newStates.reduce(
+        (acc, state, i) => {
+          acc[pools[i].poolIdentifier] = state;
+          return acc;
+        },
+        {} as Record<string, PoolState | null>,
+      );
+
+      this.pubSub.publish(dataToPublish);
+
       await Promise.all(
         pools.map(async (p, i) => {
           if (newStates[i] !== null) {
@@ -143,7 +164,7 @@ export class StatePollingManager {
     }
   }
 
-  static async slaveUpdatePoolsInBatch(
+  async slaveUpdatePoolsInBatch(
     logger: Logger,
     dexHelper: IDexHelper,
     pools: PoolPollingBase[],
@@ -155,15 +176,10 @@ export class StatePollingManager {
     await Promise.all(
       pools.map(async p => {
         try {
-          const unparsedStateFromCache = await dexHelper.cache.hget(
-            p.cacheStateKey,
+          const parsedState = await this.pubSub.getAndCache<PoolState>(
             p.poolIdentifier,
           );
-          if (unparsedStateFromCache !== null) {
-            const parsedState = Utils.Parse(
-              unparsedStateFromCache,
-            ) as PoolState;
-
+          if (parsedState !== null) {
             if (p.isStateUpToDate(parsedState)) {
               p.setState(parsedState);
               return;
@@ -197,7 +213,7 @@ export class StatePollingManager {
         }. Falling back to RPC`,
       );
 
-      await StatePollingManager.fetchAndSetStatesFromRPC(
+      await this.fetchAndSetStatesFromRPC(
         dexHelper,
         poolsForRPCUpdate,
         blockNumber,
@@ -217,7 +233,7 @@ export class StatePollingManager {
     }
   }
 
-  static async updatePoolsInBatch(
+  async updatePoolsInBatch(
     logger: Logger,
     dexHelper: IDexHelper,
     pools: PoolPollingBase[],
@@ -233,14 +249,9 @@ export class StatePollingManager {
     }
 
     if (dexHelper.config.isSlave) {
-      await StatePollingManager.slaveUpdatePoolsInBatch(
-        logger,
-        dexHelper,
-        pools,
-        blockNumber,
-      );
+      await this.slaveUpdatePoolsInBatch(logger, dexHelper, pools, blockNumber);
     } else {
-      await StatePollingManager.masterUpdatePoolsInBatch(
+      await this.masterUpdatePoolsInBatch(
         logger,
         dexHelper,
         pools,

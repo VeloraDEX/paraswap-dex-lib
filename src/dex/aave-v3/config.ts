@@ -7,20 +7,21 @@ import {
   AaveV3BNB,
   AaveV3Base,
   AaveV3Ethereum,
-  AaveV3Fantom,
+  AaveV3Sonic,
   AaveV3Optimism,
   AaveV3Polygon,
-  AaveV3PolygonZkEvm,
+  AaveV3Gnosis,
+  AaveV3EthereumLido,
 } from '@bgd-labs/aave-address-book';
 
 // TODO: find vals for V3
 export const Config: DexConfigMap<DexParam> = {
   AaveV3: {
-    [Network.FANTOM]: {
+    [Network.SONIC]: {
       ethGasCost: 246 * 100,
       lendingGasCost: 328 * 1000,
-      poolAddress: AaveV3Fantom.POOL,
-      wethGatewayAddress: AaveV3Fantom.WETH_GATEWAY,
+      poolAddress: AaveV3Sonic.POOL,
+      wethGatewayAddress: AaveV3Sonic.WETH_GATEWAY,
     },
     [Network.POLYGON]: {
       ethGasCost: 246 * 100,
@@ -64,11 +65,19 @@ export const Config: DexConfigMap<DexParam> = {
       poolAddress: AaveV3BNB.POOL,
       wethGatewayAddress: AaveV3BNB.WETH_GATEWAY,
     },
-    [Network.ZKEVM]: {
+    [Network.GNOSIS]: {
       ethGasCost: 246 * 100,
       lendingGasCost: 328 * 1000,
-      poolAddress: AaveV3PolygonZkEvm.POOL,
-      wethGatewayAddress: AaveV3PolygonZkEvm.WETH_GATEWAY,
+      poolAddress: AaveV3Gnosis.POOL,
+      wethGatewayAddress: AaveV3Gnosis.WETH_GATEWAY,
+    },
+  },
+  AaveV3Lido: {
+    [Network.MAINNET]: {
+      ethGasCost: 246 * 100,
+      lendingGasCost: 328 * 1000,
+      poolAddress: AaveV3EthereumLido.POOL,
+      wethGatewayAddress: AaveV3EthereumLido.WETH_GATEWAY,
     },
   },
 };
@@ -76,14 +85,6 @@ export const Config: DexConfigMap<DexParam> = {
 export const Adapters: {
   [chainId: number]: { [side: string]: { name: string; index: number }[] };
 } = {
-  [Network.FANTOM]: {
-    [SwapSide.SELL]: [
-      {
-        name: 'FantomAdapter01',
-        index: 6,
-      },
-    ],
-  },
   [Network.POLYGON]: {
     [SwapSide.SELL]: [
       {

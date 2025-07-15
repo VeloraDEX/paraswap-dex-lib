@@ -1,15 +1,13 @@
 import { DexParams } from './types';
-import { DexConfigMap, AdapterMappings } from '../../types';
-import { Network, SwapSide } from '../../constants';
+import { DexConfigMap } from '../../types';
+import { Network } from '../../constants';
 
 export const ApexDefiConfig: DexConfigMap<DexParams> = {
   ApexDefi: {
-    // TODO: complete me!
+    [Network.AVALANCHE]: {
+      factoryAddress: '0x754A0c42C35562eE7a41eb824d14bc1259820f01',
+      routerAddress: '0x5d2dDA02280F55A9D4529eadFA45Ff032928082B',
+      wrapperFactoryAddress: '0x709D667c0f7cb42e6099B1a2b2B71409086315Cc',
+    },
   },
-};
-
-export const Adapters: Record<number, AdapterMappings> = {
-  // TODO: add adapters for each chain
-  // This is an example to copy
-  [Network.MAINNET]: { [SwapSide.SELL]: [{ name: '', index: 0 }] },
 };

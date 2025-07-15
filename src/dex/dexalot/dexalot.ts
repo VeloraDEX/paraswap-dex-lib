@@ -68,6 +68,7 @@ import { BI_MAX_UINT256 } from '../../bigint-constants';
 import { ethers } from 'ethers';
 import BigNumber from 'bignumber.js';
 import { Method } from '../../dex-helper/irequest-wrapper';
+import { SpecialDex } from '../../executor/types';
 
 export class Dexalot extends SimpleExchange implements IDex<DexalotData> {
   readonly isStatePollingDex = true;
@@ -238,10 +239,14 @@ export class Dexalot extends SimpleExchange implements IDex<DexalotData> {
   }
 
   async getCachedPairs(): Promise<PairDataMap | null> {
-    const cachedPairs = await this.dexHelper.cache.get(
+    const cachedPairs = await this.dexHelper.cache.getAndCacheLocally(
       this.dexKey,
       this.network,
       this.pairsCacheKey,
+      // as local cache just uses passed ttl (instead of getting actual ttl from cache)
+      // pass shorter interval to avoid getting stale data
+      // (same logic is used in other places)
+      DEXALOT_API_PAIRS_POLLING_INTERVAL_MS / 1000,
     );
 
     if (cachedPairs) {
@@ -252,10 +257,11 @@ export class Dexalot extends SimpleExchange implements IDex<DexalotData> {
   }
 
   async getCachedPrices(): Promise<PriceDataMap | null> {
-    const cachedPrices = await this.dexHelper.cache.get(
+    const cachedPrices = await this.dexHelper.cache.getAndCacheLocally(
       this.dexKey,
       this.network,
       this.pricesCacheKey,
+      DEXALOT_API_PRICES_POLLING_INTERVAL_MS / 1000,
     );
 
     if (cachedPrices) {
@@ -266,10 +272,11 @@ export class Dexalot extends SimpleExchange implements IDex<DexalotData> {
   }
 
   async getCachedTokensAddr(): Promise<TokenAddrDataMap | null> {
-    const cachedTokensAddr = await this.dexHelper.cache.get(
+    const cachedTokensAddr = await this.dexHelper.cache.getAndCacheLocally(
       this.dexKey,
       this.network,
       this.tokensAddrCacheKey,
+      DEXALOT_API_PAIRS_POLLING_INTERVAL_MS / 1000,
     );
 
     if (cachedTokensAddr) {
@@ -280,10 +287,11 @@ export class Dexalot extends SimpleExchange implements IDex<DexalotData> {
   }
 
   async getCachedTokens(): Promise<TokenDataMap | null> {
-    const cachedTokens = await this.dexHelper.cache.get(
+    const cachedTokens = await this.dexHelper.cache.getAndCacheLocally(
       this.dexKey,
       this.network,
       this.tokensCacheKey,
+      DEXALOT_API_PAIRS_POLLING_INTERVAL_MS / 1000,
     );
 
     if (cachedTokens) {
@@ -592,12 +600,13 @@ export class Dexalot extends SimpleExchange implements IDex<DexalotData> {
             .multipliedBy(10000)
             .toFixed(0)
         : options.slippageFactor.minus(1).multipliedBy(10000).toFixed(0);
+
       const rfqParams = {
         makerAsset: ethers.utils.getAddress(makerToken.address),
         takerAsset: ethers.utils.getAddress(takerToken.address),
         makerAmount: isBuy ? optimalSwapExchange.destAmount : undefined,
         takerAmount: isSell ? optimalSwapExchange.srcAmount : undefined,
-        userAddress: options.txOrigin,
+        userAddress: options.userAddress,
         chainid: this.network,
         executor: options.executionContractAddress,
         partner: options.partner,
@@ -646,68 +655,59 @@ export class Dexalot extends SimpleExchange implements IDex<DexalotData> {
       const minDeadline = expiryAsBigInt > 0 ? expiryAsBigInt : BI_MAX_UINT256;
 
       const slippageFactor = options.slippageFactor;
-      let isFailOnSlippage = false;
-      let slippageErrorMessage = '';
+
+      const destAmount = optimalSwapExchange.destAmount;
+      const srcAmount = optimalSwapExchange.srcAmount;
+
+      const takerAmount = order.takerAmount;
+      const makerAmount = order.makerAmount;
 
       if (isSell) {
-        if (
-          BigInt(order.makerAmount) <
-          BigInt(
-            new BigNumber(optimalSwapExchange.destAmount.toString())
-              .times(slippageFactor)
-              .toFixed(0),
-          )
-        ) {
-          isFailOnSlippage = true;
-          const message = `${this.dexKey}-${this.network}: too much slippage on quote ${side} quoteTokenAmount ${order.makerAmount} / destAmount ${optimalSwapExchange.destAmount} < ${slippageFactor}`;
-          slippageErrorMessage = message;
-          this.logger.warn(message);
+        const requiredAmountWithSlippage = new BigNumber(destAmount)
+          .multipliedBy(slippageFactor)
+          .toFixed(0);
+
+        if (BigInt(makerAmount) < BigInt(requiredAmountWithSlippage)) {
+          const isTooStrict = BigNumber(1)
+            .minus(slippageFactor)
+            .lt(DEXALOT_MIN_SLIPPAGE_FACTOR_THRESHOLD_FOR_RESTRICTION);
+
+          const SlippageError = isTooStrict
+            ? TooStrictSlippageCheckError
+            : SlippageCheckError;
+
+          throw new SlippageError(
+            this.dexKey,
+            this.network,
+            side,
+            requiredAmountWithSlippage,
+            makerAmount,
+            slippageFactor,
+          );
         }
       } else {
-        if (
-          BigInt(order.takerAmount) >
-          BigInt(
-            slippageFactor
-              .times(optimalSwapExchange.srcAmount.toString())
-              .toFixed(0),
-          )
-        ) {
-          isFailOnSlippage = true;
-          const message = `${this.dexKey}-${
-            this.network
-          }: too much slippage on quote ${side} baseTokenAmount ${
-            order.takerAmount
-          } / srcAmount ${
-            optimalSwapExchange.srcAmount
-          } > ${slippageFactor.toFixed()}`;
-          slippageErrorMessage = message;
-          this.logger.warn(message);
+        const requiredAmountWithSlippage = new BigNumber(srcAmount)
+          .multipliedBy(slippageFactor)
+          .toFixed(0);
+
+        if (BigInt(takerAmount) > BigInt(requiredAmountWithSlippage)) {
+          const isTooStrict = slippageFactor
+            .minus(1)
+            .lt(DEXALOT_MIN_SLIPPAGE_FACTOR_THRESHOLD_FOR_RESTRICTION);
+
+          const SlippageError = isTooStrict
+            ? TooStrictSlippageCheckError
+            : SlippageCheckError;
+
+          throw new SlippageError(
+            this.dexKey,
+            this.network,
+            side,
+            requiredAmountWithSlippage,
+            takerAmount,
+            slippageFactor,
+          );
         }
-      }
-
-      let isTooStrictSlippage = false;
-      if (
-        isFailOnSlippage &&
-        isSell &&
-        new BigNumber(1)
-          .minus(slippageFactor)
-          .lt(DEXALOT_MIN_SLIPPAGE_FACTOR_THRESHOLD_FOR_RESTRICTION)
-      ) {
-        isTooStrictSlippage = true;
-      } else if (
-        isFailOnSlippage &&
-        isBuy &&
-        slippageFactor
-          .minus(1)
-          .lt(DEXALOT_MIN_SLIPPAGE_FACTOR_THRESHOLD_FOR_RESTRICTION)
-      ) {
-        isTooStrictSlippage = true;
-      }
-
-      if (isFailOnSlippage && isTooStrictSlippage) {
-        throw new TooStrictSlippageCheckError(slippageErrorMessage);
-      } else if (isFailOnSlippage && !isTooStrictSlippage) {
-        throw new SlippageCheckError(slippageErrorMessage);
       }
 
       return [
@@ -724,11 +724,11 @@ export class Dexalot extends SimpleExchange implements IDex<DexalotData> {
         const errorData = e.response.data as RFQResponseError;
         if (errorData.ReasonCode === 'FQ-009') {
           this.logger.warn(
-            `${this.dexKey}-${this.network}: Encountered rate limited user=${options.txOrigin}. Adding to local rate limit cache`,
+            `${this.dexKey}-${this.network}: Encountered rate limited user=${options.userAddress}. Adding to local rate limit cache`,
           );
-          await this.setRateLimited(options.txOrigin, errorData.RetryAfter);
+          await this.setRateLimited(options.userAddress, errorData.RetryAfter);
         } else {
-          await this.setBlacklist(options.txOrigin);
+          await this.setBlacklist(options.userAddress);
           this.logger.error(
             `${this.dexKey}-${this.network}: Failed to fetch RFQ for ${swapIdentifier}: ${errorData.Reason}`,
           );
@@ -892,20 +892,22 @@ export class Dexalot extends SimpleExchange implements IDex<DexalotData> {
   }
 
   async isBlacklisted(txOrigin: Address): Promise<boolean> {
-    const cachedBlacklist = await this.dexHelper.cache.get(
-      this.dexKey,
-      this.network,
-      this.blacklistCacheKey,
-    );
+    const [cachedBlacklist, isRateLimited] = await Promise.all([
+      this.dexHelper.cache.get(
+        this.dexKey,
+        this.network,
+        this.blacklistCacheKey,
+      ),
+      this.isRateLimited(txOrigin),
+    ]);
+
+    if (isRateLimited) {
+      return true;
+    }
 
     if (cachedBlacklist) {
       const blacklist = JSON.parse(cachedBlacklist) as string[];
       return blacklist.includes(txOrigin.toLowerCase());
-    }
-
-    // To not show pricing for rate limited users
-    if (await this.isRateLimited(txOrigin)) {
-      return true;
     }
 
     return false;
@@ -996,7 +998,7 @@ export class Dexalot extends SimpleExchange implements IDex<DexalotData> {
       `${this.dexKey}-${this.network}: quoteData undefined`,
     );
 
-    const swapFunction = 'simpleSwap';
+    const swapFunction = 'partialSwap';
     const swapFunctionParams = [
       [
         quoteData.nonceAndMeta,
@@ -1009,6 +1011,8 @@ export class Dexalot extends SimpleExchange implements IDex<DexalotData> {
         quoteData.takerAmount,
       ],
       quoteData.signature,
+      // might be overwritten on Executors
+      quoteData.takerAmount,
     ];
 
     const exchangeData = this.rfqInterface.encodeFunctionData(
@@ -1022,6 +1026,9 @@ export class Dexalot extends SimpleExchange implements IDex<DexalotData> {
       dexFuncHasRecipient: false,
       targetExchange: this.mainnetRFQAddress,
       returnAmountPos: undefined,
+      specialDexFlag: SpecialDex.SWAP_ON_DEXALOT,
+      // cannot modify amount due to signature checks
+      specialDexSupportsInsertFromAmount: false,
     };
   }
 

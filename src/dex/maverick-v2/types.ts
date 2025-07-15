@@ -120,6 +120,7 @@ export type MaverickV2Param = {
 };
 
 export type DexParams = {
+  routerAddress: string;
   quoterAddress: string;
   poolLensAddress: string;
 };
@@ -132,6 +133,9 @@ export type PoolAPIResponse = {
     lowerTick: number;
     tickSpacing: number;
     id: string;
+    volume: {
+      amount: number;
+    };
     tokenA: {
       name: string;
       symbol: string;

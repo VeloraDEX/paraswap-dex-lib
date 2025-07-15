@@ -61,20 +61,6 @@ export const Adapters: {
       },
     ],
   },
-  [Network.FANTOM]: {
-    [SwapSide.SELL]: [
-      {
-        name: 'FantomAdapter01',
-        index: 2,
-      },
-    ],
-    [SwapSide.BUY]: [
-      {
-        name: 'FantomBuyAdapter',
-        index: 1,
-      },
-    ],
-  },
   [Network.ARBITRUM]: {
     [SwapSide.SELL]: [
       {
@@ -156,6 +142,7 @@ export const UniswapV2Config: DexConfigMap<DexParams> = {
         '0x96e8ac4277198ff8b6f785478aa9a39f403cb768dd02cbee326c3e7da348845f',
       poolGasCost: 80 * 1000,
       feeCode: 30,
+      subgraphURL: '4jGhpKjW4prWoyt5Bwk1ZHUwdEmNWveJcjEyjoTZWCY9',
     },
     [Network.OPTIMISM]: {
       factoryAddress: '0x0c3c1c532F1e39EdF36BE9Fe0bE1410313E074Bf',
@@ -166,6 +153,13 @@ export const UniswapV2Config: DexConfigMap<DexParams> = {
     },
     [Network.POLYGON]: {
       factoryAddress: '0x9e5A52f57b3038F1B8EeE45F28b3C1967e22799C',
+      initCode:
+        '0x96e8ac4277198ff8b6f785478aa9a39f403cb768dd02cbee326c3e7da348845f',
+      poolGasCost: 80 * 1000,
+      feeCode: 30,
+    },
+    [Network.UNICHAIN]: {
+      factoryAddress: '0x1f98400000000000000000000000000000000002',
       initCode:
         '0x96e8ac4277198ff8b6f785478aa9a39f403cb768dd02cbee326c3e7da348845f',
       poolGasCost: 80 * 1000,
@@ -292,15 +286,6 @@ export const UniswapV2Config: DexConfigMap<DexParams> = {
       feeCode: 30,
     },
   },
-  KnightSwap: {
-    [Network.FANTOM]: {
-      subgraphURL: 'Fuygw2tyo693QMagUQCvfRpPiKjD7jVUa1wUPfzjsKxG',
-      factoryAddress: '0x7d82f56ea0820a9d42b01c3c28f1997721732218',
-      initCode:
-        '0x2e8dbc8cf79694a7ef827213d52da525b45ddf645a4abd477fcb4af09bfb5f0e',
-      feeCode: 20,
-    },
-  },
   LinkSwap: {
     [Network.MAINNET]: {
       subgraphURL: '3H25xhPJELikCCTfQD8r1gYn3sM7CUtau3nspbo496rR',
@@ -337,6 +322,24 @@ export const UniswapV2Config: DexConfigMap<DexParams> = {
       feeCode: 30,
     },
   },
+  ArenaDex: {
+    [Network.AVALANCHE]: {
+      factoryAddress: '0x231DF4D421f1F9e0AAe9bA3634a87EBC87A09c39',
+      initCode:
+        '0x5eae27f407e5d417db3b2c176a2221883934aa8eecf365f8795afb69ee0b23d1',
+      poolGasCost: 120 * 1000,
+      feeCode: 30,
+    },
+  },
+  ArenaDexV2: {
+    [Network.AVALANCHE]: {
+      factoryAddress: '0xF16784dcAf838a3e16bEF7711a62D12413c39BD1',
+      initCode:
+        '0xe5982ea9aa099c260fbe1f626ddf304ecab74f9d85fb8c5277156486875ab7fe',
+      poolGasCost: 120 * 1000,
+      feeCode: 30,
+    },
+  },
   PancakeSwap: {
     [Network.BSC]: {
       factoryAddress: '0xBCfCcbde45cE874adCB698cC183deBcF17952812',
@@ -346,6 +349,7 @@ export const UniswapV2Config: DexConfigMap<DexParams> = {
       feeCode: 20,
     },
   },
+  // RPC Pool Tracker is used
   PancakeSwapV2: {
     [Network.BSC]: {
       // subgraphURL: 'AD7yfts4Uzeav8eXQ6yxZ64VXjzDrJ1b76Gvka2VSnhd',
@@ -372,25 +376,6 @@ export const UniswapV2Config: DexConfigMap<DexParams> = {
       feeCode: 25,
     },
   },
-  PaintSwap: {
-    [Network.FANTOM]: {
-      // subgraphURL:
-      //   'https://api.thegraph.com/subgraphs/name/paint-swap-finance/exchange',
-      factoryAddress: '0x733a9d1585f2d14c77b49d39bc7d7dd14cda4aa5',
-      initCode:
-        '0x52178a9131f5551c2e56bf7cbf02aed8be8130e6493915a6b0c7602ac2125e54',
-      feeCode: 30,
-    },
-  },
-  MorpheusSwap: {
-    [Network.FANTOM]: {
-      subgraphURL: 'C5XUzYLrDHiiKL7zGjLLyiQueJkQfeUyMZCcgwnVWcNr',
-      factoryAddress: '0x9c454510848906fddc846607e4baa27ca999fbb6',
-      initCode:
-        '0x82b04e3f5f54946a0ed70d459c25f54ad42d498268c75b27f9727e3d212e91fd',
-      feeCode: 15,
-    },
-  },
   SushiSwap: {
     [Network.MAINNET]: {
       subgraphURL: 'A4JrrMwrEXsYNAiYw7rWwbHhQZdj6YZg1uVy5wa6g821',
@@ -406,9 +391,9 @@ export const UniswapV2Config: DexConfigMap<DexParams> = {
         '0xe18a34eb0e04b04f7a0ac29a6e80748dca96319b42c54d679cb821dca90c6303',
       feeCode: 30,
     },
-    [Network.FANTOM]: {
-      subgraphURL: '3nozHyFKUhxnEvekFg5G57bxPC5V63eiWbwmgA35N5VK',
-      factoryAddress: '0xc35dadb65012ec5796536bd9864ed8773abc74c4',
+    [Network.SONIC]: {
+      subgraphURL: 'DiS2ZgxR2upUs1s21wviEaY7hwjRWyrphhoBgKNc1Boo',
+      factoryAddress: '0xB45e53277a7e0F1D35f2a77160e91e25507f1763',
       initCode:
         '0xe18a34eb0e04b04f7a0ac29a6e80748dca96319b42c54d679cb821dca90c6303',
       feeCode: 30,
@@ -425,6 +410,22 @@ export const UniswapV2Config: DexConfigMap<DexParams> = {
       factoryAddress: '0xc35DADB65012eC5796536bD9864eD8773aBc74C4',
       initCode:
         '0xe18a34eb0e04b04f7a0ac29a6e80748dca96319b42c54d679cb821dca90c6303',
+      feeCode: 30,
+    },
+    [Network.GNOSIS]: {
+      subgraphURL: '7czeiia7ZXvsW45szX2w8EK1ZNgZWZET83zYCwE6JT9x',
+      factoryAddress: '0xc35dadb65012ec5796536bd9864ed8773abc74c4',
+      initCode:
+        '0xe18a34eb0e04b04f7a0ac29a6e80748dca96319b42c54d679cb821dca90c6303',
+      feeCode: 30,
+    },
+  },
+  HoneySwap: {
+    [Network.GNOSIS]: {
+      subgraphURL: '7vjh6q6gj6M1bhRNgkKZmWqd5jot79kV84BiQtUDQSdV',
+      factoryAddress: '0xa818b4f111ccac7aa31d0bcc0806d64f2e0737d7',
+      initCode:
+        '0xdbd265d4828759db2a0351a7b97180bcc41449a038bcd08a45afe937147f6267',
       feeCode: 30,
     },
   },
@@ -445,22 +446,22 @@ export const UniswapV2Config: DexConfigMap<DexParams> = {
         '0x96e8ac4277198ff8b6f785478aa9a39f403cb768dd02cbee326c3e7da348845f',
       feeCode: 30,
     },
-  },
-  SpookySwap: {
-    [Network.FANTOM]: {
-      subgraphURL: 'HyhMfT7gehNHMBmFiExqeg3pDtop9UikjvBPfAXT3b21',
-      factoryAddress: '0x152ee697f2e276fa89e96742e9bb9ab1f2e61be3',
+    [Network.BASE]: {
+      subgraphURL:
+        'https://api.studio.thegraph.com/query/113693/quickswap-v-2-base/version/latest',
+      factoryAddress: '0xEC6540261aaaE13F236A032d454dc9287E52e56A',
       initCode:
-        '0xcdf2deca40a0bd56de8e3ce5c7df6727e5b1bf2ac96f283fa9c4b3e6b42ea9d2',
-      feeCode: 20,
+        '0xa18736c3ee97fe3c96c9428c0cc2a9116facec18e84f95f9da30543f8238a782',
+      feeCode: 30,
     },
   },
-  SpiritSwap: {
-    [Network.FANTOM]: {
-      factoryAddress: '0xEF45d134b73241eDa7703fa787148D9C9F4950b0',
+  SpookySwap: {
+    [Network.SONIC]: {
+      subgraphURL: '', // deployed on 0xgraph
+      factoryAddress: '0xEE4bC42157cf65291Ba2FE839AE127e3Cc76f741',
       initCode:
-        '0xe242e798f6cee26a9cb0bbf24653bf066e5356ffeac160907fe2cc108e238617',
-      feeCode: 30,
+        '0xc0a4478c7d7a8e51439185380bd1914dea14c12086db861090a5dc8d11b4e95b',
+      feeCode: 20,
     },
   },
   ShibaSwap: {

@@ -15,6 +15,7 @@ import { _reduceTickBitmap, _reduceTicks } from '../../contract-math/utils';
 import { bigIntify } from '../../../../utils';
 import { TickBitMap } from '../../contract-math/TickBitMap';
 import { ethers } from 'ethers';
+import { INACTIVE_POOL_AGE_MS } from '../../constants';
 
 export class VelodromeSlipstreamEventPool extends UniswapV3EventPool {
   public readonly poolIface = new Interface(VelodromeSlipstreamPoolABI);
@@ -101,6 +102,11 @@ export class VelodromeSlipstreamEventPool extends UniswapV3EventPool {
       DecodedStateMultiCallResultWithRelativeBitmaps,
     ];
 
+    const inactiveTimestampMs = Date.now() - INACTIVE_POOL_AGE_MS;
+    const isActive =
+      inactiveTimestampMs < _state.observation.blockTimestamp * 1000;
+    assert(isActive, 'Pool is inactive');
+
     const tickBitmap = {};
     const ticks = {};
 
@@ -125,6 +131,7 @@ export class VelodromeSlipstreamEventPool extends UniswapV3EventPool {
     const requestedRange = this.getBitmapRangeToRequest();
 
     return {
+      networkId: this.dexHelper.config.data.network,
       pool: _state.pool,
       fee,
       blockTimestamp: bigIntify(_state.blockTimestamp),

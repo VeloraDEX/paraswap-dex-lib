@@ -409,6 +409,7 @@ export class Solidly extends UniswapV2 {
             isFeeTokenInRoute: Object.values(transferFees).some(f => f !== 0),
             pools: [
               {
+                stable: pairParam.stable,
                 address: pairParam.exchange,
                 fee: parseInt(pairParam.fee),
                 direction: pairParam.direction,
@@ -444,6 +445,7 @@ export class Solidly extends UniswapV2 {
     if (!this.subgraphURL) return [];
 
     let stableFieldKey = '';
+    let skipReserveCheck = false;
 
     if (this.dexKey.toLowerCase() === 'solidly') {
       stableFieldKey = 'stable';
@@ -451,8 +453,15 @@ export class Solidly extends UniswapV2 {
       stableFieldKey = 'isStable';
     }
 
+    // aerodrome subgraph has broken reserve and other volume fields with all 0s
+    if (this.dexKey.toLowerCase() === 'aerodrome') {
+      skipReserveCheck = true;
+    }
+
     const query = `query ($token: Bytes!, $count: Int) {
-      pools0: pairs(first: $count, orderBy: reserveUSD, orderDirection: desc, where: {token0: $token, reserve0_gt: 1, reserve1_gt: 1}) {
+      pools0: pairs(first: $count, orderBy: reserveUSD, orderDirection: desc, where: {token0: $token ${
+        skipReserveCheck ? '' : ', reserve0_gt: 0.1, reserve1_gt: 0.1'
+      }}) {
         id
         ${stableFieldKey}
         token0 {
@@ -465,7 +474,9 @@ export class Solidly extends UniswapV2 {
         }
         reserveUSD
       }
-      pools1: pairs(first: $count, orderBy: reserveUSD, orderDirection: desc, where: {token1: $token, reserve0_gt: 1, reserve1_gt: 1}) {
+      pools1: pairs(first: $count, orderBy: reserveUSD, orderDirection: desc, where: {token1: $token ${
+        skipReserveCheck ? '' : ', reserve0_gt: 0.1, reserve1_gt: 0.1'
+      }}) {
         id
         ${stableFieldKey}
         token0 {
@@ -657,9 +668,17 @@ export class Solidly extends UniswapV2 {
     if (side === SwapSide.BUY) throw new Error(`Buy not supported`);
     let exchangeDataTypes = ['bytes4', 'bytes32'];
 
+    const isStable = data.pools.some(pool => !!pool.stable);
+    const isStablePoolAndPoolCount = isStable
+      ? BigNumber.from(1)
+          .shl(255)
+          .or(BigNumber.from(data.pools.length))
+          .toHexString()
+      : hexZeroPad(hexlify(data.pools.length), 32);
+
     let exchangeDataToPack = [
       hexZeroPad(hexlify(0), 4),
-      hexZeroPad(hexlify(data.pools.length), 32),
+      isStablePoolAndPoolCount,
     ];
 
     const pools = encodePools(data.pools, this.feeFactor);

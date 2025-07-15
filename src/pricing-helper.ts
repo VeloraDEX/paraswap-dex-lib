@@ -191,7 +191,7 @@ export class PricingHelper {
       srcDexFee: 0,
       destDexFee: 0,
     },
-    rollupL1ToL2GasRatio?: number,
+    rollupL1CalldataCostToL2GasCost?: (calldataCost: number) => number,
   ): Promise<PoolPrices<any>[]> {
     const dexPoolPrices = await Promise.all(
       dexKeys.map(async key => {
@@ -229,39 +229,47 @@ export class PricingHelper {
                 )
                 .then(poolPrices => {
                   try {
-                    if (!poolPrices || !rollupL1ToL2GasRatio) {
+                    if (!poolPrices || !rollupL1CalldataCostToL2GasCost) {
                       return resolve(poolPrices);
                     }
                     return resolve(
                       poolPrices.map(pp => {
                         pp.gasCostL2 = pp.gasCost;
-                        const gasCostL1 = dexInstance.getCalldataGasCost(pp);
+                        const calldataGasCost =
+                          dexInstance.getCalldataGasCost(pp);
                         if (
                           typeof pp.gasCost === 'number' &&
-                          typeof gasCostL1 === 'number'
+                          pp.gasCost !== 0 &&
+                          typeof calldataGasCost === 'number'
                         ) {
                           pp.gasCost += Math.ceil(
-                            rollupL1ToL2GasRatio * gasCostL1,
+                            rollupL1CalldataCostToL2GasCost(calldataGasCost),
                           );
                         } else if (
                           typeof pp.gasCost !== 'number' &&
-                          typeof gasCostL1 !== 'number'
+                          typeof calldataGasCost !== 'number'
                         ) {
-                          if (pp.gasCost.length !== gasCostL1.length) {
+                          if (pp.gasCost.length !== calldataGasCost.length) {
                             throw new Error(
                               `getCalldataGasCost returned wrong array length in dex ${key}`,
                             );
                           }
-                          pp.gasCost = pp.gasCost.map(
-                            (g, i) =>
-                              g +
-                              Math.ceil(rollupL1ToL2GasRatio * gasCostL1[i]),
+                          pp.gasCost = pp.gasCost.map((g, i) =>
+                            g === 0
+                              ? 0
+                              : g +
+                                Math.ceil(
+                                  rollupL1CalldataCostToL2GasCost(
+                                    calldataGasCost[i],
+                                  ),
+                                ),
                           );
                         } else {
                           throw new Error(
                             `getCalldataGasCost returned wrong type in dex ${key}`,
                           );
                         }
+                        pp.calldataGasCost = calldataGasCost;
                         return pp;
                       }),
                     );

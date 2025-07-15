@@ -54,4 +54,12 @@ module.exports = {
       },
     ],
   },
+  overrides: [
+    {
+      files: ['tests/**/*.ts', '*.test.ts'],
+      rules: {
+        'no-console': 'off',
+      },
+    },
+  ],
 };

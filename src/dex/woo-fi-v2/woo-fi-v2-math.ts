@@ -30,12 +30,18 @@ export class WooFiV2Math {
     fromAmounts: bigint[],
   ): bigint[] | null {
     try {
+      const { reserve, capBal } = this.state.tokenInfos[fromToken];
+      const amounts = fromAmounts.map(amount => {
+        if (reserve + amount > capBal) return 0n;
+        else return amount;
+      });
+
       if (fromToken === this._quoteToken) {
-        return this._querySellQuote(toToken, fromAmounts);
+        return this._querySellQuote(toToken, amounts);
       } else if (toToken === this._quoteToken) {
-        return this._querySellBase(fromToken, fromAmounts);
+        return this._querySellBase(fromToken, amounts);
       } else {
-        return this._queryBaseToBase(fromToken, toToken, fromAmounts);
+        return this._queryBaseToBase(fromToken, toToken, amounts);
       }
     } catch (e) {
       handleMathError(e, this.logger);
@@ -46,6 +52,14 @@ export class WooFiV2Math {
   _querySellBase(baseToken: Address, baseAmounts: bigint[]): bigint[] | null {
     try {
       const _state = this.state.tokenStates[baseToken];
+
+      if (!_state.woFeasible) {
+        this.logger.error(
+          `Oracle state for base token ${baseToken} is not feasible, state timestamp: ${this.state.oracleTimestamp}`,
+        );
+        return null;
+      }
+
       let quoteAmounts = this._calcQuoteAmountSellBase(
         baseToken,
         baseAmounts,
@@ -72,6 +86,14 @@ export class WooFiV2Math {
       quoteAmounts = this._takeFee(quoteAmounts, feeRate);
 
       const _state = this.state.tokenStates[baseToken];
+
+      if (!_state.woFeasible) {
+        this.logger.error(
+          `Oracle state for base token ${baseToken} is not feasible, state timestamp: ${this.state.oracleTimestamp}`,
+        );
+        return null;
+      }
+
       let toAmounts = this._calcBaseAmountSellQuote(
         baseToken,
         quoteAmounts,
@@ -96,6 +118,23 @@ export class WooFiV2Math {
     try {
       let state1: TokenState = this.state.tokenStates[baseToken1];
       let state2: TokenState = this.state.tokenStates[baseToken2];
+
+      if (!state1.woFeasible || !state2.woFeasible) {
+        let errorMessage = 'Oracle state is not feasible for base token';
+        const logBoth = !state1.woFeasible && !state2.woFeasible;
+
+        if (logBoth) {
+          errorMessage += `s ${baseToken1} and ${baseToken2}`;
+        } else {
+          const token = !state1.woFeasible ? baseToken1 : baseToken2;
+          errorMessage += ` ${token}`;
+        }
+
+        errorMessage += `, state timestamp: ${this.state.oracleTimestamp}`;
+
+        this.logger.error(errorMessage);
+        return null;
+      }
 
       const feeRate1 = this.state.tokenInfos[baseToken1].feeRate;
       const feeRate2 = this.state.tokenInfos[baseToken2].feeRate;

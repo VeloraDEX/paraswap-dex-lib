@@ -92,7 +92,7 @@ export class RateFetcher {
 
   stop() {
     this.rateFetcher.stopPolling();
-    this.tokensFetcher.startPolling();
+    this.tokensFetcher.stopPolling();
   }
 
   private handleTokensResponse(resp: SwaapV2TokensResponse): void {

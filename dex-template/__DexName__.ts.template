@@ -16,7 +16,7 @@ import { IDex } from '../../dex/idex';
 import { IDexHelper } from '../../dex-helper/idex-helper';
 import { __DexName__Data } from './types';
 import { SimpleExchange } from '../simple-exchange';
-import { __DexName__Config, Adapters } from './config';
+import { __DexName__Config } from './config';
 import { __DexName__EventPool } from './__DexNameParam__-pool';
 
 export class __DexName__
@@ -40,7 +40,6 @@ export class __DexName__
     readonly network: Network,
     readonly dexKey: string,
     readonly dexHelper: IDexHelper,
-    protected adapters = Adapters[network] || {}, // TODO: add any additional optional params to support other fork DEXes
   ) {
     super(dexHelper, dexKey);
     this.logger = dexHelper.getLogger(dexKey);
@@ -60,10 +59,11 @@ export class __DexName__
     // TODO: complete me!
   }
 
+  // Legacy: was only used for V5
   // Returns the list of contract adapters (name and index)
   // for a buy/sell. Return null if there are no adapters.
   getAdapters(side: SwapSide): { name: string; index: number }[] | null {
-    return this.adapters[side] ? this.adapters[side] : null;
+    return null;
   }
 
   // Returns list of pool identifiers that can be used

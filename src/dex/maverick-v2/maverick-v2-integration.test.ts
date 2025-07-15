@@ -34,10 +34,6 @@ import { AbiItem } from 'web3-utils';
   (This comment should be removed from the final implementation)
 */
 
-const network = Network.BASE;
-const dexKey = 'MaverickV2';
-const dexHelper = new DummyDexHelper(network);
-
 function calculateSwap(
   network: Network,
   pool: PoolPrices<MaverickV2Data>,
@@ -47,11 +43,12 @@ function calculateSwap(
   side: SwapSide,
   amount: bigint,
 ) {
+  const dexHelper = new DummyDexHelper(network);
   srcToken = dexHelper.config.wrapETH(srcToken);
 
   let quoterContract = new dexHelper.web3Provider.eth.Contract(
     MaverickV2QuoterABI as AbiItem[],
-    MaverickV2Config[dexKey][network].quoterAddress,
+    MaverickV2Config['MaverickV2'][network].quoterAddress,
   );
 
   return new Promise((resolve, reject) => {
@@ -62,8 +59,8 @@ function calculateSwap(
         pool.data.tokenA.toLowerCase() === srcToken.toLowerCase(),
         side === SwapSide.BUY,
         pool.data.tokenA.toLowerCase() === srcToken.toLowerCase()
-          ? 1000000n
-          : -1000000n,
+          ? 100n
+          : -100n,
       )
       .call({}, blockNumber, (err: any, result: any) => {
         if (err) {
@@ -84,8 +81,7 @@ function calculateSwap(
 }
 
 async function checkOnChainPricing(
-  maverickV2: MaverickV2,
-  funcName: string,
+  network: Network,
   blockNumber: number,
   pools: ExchangePrices<MaverickV2Data>,
   amounts: bigint[],
@@ -143,7 +139,7 @@ async function testPricingOnNetwork(
     blockNumber,
   );
   console.log(
-    `${srcTokenSymbol} <> ${destTokenSymbol} Pool Identifiers: `,
+    `${srcTokenSymbol} <> ${destTokenSymbol} (${side}) Pool Identifiers: `,
     pools,
   );
 
@@ -158,7 +154,7 @@ async function testPricingOnNetwork(
     pools,
   );
   console.log(
-    `${srcTokenSymbol} <> ${destTokenSymbol} Pool Prices: `,
+    `${srcTokenSymbol} <> ${destTokenSymbol} (${side}) Pool Prices: `,
     poolPrices,
   );
 
@@ -171,8 +167,7 @@ async function testPricingOnNetwork(
 
   // Check if onchain pricing equals to calculated ones
   await checkOnChainPricing(
-    maverickV2,
-    funcNameToCheck,
+    network,
     blockNumber,
     poolPrices!,
     amounts,
@@ -181,103 +176,112 @@ async function testPricingOnNetwork(
   );
 }
 
+const testCases = [
+  { network: Network.MAINNET, srcTokenSymbol: 'GHO', destTokenSymbol: 'USDC' },
+  {
+    network: Network.ARBITRUM,
+    srcTokenSymbol: 'USDT',
+    destTokenSymbol: 'USDC',
+  },
+  { network: Network.BASE, srcTokenSymbol: 'ETH', destTokenSymbol: 'wstETH' },
+  // {network: Network.BSC, srcTokenSymbol: "USDC", destTokenSymbol: "USDT"},
+];
 describe('MaverickV2', function () {
   const dexKey = 'MaverickV2';
-  let blockNumber: number;
-  let maverickV2: MaverickV2;
-  const network = Network.BASE;
 
-  describe(network, () => {
+  for (const { network, srcTokenSymbol, destTokenSymbol } of testCases) {
     const dexHelper = new DummyDexHelper(network);
 
-    const tokens = Tokens[network];
+    let blockNumber: number;
+    let maverickV2: MaverickV2;
 
-    const srcTokenSymbol = 'ETH';
-    const destTokenSymbol = 'USDC';
+    describe(network, () => {
+      const tokens = Tokens[network];
 
-    const srcDecimals = tokens[srcTokenSymbol].decimals;
-    const destDecimals = tokens[destTokenSymbol].decimals;
+      const srcDecimals = tokens[srcTokenSymbol].decimals;
+      const destDecimals = tokens[destTokenSymbol].decimals;
 
-    const amountsForSell = [
-      0n,
-      1n * BI_POWS[srcDecimals],
-      2n * BI_POWS[srcDecimals],
-      3n * BI_POWS[srcDecimals],
-      4n * BI_POWS[srcDecimals],
-      5n * BI_POWS[srcDecimals],
-      6n * BI_POWS[srcDecimals],
-      7n * BI_POWS[srcDecimals],
-      8n * BI_POWS[srcDecimals],
-      // 9n * BI_POWS[srcDecimals],
-      // 10n * BI_POWS[srcDecimals],
-    ];
+      const amountsForSell = [
+        0n,
+        1n * BI_POWS[srcDecimals],
+        2n * BI_POWS[srcDecimals],
+        3n * BI_POWS[srcDecimals],
+        4n * BI_POWS[srcDecimals],
+        5n * BI_POWS[srcDecimals],
+        6n * BI_POWS[srcDecimals],
+        7n * BI_POWS[srcDecimals],
+        8n * BI_POWS[srcDecimals],
+        9n * BI_POWS[srcDecimals],
+        10n * BI_POWS[srcDecimals],
+      ];
 
-    const amountsForBuy = [
-      0n,
-      1n * BI_POWS[destDecimals],
-      2n * BI_POWS[destDecimals],
-      3n * BI_POWS[destDecimals],
-      4n * BI_POWS[destDecimals],
-      5n * BI_POWS[destDecimals],
-      6n * BI_POWS[destDecimals],
-      7n * BI_POWS[destDecimals],
-      8n * BI_POWS[destDecimals],
-      // 9n * BI_POWS[destDecimals],
-      // 10n * BI_POWS[destDecimals],
-    ];
+      const amountsForBuy = [
+        0n,
+        1n * BI_POWS[destDecimals],
+        2n * BI_POWS[destDecimals],
+        3n * BI_POWS[destDecimals],
+        4n * BI_POWS[destDecimals],
+        5n * BI_POWS[destDecimals],
+        6n * BI_POWS[destDecimals],
+        7n * BI_POWS[destDecimals],
+        8n * BI_POWS[destDecimals],
+        9n * BI_POWS[destDecimals],
+        10n * BI_POWS[destDecimals],
+      ];
 
-    beforeAll(async () => {
-      blockNumber = await dexHelper.web3Provider.eth.getBlockNumber();
-      maverickV2 = new MaverickV2(network, dexKey, dexHelper);
-      await maverickV2.initializePricing(blockNumber);
-    });
+      beforeAll(async () => {
+        blockNumber = await dexHelper.web3Provider.eth.getBlockNumber();
+        maverickV2 = new MaverickV2(network, dexKey, dexHelper);
+        await maverickV2.initializePricing(blockNumber);
+      });
 
-    it('getPoolIdentifiers and getPricesVolume SELL', async function () {
-      await testPricingOnNetwork(
-        maverickV2,
-        network,
-        dexKey,
-        blockNumber,
-        srcTokenSymbol,
-        destTokenSymbol,
-        SwapSide.SELL,
-        amountsForSell,
-        'calculatePrice',
-      );
-    });
-
-    // it('getPoolIdentifiers and getPricesVolume BUY', async function () {
-    //   await testPricingOnNetwork(
-    //     maverickV2,
-    //     network,
-    //     dexKey,
-    //     blockNumber,
-    //     srcTokenSymbol,
-    //     destTokenSymbol,
-    //     SwapSide.BUY,
-    //     amountsForBuy,
-    //     'calculatePrice',
-    //   );
-    // });
-
-    it('getTopPoolsForToken', async function () {
-      const newMaverickV2 = new MaverickV2(network, dexKey, dexHelper);
-      if (newMaverickV2.updatePoolState) {
-        await newMaverickV2.updatePoolState();
-      }
-      const poolLiquidity = await newMaverickV2.getTopPoolsForToken(
-        tokens[srcTokenSymbol].address,
-        10,
-      );
-      console.log(`${srcTokenSymbol} Top Pools:`, poolLiquidity);
-
-      if (!newMaverickV2.hasConstantPriceLargeAmounts) {
-        checkPoolsLiquidity(
-          poolLiquidity,
-          tokens[srcTokenSymbol].address,
+      it('getPoolIdentifiers and getPricesVolume SELL', async function () {
+        await testPricingOnNetwork(
+          maverickV2,
+          network,
           dexKey,
+          blockNumber,
+          srcTokenSymbol,
+          destTokenSymbol,
+          SwapSide.SELL,
+          amountsForSell,
+          'calculatePrice',
         );
-      }
+      });
+
+      it('getPoolIdentifiers and getPricesVolume BUY', async function () {
+        await testPricingOnNetwork(
+          maverickV2,
+          network,
+          dexKey,
+          blockNumber,
+          srcTokenSymbol,
+          destTokenSymbol,
+          SwapSide.BUY,
+          amountsForBuy,
+          'calculatePrice',
+        );
+      });
+
+      it('getTopPoolsForToken', async function () {
+        const newMaverickV2 = new MaverickV2(network, dexKey, dexHelper);
+        if (newMaverickV2.updatePoolState) {
+          await newMaverickV2.updatePoolState();
+        }
+        const poolLiquidity = await newMaverickV2.getTopPoolsForToken(
+          tokens[srcTokenSymbol].address,
+          10,
+        );
+        console.log(`${srcTokenSymbol} Top Pools:`, poolLiquidity);
+
+        if (!newMaverickV2.hasConstantPriceLargeAmounts) {
+          checkPoolsLiquidity(
+            poolLiquidity,
+            tokens[srcTokenSymbol].address,
+            dexKey,
+          );
+        }
+      });
     });
-  });
+  }
 });

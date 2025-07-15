@@ -1,27 +1,16 @@
 import dotenv from 'dotenv';
 dotenv.config();
 
-import { ethers } from 'ethers';
-import { Network, ContractMethod, SwapSide, MAX_UINT } from '../../constants';
+import { Network, ContractMethod, SwapSide } from '../../constants';
 import { generateConfig } from '../../config';
 import { newTestE2E, getEnv } from '../../../tests/utils-e2e';
 import {
-  SmartTokens,
   GENERIC_ADDR1,
+  GENERIC_ADDR2,
   Tokens,
 } from '../../../tests/constants-e2e';
 import { RFQConfig } from './types';
 import { testConfig } from './e2e-test-config';
-import { SmartToken } from '../../../tests/smart-tokens';
-import { Token } from '../../types';
-
-const PK_KEY = process.env.TEST_PK_KEY;
-
-if (!PK_KEY) {
-  throw new Error('Missing TEST_PK_KEY');
-}
-
-const testAccount = new ethers.Wallet(PK_KEY!);
 
 jest.setTimeout(1000 * 60 * 3);
 
@@ -85,56 +74,26 @@ const buildConfigForGenericRFQ = (): RFQConfig => {
   };
 };
 
-const SKIP_TENDERLY = !!getEnv('GENERIC_RFQ_SKIP_TENDERLY', true);
+const SKIP_TENDERLY =
+  (process.env.GENERIC_RFQ_SKIP_TENDERLY ?? 'true') === 'true';
 const dexKey = 'YOUR_NAME';
 
 describe(`GenericRFQ ${dexKey} E2E`, () => {
   for (const [_network, testCases] of Object.entries(testConfig)) {
     const network = parseInt(_network, 10);
     const tokens = Tokens[network];
-    const smartTokens = SmartTokens[network];
     const config = generateConfig(network);
 
     config.rfqConfigs[dexKey] = buildConfigForGenericRFQ();
     describe(`${Network[network]}`, () => {
       for (const testCase of testCases) {
-        let srcToken: Token | SmartToken, destToken: Token | SmartToken;
+        const srcToken = tokens[testCase.srcToken];
+        const destToken = tokens[testCase.destToken];
 
-        if (SKIP_TENDERLY) {
-          srcToken = tokens[testCase.srcToken];
-          destToken = tokens[testCase.destToken];
-        } else {
-          if (!smartTokens.hasOwnProperty(testCase.srcToken)) {
-            throw new Error(
-              `Please add "addBalance" and "addAllowance" functions for ${testCase.srcToken} on ${Network[network]} (in constants-e2e.ts).`,
-            );
-          }
-          if (!smartTokens.hasOwnProperty(testCase.destToken)) {
-            throw new Error(
-              `Please add "addBalance" and "addAllowance" functions for ${testCase.destToken} on ${Network[network]} (in constants-e2e.ts).`,
-            );
-          }
-          srcToken = smartTokens[testCase.srcToken];
-          destToken = smartTokens[testCase.destToken];
-
-          srcToken.addBalance(testAccount.address, MAX_UINT);
-          srcToken.addAllowance(
-            testAccount.address,
-            config.augustusRFQAddress,
-            MAX_UINT,
-          );
-
-          destToken.addBalance(testAccount.address, MAX_UINT);
-          destToken.addAllowance(
-            testAccount.address,
-            config.augustusRFQAddress,
-            MAX_UINT,
-          );
-        }
         const contractMethod =
           testCase.swapSide === SwapSide.BUY
-            ? ContractMethod.swapExactAmountInOutOnAugustusRFQTryBatchFill
-            : ContractMethod.swapExactAmountInOutOnAugustusRFQTryBatchFill;
+            ? ContractMethod.swapOnAugustusRFQTryBatchFill
+            : ContractMethod.swapOnAugustusRFQTryBatchFill;
         describe(`${contractMethod}`, () => {
           it(`${testCase.swapSide} ${testCase.srcToken} -> ${testCase.destToken}`, async () => {
             await newTestE2E({
@@ -142,7 +101,7 @@ describe(`GenericRFQ ${dexKey} E2E`, () => {
               srcToken,
               destToken,
               senderAddress: GENERIC_ADDR1,
-              thirdPartyAddress: testAccount.address,
+              thirdPartyAddress: GENERIC_ADDR2,
               _amount: testCase.amount,
               swapSide: testCase.swapSide as SwapSide,
               dexKeys: [dexKey],

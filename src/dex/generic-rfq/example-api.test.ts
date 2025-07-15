@@ -90,6 +90,9 @@ const blacklist = {
 export const startTestServer = (account: ethers.Wallet) => {
   const app = express();
 
+  // to overcome isEmpty(pairs) check on handleRatesResponse in rate-fetcher
+  let pairsReturned = false;
+
   /**
    * Use JSON Body parser...
    */
@@ -100,10 +103,15 @@ export const startTestServer = (account: ethers.Wallet) => {
   });
 
   app.get('/pairs', (req, res) => {
+    pairsReturned = true;
     return res.status(200).json(pairs);
   });
 
-  app.get('/prices', (req, res) => {
+  app.get('/prices', async (req, res) => {
+    if (!pairsReturned) {
+      // sleep for 1 second
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
     return res.status(200).json(prices);
   });
 
@@ -201,6 +209,9 @@ export const startTestServer = (account: ethers.Wallet) => {
     const signableOrderData = await paraSwapLimitOrderSDK.buildLimitOrder(
       order,
     );
+
+    // to prevent overwriting taker to augustus v5
+    signableOrderData.data.taker = payload.takerAddress;
 
     const signature = await paraSwapLimitOrderSDK.signLimitOrder(
       signableOrderData,

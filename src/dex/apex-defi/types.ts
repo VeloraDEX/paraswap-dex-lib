@@ -1,40 +1,21 @@
-import { Address, NumberAsString } from '../../types';
+import { Address } from '../../types';
 
 export type PoolState = {
-  // TODO: poolState is the state of event
-  // subscriber. This should be the minimum
-  // set of parameters required to compute
-  // pool prices. Complete me!
+  reserve0: bigint;
+  reserve1: bigint;
+  fee: number;
+  tradingFee: number;
 };
 
-export type ApexDeFiData = {
-  pairs: ApexDeFiPair[];
+export type ApexDefiData = {
+  path: {
+    tokenIn: Address;
+    tokenOut: Address;
+  }[];
 };
 
 export type DexParams = {
-  // TODO: DexParams is set of parameters the can
-  // be used to initiate a DEX fork.
-  // Complete me!
   factoryAddress: Address;
+  routerAddress: Address;
+  wrapperFactoryAddress: Address;
 };
-
-export type ApexDeFiPair = {
-  address: Address;
-};
-
-export type ApexDeFiBuyParams = {
-  amountIn: NumberAsString;
-  amountOutMin: NumberAsString;
-  deadline: string;
-};
-
-export type ApexDeFiSellParams = {
-  amountIn: NumberAsString;
-  amountOutMin: NumberAsString;
-  deadline: string;
-};
-
-export enum ApexDeFiSwapFunctions {
-  swapNativeToToken = 'swapNativeToToken',
-  swapTokenToNative = 'swapTokenToNative',
-}

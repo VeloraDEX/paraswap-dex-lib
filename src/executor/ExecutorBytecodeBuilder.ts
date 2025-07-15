@@ -1,6 +1,7 @@
 import { Interface } from '@ethersproject/abi';
 import { IDexHelper } from '../dex-helper';
 import ERC20ABI from '../abi/erc20.json';
+import Permit2Abi from '../abi/permit2.json';
 import { ethers } from 'ethers';
 import {
   Address,
@@ -23,13 +24,16 @@ import {
   DISABLED_MAX_UNIT_APPROVAL_TOKENS,
 } from './constants';
 import { Executors, Flag, SpecialDex } from './types';
-import { MAX_UINT, Network } from '../constants';
+import { MAX_UINT, Network, PERMIT2_ADDRESS } from '../constants';
 import { DexExchangeBuildParam, DexExchangeParam } from '../types';
-import { ExecutorDetector } from './ExecutorDetector';
+import { BI_MAX_UINT160, BI_MAX_UINT48 } from '../bigint-constants';
 
 const {
   utils: { hexlify, hexDataLength, hexConcat, hexZeroPad, solidityPack },
 } = ethers;
+
+const MAX_UINT48 = BI_MAX_UINT48.toString();
+const MAX_UINT160 = BI_MAX_UINT160.toString();
 
 export type SingleSwapCallDataParams<T> = {
   priceRoute: OptimalRate;
@@ -54,9 +58,11 @@ export type DexCallDataParams<T> = {
 export abstract class ExecutorBytecodeBuilder<S = {}, D = {}> {
   type!: Executors;
   erc20Interface: Interface;
+  permit2Interface: Interface;
 
   constructor(protected dexHelper: IDexHelper) {
     this.erc20Interface = new Interface(ERC20ABI);
+    this.permit2Interface = new Interface(Permit2Abi);
   }
 
   protected buildSimpleSwapFlags(
@@ -120,8 +126,13 @@ export abstract class ExecutorBytecodeBuilder<S = {}, D = {}> {
     spender: string,
     tokenAddr: Address,
     flag: Flag,
+    permit2 = false,
     amount = MAX_UINT,
   ): string {
+    if (permit2) {
+      return this.buildPermit2CallData(spender, tokenAddr, flag);
+    }
+
     let approveCalldata = this.erc20Interface.encodeFunctionData('approve', [
       spender,
       amount,
@@ -155,6 +166,7 @@ export abstract class ExecutorBytecodeBuilder<S = {}, D = {}> {
           spender,
           tokenAddr,
           Flag.DONT_INSERT_FROM_AMOUNT_DONT_CHECK_BALANCE_AFTER_SWAP,
+          false,
           '0',
         ),
         approvalCalldata,
@@ -162,6 +174,79 @@ export abstract class ExecutorBytecodeBuilder<S = {}, D = {}> {
     }
 
     return approvalCalldata;
+  }
+
+  protected buildPermit2CallData(
+    spender: string,
+    tokenAddr: Address,
+    flag: Flag,
+  ): string {
+    // first, give approval for Permit2 on the token contract
+    // (with this approval, Permit2 contract can invoke safeTransferFrom on the token)
+    let approveData = this.erc20Interface.encodeFunctionData('approve', [
+      PERMIT2_ADDRESS,
+      MAX_UINT,
+    ]);
+
+    let approvalCalldata = this.buildCallData(
+      tokenAddr,
+      approveData,
+      0,
+      APPROVE_CALLDATA_DEST_TOKEN_POS,
+      SpecialDex.DEFAULT,
+      Flag.DONT_INSERT_FROM_AMOUNT_DONT_CHECK_BALANCE_AFTER_SWAP,
+    );
+
+    // add additional approval 0 for special cases
+    if (
+      DISABLED_MAX_UNIT_APPROVAL_TOKENS?.[
+        this.dexHelper.config.data.network as Network
+      ]?.includes(tokenAddr)
+    ) {
+      let resetApprove = this.erc20Interface.encodeFunctionData('approve', [
+        PERMIT2_ADDRESS,
+        0,
+      ]);
+
+      approvalCalldata = hexConcat([
+        this.buildCallData(
+          tokenAddr,
+          resetApprove,
+          0,
+          APPROVE_CALLDATA_DEST_TOKEN_POS,
+          SpecialDex.DEFAULT,
+          Flag.DONT_INSERT_FROM_AMOUNT_DONT_CHECK_BALANCE_AFTER_SWAP,
+        ),
+        approvalCalldata,
+      ]);
+    }
+
+    // second, give approval for spender on Permit2 contract
+    // (with this approval, spender can interact with Permit2 on behalf of the executor)
+    let permit2Data = this.permit2Interface.encodeFunctionData('approve', [
+      tokenAddr,
+      spender,
+      MAX_UINT160,
+      MAX_UINT48,
+    ]);
+
+    let permit2Calldata = this.buildCallData(
+      PERMIT2_ADDRESS,
+      permit2Data,
+      0,
+      APPROVE_CALLDATA_DEST_TOKEN_POS,
+      SpecialDex.DEFAULT,
+      flag,
+    );
+
+    // as approval given only for MAX_UNIT or 0, no need to use insertFromAmount flag
+    const checkSrcTokenBalance = flag % 3 === 2;
+
+    if (checkSrcTokenBalance) {
+      permit2Calldata = hexConcat([permit2Calldata, ZEROS_12_BYTES, tokenAddr]);
+    }
+
+    return hexConcat([approvalCalldata, permit2Calldata]);
   }
 
   protected buildWrapEthCallData(

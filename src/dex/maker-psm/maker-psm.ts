@@ -397,7 +397,7 @@ export class MakerPsm
         },
         poolAddresses: [eventPool.poolConfig.psmAddress],
         exchange: this.dexKey,
-        gasCost: 100 * 1000, //TODO: simulate and fix the gas cost
+        gasCost: 200 * 1000,
         poolIdentifier,
       },
     ];
@@ -653,8 +653,7 @@ export class MakerPsm
       // not used on the contract, but used for analytics
       destToken,
       fromAmount,
-      // as there's no slippage, use instead of toAmount
-      quotedAmount,
+      toAmount,
       data.toll,
       to18ConversionFactor.toString(),
       data.psmAddress,

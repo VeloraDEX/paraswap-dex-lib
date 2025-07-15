@@ -25,6 +25,12 @@ export const WethConfig: DexConfigMap<DexParams> = {
     [Network.BASE]: {
       poolGasCost: WethGasCost,
     },
+    [Network.SEPOLIA]: {
+      poolGasCost: WethGasCost,
+    },
+    [Network.UNICHAIN]: {
+      poolGasCost: WethGasCost,
+    },
   },
   Wbnb: {
     [Network.BSC]: {
@@ -36,13 +42,18 @@ export const WethConfig: DexConfigMap<DexParams> = {
       poolGasCost: WethGasCost,
     },
   },
-  Wftm: {
-    [Network.FANTOM]: {
+  wS: {
+    [Network.SONIC]: {
       poolGasCost: WethGasCost,
     },
   },
   Wavax: {
     [Network.AVALANCHE]: {
+      poolGasCost: WethGasCost,
+    },
+  },
+  Wxdai: {
+    [Network.GNOSIS]: {
       poolGasCost: WethGasCost,
     },
   },
@@ -57,9 +68,6 @@ export const Adapters: {
     [SwapSide.SELL]: [{ name: 'AvalancheAdapter01', index: 1 }],
   },
   [Network.BSC]: { [SwapSide.SELL]: [{ name: 'BscAdapter01', index: 1 }] },
-  [Network.FANTOM]: {
-    [SwapSide.SELL]: [{ name: 'FantomAdapter01', index: 1 }],
-  },
   [Network.MAINNET]: { [SwapSide.SELL]: [{ name: 'Adapter02', index: 5 }] },
   [Network.POLYGON]: {
     [SwapSide.SELL]: [{ name: 'PolygonAdapter01', index: 2 }],

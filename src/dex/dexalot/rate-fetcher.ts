@@ -1,21 +1,21 @@
+import { Network } from '../../constants';
 import { IDexHelper } from '../../dex-helper';
 import { Fetcher } from '../../lib/fetcher/fetcher';
 import { validateAndCast } from '../../lib/validators';
 import { Logger, Token } from '../../types';
 import {
-  DexalotRateFetcherConfig,
-  DexalotPairsResponse,
-  PairDataMap,
-  DexalotPricesResponse,
-  PriceDataMap,
   DexalotBlacklistResponse,
+  DexalotPairsResponse,
+  DexalotPricesResponse,
+  DexalotRateFetcherConfig,
+  PairDataMap,
+  PriceDataMap,
 } from './types';
 import {
-  pricesResponseValidator,
-  pairsResponseValidator,
   blacklistResponseValidator,
+  pairsResponseValidator,
+  pricesResponseValidator,
 } from './validators';
-import { Network } from '../../constants';
 
 export class RateFetcher {
   private pairsFetcher: Fetcher<DexalotPairsResponse>;

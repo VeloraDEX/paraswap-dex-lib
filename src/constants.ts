@@ -7,6 +7,9 @@ export const PORT_TEST_SERVER = process.env.TEST_PORT;
 export const ETHER_ADDRESS =
   '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE'.toLowerCase();
 
+// address is the same on all chains
+export const PERMIT2_ADDRESS = '0x000000000022d473030f116ddee9f6b43ac78ba3';
+
 export const NULL_ADDRESS = '0x0000000000000000000000000000000000000000';
 
 export const CACHE_PREFIX = 'dl';
@@ -38,9 +41,13 @@ export enum Network {
   ZKEVM = 1101,
   AVALANCHE = 43114,
   FANTOM = 250,
+  SONIC = 146,
   ARBITRUM = 42161,
   OPTIMISM = 10,
   BASE = 8453,
+  SEPOLIA = 11155111,
+  GNOSIS = 100,
+  UNICHAIN = 130,
 }
 export const SUBGRAPH_TIMEOUT = 20 * 1000;
 
@@ -67,3 +74,7 @@ export const IS_CAP_SURPLUS_MASK = BigNumber.from('1').shl(92);
 export const IS_SKIP_BLACKLIST_MASK = BigNumber.from('1').shl(93);
 export const IS_REFERRAL_MASK = BigNumber.from('1').shl(94);
 export const IS_TAKE_SURPLUS_MASK = BigNumber.from('1').shl(95);
+
+// used for PoolTracker data
+export const NO_USD_LIQUIDITY = -1;
+export const UNLIMITED_USD_LIQUIDITY = 1234567890;

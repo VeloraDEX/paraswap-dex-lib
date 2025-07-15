@@ -10,7 +10,12 @@ import {
   Logger,
   DexExchangeParam,
 } from '../../types';
-import { SwapSide, Network, NULL_ADDRESS } from '../../constants';
+import {
+  SwapSide,
+  Network,
+  NULL_ADDRESS,
+  ETHER_ADDRESS,
+} from '../../constants';
 import * as CALLDATA_GAS_COST from '../../calldata-gas-cost';
 import { getDexKeysWithNetwork, isETHAddress, getBigIntPow } from '../../utils';
 import { IDex } from '../../dex/idex';
@@ -18,7 +23,11 @@ import { IDexHelper } from '../../dex-helper/idex-helper';
 import { Data, Param, PoolAndWethFunctions } from './types';
 import { SimpleExchange } from '../simple-exchange';
 import { Adapters, Config } from './config';
-import { getATokenIfAaveV3Pair, setTokensOnNetwork } from './tokens';
+import {
+  getATokenIfAaveV3Pair,
+  setTokensOnNetwork,
+  TokensByAddress,
+} from './tokens';
 
 import WETH_GATEWAY_ABI from '../../abi/aave-v3-weth-gateway.json';
 import POOL_ABI from '../../abi/AaveV3_lending_pool.json';
@@ -55,10 +64,14 @@ export class AaveV3 extends SimpleExchange implements IDex<Data, Param> {
   }
 
   getAdapters(side: SwapSide): { name: string; index: number }[] | null {
-    return this.adapters[side];
+    return this.adapters?.[side] ?? null;
   }
 
   async initializePricing(blockNumber: number): Promise<void> {
+    await this.initializeTokens(blockNumber);
+  }
+
+  async initializeTokens(blockNumber?: number): Promise<void> {
     let cachedTokenList = await this.dexHelper.cache.getAndCacheLocally(
       this.dexKey,
       this.network,
@@ -66,17 +79,21 @@ export class AaveV3 extends SimpleExchange implements IDex<Data, Param> {
       TOKEN_LIST_LOCAL_TTL_SECONDS,
     );
     if (cachedTokenList !== null) {
-      setTokensOnNetwork(this.network, JSON.parse(cachedTokenList));
+      setTokensOnNetwork(
+        this.network,
+        this.dexKey,
+        JSON.parse(cachedTokenList),
+      );
       return;
     }
 
     let tokenList = await fetchTokenList(
       this.dexHelper.web3Provider,
-      blockNumber,
       this.config.poolAddress,
       this.pool,
       this.erc20Interface,
       this.dexHelper.multiWrapper,
+      blockNumber,
     );
 
     await this.dexHelper.cache.setex(
@@ -87,7 +104,7 @@ export class AaveV3 extends SimpleExchange implements IDex<Data, Param> {
       JSON.stringify(tokenList),
     );
 
-    setTokensOnNetwork(this.network, tokenList);
+    setTokensOnNetwork(this.network, this.dexKey, tokenList);
   }
 
   private _getPoolIdentifier(srcToken: Token, destToken: Token): string {
@@ -107,6 +124,7 @@ export class AaveV3 extends SimpleExchange implements IDex<Data, Param> {
   ): Promise<string[]> {
     const aToken = getATokenIfAaveV3Pair(
       this.network,
+      this.dexKey,
       this.dexHelper.config.wrapETH(srcToken),
       this.dexHelper.config.wrapETH(destToken),
     );
@@ -127,7 +145,7 @@ export class AaveV3 extends SimpleExchange implements IDex<Data, Param> {
     const _src = this.dexHelper.config.wrapETH(srcToken);
     const _dst = this.dexHelper.config.wrapETH(destToken);
 
-    const aToken = getATokenIfAaveV3Pair(this.network, _src, _dst);
+    const aToken = getATokenIfAaveV3Pair(this.network, this.dexKey, _src, _dst);
 
     if (!aToken) return null;
 
@@ -246,7 +264,8 @@ export class AaveV3 extends SimpleExchange implements IDex<Data, Param> {
       exchangeData,
       targetExchange: swapCallee,
       returnAmountPos: undefined,
-      skipApproval: data.fromAToken,
+      skipApproval:
+        !data.fromAToken && srcToken.toLowerCase() === ETHER_ADDRESS,
     };
   }
 
@@ -320,6 +339,32 @@ export class AaveV3 extends SimpleExchange implements IDex<Data, Param> {
     tokenAddress: Address,
     limit: number,
   ): Promise<PoolLiquidity[]> {
-    return [];
+    // only for aToken <=> underlying token
+    await this.initializeTokens();
+    const address = tokenAddress.toLowerCase();
+
+    const token = TokensByAddress[this.network][this.dexKey][address];
+    if (!token) return [];
+
+    const isAToken = token.aAddress === address;
+
+    return [
+      {
+        exchange: this.dexKey,
+        address: token.aAddress,
+        connectorTokens: [
+          isAToken
+            ? {
+                address: token.address,
+                decimals: token.decimals,
+              }
+            : {
+                address: token.aAddress,
+                decimals: token.decimals,
+              },
+        ],
+        liquidityUSD: 10 ** 9,
+      },
+    ];
   }
 }

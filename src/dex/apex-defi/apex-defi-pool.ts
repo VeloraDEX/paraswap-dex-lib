@@ -1,10 +1,12 @@
 import { Interface } from '@ethersproject/abi';
 import { DeepReadonly } from 'ts-essentials';
-import { Log, Logger } from '../../types';
+import { Address, Log, Logger } from '../../types';
 import { catchParseLogError } from '../../utils';
 import { StatefulEventSubscriber } from '../../stateful-event-subscriber';
 import { IDexHelper } from '../../dex-helper/idex-helper';
 import { PoolState } from './types';
+import ApexDefiTokenABI from '../../abi/apex-defi/ApexDefiToken.abi.json';
+import ApexDefiFactoryABI from '../../abi/apex-defi/ApexDefiFactory.abi.json';
 
 export class ApexDefiEventPool extends StatefulEventSubscriber<PoolState> {
   handlers: {
@@ -19,26 +21,54 @@ export class ApexDefiEventPool extends StatefulEventSubscriber<PoolState> {
 
   addressesSubscribed: string[];
 
+  readonly token0: Address;
+
+  readonly token1: Address;
+
+  private _poolAddress?: Address;
+
   constructor(
     readonly parentName: string,
     protected network: number,
     protected dexHelper: IDexHelper,
+    token0: Address,
+    token1: Address,
+    poolAddress: Address,
     logger: Logger,
-    protected apexDefiIface = new Interface(
-      '' /* TODO: Import and put here ApexDefi ABI */,
-    ), // TODO: add any additional params required for event subscriber
+    protected apexDefiFactoryAddress: Address,
+    protected apexDefiFactoryIface = new Interface(ApexDefiFactoryABI),
+    protected apexDefiTokenIface = new Interface(ApexDefiTokenABI),
   ) {
-    // TODO: Add pool name
-    super(parentName, 'POOL_NAME', dexHelper, logger);
+    super(parentName, poolAddress, dexHelper, logger);
 
-    // TODO: make logDecoder decode logs that
-    this.logDecoder = (log: Log) => this.apexDefiIface.parseLog(log);
-    this.addressesSubscribed = [
-      /* subscribed addresses */
-    ];
+    this.token0 = token0.toLowerCase();
+    this.token1 = token1.toLowerCase();
+    this._poolAddress = poolAddress.toLowerCase();
+    this.logDecoder = (log: Log) => this.apexDefiTokenIface.parseLog(log);
+    this.addressesSubscribed = new Array<Address>(1).fill(poolAddress);
 
     // Add handlers
-    this.handlers['myEvent'] = this.handleMyEvent.bind(this);
+    this.handlers['Swap'] = this.handleSwap.bind(this);
+  }
+
+  get poolAddress() {
+    // If the pool address is not set, compute it
+    // ApexDefi pools are always in the format of WETH/token
+    // If the token0 is WETH, then the pool address is the token1 address
+    // Otherwise, the pool address is the token0 address
+    if (this._poolAddress === undefined) {
+      if (this.dexHelper.config.isWETH(this.token0)) {
+        this._poolAddress = this.token1;
+      } else {
+        this._poolAddress = this.token0;
+      }
+    }
+
+    return this._poolAddress;
+  }
+
+  set poolAddress(address: Address) {
+    this._poolAddress = address.toLowerCase();
   }
 
   /**
@@ -66,6 +96,14 @@ export class ApexDefiEventPool extends StatefulEventSubscriber<PoolState> {
     return null;
   }
 
+  async getStateOrGenerate(blockNumber: number): Promise<Readonly<PoolState>> {
+    const evenState = this.getState(blockNumber);
+    if (evenState) return evenState;
+    const onChainState = await this.generateState(blockNumber);
+    this.setState(onChainState, blockNumber);
+    return onChainState;
+  }
+
   /**
    * The function generates state using on-chain calls. This
    * function is called to regenerate state if the event based
@@ -76,12 +114,54 @@ export class ApexDefiEventPool extends StatefulEventSubscriber<PoolState> {
    * @returns state of the event subscriber at blocknumber
    */
   async generateState(blockNumber: number): Promise<DeepReadonly<PoolState>> {
-    // TODO: complete me!
-    return {};
+    // Get reserves, trading fee rate, and base swap rate for the pool
+    const poolData = await this.dexHelper.multiContract.methods
+      .aggregate([
+        {
+          target: this.poolAddress,
+          callData: this.apexDefiTokenIface.encodeFunctionData(
+            'getReserves',
+            [],
+          ),
+        },
+        {
+          target: this.poolAddress,
+          callData:
+            this.apexDefiTokenIface.encodeFunctionData('tradingFeeRate'),
+        },
+        {
+          target: this.apexDefiFactoryAddress,
+          callData: this.apexDefiFactoryIface.encodeFunctionData(
+            'getBaseSwapRate',
+            [this.poolAddress],
+          ),
+        },
+      ])
+      .call({}, blockNumber);
+
+    const reserves = this.apexDefiTokenIface.decodeFunctionResult(
+      'getReserves',
+      poolData.returnData[0],
+    );
+    const tradingFeeRate = this.apexDefiTokenIface.decodeFunctionResult(
+      'tradingFeeRate',
+      poolData.returnData[1],
+    )[0];
+    const baseSwapRate = this.apexDefiFactoryIface.decodeFunctionResult(
+      'getBaseSwapRate',
+      poolData.returnData[2],
+    )[0];
+
+    return {
+      fee: Number(baseSwapRate),
+      tradingFee: Number(tradingFeeRate),
+      reserve0: reserves[0],
+      reserve1: reserves[1],
+    };
   }
 
   // Its just a dummy example
-  handleMyEvent(
+  handleSwap(
     event: any,
     state: DeepReadonly<PoolState>,
     log: Readonly<Log>,

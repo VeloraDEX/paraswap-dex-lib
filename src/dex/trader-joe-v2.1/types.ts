@@ -27,9 +27,9 @@ export type TraderJoeV2RouterParam =
   | TraderJoeV2RouterBuyParams;
 
 export type TraderJoeV2Data = {
-  tokenIn: string; // redundant
-  tokenOut: string; // redundant
-  binStep: string;
+  tokenPath: string[];
+  binSteps: string[];
+  versions: string[];
 };
 
 export enum TraderJoeV2RouterFunctions {

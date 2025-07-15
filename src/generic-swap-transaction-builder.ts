@@ -2,6 +2,7 @@ import {
   Address,
   DexExchangeBuildParam,
   DexExchangeParam,
+  DexExchangeParamWithBooleanNeedWrapNative,
   OptimalRate,
   OptimalSwap,
   OptimalSwapExchange,
@@ -84,8 +85,19 @@ export class GenericSwapTransactionBuilder {
     srcAmountWeth: bigint,
     destAmountWeth: bigint,
     side: SwapSide,
+    priceRoute: OptimalRate,
+    exchangeParams: DexExchangeParamWithBooleanNeedWrapNative[],
   ) {
     if (srcAmountWeth === 0n && destAmountWeth === 0n) return;
+
+    if (
+      srcAmountWeth === destAmountWeth &&
+      !this.hasAnyRouteWithEthAndDifferentNeedWrapNative(
+        priceRoute,
+        exchangeParams,
+      )
+    )
+      return;
 
     return (
       this.dexAdapterService.getTxBuilderDexByKey(
@@ -134,7 +146,7 @@ export class GenericSwapTransactionBuilder {
               executorAddress,
             );
 
-            const dexParams = await dex.getDexParam!(
+            let dexParams = await dex.getDexParam!(
               srcToken,
               destToken,
               side === SwapSide.BUY ? se.srcAmount : srcAmount, // in other case we would not be able to make insert from amount on Ex3
@@ -152,8 +164,16 @@ export class GenericSwapTransactionBuilder {
               executorAddress,
             );
 
+            if (typeof dexParams.needWrapNative === 'function') {
+              dexParams.needWrapNative = dexParams.needWrapNative(
+                priceRoute,
+                swap,
+                se,
+              );
+            }
+
             return {
-              dexParams,
+              dexParams: <DexExchangeParamWithBooleanNeedWrapNative>dexParams,
               wethDeposit,
               wethWithdraw,
             };
@@ -164,7 +184,7 @@ export class GenericSwapTransactionBuilder {
 
     const { exchangeParams, srcAmountWethToDeposit, destAmountWethToWithdraw } =
       await rawDexParams.reduce<{
-        exchangeParams: DexExchangeParam[];
+        exchangeParams: DexExchangeParamWithBooleanNeedWrapNative[];
         srcAmountWethToDeposit: bigint;
         destAmountWethToWithdraw: bigint;
       }>(
@@ -185,6 +205,8 @@ export class GenericSwapTransactionBuilder {
       srcAmountWethToDeposit,
       destAmountWethToWithdraw,
       side,
+      priceRoute,
+      exchangeParams,
     );
 
     const buildExchangeParams = await this.addDexExchangeApproveParams(
@@ -205,6 +227,7 @@ export class GenericSwapTransactionBuilder {
   protected async _build(
     priceRoute: OptimalRate,
     minMaxAmount: string,
+    quotedAmount: string,
     userAddress: Address,
     referrerAddress: Address | undefined,
     partnerAddress: Address,
@@ -253,7 +276,7 @@ export class GenericSwapTransactionBuilder {
         priceRoute.destToken,
         isSell ? priceRoute.srcAmount : minMaxAmount,
         isSell ? minMaxAmount : priceRoute.destAmount,
-        isSell ? priceRoute.destAmount : priceRoute.srcAmount,
+        quotedAmount,
         hexConcat([
           hexZeroPad(uuidToBytes16(uuid), 16),
           hexZeroPad(hexlify(priceRoute.blockNumber), 16),
@@ -281,6 +304,7 @@ export class GenericSwapTransactionBuilder {
   protected async _buildDirect(
     priceRoute: OptimalRate,
     minMaxAmount: string,
+    quotedAmount: string,
     referrerAddress: Address | undefined,
     partnerAddress: Address,
     partnerFeePercent: string,
@@ -321,11 +345,6 @@ export class GenericSwapTransactionBuilder {
         ? minMaxAmount
         : swapExchange.destAmount;
 
-    const expectedAmount =
-      priceRoute.side === SwapSide.SELL
-        ? priceRoute.destAmount
-        : priceRoute.srcAmount;
-
     const partnerAndFee = this.buildFeesV6({
       referrerAddress,
       partnerAddress,
@@ -342,7 +361,7 @@ export class GenericSwapTransactionBuilder {
       priceRoute.destToken,
       srcAmount,
       destAmount,
-      expectedAmount,
+      quotedAmount,
       swapExchange.data,
       priceRoute.side,
       permit,
@@ -403,6 +422,7 @@ export class GenericSwapTransactionBuilder {
   public async build({
     priceRoute,
     minMaxAmount,
+    quotedAmount,
     userAddress,
     referrerAddress,
     partnerAddress,
@@ -422,6 +442,7 @@ export class GenericSwapTransactionBuilder {
   }: {
     priceRoute: OptimalRate;
     minMaxAmount: string;
+    quotedAmount?: string;
     userAddress: Address;
     referrerAddress?: Address;
     partnerAddress: Address;
@@ -438,7 +459,14 @@ export class GenericSwapTransactionBuilder {
     uuid: string;
     beneficiary?: Address;
     onlyParams?: boolean;
-  }): Promise<TxObject> {
+  }): Promise<TxObject | (string | string[])[]> {
+    // if quotedAmount wasn't passed, use the amount from the route
+    const _quotedAmount = quotedAmount
+      ? quotedAmount
+      : priceRoute.side === SwapSide.SELL
+      ? priceRoute.destAmount
+      : priceRoute.srcAmount;
+
     // if beneficiary is not defined, then in smart contract it will be replaced to msg.sender
     const _beneficiary =
       beneficiary !== NULL_ADDRESS &&
@@ -455,6 +483,7 @@ export class GenericSwapTransactionBuilder {
       ({ encoder, params } = await this._buildDirect(
         priceRoute,
         minMaxAmount,
+        _quotedAmount,
         referrerAddress,
         partnerAddress,
         partnerFeePercent,
@@ -470,6 +499,7 @@ export class GenericSwapTransactionBuilder {
       ({ encoder, params } = await this._build(
         priceRoute,
         minMaxAmount,
+        _quotedAmount,
         userAddress,
         referrerAddress,
         partnerAddress,
@@ -484,6 +514,8 @@ export class GenericSwapTransactionBuilder {
         uuid,
       ));
     }
+
+    if (onlyParams) return params;
 
     const value = (
       priceRoute.srcToken.toLowerCase() === ETHER_ADDRESS.toLowerCase()
@@ -516,8 +548,14 @@ export class GenericSwapTransactionBuilder {
     isReferral,
     isSkipBlacklist,
   }: FeeParams): string {
+    const partnerAddress =
+      feePercent === '0' && !isTakeSurplus && !isReferral
+        ? NULL_ADDRESS
+        : partner;
+
     // Partner address shifted left to make room for flags and fee percent
-    const partialFeeCodeWithPartnerAddress = BigNumber.from(partner).shl(96);
+    const partialFeeCodeWithPartnerAddress =
+      BigNumber.from(partnerAddress).shl(96);
     let partialFeeCodeWithBitFlags = BigNumber.from(0); // default 0 is safe if none the conditions pass
 
     const isFixedFees = !BigNumber.from(feePercent).isZero();
@@ -633,7 +671,12 @@ export class GenericSwapTransactionBuilder {
     // should work if the final slippage check passes.
     const _destAmount = side === SwapSide.SELL ? '1' : se.destAmount;
 
-    if (isETHAddress(swap.srcToken) && dex.needWrapNative) {
+    const dexNeedWrapNative =
+      typeof dex.needWrapNative === 'function'
+        ? dex.needWrapNative(priceRoute, swap, se)
+        : dex.needWrapNative;
+
+    if (isETHAddress(swap.srcToken) && dexNeedWrapNative) {
       _src = wethAddress;
       wethDeposit = BigInt(_srcAmount);
     }
@@ -641,11 +684,11 @@ export class GenericSwapTransactionBuilder {
     const forceUnwrap =
       isETHAddress(swap.destToken) &&
       (isMultiSwap || isMegaSwap) &&
-      !dex.needWrapNative &&
+      !dexNeedWrapNative &&
       !isLastSwap;
 
-    if ((isETHAddress(swap.destToken) && dex.needWrapNative) || forceUnwrap) {
-      _dest = forceUnwrap && !dex.needWrapNative ? _dest : wethAddress;
+    if ((isETHAddress(swap.destToken) && dexNeedWrapNative) || forceUnwrap) {
+      _dest = forceUnwrap && !dexNeedWrapNative ? _dest : wethAddress;
       wethWithdraw = BigInt(se.destAmount);
     }
 
@@ -668,12 +711,12 @@ export class GenericSwapTransactionBuilder {
   private async addDexExchangeApproveParams(
     bytecodeBuilder: ExecutorBytecodeBuilder,
     priceRoute: OptimalRate,
-    dexExchangeParams: DexExchangeParam[],
+    dexExchangeParams: DexExchangeParamWithBooleanNeedWrapNative[],
     maybeWethCallData?: DepositWithdrawReturn,
   ): Promise<DexExchangeBuildParam[]> {
     const spender = bytecodeBuilder.getAddress();
     const tokenTargetMapping: {
-      params: [token: Address, target: Address];
+      params: [token: Address, target: Address, permit2: boolean];
       exchangeParamIndex: number;
     }[] = [];
 
@@ -690,7 +733,11 @@ export class GenericSwapTransactionBuilder {
 
           if (approveParams) {
             tokenTargetMapping.push({
-              params: [approveParams.token, approveParams?.target],
+              params: [
+                approveParams.token,
+                approveParams.target,
+                !!curExchangeParam.permit2Approval,
+              ],
               exchangeParamIndex: currentExchangeParamIndex,
             });
           }
@@ -723,5 +770,41 @@ export class GenericSwapTransactionBuilder {
     });
 
     return dexExchangeBuildParams;
+  }
+
+  private hasAnyRouteWithEthAndDifferentNeedWrapNative(
+    priceRoute: OptimalRate,
+    exchangeParams: DexExchangeParamWithBooleanNeedWrapNative[],
+  ) {
+    const eth = ETHER_ADDRESS.toLowerCase();
+    const weth =
+      this.dexAdapterService.dexHelper.config.data.wrappedNativeTokenAddress.toLowerCase();
+
+    let currentExchangeParamIndex = 0;
+
+    return !priceRoute.bestRoute.every(route => {
+      const swapExchangeParams: DexExchangeParamWithBooleanNeedWrapNative[] =
+        [];
+
+      route.swaps.forEach(swap => {
+        swap.swapExchanges.forEach(se => {
+          const curExchangeParam = exchangeParams[currentExchangeParamIndex];
+          currentExchangeParamIndex++;
+          if (
+            swap.destToken.toLowerCase() === weth ||
+            swap.destToken.toLowerCase() === eth ||
+            swap.srcToken.toLowerCase() === weth ||
+            swap.srcToken.toLowerCase() === eth
+          ) {
+            swapExchangeParams.push(curExchangeParam);
+          }
+        });
+      });
+
+      return (
+        swapExchangeParams.every(p => p.needWrapNative === true) ||
+        swapExchangeParams.every(p => p.needWrapNative === false)
+      );
+    });
   }
 }

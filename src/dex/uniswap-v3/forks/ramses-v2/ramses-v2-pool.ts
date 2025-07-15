@@ -14,6 +14,7 @@ import RamsesV2PoolABI from '../../../../abi/ramses-v2/RamsesV2Pool.abi.json';
 import { IDexHelper } from '../../../../dex-helper';
 import { Contract } from 'web3-eth-contract';
 import { Address, Logger } from '../../../../types';
+import { INACTIVE_POOL_AGE_MS } from '../../constants';
 
 export class RamsesV2EventPool extends UniswapV3EventPool {
   public readonly poolIface = new Interface(RamsesV2PoolABI);
@@ -99,6 +100,11 @@ export class RamsesV2EventPool extends UniswapV3EventPool {
       bigint,
     ];
 
+    const inactiveTimestampMs = Date.now() - INACTIVE_POOL_AGE_MS;
+    const isActive =
+      inactiveTimestampMs < _state.observation.blockTimestamp * 1000;
+    assert(isActive, 'Pool is inactive');
+
     const tickBitmap = {};
     const ticks = {};
 
@@ -123,6 +129,7 @@ export class RamsesV2EventPool extends UniswapV3EventPool {
     const requestedRange = this.getBitmapRangeToRequest();
 
     return {
+      networkId: this.dexHelper.config.data.network,
       pool: _state.pool,
       blockTimestamp: bigIntify(_state.blockTimestamp),
       slot0: {

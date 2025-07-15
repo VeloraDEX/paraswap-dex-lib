@@ -38,7 +38,6 @@ import {
   _reduceTickBitmap,
   _reduceTicks,
 } from '../uniswap-v3/contract-math/utils';
-import { Constants } from './lib/Constants';
 import { Network, NULL_ADDRESS } from '../../constants';
 import { TickTable } from './lib/TickTable';
 import {
@@ -336,7 +335,8 @@ export class AlgebraEventPoolV1_1 extends StatefulEventSubscriber<PoolStateV1_1>
       globalState: { tick },
     } = _stateWithoutTicksAndTickBitmap;
     const currentBitmapIndex = int16(
-      (BigInt(tick) / Constants.TICK_SPACING) >> 8n,
+      (BigInt(tick) / BigInt(_stateWithoutTicksAndTickBitmap.tickSpacing)) >>
+        8n,
     );
 
     const buffer = this.getBitmapRangeToRequest();
@@ -633,7 +633,7 @@ export class AlgebraEventPoolV1_1 extends StatefulEventSubscriber<PoolStateV1_1>
     };
     const currentTick = globalState.tick;
     const startTickBitmap = TickTable.position(
-      BigInt(currentTick) / Constants.TICK_SPACING,
+      BigInt(currentTick) / BigInt(_state.tickSpacing),
     )[0];
 
     return {
@@ -641,8 +641,8 @@ export class AlgebraEventPoolV1_1 extends StatefulEventSubscriber<PoolStateV1_1>
       blockTimestamp: bigIntify(_state.blockTimestamp),
       globalState,
       liquidity: bigIntify(_state.liquidity),
-      tickSpacing: Constants.TICK_SPACING,
-      maxLiquidityPerTick: Constants.MAX_LIQUIDITY_PER_TICK,
+      tickSpacing: bigIntify(_state.tickSpacing),
+      maxLiquidityPerTick: bigIntify(_state.maxLiquidityPerTick),
       tickBitmap,
       ticks,
       startTickBitmap,

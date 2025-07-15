@@ -27,8 +27,7 @@ export const AlgebraConfig: DexConfigMap<DexParams> = {
       chunksCount: 3,
       initRetryFrequency: 30,
       algebraStateMulticall: '0xa6bc273A238867dD74F2bBbD5fBbA3c941C939B9',
-      subgraphURL:
-        'https://api.studio.thegraph.com/query/44554/quickswap-v3-02/0.0.7',
+      subgraphURL: '3L5Y5brtgvzDoAFGaPs63xz27KdviCdzRuY12spLSBGU',
       uniswapMulticall: '0x61530d6E1c7A47BBB3e48e8b8EdF7569DcFeE121',
       deployer: '0x0d500b1d8e8ef31e21c99d1db9a6444d3adf1270',
       version: 'v1.1',
@@ -62,6 +61,8 @@ export const AlgebraConfig: DexConfigMap<DexParams> = {
       subgraphURL: '3CA9ffebLkS3N2otXaSj8XaDDdspty75upBjKTUS79qY',
       uniswapMulticall: '0x1F98415757620B543A52E61c46B32eB19261F984',
       deployer: '0xc0d4323426c709e8d04b5b130e7f059523464a91',
+      // optimism fork uses v1.9-bidirectional-fee (with TickSpacing event and simple `fee` in globalState),
+      // not sure why v1.1 is used here
       version: 'v1.1',
     },
   },
@@ -79,6 +80,25 @@ export const AlgebraConfig: DexConfigMap<DexParams> = {
       uniswapMulticall: '0x1F98415757620B543A52E61c46B32eB19261F984',
       deployer: '0x6dd3fb9653b10e806650f107c3b5a0a6ff974f65',
       version: 'v1.9',
+      // looks like it isn't used as we override it with dexHelper.config.data.forceRpcFallbackDexs in constructor
+      forceRPC: true,
+    },
+  },
+  SwaprV3: {
+    [Network.GNOSIS]: {
+      factory: '0xA0864cCA6E114013AB0e27cbd5B6f4c8947da766',
+      router: '0xfFB643E73f280B97809A8b41f7232AB401a04ee1',
+      quoter: '0xcBaD9FDf0D2814659Eb26f600EFDeAF005Eda0F7',
+      initHash:
+        '0xbce37a54eab2fcd71913a0d40723e04238970e7fc1159bfd58ad5b79531697e7',
+      chunksCount: 10,
+      initRetryFrequency: 10,
+      // AlgebraStateMulticall
+      algebraStateMulticall: '0x49C46f7f88110ccA234ef27Cd664510f7bbF5998',
+      subgraphURL: 'YwkNWffc8UTH77wDqGWgMShMq1uXdiQsD5wrD5MzKwJ',
+      uniswapMulticall: '0x4dfa9a980efE4802E969AC33968E3d6E59B8a19e',
+      deployer: '0xC1b576AC6Ec749d5Ace1787bF9Ec6340908ddB47',
+      version: 'v1.9-bidirectional-fee',
       forceRPC: true,
     },
   },

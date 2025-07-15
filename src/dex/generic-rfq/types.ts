@@ -5,6 +5,8 @@ import {
   AugustusOrderWithString,
   OrderInfo,
 } from '../paraswap-limit-orders/types';
+import { Network, SwapSide } from '../../constants';
+import { ErrorCode } from '../hashflow/types';
 
 export type Pair = {
   base: string;
@@ -101,9 +103,61 @@ export type RFQFirmRateResponse = {
   order: AugustusOrderWithStringAndSignature;
 };
 
-export class SlippageCheckError extends Error {}
+export class SlippageCheckError extends Error {
+  isSlippageError = true;
+  cause = 'SlippageCheckError';
+  code: ErrorCode = 'SLIPPAGE';
 
-export class TooStrictSlippageCheckError extends Error {}
+  constructor(
+    dexKey: string,
+    network: Network,
+    side: SwapSide,
+    expectedAmount: string,
+    quotedAmount: string,
+    slippageFactor: BigNumber,
+    insufficientOutput?: boolean,
+  ) {
+    const expected = new BigNumber(expectedAmount);
+    const actual = new BigNumber(quotedAmount);
+
+    const slipped =
+      side === SwapSide.SELL
+        ? new BigNumber(1).minus(actual.div(expected))
+        : actual.div(expected).minus(1);
+
+    const slippedPercentage = slipped.multipliedBy(100).toFixed(10);
+
+    const errorDetails = {
+      dexKey,
+      network,
+      side,
+      expectedAmount: expected.toFixed(),
+      quotedAmount: actual.toFixed(),
+      slippageFactor: slippageFactor.toFixed(),
+      slippedPercentage: `${slippedPercentage}%`,
+      ...(insufficientOutput !== undefined && { insufficientOutput }),
+    };
+
+    super(JSON.stringify(errorDetails));
+    this.name = 'SlippageCheckError';
+  }
+}
+
+export class TooStrictSlippageCheckError extends SlippageCheckError {
+  cause = 'TooStrictSlippageCheckError';
+
+  constructor(
+    dexKey: string,
+    network: Network,
+    side: SwapSide,
+    expectedAmount: string,
+    quotedAmount: string,
+    slippageFactor: BigNumber,
+  ) {
+    super(dexKey, network, side, expectedAmount, quotedAmount, slippageFactor);
+    this.name = 'TooStrictSlippageCheckError';
+  }
+}
 
 export type RFQParams = [
   fromAmount: NumberAsString,

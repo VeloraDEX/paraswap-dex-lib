@@ -1497,6 +1497,36 @@ describe('Executor02ByteCodeBuilder e2e tests', () => {
           );
         });
       });
+
+      describe('USDCe -> MATIC', () => {
+        const dexKeys = ['CurveV2', 'UniswapV3', 'SushiSwapV3', 'SwaapV2'];
+
+        const tokenASymbol: string = 'USDCe';
+        const tokenBSymbol: string = 'MATIC';
+        const tokenAAmount: string = '1978798814';
+
+        const side = SwapSide.SELL;
+
+        it(`${tokenASymbol} -> ${tokenBSymbol}`, async () => {
+          await testE2E(
+            tokens[tokenASymbol],
+            tokens[tokenBSymbol],
+            holders[tokenASymbol],
+            tokenAAmount,
+            side,
+            dexKeys,
+            contractMethod,
+            network,
+            provider,
+            undefined,
+            undefined,
+            undefined,
+            100,
+            2000,
+            false,
+          );
+        });
+      });
     });
   });
 

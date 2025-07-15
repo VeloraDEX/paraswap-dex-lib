@@ -1,15 +1,9 @@
 import { DexParams } from './types';
-import { DexConfigMap, AdapterMappings } from '../../types';
+import { DexConfigMap } from '../../types';
 import { Network, SwapSide } from '../../constants';
 
 export const __DexName__Config: DexConfigMap<DexParams> = {
   __DexName__: {
     // TODO: complete me!
   },
-};
-
-export const Adapters: Record<number, AdapterMappings> = {
-  // TODO: add adapters for each chain
-  // This is an example to copy
-  [Network.MAINNET]: { [SwapSide.SELL]: [{ name: '', index: 0 }] },
 };

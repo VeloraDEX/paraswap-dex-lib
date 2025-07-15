@@ -1,0 +1,1 @@
+export const USDC_TRANSMUTER_GAS_COST = 70_000;

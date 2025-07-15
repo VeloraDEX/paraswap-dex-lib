@@ -1,4 +1,3 @@
-/* eslint-disable no-console */
 import dotenv from 'dotenv';
 dotenv.config();
 
@@ -13,7 +12,7 @@ import { StaticJsonRpcProvider } from '@ethersproject/providers';
 import { generateConfig } from '../../config';
 import { Collateral } from './angle-transmuter-integration.test';
 import { BI_POWS } from '../../bigint-constants';
-import { SmartTokenParams } from '../../../tests/smart-tokens';
+import { Token } from '../../types';
 
 function testForNetwork(
   network: Network,
@@ -82,7 +81,7 @@ describe('AngleTransmuter E2E', () => {
   const dexKey = 'AngleTransmuter';
 
   const networks = [Network.MAINNET, Network.ARBITRUM, Network.BASE];
-  const stablesPerNetwork: { [network: number]: SmartTokenParams[] } = {
+  const stablesPerNetwork: { [network: number]: Token[] } = {
     [Network.MAINNET]: [
       Tokens[Network.MAINNET].EURA,
       Tokens[Network.MAINNET].USDA,
@@ -91,7 +90,7 @@ describe('AngleTransmuter E2E', () => {
     [Network.BASE]: [Tokens[Network.BASE].USDA],
   };
   const collateralsPerNetwork: {
-    [network: number]: { [stable: string]: SmartTokenParams[] };
+    [network: number]: { [stable: string]: Token[] };
   } = {
     [Network.MAINNET]: {
       USDA: [

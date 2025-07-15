@@ -5,7 +5,6 @@ import {
   ExchangePrices,
   PoolPrices,
   AdapterExchangeParam,
-  SimpleExchangeParam,
   PoolLiquidity,
   Logger,
   NumberAsString,
@@ -116,8 +115,8 @@ export class AngleTransmuter
     blockNumber: number,
   ): Promise<string[]> {
     const knownInfo = this._knownAddress(srcToken, destToken);
-    if (!knownInfo.known) return [];
-    return [`${this.dexKey}_${knownInfo.agToken!.toLowerCase()}`];
+    if (!knownInfo) return [];
+    return [`${this.dexKey}_${knownInfo.agToken.toLowerCase()}`];
   }
 
   // Returns pool prices for amounts.
@@ -133,14 +132,18 @@ export class AngleTransmuter
     limitPools?: string[],
   ): Promise<null | ExchangePrices<AngleTransmuterData>> {
     const knownInfo = this._knownAddress(srcToken, destToken);
-    const pool = `${this.dexKey}_${knownInfo.agToken!.toLowerCase()}`;
-    if (
-      !knownInfo.known ||
-      (limitPools && limitPools.length > 0 && !limitPools.includes(pool))
-    )
-      return null;
 
-    const fiat = knownInfo.fiatName! as keyof DexParams;
+    if (!knownInfo) {
+      return null;
+    }
+
+    const pool = `${this.dexKey}_${knownInfo.agToken.toLowerCase()}`;
+
+    if (limitPools && limitPools.length > 0 && !limitPools.includes(pool)) {
+      return null;
+    }
+
+    const fiat = knownInfo.fiatName as keyof DexParams;
     const preProcessDecimals =
       side === SwapSide.SELL ? srcToken.decimals : destToken.decimals;
     const postProcessDecimals =
@@ -377,7 +380,7 @@ export class AngleTransmuter
   _knownAddress(
     srcToken: Token,
     destToken: Token,
-  ): { known: boolean; agToken: string | null; fiatName: string | null } {
+  ): { agToken: string; fiatName: string } | null {
     const srcAddress = this.dexHelper.config
       .wrapETH(srcToken)
       .address.toLowerCase();
@@ -397,12 +400,11 @@ export class AngleTransmuter
           destAddress === paramFiat.stablecoin.address.toLowerCase())
       ) {
         return {
-          known: true,
           agToken: paramFiat.stablecoin.address.toLowerCase(),
           fiatName: stablecoin,
         };
       }
     }
-    return { known: false, agToken: null, fiatName: null };
+    return null;
   }
 }

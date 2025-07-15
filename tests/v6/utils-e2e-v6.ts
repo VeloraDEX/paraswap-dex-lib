@@ -1,18 +1,11 @@
-import { Interface } from '@ethersproject/abi';
-import { Address, OptimalRate, SwapSide } from '@paraswap/core';
-import Erc20ABI from '../../src/abi/erc20.json';
-import { generateConfig } from '../../src/config';
-import { Network, MAX_UINT, ETHER_ADDRESS } from '../../src/constants';
-import {
-  TenderlySimulation,
-  TransactionSimulator,
-} from '../tenderly-simulation';
+import { OptimalRate, SwapSide } from '@paraswap/core';
+import { ETHER_ADDRESS } from '../../src/constants';
 import {
   IParaSwapSDK,
   LocalParaswapSDK,
 } from '../../src/implementations/local-paraswap-sdk';
-import { sleep } from '../utils';
-import * as util from 'util';
+import { TenderlySimulator, StateOverride } from '../tenderly-simulation';
+import { assert } from 'ts-essentials';
 
 export type ContractsAugustusV6 = {
   AugustusV6: string;
@@ -20,24 +13,6 @@ export type ContractsAugustusV6 = {
   Executor02: string;
   Executor03: string;
 };
-
-const erc20Interface = new Interface(Erc20ABI);
-
-function allowAugustusV6(
-  tokenAddress: Address,
-  holderAddress: Address,
-  augustusV6Address: Address,
-) {
-  return {
-    from: holderAddress,
-    to: tokenAddress,
-    data: erc20Interface.encodeFunctionData('approve', [
-      augustusV6Address,
-      MAX_UINT,
-    ]),
-    value: '0',
-  };
-}
 
 const getAllExchanges = (data: OptimalRate): string[] => {
   const exchanges = new Set<string>();
@@ -58,120 +33,78 @@ export async function runE2ETest(
   senderAddress: string,
   contracts: ContractsAugustusV6,
 ) {
-  const { network, srcToken, destToken, side, contractMethod } = priceRoute;
-
-  const ts: TransactionSimulator = new TenderlySimulation(network);
-
-  await ts.setup();
-
-  if (srcToken.toLowerCase() !== ETHER_ADDRESS.toLowerCase()) {
-    const augustusV6Allowance = await ts.simulate(
-      allowAugustusV6(srcToken, senderAddress, contracts.AugustusV6),
-    );
-    if (!augustusV6Allowance.success) console.log(augustusV6Allowance.url);
-    expect(augustusV6Allowance!.success).toEqual(true);
-  }
-
+  // extract data from priceRoute
+  const { network, srcToken, side, srcAmount } = priceRoute;
+  // log the route for visibility
+  console.log('Price Route:', JSON.stringify(priceRoute, null, 2));
   // The API currently doesn't allow for specifying poolIdentifiers
   const paraswap: IParaSwapSDK = new LocalParaswapSDK(
     network,
     getAllExchanges(priceRoute),
     '',
   );
-
   paraswap.dexHelper!.config.data.augustusV6Address = contracts.AugustusV6;
   paraswap.dexHelper!.config.data.executorsAddresses = { ...contracts };
-
-  if (paraswap.initializePricing) await paraswap.initializePricing();
-
-  await sleep(2000);
-
-  if (paraswap.dexHelper?.replaceProviderWithRPC) {
-    paraswap.dexHelper?.replaceProviderWithRPC(
-      `https://rpc.tenderly.co/fork/${ts.forkId}`,
-    );
-  }
-
-  try {
-    console.log('PRICE ROUTE: ', util.inspect(priceRoute, false, null, true));
-    expect(parseFloat(priceRoute.destAmount)).toBeGreaterThan(0);
-
-    const config = generateConfig(network);
-
-    const augustusV6Address = config.augustusV6Address!;
-    const executorsAddresses = Object.values(config.executorsAddresses!);
-    const addresses = [...executorsAddresses, augustusV6Address];
-
-    //  for await (const a of addresses) {
-    //    const src =
-    //      srcToken.address.toLowerCase() === ETHER_ADDRESS
-    //        ? config.wrappedNativeTokenAddress
-    //        : srcToken.address.toLowerCase();
-    //    const dest =
-    //      destToken.address.toLowerCase() === ETHER_ADDRESS
-    //        ? config.wrappedNativeTokenAddress
-    //        : destToken.address.toLowerCase();
-
-    //    if (priceRoute.bestRoute[0].swaps.length > 0) {
-    //      const intermediateToken =
-    //        priceRoute.bestRoute[0].swaps[0].destToken.toLowerCase() ===
-    //        ETHER_ADDRESS
-    //          ? config.wrappedNativeTokenAddress
-    //          : priceRoute.bestRoute[0].swaps[0].destToken.toLowerCase();
-
-    //      await ts.simulate(send1WeiTo(intermediateToken, a, network));
-    //    }
-
-    //    await ts.simulate(send1WeiTo(src, a, network));
-    //    await ts.simulate(send1WeiTo(dest, a, network));
-    //  }
-    //  //
-    //  // for await (const a of addresses) {
-    //  //   const src =
-    //  //     srcToken.address.toLowerCase() === ETHER_ADDRESS
-    //  //       ? config.wrappedNativeTokenAddress
-    //  //       : srcToken.address.toLowerCase();
-    //  //   const dest =
-    //  //     destToken.address.toLowerCase() === ETHER_ADDRESS
-    //  //       ? config.wrappedNativeTokenAddress
-    //  //       : destToken.address.toLowerCase();
-    //  //
-    //  //   if (priceRoute.bestRoute[0].swaps.length > 0) {
-    //  //     const intermediateToken =
-    //  //       priceRoute.bestRoute[0].swaps[0].destToken.toLowerCase() ===
-    //  //       ETHER_ADDRESS
-    //  //         ? config.wrappedNativeTokenAddress
-    //  //         : priceRoute.bestRoute[0].swaps[0].destToken.toLowerCase();
-    //  //
-    //  //     await ts.simulate(checkBalanceOf(intermediateToken, a));
-    //  //   }
-    //  //
-    //  //   await ts.simulate(checkBalanceOf(src, a));
-    //  //   await ts.simulate(checkBalanceOf(dest, a));
-    //  // }
-
-    // Calculate slippage. Default is 1%
-
-    const _slippage = 100;
-
-    const minMaxAmount =
-      (side === SwapSide.SELL
-        ? BigInt(priceRoute.destAmount) * (10000n - BigInt(_slippage))
-        : BigInt(priceRoute.srcAmount) * (10000n + BigInt(_slippage))) / 10000n;
-
-    const swapParams = await paraswap.buildTransaction(
-      priceRoute,
-      minMaxAmount,
+  // initialize pricing
+  await paraswap.initializePricing?.();
+  // prepare state overrides
+  const tenderlySimulator = TenderlySimulator.getInstance();
+  // init `StateOverride` object
+  const stateOverride: StateOverride = {};
+  // fund x2 just in case
+  const amountToFund = BigInt(srcAmount) * 2n;
+  // add allowance override to Augustus
+  if (srcToken.toLowerCase() !== ETHER_ADDRESS) {
+    await tenderlySimulator.addTokenBalanceOverride(
+      stateOverride,
+      network,
+      srcToken,
       senderAddress,
+      amountToFund,
     );
-
-    const swapTx = await ts.simulate(swapParams);
-
-    console.log(`Tenderly URL: ${swapTx!.url}`);
-    expect(swapTx!.success).toEqual(true);
-  } finally {
-    if (paraswap.releaseResources) {
-      await paraswap.releaseResources();
-    }
+    await tenderlySimulator.addAllowanceOverride(
+      stateOverride,
+      network,
+      srcToken,
+      senderAddress,
+      contracts.AugustusV6,
+      amountToFund,
+    );
   }
+  // Calculate slippage. Default is 1%
+  const _slippage = BigInt(100);
+  const minMaxAmount =
+    (side === SwapSide.SELL
+      ? BigInt(priceRoute.destAmount) * (10000n - _slippage)
+      : BigInt(priceRoute.srcAmount) * (10000n + _slippage)) / 10000n;
+  const swapParams = await paraswap.buildTransaction(
+    priceRoute,
+    minMaxAmount,
+    senderAddress,
+  );
+  assert(
+    swapParams.to !== undefined,
+    'Transaction params missing `to` property',
+  );
+  // assemble `SimulationRequest`
+  const { from, to, data, value } = swapParams;
+  const simulationRequest = {
+    chainId: network,
+    from,
+    to,
+    data,
+    value,
+    blockNumber: priceRoute.blockNumber,
+    stateOverride,
+  };
+  // simulate the transaction with overrides
+  const simulation = await tenderlySimulator.simulateTransaction(
+    simulationRequest,
+  );
+  // release
+  if (paraswap.releaseResources) {
+    await paraswap.releaseResources();
+  }
+  // assert simulation status
+  expect(simulation.status).toEqual(true);
 }

@@ -94,11 +94,13 @@ export class Weth
 
     if (!isWETHSwap) return null;
 
+    const gasCost = isETHAddress(srcToken.address) ? 6_500 : 9000;
+
     return [
       {
         prices: amounts,
         unit: this.unitPrice,
-        gasCost: this.poolGasCost,
+        gasCost,
         exchange: this.dexKey,
         poolAddresses: [this.address],
         data: null,

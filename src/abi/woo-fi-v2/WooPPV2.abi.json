@@ -508,7 +508,14 @@
     "name": "tokenInfos",
     "outputs": [
       { "internalType": "uint192", "name": "reserve", "type": "uint192" },
-      { "internalType": "uint16", "name": "feeRate", "type": "uint16" }
+      { "internalType": "uint16", "name": "feeRate", "type": "uint16" },
+      { "internalType": "uint128", "name": "maxGamma", "type": "uint128" },
+      {
+        "internalType": "uint128",
+        "name": "maxNotionalSwap",
+        "type": "uint128"
+      },
+      { "internalType": "uint192", "name": "capBal", "type": "uint256" }
     ],
     "stateMutability": "view",
     "type": "function"

@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package bebop;
+
+message PriceUpdate {
+  optional bytes base = 1;
+  optional bytes quote = 2;
+  optional uint64 last_update_ts = 3;
+  repeated float bids = 4 [packed=true];
+  repeated float asks = 5 [packed=true];
+}
+
+message BebopPricingUpdate {
+  repeated PriceUpdate pairs = 1;
+}

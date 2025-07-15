@@ -1831,4 +1831,65 @@ describe('UniswapV2 E2E Mainnet', () => {
       }),
     );
   });
+
+  describe(`RingV2`, () => {
+    const dexKey = 'RingV2';
+
+    const sideToContractMethods = new Map([
+      [SwapSide.SELL, [ContractMethod.swapExactAmountIn]],
+      [SwapSide.BUY, [ContractMethod.swapExactAmountOut]],
+    ]);
+
+    const getOneUnit = (tokenSymbol: string): string => {
+      const decimalsMap: Record<string, number> = {
+        ETH: 18,
+        DAI: 18,
+        WBTC: 8,
+        USDC: 6,
+      };
+      return '1' + '0'.repeat(decimalsMap[tokenSymbol]);
+    };
+
+    const pairs = [
+      { from: 'USDC', to: 'ETH' },
+      { from: 'WBTC', to: 'DAI' },
+    ];
+
+    sideToContractMethods.forEach((contractMethods, side) =>
+      describe(`${side}`, () => {
+        contractMethods.forEach((contractMethod: ContractMethod) => {
+          pairs.forEach(({ from, to }) => {
+            describe(`${contractMethod}`, () => {
+              it(`${from} -> ${to}`, async () => {
+                await testE2E(
+                  tokens[from],
+                  tokens[to],
+                  holders[from],
+                  side === SwapSide.SELL ? getOneUnit(from) : getOneUnit(to),
+                  side,
+                  dexKey,
+                  contractMethod,
+                  network,
+                  provider,
+                );
+              });
+              it(`${to} -> ${from}`, async () => {
+                await testE2E(
+                  tokens[to],
+                  tokens[from],
+                  holders[to],
+                  side === SwapSide.SELL ? getOneUnit(to) : getOneUnit(from),
+                  side,
+                  dexKey,
+                  contractMethod,
+                  network,
+                  provider,
+                );
+              });
+            });
+          });
+        });
+      }),
+    );
+  });
 });

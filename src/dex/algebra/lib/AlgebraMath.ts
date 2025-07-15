@@ -48,14 +48,14 @@ interface PriceMovementCache {
 }
 
 const isPoolV1_9 = (
-  poolState: PoolStateV1_1 | PoolState_v1_9,
-): poolState is PoolState_v1_9 =>
+  poolState: DeepReadonly<PoolStateV1_1> | DeepReadonly<PoolState_v1_9>,
+): poolState is DeepReadonly<PoolState_v1_9> =>
   'feeZto' in poolState.globalState && 'feeOtz' in poolState.globalState;
 
 // % START OF COPY PASTA FROM UNISWAPV3 %
 function _priceComputationCycles(
   networkId: number,
-  poolState: DeepReadonly<PoolStateV1_1 | PoolState_v1_9>,
+  poolState: DeepReadonly<PoolStateV1_1> | DeepReadonly<PoolState_v1_9>,
   ticksCopy: Record<NumberAsString, TickInfo>,
   state: PriceComputationState,
   cache: PriceComputationCache,
@@ -579,7 +579,11 @@ class AlgebraMathClass {
       tickCount: 0,
     };
     // swap until there is remaining input or output tokens or we reach the price limit
+    let iterationsCount = 0;
     while (true) {
+      iterationsCount++;
+      _require(iterationsCount < 100, 'Max iteration reached on AlgebraMath');
+
       step.stepSqrtPrice = currentPrice;
 
       //equivalent of tickTable.nextTickInTheSameRow(currentTick, zeroToOne);
@@ -651,11 +655,7 @@ class AlgebraMathClass {
       }
 
       // check stop condition
-      if (
-        amountRequired == 0n ||
-        currentPrice == newSqrtPriceX96 ||
-        currentTick === newTick // deviation from contract
-      ) {
+      if (amountRequired == 0n || currentPrice == newSqrtPriceX96) {
         break;
       }
     }

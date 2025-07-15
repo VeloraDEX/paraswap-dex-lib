@@ -80,7 +80,7 @@ export class MaverickV1EventPool extends StatefulEventSubscriber<PoolState> {
 
     this.poolMath = new MaverickPoolMath(
       parentName,
-      BigInt(fee * 1e18),
+      BigInt((fee * 1e18).toFixed(0)),
       BigInt(tickSpacing),
       BigInt(protocolFeeRatio),
     );

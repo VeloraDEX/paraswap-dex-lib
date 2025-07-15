@@ -115,7 +115,12 @@ export abstract class SimpleRouterBase<RouterParam>
           // should work if the final slippage check passes.
           const _destAmount = this.side === SwapSide.SELL ? '1' : se.destAmount;
 
-          if (dex.needWrapNative) {
+          const dexNeedWrapNative =
+            typeof dex.needWrapNative === 'function'
+              ? dex.needWrapNative(priceRoute, swap, se)
+              : dex.needWrapNative;
+
+          if (dexNeedWrapNative) {
             if (isETHAddress(swap.srcToken)) {
               if (swapIndex !== 0) {
                 throw new Error('Wrap native srcToken not in swapIndex 0');

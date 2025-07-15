@@ -437,6 +437,7 @@ export class AaveV3Stata
     tokenAddress: Address,
     limit: number,
   ): Promise<PoolLiquidity[]> {
+    // only for stata <=> underlying/aToken
     await this.initializeTokens();
 
     const tokenType = getTokenType(this.network, tokenAddress);
@@ -467,13 +468,6 @@ export class AaveV3Stata
           address: stata.address,
           connectorTokens: [
             { address: stata.address, decimals: stata.decimals },
-            {
-              address:
-                tokenType === TokenType.UNDERLYING
-                  ? stata.underlyingAToken
-                  : stata.underlying,
-              decimals: stata.decimals,
-            },
           ],
         },
       ];

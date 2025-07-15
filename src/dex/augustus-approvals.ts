@@ -1,11 +1,13 @@
-import { Address, ParaSwapVersion } from '@paraswap/core';
-import { CACHE_PREFIX, ETHER_ADDRESS } from '../constants';
-import { ICache, IDexHelper } from '../dex-helper';
+import { Address } from '@paraswap/core';
+import { CACHE_PREFIX, ETHER_ADDRESS, PERMIT2_ADDRESS } from '../constants';
+import { ICache } from '../dex-helper';
 import { Interface } from '@ethersproject/abi';
 import ERC20ABI from '../abi/erc20.json';
+import Permit2Abi from '../abi/permit2.json';
 import { uint256ToBigInt } from '../lib/decoders';
 import { MultiCallParams, MultiWrapper } from '../lib/multi-wrapper';
 import { ConfigHelper } from '../config';
+import { BigNumber } from 'ethers';
 
 const DEFAULT_APPROVE_CACHE_KEY_VALUE = 'true';
 
@@ -14,6 +16,7 @@ type ApprovalsMapping = Record<string, boolean>;
 
 export class AugustusApprovals {
   erc20Interface: Interface;
+  permit2Interface: Interface;
 
   private cache: ICache;
 
@@ -32,6 +35,7 @@ export class AugustusApprovals {
     this.augustusAddress = config.data.augustusAddress;
     this.augustusV6Address = config.data.augustusV6Address;
     this.erc20Interface = new Interface(ERC20ABI);
+    this.permit2Interface = new Interface(Permit2Abi);
     this.cache = cache;
 
     this.cacheApprovesKey = `${CACHE_PREFIX}_${this.network}_generic_approves`;
@@ -41,19 +45,22 @@ export class AugustusApprovals {
     spender: Address,
     token: Address,
     target: Address,
+    permit2 = false,
   ): Promise<boolean> {
-    const approvals = await this.hasApprovals(spender, [[token, target]]);
+    const approvals = await this.hasApprovals(spender, [
+      [token, target, permit2],
+    ]);
     return approvals[0];
   }
 
   async hasApprovals(
     spender: Address,
-    tokenTargetMapping: [token: Address, target: Address][],
+    tokenTargetMapping: [token: Address, target: Address, permit2: boolean][],
   ): Promise<boolean[]> {
     let approvalsMapping: Record<string, boolean> = {};
 
-    tokenTargetMapping.forEach(([token, target]) => {
-      const key = this.createCacheKey(spender, token, target);
+    tokenTargetMapping.forEach(([token, target, permit2]) => {
+      const key = this.createCacheKey(spender, token, target, permit2);
       // set approved 'true' for ETH
       approvalsMapping[key] = token.toLowerCase() === ETHER_ADDRESS;
     });
@@ -68,7 +75,9 @@ export class AugustusApprovals {
 
     // to keep same order and length as input
     return tokenTargetMapping
-      .map(([token, target]) => this.createCacheKey(spender, token, target))
+      .map(([token, target, permit2]) =>
+        this.createCacheKey(spender, token, target, permit2),
+      )
       .map(key => approvalsMapping[key]);
   }
 
@@ -107,17 +116,37 @@ export class AugustusApprovals {
       spender: Address,
       token: Address,
       target: Address,
+      permit2: boolean,
     ][],
   ): Promise<boolean[]> {
     const allowanceCalldata: MultiCallParams<bigint>[] =
-      spenderTokenTargetMapping.map(([spender, token, target]) => ({
-        target: token,
-        callData: this.erc20Interface.encodeFunctionData('allowance', [
-          spender,
-          target,
-        ]),
-        decodeFunction: uint256ToBigInt,
-      }));
+      spenderTokenTargetMapping.map(([spender, token, target, permit2]) =>
+        permit2
+          ? {
+              target: PERMIT2_ADDRESS,
+              callData: this.permit2Interface.encodeFunctionData('allowance', [
+                spender,
+                token,
+                target,
+              ]),
+              decodeFunction: value => {
+                const [amount, expiration, nonce] =
+                  this.permit2Interface.decodeFunctionResult(
+                    'allowance',
+                    value.toString(),
+                  ) as [BigNumber, BigNumber, BigNumber];
+                return amount.toBigInt();
+              },
+            }
+          : {
+              target: token,
+              callData: this.erc20Interface.encodeFunctionData('allowance', [
+                spender,
+                target,
+              ]),
+              decodeFunction: uint256ToBigInt,
+            },
+      );
 
     const allowances = await this.multiWrapper.tryAggregate<bigint>(
       false,
@@ -157,14 +186,18 @@ export class AugustusApprovals {
     spender: Address,
     token: Address,
     target: Address,
+    permit2 = false,
   ): string {
-    return `${spender}_${token}_${target}`;
+    return `${spender}_${token}_${target}${
+      permit2 ? '_permit2' : ''
+    }`.toLowerCase();
   }
 
   private splitCacheKey(
     key: string,
-  ): [spender: Address, token: Address, target: Address] {
-    return key.split('_') as [Address, Address, Address];
+  ): [spender: Address, token: Address, target: Address, permit2: boolean] {
+    const [spender, token, target, permit2] = key.split('_');
+    return [spender, token, target, permit2 === 'permit2'];
   }
 
   private filterKeys(tokenTargetMapping: ApprovalsMapping, approved = false) {

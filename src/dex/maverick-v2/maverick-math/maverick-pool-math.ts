@@ -98,6 +98,11 @@ export class MaverickPoolMath {
       throw 'Beyond Swap Limit';
     }
 
+    const usedReserve = tokenAIn ? state.reserveB : state.reserveA;
+    if (exactOutput && amount > usedReserve) {
+      throw 'Not enough liquidity for exactOutput swap';
+    }
+
     let inScale = tokenAIn ? this.tokenAScale : this.tokenBScale;
     let outScale = tokenAIn ? this.tokenBScale : this.tokenAScale;
 
@@ -629,7 +634,7 @@ export class MaverickPoolMath {
       activeTick += delta.tokenAIn ? 1n : -1n;
 
       if (MaverickDeltaMath.pastMaxTick(delta, activeTick)) {
-        this.state.activeTick += delta.tokenAIn ? 1n : -1n;
+        this.state.activeTick += delta.tokenAIn ? -1n : 1n;
         return delta;
       }
     }

@@ -1,5 +1,5 @@
 import { UnoptimizedRate } from '../../types';
-import { OptimalSwap, ParaSwapVersion } from '@paraswap/core';
+import { OptimalSwap } from '@paraswap/core';
 import _ from 'lodash';
 import { CurveV1FactoryConfig } from './config';
 import { CurveV1StableNgConfig } from '../curve-v1-stable-ng/config';

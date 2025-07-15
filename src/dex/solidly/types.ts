@@ -19,9 +19,12 @@ export interface SolidlyPoolOrderedParams extends UniswapV2PoolOrderedParams {
   stable: boolean;
 }
 
-export type SolidlyData = UniswapV2Data & { isFeeTokenInRoute: boolean };
+export type SolidlyPool = UniswapPool & { stable: boolean };
 
-export type SolidlyPool = UniswapPool;
+export type SolidlyData = {
+  isFeeTokenInRoute: boolean;
+  pools: SolidlyPool[];
+} & UniswapV2Data;
 
 export interface DexParams extends Omit<UniswapV2DexParams, 'feeCode'> {
   feeCode: number;

@@ -6,6 +6,9 @@ import { Interface } from '@ethersproject/abi';
 import { getDexKeysWithNetwork } from '../../../utils';
 import { SolidlyConfig } from '../config';
 import _ from 'lodash';
+import { SolidlyRpcPoolTracker } from '../rpc-pool-tracker';
+import { uint256DecodeToNumber, addressDecode } from '../../../lib/decoders';
+import { MultiCallParams } from '../../../lib/multi-wrapper';
 
 const EqualizerFactoryABI = [
   {
@@ -15,11 +18,25 @@ const EqualizerFactoryABI = [
     stateMutability: 'view',
     type: 'function',
   },
+  {
+    inputs: [{ internalType: 'uint256', name: '', type: 'uint256' }],
+    name: 'allPairs',
+    outputs: [{ internalType: 'address', name: '', type: 'address' }],
+    stateMutability: 'view',
+    type: 'function',
+  },
+  {
+    inputs: [],
+    name: 'allPairsLength',
+    outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }],
+    stateMutability: 'view',
+    type: 'function',
+  },
 ];
 
 const equalizerFactoryIface = new Interface(EqualizerFactoryABI);
 
-export class Equalizer extends Solidly {
+export class Equalizer extends SolidlyRpcPoolTracker {
   public static dexKeysWithNetwork: { key: string; networks: Network[] }[] =
     getDexKeysWithNetwork(_.pick(SolidlyConfig, ['Equalizer']));
 
@@ -53,6 +70,22 @@ export class Equalizer extends Solidly {
     return {
       callEntry,
       callDecoder,
+    };
+  }
+
+  protected getAllPoolsCallData(): MultiCallParams<number> {
+    return {
+      target: this.factoryAddress,
+      callData: equalizerFactoryIface.encodeFunctionData('allPairsLength', []),
+      decodeFunction: uint256DecodeToNumber,
+    };
+  }
+
+  protected getPoolCallData(index: number): MultiCallParams<string> {
+    return {
+      target: this.factoryAddress,
+      callData: equalizerFactoryIface.encodeFunctionData('allPairs', [index]),
+      decodeFunction: addressDecode,
     };
   }
 }

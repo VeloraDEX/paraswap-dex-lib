@@ -60,9 +60,14 @@ export class GMX extends SimpleExchange implements IDex<GMXData> {
   // pricing service. It is intended to setup the integration
   // for pricing requests.
   async initializePricing(blockNumber: number) {
+    const pool = await this.setupPool(blockNumber);
+    await pool.initialize(blockNumber);
+  }
+
+  async setupPool(blockNumber?: number) {
     const config = await GMXEventPool.getConfig(
       this.params,
-      blockNumber,
+      blockNumber ?? 'latest',
       this.dexHelper.multiContract,
     );
     config.tokenAddresses.forEach(
@@ -75,7 +80,8 @@ export class GMX extends SimpleExchange implements IDex<GMXData> {
       this.logger,
       config,
     );
-    await this.pool.initialize(blockNumber);
+
+    return this.pool;
   }
 
   // Returns the list of contract adapters (name and index)
@@ -271,32 +277,9 @@ export class GMX extends SimpleExchange implements IDex<GMXData> {
       }));
     }
 
-    const erc20BalanceCalldata = GMX.erc20Interface.encodeFunctionData(
-      'balanceOf',
-      [this.params.vault],
-    );
-    const tokenBalanceMultiCall = this.supportedTokens.map(t => ({
-      target: t.address,
-      callData: erc20BalanceCalldata,
-    }));
-    const res = (
-      await this.dexHelper.multiContract.methods
-        .aggregate(tokenBalanceMultiCall)
-        .call()
-    ).returnData;
-    const tokenBalances = res.map((r: any) =>
-      BigInt(
-        GMX.erc20Interface.decodeFunctionResult('balanceOf', r)[0].toString(),
-      ),
-    );
-    const tokenBalancesUSD = await Promise.all(
-      this.supportedTokens.map((t, i) =>
-        this.dexHelper.getTokenUSDPrice(t, tokenBalances[i]),
-      ),
-    );
-    this.vaultUSDBalance = tokenBalancesUSD.reduce(
-      (sum: number, curr: number) => sum + curr,
-    );
+    if (!this.pool) {
+      this.pool = await this.setupPool();
+    }
   }
 
   // Returns list of top pools based on liquidity. Max
@@ -307,15 +290,36 @@ export class GMX extends SimpleExchange implements IDex<GMXData> {
   ): Promise<PoolLiquidity[]> {
     const tokenAddress = _tokenAddress.toLowerCase();
     if (!this.supportedTokens.some(t => t.address === tokenAddress)) return [];
-    return [
-      {
-        exchange: this.dexKey,
-        address: this.params.vault,
-        connectorTokens: this.supportedTokens.filter(
-          t => t.address !== tokenAddress,
-        ),
-        liquidityUSD: this.vaultUSDBalance,
-      },
-    ];
+
+    const tokens = this.supportedTokens.filter(t => t.address !== tokenAddress);
+    const maxAmounts: Record<string, bigint> = {};
+
+    await Promise.all(
+      tokens.map(async token => {
+        const maxAmountIn = await this.pool?.getMaxAmountIn(
+          tokenAddress,
+          token.address,
+        );
+        if (maxAmountIn) {
+          maxAmounts[token.address] = maxAmountIn;
+        }
+      }),
+    );
+
+    if (!Object.keys(maxAmounts).length) return [];
+
+    const usdMaxAmountIn = await this.dexHelper.getUsdTokenAmounts(
+      // maxAmounts are in the asked token, so replace token address
+      Object.entries(maxAmounts).map(([_, amount]) => [tokenAddress, amount]),
+    );
+
+    return Object.keys(maxAmounts).map((connectorToken, i) => ({
+      exchange: this.dexKey,
+      address: this.params.vault,
+      connectorTokens: [
+        this.supportedTokens.find(t => connectorToken === t.address)!,
+      ],
+      liquidityUSD: usdMaxAmountIn[i],
+    }));
   }
 }

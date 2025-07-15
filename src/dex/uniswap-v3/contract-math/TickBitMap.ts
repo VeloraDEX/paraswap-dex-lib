@@ -6,7 +6,9 @@ import { DeepReadonly } from 'ts-essentials';
 import {
   OUT_OF_RANGE_ERROR_POSTFIX,
   TICK_BITMAP_BUFFER,
+  TICK_BITMAP_BUFFER_BY_CHAIN,
   TICK_BITMAP_TO_USE,
+  TICK_BITMAP_TO_USE_BY_CHAIN,
 } from '../constants';
 
 function isWordPosOut(
@@ -15,18 +17,24 @@ function isWordPosOut(
   // For pricing we use wider range to check price impact. If function called from event
   // it must always be within buffer
   isPriceQuery: boolean,
+  networkId: number,
 ) {
   let lowerTickBitmapLimit;
   let upperTickBitmapLimit;
 
+  const tickBitMapToUse =
+    TICK_BITMAP_TO_USE_BY_CHAIN[networkId] ?? TICK_BITMAP_TO_USE;
+  const tickBitMapBuffer =
+    TICK_BITMAP_BUFFER_BY_CHAIN[networkId] ?? TICK_BITMAP_BUFFER;
+
   if (isPriceQuery) {
     lowerTickBitmapLimit =
-      startTickBitmap - (TICK_BITMAP_BUFFER + TICK_BITMAP_TO_USE);
+      startTickBitmap - (tickBitMapBuffer + tickBitMapToUse);
     upperTickBitmapLimit =
-      startTickBitmap + (TICK_BITMAP_BUFFER + TICK_BITMAP_TO_USE);
+      startTickBitmap + (tickBitMapBuffer + tickBitMapToUse);
   } else {
-    lowerTickBitmapLimit = startTickBitmap - TICK_BITMAP_BUFFER;
-    upperTickBitmapLimit = startTickBitmap + TICK_BITMAP_BUFFER;
+    lowerTickBitmapLimit = startTickBitmap - tickBitMapBuffer;
+    upperTickBitmapLimit = startTickBitmap + tickBitMapBuffer;
   }
 
   _require(
@@ -43,7 +51,7 @@ export class TickBitMap {
   }
 
   static flipTick(
-    state: Pick<PoolState, 'startTickBitmap' | 'tickBitmap'>,
+    state: Pick<PoolState, 'startTickBitmap' | 'tickBitmap' | 'networkId'>,
     tick: bigint,
     tickSpacing: bigint,
   ) {
@@ -58,7 +66,7 @@ export class TickBitMap {
 
     // flipTick is used only in _updatePosition which is always state changing event
     // Therefore it is never used in price query
-    isWordPosOut(wordPos, state.startTickBitmap, false);
+    isWordPosOut(wordPos, state.startTickBitmap, false, state.networkId);
 
     const stringWordPos = wordPos.toString();
     if (state.tickBitmap[stringWordPos] === undefined) {
@@ -69,7 +77,9 @@ export class TickBitMap {
   }
 
   static nextInitializedTickWithinOneWord(
-    state: DeepReadonly<Pick<PoolState, 'startTickBitmap' | 'tickBitmap'>>,
+    state: DeepReadonly<
+      Pick<PoolState, 'startTickBitmap' | 'tickBitmap' | 'networkId'>
+    >,
     tick: bigint,
     tickSpacing: bigint,
     lte: boolean,
@@ -85,7 +95,12 @@ export class TickBitMap {
       const [wordPos, bitPos] = TickBitMap.position(compressed);
       const mask = (1n << bitPos) - 1n + (1n << bitPos);
 
-      isWordPosOut(wordPos, state.startTickBitmap, isPriceQuery);
+      isWordPosOut(
+        wordPos,
+        state.startTickBitmap,
+        isPriceQuery,
+        state.networkId,
+      );
       let tickBitmapValue = state.tickBitmap[wordPos.toString()];
       tickBitmapValue = tickBitmapValue === undefined ? 0n : tickBitmapValue;
 
@@ -102,7 +117,12 @@ export class TickBitMap {
       const [wordPos, bitPos] = TickBitMap.position(compressed + 1n);
       const mask = ~((1n << bitPos) - 1n);
 
-      isWordPosOut(wordPos, state.startTickBitmap, isPriceQuery);
+      isWordPosOut(
+        wordPos,
+        state.startTickBitmap,
+        isPriceQuery,
+        state.networkId,
+      );
       let tickBitmapValue = state.tickBitmap[wordPos.toString()];
       tickBitmapValue = tickBitmapValue === undefined ? 0n : tickBitmapValue;
 

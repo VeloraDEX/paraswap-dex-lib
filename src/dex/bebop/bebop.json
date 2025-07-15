@@ -1,0 +1,72 @@
+{
+  "options": {
+    "syntax": "proto3"
+  },
+  "nested": {
+    "bebop": {
+      "nested": {
+        "PriceUpdate": {
+          "oneofs": {
+            "_base": {
+              "oneof": ["base"]
+            },
+            "_quote": {
+              "oneof": ["quote"]
+            },
+            "_lastUpdateTs": {
+              "oneof": ["lastUpdateTs"]
+            }
+          },
+          "fields": {
+            "base": {
+              "type": "bytes",
+              "id": 1,
+              "options": {
+                "proto3_optional": true
+              }
+            },
+            "quote": {
+              "type": "bytes",
+              "id": 2,
+              "options": {
+                "proto3_optional": true
+              }
+            },
+            "lastUpdateTs": {
+              "type": "uint64",
+              "id": 3,
+              "options": {
+                "proto3_optional": true
+              }
+            },
+            "bids": {
+              "rule": "repeated",
+              "type": "float",
+              "id": 4,
+              "options": {
+                "packed": true
+              }
+            },
+            "asks": {
+              "rule": "repeated",
+              "type": "float",
+              "id": 5,
+              "options": {
+                "packed": true
+              }
+            }
+          }
+        },
+        "BebopPricingUpdate": {
+          "fields": {
+            "pairs": {
+              "rule": "repeated",
+              "type": "PriceUpdate",
+              "id": 1
+            }
+          }
+        }
+      }
+    }
+  }
+}

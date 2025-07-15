@@ -23,23 +23,8 @@ function testForNetwork(
   const holders = Holders[network];
 
   const sideToContractMethods = new Map([
-    [
-      SwapSide.SELL,
-      [
-        ContractMethod.simpleSwap,
-        ContractMethod.multiSwap,
-        ContractMethod.megaSwap,
-        ContractMethod.swapExactAmountIn,
-      ],
-    ],
-    [
-      SwapSide.BUY,
-      [
-        ContractMethod.simpleBuy,
-        ContractMethod.buy,
-        ContractMethod.swapExactAmountOut,
-      ],
-    ],
+    [SwapSide.SELL, [ContractMethod.swapExactAmountIn]],
+    [SwapSide.BUY, [ContractMethod.swapExactAmountOut]],
   ]);
 
   describe(`${network}`, () => {
@@ -80,10 +65,9 @@ function testForNetwork(
   });
 }
 
-describe('sDAI E2E', () => {
-  const dexKey = 'Spark';
-
-  describe('Mainnet', () => {
+describe('Spark E2E', () => {
+  describe('sDai', () => {
+    const dexKey = 'Spark';
     const network = Network.MAINNET;
 
     const tokenASymbol: string = 'DAI';
@@ -100,5 +84,142 @@ describe('sDAI E2E', () => {
       tokenAAmount,
       tokenBAmount,
     );
+  });
+
+  describe('sUSDS', () => {
+    const dexKey = 'sUSDS';
+
+    describe('Mainnet', () => {
+      const network = Network.MAINNET;
+
+      const tokenASymbol: string = 'USDS';
+      const tokenBSymbol: string = 'sUSDS';
+
+      const tokenAAmount: string = '1000000000000000000';
+      const tokenBAmount: string = '1000000000000000000';
+
+      testForNetwork(
+        network,
+        dexKey,
+        tokenASymbol,
+        tokenBSymbol,
+        tokenAAmount,
+        tokenBAmount,
+      );
+    });
+  });
+
+  describe('SparkPsm', () => {
+    const dexKey = 'SparkPsm';
+
+    describe('Arbitrum', () => {
+      const network = Network.ARBITRUM;
+
+      describe('USDS -> sUSDS', () => {
+        const tokenASymbol: string = 'USDS';
+        const tokenBSymbol: string = 'sUSDS';
+
+        const tokenAAmount: string = '1000000000000000000';
+        const tokenBAmount: string = '1000000000000000000';
+
+        testForNetwork(
+          network,
+          dexKey,
+          tokenASymbol,
+          tokenBSymbol,
+          tokenAAmount,
+          tokenBAmount,
+        );
+      });
+
+      describe('USDS -> USDC', () => {
+        const tokenASymbol: string = 'USDS';
+        const tokenBSymbol: string = 'USDC';
+
+        const tokenAAmount: string = '1000000000000000000';
+        const tokenBAmount: string = '1000000';
+
+        testForNetwork(
+          network,
+          dexKey,
+          tokenASymbol,
+          tokenBSymbol,
+          tokenAAmount,
+          tokenBAmount,
+        );
+      });
+
+      describe('USDC -> sUSDS', () => {
+        const tokenASymbol: string = 'USDC';
+        const tokenBSymbol: string = 'sUSDS';
+
+        const tokenAAmount: string = '1000000';
+        const tokenBAmount: string = '1000000000000000000';
+
+        testForNetwork(
+          network,
+          dexKey,
+          tokenASymbol,
+          tokenBSymbol,
+          tokenAAmount,
+          tokenBAmount,
+        );
+      });
+    });
+
+    describe('Base', () => {
+      const network = Network.BASE;
+
+      describe('USDS -> sUSDS', () => {
+        const tokenASymbol: string = 'USDS';
+        const tokenBSymbol: string = 'sUSDS';
+
+        const tokenAAmount: string = '1000000000000000000';
+        const tokenBAmount: string = '1000000000000000000';
+
+        testForNetwork(
+          network,
+          dexKey,
+          tokenASymbol,
+          tokenBSymbol,
+          tokenAAmount,
+          tokenBAmount,
+        );
+      });
+
+      describe('USDS -> USDC', () => {
+        const tokenASymbol: string = 'USDS';
+        const tokenBSymbol: string = 'USDC';
+
+        const tokenAAmount: string = '1000000000000000000';
+        const tokenBAmount: string = '1000000';
+
+        testForNetwork(
+          network,
+          dexKey,
+          tokenASymbol,
+          tokenBSymbol,
+          tokenAAmount,
+          tokenBAmount,
+        );
+      });
+
+      describe('USDC -> sUSDS', () => {
+        const tokenASymbol: string = 'USDC';
+        const tokenBSymbol: string = 'sUSDS';
+
+        const tokenAAmount: string = '1000000';
+        const tokenBAmount: string = '1000000000000000000';
+
+        testForNetwork(
+          network,
+          dexKey,
+          tokenASymbol,
+          tokenBSymbol,
+          tokenAAmount,
+          tokenBAmount,
+        );
+      });
+    });
   });
 });

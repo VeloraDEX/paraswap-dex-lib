@@ -102,7 +102,7 @@ export class MaverickV2EventPool extends StatefulEventSubscriber<PoolState> {
   ) {
     const name = `${parentName.toLowerCase()}-${tokenA.symbol}-${
       tokenB.symbol
-    }-${address.toLowerCase()}`;
+    }-${address.toLowerCase()}-${feeAIn}-${feeBIn}-${tickSpacing}-${lookback}`;
 
     super(parentName, name, dexHelper, logger);
 
@@ -304,7 +304,7 @@ export class MaverickV2EventPool extends StatefulEventSubscriber<PoolState> {
     amount: bigint,
     from: Token,
     to: Token,
-    side: boolean,
+    exactOutput: boolean,
   ): [bigint, bigint] {
     try {
       const tempState = _.cloneDeep(this.state!);
@@ -315,7 +315,7 @@ export class MaverickV2EventPool extends StatefulEventSubscriber<PoolState> {
         tempState,
         amount,
         from.address.toLowerCase() === this.tokenA.address.toLowerCase(),
-        side,
+        exactOutput,
         from.address.toLowerCase() === this.tokenA.address.toLowerCase()
           ? tempState.activeTick + 100n
           : tempState.activeTick - 100n,
@@ -323,7 +323,7 @@ export class MaverickV2EventPool extends StatefulEventSubscriber<PoolState> {
 
       if (output[0] === 0n && output[1] === 0n) {
         this.logger.trace(
-          `Reached max swap iteration calculation for address=${this.address} amount=${amount}, from=${from.address}, to=${to.address}, side=${side}`,
+          `Reached max swap iteration calculation for address=${this.address} amount=${amount}, from=${from.address}, to=${to.address}, exactOutput=${exactOutput}`,
         );
         return [0n, 0n];
       }
@@ -332,13 +332,13 @@ export class MaverickV2EventPool extends StatefulEventSubscriber<PoolState> {
       const tickDiff = Math.abs(Number(postActiveTick) - Number(preActiveTick));
 
       return [
-        side ? output[0] : output[1],
+        exactOutput ? output[0] : output[1],
         // Tick calculation must be started from 1 to account at least one tick
         BigInt(tickDiff + 1),
       ];
     } catch (e) {
       this.logger.debug(
-        `Failed to calculate swap for address=${this.address} amount=${amount}, from=${from.address}, to=${to.address}, side=${side} math: ${e}`,
+        `Failed to calculate swap for address=${this.address} amount=${amount}, from=${from.address}, to=${to.address}, exactOutput=${exactOutput} math: ${e}`,
       );
       return [0n, 0n];
     }

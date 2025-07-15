@@ -62,6 +62,8 @@ import {
   PancakeswapV3Factory,
 } from './pancakeswap-v3-factory';
 import { extractReturnAmountPosition } from '../../executor/utils';
+import { uint256ToBigInt } from '../../lib/decoders';
+import { MultiCallParams } from '../../lib/multi-wrapper';
 
 type PoolPairsInfo = {
   token0: Address;
@@ -293,19 +295,27 @@ export class PancakeswapV3
         },
       });
     } catch (e) {
-      if (e instanceof Error && e.message.endsWith('Pool does not exist')) {
+      if (
+        e instanceof Error &&
+        (e.message.endsWith('Pool does not exist') ||
+          e.message.endsWith('Pool is inactive'))
+      ) {
+        if (e.message.endsWith('Pool is inactive')) {
+          this.logger.info(
+            `${this.dexKey}: Adding inactive pool ${pool.poolAddress} to "notExistingPoolSet": srcAddress=${srcAddress}, destAddress=${destAddress}, fee=${fee}`,
+          );
+        }
         // no need to await we want the set to have the pool key but it's not blocking
-        this.dexHelper.cache.zadd(
+        void this.dexHelper.cache.zadd(
           this.notExistingPoolSetKey,
           [Date.now(), key],
           'NX',
         );
 
-        // Pool does not exist for this feeCode, so we can set it to null
-        // to prevent more requests for this pool
+        // prevent more requests for this pool
         pool = null;
         this.logger.trace(
-          `${this.dexHelper}: Pool: srcAddress=${srcAddress}, destAddress=${destAddress}, fee=${fee} not found`,
+          `${this.dexHelper}: ${e.message}: srcAddress=${srcAddress}, destAddress=${destAddress}, fee=${fee}`,
           e,
         );
       } else {
@@ -613,6 +623,10 @@ export class PancakeswapV3
 
       if (selectedPools.length === 0) return null;
 
+      await Promise.all(
+        selectedPools.map(pool => pool.checkState(blockNumber)),
+      );
+
       const poolsToUse = selectedPools.reduce(
         (acc, pool) => {
           let state = pool.getState(blockNumber);
@@ -631,6 +645,12 @@ export class PancakeswapV3
           poolWithoutState: [] as PancakeSwapV3EventPool[],
         },
       );
+
+      poolsToUse.poolWithoutState.forEach(pool => {
+        this.logger.warn(
+          `PancakeV3: Pool ${pool.name} on ${this.dexKey} has no state. Fallback to rpc`,
+        );
+      });
 
       const rpcResultsPromise = this.getPricingFromRpc(
         _srcToken,
@@ -956,7 +976,7 @@ export class PancakeswapV3
       return [];
     }
 
-    const pools0 = _.map(res.pools0, pool => ({
+    const pools0: PoolLiquidity[] = _.map(res.pools0, pool => ({
       exchange: this.dexKey,
       address: pool.id.toLowerCase(),
       connectorTokens: [
@@ -965,11 +985,10 @@ export class PancakeswapV3
           decimals: parseInt(pool.token1.decimals),
         },
       ],
-      liquidityUSD:
-        parseFloat(pool.totalValueLockedUSD) * PANCAKESWAPV3_EFFICIENCY_FACTOR,
+      liquidityUSD: parseFloat(pool.totalValueLockedUSD),
     }));
 
-    const pools1 = _.map(res.pools1, pool => ({
+    const pools1: PoolLiquidity[] = _.map(res.pools1, pool => ({
       exchange: this.dexKey,
       address: pool.id.toLowerCase(),
       connectorTokens: [
@@ -978,29 +997,113 @@ export class PancakeswapV3
           decimals: parseInt(pool.token0.decimals),
         },
       ],
-      liquidityUSD:
-        parseFloat(pool.totalValueLockedUSD) * PANCAKESWAPV3_EFFICIENCY_FACTOR,
+      liquidityUSD: parseFloat(pool.totalValueLockedUSD),
     }));
 
-    const pools = _.slice(
-      _.sortBy(_.concat(pools0, pools1), [pool => -1 * pool.liquidityUSD]),
-      0,
-      limit,
+    const allPools = pools0.concat(pools1);
+
+    if (allPools.length === 0) {
+      return [];
+    }
+
+    const poolBalances = await this._getPoolBalances(
+      allPools.map(p => [
+        p.address,
+        tokenAddress,
+        p.connectorTokens[0].address,
+      ]),
     );
-    return pools;
+
+    const tokensAmounts = allPools
+      .map((p, i) => {
+        return [
+          [tokenAddress, poolBalances[i][0]],
+          [p.connectorTokens[0].address, poolBalances[i][1]],
+        ] as [string, bigint | null][];
+      })
+      .flat();
+
+    const poolUsdBalances = await this.dexHelper.getUsdTokenAmounts(
+      tokensAmounts,
+    );
+
+    const pools = allPools.map((pool, i) => {
+      const tokenUsdBalance = poolUsdBalances[i * 2];
+      const connectorTokenUsdBalance = poolUsdBalances[i * 2 + 1];
+
+      let tokenUsdLiquidity = null;
+
+      if (tokenUsdBalance) {
+        tokenUsdLiquidity = tokenUsdBalance * PANCAKESWAPV3_EFFICIENCY_FACTOR;
+      }
+
+      let connectorTokenUsdLiquidity = null;
+
+      if (connectorTokenUsdBalance) {
+        connectorTokenUsdLiquidity =
+          connectorTokenUsdBalance * PANCAKESWAPV3_EFFICIENCY_FACTOR;
+      }
+
+      // connectorToken.liquidityUSD should specify how much liquidity is available for connectorToken -> token swaps
+      // it allows to handle unbalanced pools, when one token has much higher usd liquidity (e.g. 0xA7B3BCC6c88Da2856867d29F11c67C3A85634882)
+      if (tokenUsdLiquidity) {
+        // there's always only one connectorToken
+        pool.connectorTokens[0] = {
+          ...pool.connectorTokens[0],
+          liquidityUSD: tokenUsdLiquidity,
+        };
+      }
+
+      // the amount of connectorToken liquidity is the amount available for token -> connectorToken swaps
+      // take connectorTokenUsdLiquidity by default, in case there's no usd prices fallback to tokenUsdLiquidity
+      const liquidityUSD = connectorTokenUsdLiquidity || tokenUsdLiquidity || 0;
+
+      return {
+        ...pool,
+        liquidityUSD,
+      };
+    });
+
+    return pools
+      .sort((a, b) => b.liquidityUSD - a.liquidityUSD)
+      .slice(0, limit);
   }
 
-  private async _getPoolsFromIdentifiers(
-    poolIdentifiers: string[],
-    blockNumber: number,
-  ): Promise<PancakeSwapV3EventPool[]> {
-    const pools = await Promise.all(
-      poolIdentifiers.map(async identifier => {
-        const [, srcAddress, destAddress, fee] = identifier.split('_');
-        return this.getPool(srcAddress, destAddress, BigInt(fee), blockNumber);
-      }),
-    );
-    return pools.filter(pool => pool) as PancakeSwapV3EventPool[];
+  private async _getPoolBalances(
+    pools: [pool: string, token0: string, token1: string][],
+  ): Promise<[balanceToken0: bigint | null, balanceToken1: bigint | null][]> {
+    const callData: MultiCallParams<bigint>[] = pools
+      .map(pool => [
+        {
+          target: pool[1],
+          callData: this.erc20Interface.encodeFunctionData('balanceOf', [
+            pool[0],
+          ]),
+          decodeFunction: uint256ToBigInt,
+        },
+        {
+          target: pool[2],
+          callData: this.erc20Interface.encodeFunctionData('balanceOf', [
+            pool[0],
+          ]),
+          decodeFunction: uint256ToBigInt,
+        },
+      ])
+      .flat();
+
+    const balanceOfCalls =
+      await this.dexHelper.multiWrapper.tryAggregate<bigint>(false, callData);
+
+    const balances: [bigint | null, bigint | null][] = [];
+    for (let i = 0; i < balanceOfCalls.length; i += 2) {
+      const balanceToken0 = balanceOfCalls[i];
+      const balanceToken1 = balanceOfCalls[i + 1];
+      balances.push([
+        balanceToken0.success ? balanceToken0.returnData : null,
+        balanceToken1.success ? balanceToken1.returnData : null,
+      ]);
+    }
+    return balances;
   }
 
   private _getLoweredAddresses(srcToken: Token, destToken: Token) {

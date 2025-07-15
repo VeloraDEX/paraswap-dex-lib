@@ -1,15 +1,14 @@
 import { aToken, Token } from '../../types';
 import { Network } from '../../constants';
-import { tokenlist } from '@bgd-labs/aave-address-book';
+import tokens from './tokenlist.json';
 import { aaveLendingPool } from './config';
 
 function getTokensForPool(pool: string): aToken[] {
-  return tokenlist.tokens
+  return tokens
     .filter(
       token =>
         token.extensions?.pool &&
-        token.extensions?.pool.toLowerCase() === pool.toLowerCase() &&
-        token.tags.includes('aTokenV2'),
+        token.extensions?.pool.toLowerCase() === pool.toLowerCase(),
     )
     .map(token => ({
       aSymbol: token.symbol,

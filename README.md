@@ -22,7 +22,7 @@ You can find template code for newly integrated DEX in `src/dex/<your-dex-name>`
 
 5. Complete the template code by filling the functions implementations. Template code is highly documented which should help you build the implementation. You should look into existing DEX implementation in `src/dex/` to understand the interfaces. Please refer below for detailed explanations and good practices.
 
-6. Add `<your-dex-name>` to `dexes` list in `src/dex/index.ts`
+6. Add `<your-dex-name>` to `Dexes` list in `src/dex/index.ts`
 
 7. Complete the test templates (All files with `src/dex/<your-dex-name>/*.test.ts`). Each DEX implementation should have thorough testing. We have multiple kinds of tests each dex must have. You can refer to [Writing Tests](#writing-testing) for detailed explanation. You can run all the tests using
 

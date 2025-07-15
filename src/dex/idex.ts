@@ -18,11 +18,18 @@ import {
 } from '../types';
 import { SwapSide, Network } from '../constants';
 import { IDexHelper } from '../dex-helper/idex-helper';
+import { OptimalRate, OptimalSwap } from '@paraswap/core';
 
 export type Context = {
   isGlobalSrcToken: boolean;
   isGlobalDestToken: boolean;
 };
+
+export type NeedWrapNativeFunc = (
+  priceRoute: OptimalRate,
+  swap: OptimalSwap,
+  se: OptimalSwapExchange<any>,
+) => boolean;
 
 export interface IDexTxBuilderV5<ExchangeData, DirectParam = null> {
   // Encode params required by the exchange adapter
@@ -106,7 +113,7 @@ export interface IDexTxBuilderV6<ExchangeData, DirectParam = null> {
 export interface IDexTxBuilder<ExchangeData, DirectParam = null>
   extends IDexTxBuilderV5<ExchangeData, DirectParam>,
     IDexTxBuilderV6<ExchangeData, DirectParam> {
-  needWrapNative: boolean;
+  needWrapNative: boolean | NeedWrapNativeFunc;
   needsSequentialPreprocessing?: boolean;
 
   // Returns the ETH fee required to swap

@@ -47,7 +47,7 @@ export class AngleTransmuterEventPool extends ComposedEventSubscriber<PoolState>
   public transmuter: Contract;
   public readonly angleTransmuterIface;
   readonly config: PoolConfig;
-  timer: NodeJS.Timer;
+  timer: NodeJS.Timeout;
 
   constructor(
     readonly parentName: string,

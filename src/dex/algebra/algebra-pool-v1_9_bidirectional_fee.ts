@@ -32,7 +32,7 @@ export class AlgebraEventPoolV1_9_bidirectional_fee extends AlgebraEventPoolV1_1
       mapKey,
       poolInitCodeHash,
       poolDeployer,
-      false, // forceManualStateGeneration; mainly for zkEVM
+      true, // forceManualStateGeneration; mainly used for xLayer
       false, // areTicksCompressed
     );
 

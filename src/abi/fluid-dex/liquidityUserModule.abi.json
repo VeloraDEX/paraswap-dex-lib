@@ -1,0 +1,145 @@
+[
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "errorId_",
+        "type": "uint256"
+      }
+    ],
+    "name": "FluidLiquidityCalcsError",
+    "type": "error"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "errorId_",
+        "type": "uint256"
+      }
+    ],
+    "name": "FluidLiquidityError",
+    "type": "error"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "errorId_",
+        "type": "uint256"
+      }
+    ],
+    "name": "FluidSafeTransferError",
+    "type": "error"
+  },
+  {
+    "anonymous": false,
+    "inputs": [],
+    "name": "BorrowRateMaxCap",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "user",
+        "type": "address"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "token",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "int256",
+        "name": "supplyAmount",
+        "type": "int256"
+      },
+      {
+        "indexed": false,
+        "internalType": "int256",
+        "name": "borrowAmount",
+        "type": "int256"
+      },
+      {
+        "indexed": false,
+        "internalType": "address",
+        "name": "withdrawTo",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "address",
+        "name": "borrowTo",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "totalAmounts",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "exchangePricesAndConfig",
+        "type": "uint256"
+      }
+    ],
+    "name": "LogOperate",
+    "type": "event"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "token_",
+        "type": "address"
+      },
+      {
+        "internalType": "int256",
+        "name": "supplyAmount_",
+        "type": "int256"
+      },
+      {
+        "internalType": "int256",
+        "name": "borrowAmount_",
+        "type": "int256"
+      },
+      {
+        "internalType": "address",
+        "name": "withdrawTo_",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "borrowTo_",
+        "type": "address"
+      },
+      {
+        "internalType": "bytes",
+        "name": "callbackData_",
+        "type": "bytes"
+      }
+    ],
+    "name": "operate",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "memVar3_",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "memVar4_",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "payable",
+    "type": "function"
+  }
+]

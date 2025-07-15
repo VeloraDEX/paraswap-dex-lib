@@ -72,6 +72,7 @@ async function isPoolStateEqualToReal(
     dexHelper.multiContract,
     potAddress,
     new Interface(PotAbi),
+    'dsr',
     blockNumber,
   );
 

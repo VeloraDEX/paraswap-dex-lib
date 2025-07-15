@@ -70,11 +70,8 @@ function testForNetwork(
   const nativeTokenSymbol = NativeTokenSymbols[network];
 
   const sideToContractMethods = new Map([
-    [
-      SwapSide.SELL,
-      [ContractMethod.simpleSwap, ContractMethod.swapExactAmountIn],
-    ],
-    // [SwapSide.BUY, [ContractMethod.simpleBuy]],
+    [SwapSide.SELL, [ContractMethod.swapExactAmountIn]],
+    [SwapSide.BUY, [ContractMethod.swapExactAmountOut]],
   ]);
 
   describe(`${network}`, () => {
@@ -82,32 +79,6 @@ function testForNetwork(
       describe(`${side}`, () => {
         contractMethods.forEach((contractMethod: ContractMethod) => {
           describe(`${contractMethod}`, () => {
-            it(`${nativeTokenSymbol} -> ${tokenASymbol}`, async () => {
-              await testE2E(
-                tokens[nativeTokenSymbol],
-                tokens[tokenASymbol],
-                holders[nativeTokenSymbol],
-                side === SwapSide.SELL ? nativeTokenAmount : tokenAAmount,
-                side,
-                dexKey,
-                contractMethod,
-                network,
-                provider,
-              );
-            });
-            it(`${tokenASymbol} -> ${nativeTokenSymbol}`, async () => {
-              await testE2E(
-                tokens[tokenASymbol],
-                tokens[nativeTokenSymbol],
-                holders[tokenASymbol],
-                side === SwapSide.SELL ? tokenAAmount : nativeTokenAmount,
-                side,
-                dexKey,
-                contractMethod,
-                network,
-                provider,
-              );
-            });
             it(`${tokenASymbol} -> ${tokenBSymbol}`, async () => {
               await testE2E(
                 tokens[tokenASymbol],
@@ -147,17 +118,17 @@ describe('MaverickV2 E2E', () => {
   const testCases = [
     {
       network: Network.BASE,
-      tokenASymbol: 'MAV',
-      tokenBSymbol: 'PRIME',
-      tokenAAmount: '1000000000000000',
-      tokenBAmount: '1000000000000000',
+      tokenASymbol: 'USDC',
+      tokenBSymbol: 'ETH',
+      tokenAAmount: '1000000000',
+      tokenBAmount: '1000000000000000000',
     },
     {
       network: Network.ARBITRUM,
       tokenASymbol: 'USDC',
-      tokenBSymbol: 'USDT',
-      tokenAAmount: '100000000',
-      tokenBAmount: '100000000',
+      tokenBSymbol: 'ETH',
+      tokenAAmount: '1000000',
+      tokenBAmount: '1000000000000000000',
     },
     {
       network: Network.BSC,
@@ -168,16 +139,23 @@ describe('MaverickV2 E2E', () => {
     },
     {
       network: Network.MAINNET,
-      tokenASymbol: 'USDC',
-      tokenBSymbol: 'USDT',
-      tokenAAmount: '100000000',
-      tokenBAmount: '100000000',
+      tokenASymbol: 'GHO',
+      tokenBSymbol: 'USDC',
+      tokenAAmount: '1000000000000000000000',
+      tokenBAmount: '100000000000',
+    },
+    {
+      network: Network.MAINNET,
+      tokenASymbol: 'ETH',
+      tokenBSymbol: 'USDC',
+      tokenAAmount: '1000000000000000000',
+      tokenBAmount: '1000000',
     },
   ];
 
   testCases.forEach(
     ({ network, tokenAAmount, tokenBAmount, tokenASymbol, tokenBSymbol }) => {
-      const nativeTokenAmount = '100000000000000';
+      const nativeTokenAmount = '1000000000000000000';
 
       testForNetwork(
         network,

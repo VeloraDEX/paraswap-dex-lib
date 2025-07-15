@@ -28,7 +28,6 @@ import { IDexHelper } from '../dex-helper';
 import { SwapSide } from '../constants';
 import { Adapters } from '../types';
 import { Lido } from './lido/lido';
-import { Excalibur } from './uniswap-v2/excalibur';
 import { MakerPsm } from './maker-psm/maker-psm';
 import { KyberDmm } from './kyberdmm/kyberdmm';
 import { GMX } from './gmx/gmx';
@@ -58,8 +57,10 @@ import { CurveV1StableNg } from './curve-v1-stable-ng/curve-v1-stable-ng';
 import { curveV1Merge } from './curve-v1-factory/optimizer';
 import { GenericRFQ } from './generic-rfq/generic-rfq';
 import { WstETH } from './wsteth/wsteth';
+import { ERC4626 } from './erc4626/erc4626';
 import { Camelot } from './camelot/camelot';
 import { Hashflow } from './hashflow/hashflow';
+import { Infusion } from './infusion/infusion';
 import { SolidlyEthereum } from './solidly/solidly-ethereum';
 import { MaverickV1 } from './maverick-v1/maverick-v1';
 import { MaverickV2 } from './maverick-v2/maverick-v2';
@@ -75,15 +76,43 @@ import { AngleStakedStable } from './angle-staked-stable/angle-staked-stable';
 import { QuickPerps } from './quick-perps/quick-perps';
 import { NomiswapV2 } from './uniswap-v2/nomiswap-v2';
 import { Dexalot } from './dexalot/dexalot';
+import { Bebop } from './bebop/bebop';
 import { Wombat } from './wombat/wombat';
 import { Swell } from './swell/swell';
 import { PharaohV1 } from './solidly/forks-override/pharaohV1';
 import { EtherFi } from './etherfi';
 import { Spark } from './spark/spark';
+import { SparkPsm } from './spark/spark-psm';
 import { VelodromeSlipstream } from './uniswap-v3/forks/velodrome-slipstream/velodrome-slipstream';
 import { AaveV3Stata } from './aave-v3-stata/aave-v3-stata';
+import { AaveV3StataV2 } from './aave-v3-stata-v2/aave-v3-stata-v2';
+import { OSwap } from './oswap/oswap';
+import { FluidDex } from './fluid-dex/fluid-dex';
 import { ConcentratorArusd } from './concentrator-arusd/concentrator-arusd';
 import { FxProtocolRusd } from './fx-protocol-rusd/fx-protocol-rusd';
+import { AaveGsm } from './aave-gsm/aave-gsm';
+import { LitePsm } from './lite-psm/lite-psm';
+import { StkGHO } from './stkgho/stkgho';
+import { BalancerV3 } from './balancer-v3/balancer-v3';
+import { balancerV3Merge } from './balancer-v3/optimizer';
+import { SkyConverter } from './sky-converter/sky-converter';
+import { Cables } from './cables/cables';
+import { Stader } from './stader/stader';
+import { UsualBond } from './usual/usual-bond';
+import { UsualMWrappedM } from './usual/usual-m-wrapped-m';
+import { UsualMUsd0 } from './usual/usual-m-usd0';
+import { MWrappedM } from './usual/m-wrapped-m';
+import { WrappedMM } from './usual/wrapped-m-m';
+import { UsualPP } from './usual-pp/usual-pp';
+import { AlgebraIntegral } from './algebra-integral/algebra-integral';
+import { Ekubo } from './ekubo/ekubo';
+import { UniswapV4 } from './uniswap-v4/uniswap-v4';
+import { PancakeSwapV2 } from './uniswap-v2/pancake-swap-v2';
+import { uniswapV4Merge } from './uniswap-v4/optimizer';
+import { AaveV3PtRollOver } from './aave-v3-pt-roll-over/aave-v3-pt-roll-over';
+import { RingV2 } from './uniswap-v2/ring-v2';
+import { UsdcTransmuter } from './usdc-transmuter/usdc-transmuter';
+import { ApexDefi } from './apex-defi/apex-defi';
 
 const LegacyDexes = [
   CurveV2,
@@ -103,21 +132,26 @@ const LegacyDexes = [
 ];
 
 const Dexes = [
+  Stader,
+  Bebop,
   Dexalot,
   CurveV1,
   CurveFork,
   Swerve,
   BalancerV1,
   BalancerV2,
+  BalancerV3,
   UniswapV2,
   UniswapV3,
+  UniswapV4,
   Algebra,
+  AlgebraIntegral,
+  PancakeSwapV2,
   PancakeswapV3,
   VelodromeSlipstream,
   BiSwap,
   MDEX,
   Dfyn,
-  Excalibur,
   AaveV2,
   AaveV3,
   IdleDao,
@@ -146,7 +180,9 @@ const Dexes = [
   CurveV1Factory,
   CurveV1StableNg,
   WstETH,
+  ERC4626,
   Hashflow,
+  Infusion,
   MaverickV1,
   MaverickV2,
   Camelot,
@@ -160,9 +196,29 @@ const Dexes = [
   Swell,
   PharaohV1,
   Spark,
+  SparkPsm,
   AaveV3Stata,
+  AaveV3StataV2,
+  OSwap,
   ConcentratorArusd,
   FxProtocolRusd,
+  AaveGsm,
+  LitePsm,
+  UsualBond,
+  StkGHO,
+  SkyConverter,
+  Cables,
+  FluidDex,
+  UsualMWrappedM,
+  MWrappedM,
+  WrappedMM,
+  UsualMUsd0,
+  UsualPP,
+  Ekubo,
+  AaveV3PtRollOver,
+  RingV2,
+  UsdcTransmuter,
+  ApexDefi,
 ];
 
 export type LegacyDexConstructor = new (dexHelper: IDexHelper) => IDexTxBuilder<
@@ -193,8 +249,10 @@ export class DexAdapterService {
   public routeOptimizers: IRouteOptimizer<UnoptimizedRate>[] = [
     balancerV1Merge,
     balancerV2Merge,
+    balancerV3Merge,
     uniswapMerge,
     curveV1Merge,
+    uniswapV4Merge,
   ];
 
   constructor(

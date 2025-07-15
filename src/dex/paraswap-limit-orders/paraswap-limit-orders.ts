@@ -67,7 +67,7 @@ export class ParaSwapLimitOrders
     super(dexHelper, dexKey);
     this.augustusRFQAddress =
       dexHelper.config.data.augustusRFQAddress.toLowerCase();
-    this.logger = dexHelper.getLogger(dexKey);
+    this.logger = dexHelper.getLogger(`${dexKey}-${network}`);
   }
 
   get limitOrderProviderName() {

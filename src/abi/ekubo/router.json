@@ -1,0 +1,803 @@
+[
+  {
+    "type": "constructor",
+    "inputs": [
+      {
+        "name": "core",
+        "type": "address",
+        "internalType": "contract ICore"
+      }
+    ],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "checkDeadline",
+    "inputs": [
+      {
+        "name": "deadline",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "payable"
+  },
+  {
+    "type": "function",
+    "name": "checkMaximumInputNotExceeded",
+    "inputs": [
+      {
+        "name": "token",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "maximumInput",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "payable"
+  },
+  {
+    "type": "function",
+    "name": "checkMinimumOutputReceived",
+    "inputs": [
+      {
+        "name": "token",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "minimumOutput",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "payable"
+  },
+  {
+    "type": "function",
+    "name": "locked",
+    "inputs": [
+      {
+        "name": "id",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "multiMultihopSwap",
+    "inputs": [
+      {
+        "name": "swaps",
+        "type": "tuple[]",
+        "internalType": "struct Swap[]",
+        "components": [
+          {
+            "name": "route",
+            "type": "tuple[]",
+            "internalType": "struct RouteNode[]",
+            "components": [
+              {
+                "name": "poolKey",
+                "type": "tuple",
+                "internalType": "struct PoolKey",
+                "components": [
+                  {
+                    "name": "token0",
+                    "type": "address",
+                    "internalType": "address"
+                  },
+                  {
+                    "name": "token1",
+                    "type": "address",
+                    "internalType": "address"
+                  },
+                  {
+                    "name": "config",
+                    "type": "bytes32",
+                    "internalType": "Config"
+                  }
+                ]
+              },
+              {
+                "name": "sqrtRatioLimit",
+                "type": "uint96",
+                "internalType": "SqrtRatio"
+              },
+              {
+                "name": "skipAhead",
+                "type": "uint256",
+                "internalType": "uint256"
+              }
+            ]
+          },
+          {
+            "name": "tokenAmount",
+            "type": "tuple",
+            "internalType": "struct TokenAmount",
+            "components": [
+              {
+                "name": "token",
+                "type": "address",
+                "internalType": "address"
+              },
+              {
+                "name": "amount",
+                "type": "int128",
+                "internalType": "int128"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "calculatedAmountThreshold",
+        "type": "int256",
+        "internalType": "int256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "results",
+        "type": "tuple[][]",
+        "internalType": "struct Delta[][]",
+        "components": [
+          {
+            "name": "amount0",
+            "type": "int128",
+            "internalType": "int128"
+          },
+          {
+            "name": "amount1",
+            "type": "int128",
+            "internalType": "int128"
+          }
+        ]
+      }
+    ],
+    "stateMutability": "payable"
+  },
+  {
+    "type": "function",
+    "name": "multicall",
+    "inputs": [
+      {
+        "name": "data",
+        "type": "bytes[]",
+        "internalType": "bytes[]"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes[]",
+        "internalType": "bytes[]"
+      }
+    ],
+    "stateMutability": "payable"
+  },
+  {
+    "type": "function",
+    "name": "multihopSwap",
+    "inputs": [
+      {
+        "name": "s",
+        "type": "tuple",
+        "internalType": "struct Swap",
+        "components": [
+          {
+            "name": "route",
+            "type": "tuple[]",
+            "internalType": "struct RouteNode[]",
+            "components": [
+              {
+                "name": "poolKey",
+                "type": "tuple",
+                "internalType": "struct PoolKey",
+                "components": [
+                  {
+                    "name": "token0",
+                    "type": "address",
+                    "internalType": "address"
+                  },
+                  {
+                    "name": "token1",
+                    "type": "address",
+                    "internalType": "address"
+                  },
+                  {
+                    "name": "config",
+                    "type": "bytes32",
+                    "internalType": "Config"
+                  }
+                ]
+              },
+              {
+                "name": "sqrtRatioLimit",
+                "type": "uint96",
+                "internalType": "SqrtRatio"
+              },
+              {
+                "name": "skipAhead",
+                "type": "uint256",
+                "internalType": "uint256"
+              }
+            ]
+          },
+          {
+            "name": "tokenAmount",
+            "type": "tuple",
+            "internalType": "struct TokenAmount",
+            "components": [
+              {
+                "name": "token",
+                "type": "address",
+                "internalType": "address"
+              },
+              {
+                "name": "amount",
+                "type": "int128",
+                "internalType": "int128"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "calculatedAmountThreshold",
+        "type": "int256",
+        "internalType": "int256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "result",
+        "type": "tuple[]",
+        "internalType": "struct Delta[]",
+        "components": [
+          {
+            "name": "amount0",
+            "type": "int128",
+            "internalType": "int128"
+          },
+          {
+            "name": "amount1",
+            "type": "int128",
+            "internalType": "int128"
+          }
+        ]
+      }
+    ],
+    "stateMutability": "payable"
+  },
+  {
+    "type": "function",
+    "name": "payCallback",
+    "inputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "token",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "permit",
+    "inputs": [
+      {
+        "name": "token",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "amount",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "deadline",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "v",
+        "type": "uint8",
+        "internalType": "uint8"
+      },
+      {
+        "name": "r",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "s",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "payable"
+  },
+  {
+    "type": "function",
+    "name": "quote",
+    "inputs": [
+      {
+        "name": "poolKey",
+        "type": "tuple",
+        "internalType": "struct PoolKey",
+        "components": [
+          {
+            "name": "token0",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "token1",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "config",
+            "type": "bytes32",
+            "internalType": "Config"
+          }
+        ]
+      },
+      {
+        "name": "isToken1",
+        "type": "bool",
+        "internalType": "bool"
+      },
+      {
+        "name": "amount",
+        "type": "int128",
+        "internalType": "int128"
+      },
+      {
+        "name": "sqrtRatioLimit",
+        "type": "uint96",
+        "internalType": "SqrtRatio"
+      },
+      {
+        "name": "skipAhead",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "delta0",
+        "type": "int128",
+        "internalType": "int128"
+      },
+      {
+        "name": "delta1",
+        "type": "int128",
+        "internalType": "int128"
+      }
+    ],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "recordBalanceForSlippageCheck",
+    "inputs": [
+      {
+        "name": "token",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "payable"
+  },
+  {
+    "type": "function",
+    "name": "refundNativeToken",
+    "inputs": [],
+    "outputs": [],
+    "stateMutability": "payable"
+  },
+  {
+    "type": "function",
+    "name": "swap",
+    "inputs": [
+      {
+        "name": "poolKey",
+        "type": "tuple",
+        "internalType": "struct PoolKey",
+        "components": [
+          {
+            "name": "token0",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "token1",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "config",
+            "type": "bytes32",
+            "internalType": "Config"
+          }
+        ]
+      },
+      {
+        "name": "isToken1",
+        "type": "bool",
+        "internalType": "bool"
+      },
+      {
+        "name": "amount",
+        "type": "int128",
+        "internalType": "int128"
+      },
+      {
+        "name": "sqrtRatioLimit",
+        "type": "uint96",
+        "internalType": "SqrtRatio"
+      },
+      {
+        "name": "skipAhead",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "delta0",
+        "type": "int128",
+        "internalType": "int128"
+      },
+      {
+        "name": "delta1",
+        "type": "int128",
+        "internalType": "int128"
+      }
+    ],
+    "stateMutability": "payable"
+  },
+  {
+    "type": "function",
+    "name": "swap",
+    "inputs": [
+      {
+        "name": "poolKey",
+        "type": "tuple",
+        "internalType": "struct PoolKey",
+        "components": [
+          {
+            "name": "token0",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "token1",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "config",
+            "type": "bytes32",
+            "internalType": "Config"
+          }
+        ]
+      },
+      {
+        "name": "isToken1",
+        "type": "bool",
+        "internalType": "bool"
+      },
+      {
+        "name": "amount",
+        "type": "int128",
+        "internalType": "int128"
+      },
+      {
+        "name": "sqrtRatioLimit",
+        "type": "uint96",
+        "internalType": "SqrtRatio"
+      },
+      {
+        "name": "skipAhead",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "calculatedAmountThreshold",
+        "type": "int256",
+        "internalType": "int256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "delta0",
+        "type": "int128",
+        "internalType": "int128"
+      },
+      {
+        "name": "delta1",
+        "type": "int128",
+        "internalType": "int128"
+      }
+    ],
+    "stateMutability": "payable"
+  },
+  {
+    "type": "function",
+    "name": "swap",
+    "inputs": [
+      {
+        "name": "node",
+        "type": "tuple",
+        "internalType": "struct RouteNode",
+        "components": [
+          {
+            "name": "poolKey",
+            "type": "tuple",
+            "internalType": "struct PoolKey",
+            "components": [
+              {
+                "name": "token0",
+                "type": "address",
+                "internalType": "address"
+              },
+              {
+                "name": "token1",
+                "type": "address",
+                "internalType": "address"
+              },
+              {
+                "name": "config",
+                "type": "bytes32",
+                "internalType": "Config"
+              }
+            ]
+          },
+          {
+            "name": "sqrtRatioLimit",
+            "type": "uint96",
+            "internalType": "SqrtRatio"
+          },
+          {
+            "name": "skipAhead",
+            "type": "uint256",
+            "internalType": "uint256"
+          }
+        ]
+      },
+      {
+        "name": "tokenAmount",
+        "type": "tuple",
+        "internalType": "struct TokenAmount",
+        "components": [
+          {
+            "name": "token",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "amount",
+            "type": "int128",
+            "internalType": "int128"
+          }
+        ]
+      },
+      {
+        "name": "calculatedAmountThreshold",
+        "type": "int256",
+        "internalType": "int256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "delta0",
+        "type": "int128",
+        "internalType": "int128"
+      },
+      {
+        "name": "delta1",
+        "type": "int128",
+        "internalType": "int128"
+      }
+    ],
+    "stateMutability": "payable"
+  },
+  {
+    "type": "function",
+    "name": "swap",
+    "inputs": [
+      {
+        "name": "poolKey",
+        "type": "tuple",
+        "internalType": "struct PoolKey",
+        "components": [
+          {
+            "name": "token0",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "token1",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "config",
+            "type": "bytes32",
+            "internalType": "Config"
+          }
+        ]
+      },
+      {
+        "name": "isToken1",
+        "type": "bool",
+        "internalType": "bool"
+      },
+      {
+        "name": "amount",
+        "type": "int128",
+        "internalType": "int128"
+      },
+      {
+        "name": "sqrtRatioLimit",
+        "type": "uint96",
+        "internalType": "SqrtRatio"
+      },
+      {
+        "name": "skipAhead",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "calculatedAmountThreshold",
+        "type": "int256",
+        "internalType": "int256"
+      },
+      {
+        "name": "recipient",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "delta0",
+        "type": "int128",
+        "internalType": "int128"
+      },
+      {
+        "name": "delta1",
+        "type": "int128",
+        "internalType": "int128"
+      }
+    ],
+    "stateMutability": "payable"
+  },
+  {
+    "type": "error",
+    "name": "BaseLockerAccountantOnly",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "CoreOnly",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "ExpectedRevertWithinLock",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "MaximumInputExceeded",
+    "inputs": [
+      {
+        "name": "token",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "maximumInput",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "MinimumOutputNotReceived",
+    "inputs": [
+      {
+        "name": "token",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "minimumOutput",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "PartialSwapsDisallowed",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "QuoteReturnValue",
+    "inputs": [
+      {
+        "name": "delta0",
+        "type": "int128",
+        "internalType": "int128"
+      },
+      {
+        "name": "delta1",
+        "type": "int128",
+        "internalType": "int128"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "SlippageCheckFailed",
+    "inputs": [
+      {
+        "name": "expectedAmount",
+        "type": "int256",
+        "internalType": "int256"
+      },
+      {
+        "name": "calculatedAmount",
+        "type": "int256",
+        "internalType": "int256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "TokensMismatch",
+    "inputs": [
+      {
+        "name": "index",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "TransactionExpired",
+    "inputs": [
+      {
+        "name": "deadline",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  }
+]

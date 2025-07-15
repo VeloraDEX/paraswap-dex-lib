@@ -351,64 +351,6 @@ export class Wombat extends SimpleExchange implements IDex<WombatData> {
     };
   }
 
-  // This is called once before getTopPoolsForToken is
-  // called for multiple tokens. This can be helpful to
-  // update common state required for calculating
-  // getTopPoolsForToken. For example, poolLiquidityUSD.
-  async updatePoolState(): Promise<void> {
-    const blockNumber = await this.dexHelper.provider.getBlockNumber();
-    await this.init(blockNumber);
-    const bmwState = this.bmw.getState(blockNumber);
-    if (!bmwState) {
-      throw new Error('updatePoolState: bmwState still null after init');
-    }
-
-    // All tokens are USD stablecoins so to estimate liquidity can just add
-    // the cash balances of all the tokens
-    const poolLiquidityUSD: { [poolAddress: string]: number } = {};
-    const usdPromises = [];
-    const poolStates: { [poolAddress: string]: DeepReadonly<PoolState> } = {};
-    const poolStateObjs = await Promise.all(
-      Object.values(this.pools).map(pool => pool.getState(blockNumber)),
-    );
-
-    for (const [poolAddress, _] of Object.entries(this.pools)) {
-      const index = Object.keys(this.pools).indexOf(poolAddress);
-      let state = poolStateObjs[index];
-      if (!state) {
-        this.logger.warn(
-          `State of ${poolAddress} is null in updatePoolState, skipping...`,
-        );
-        continue;
-      }
-      poolStates[poolAddress] = state;
-      for (const [tokenAddress, assetState] of Object.entries(state.asset)) {
-        usdPromises.push(
-          this.dexHelper.getTokenUSDPrice(
-            {
-              address: tokenAddress,
-              decimals: assetState.underlyingTokenDecimals,
-            },
-            fromWad(
-              assetState.cash,
-              BigInt(assetState.underlyingTokenDecimals),
-            ),
-          ),
-        );
-      }
-    }
-    const usdValues = await Promise.all(usdPromises);
-
-    for (const [poolAddress, poolState] of Object.entries(poolStates)) {
-      poolLiquidityUSD[poolAddress] = 0;
-      for (let i = 0; i < poolState.underlyingAddresses.length; i++) {
-        poolLiquidityUSD[poolAddress] += usdValues[i];
-      }
-    }
-
-    this.poolLiquidityUSD = poolLiquidityUSD;
-  }
-
   // Returns list of top pools based on liquidity. Max
   // limit number pools should be returned.
   async getTopPoolsForToken(

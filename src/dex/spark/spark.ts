@@ -1,6 +1,6 @@
 import { SimpleExchange } from '../simple-exchange';
 import { Context, IDex } from '../idex';
-import { SparkParams, SparkData, SparkSDaiFunctions } from './types';
+import { SparkParams, SparkData, SparkSDaiPoolState } from './types';
 import { Network, SwapSide } from '../../constants';
 import { getDexKeysWithNetwork } from '../../utils';
 import { Adapters, SDaiConfig } from './config';
@@ -18,12 +18,10 @@ import {
 } from '../../types';
 import { IDexHelper } from '../../dex-helper';
 import * as CALLDATA_GAS_COST from '../../calldata-gas-cost';
-import PotAbi from '../../abi/maker-psm/pot.json';
-import SavingsDaiAbi from '../../abi/sdai/SavingsDai.abi.json';
 import { Interface } from 'ethers/lib/utils';
-import { SparkSDaiEventPool } from './spark-sdai-pool';
+import { calcChi, RAY, SparkSDaiEventPool } from './spark-sdai-pool';
 import { BI_POWS } from '../../bigint-constants';
-import { SDAI_DEPOSIT_GAS_COST, SDAI_REDEEM_GAS_COST } from './constants';
+import { SDAI_DEPOSIT_GAS_COST } from './constants';
 import { extractReturnAmountPosition } from '../../executor/utils';
 
 export class Spark
@@ -42,25 +40,31 @@ export class Spark
   constructor(
     protected network: Network,
     dexKey: string,
-    protected dexHelper: IDexHelper,
-
+    readonly dexHelper: IDexHelper,
+    protected readonly config = SDaiConfig[dexKey][network],
     readonly daiAddress: string = SDaiConfig[dexKey][network].daiAddress,
     readonly sdaiAddress: string = SDaiConfig[dexKey][network].sdaiAddress,
     readonly potAddress: string = SDaiConfig[dexKey][network].potAddress,
+    readonly abiInterface: Interface = SDaiConfig[dexKey][network]
+      .poolInterface,
 
     protected adapters = Adapters[network] || {},
-    protected sdaiInterface = new Interface(SavingsDaiAbi),
-    protected potInterface = new Interface(PotAbi),
+    protected sdaiInterface = SDaiConfig[dexKey][network].exchangeInterface,
+    protected swapFunctions = SDaiConfig[dexKey][network].swapFunctions,
+    protected referralCode = SDaiConfig[dexKey][network].referralCode,
   ) {
     super(dexHelper, dexKey);
     this.logger = dexHelper.getLogger(dexKey);
     this.eventPool = new SparkSDaiEventPool(
       this.dexKey,
+      this.network,
       `${this.daiAddress}_${this.sdaiAddress}`,
       dexHelper,
       this.potAddress,
-      this.potInterface,
+      this.abiInterface,
       this.logger,
+      config.savingsRate.topic,
+      config.savingsRate.symbol,
     );
   }
 
@@ -107,41 +111,38 @@ export class Spark
     limitPools?: string[],
   ): Promise<null | ExchangePrices<SparkData>> {
     if (!this.isAppropriatePair(srcToken, destToken)) return null;
-    if (!this.eventPool.getState(blockNumber)) return null;
+    const state = await this.eventPool.getOrGenerateState(blockNumber);
+    if (!state) return null;
+
+    const isSrcAsset = this.isDai(srcToken.address);
+
+    let calcFunction: Function;
 
     if (side === SwapSide.SELL) {
-      const calcSellFn = (blockNumber: number, amountIn: bigint) =>
-        this.isDai(srcToken.address)
-          ? this.eventPool.convertToSDai(amountIn, blockNumber)
-          : this.eventPool.convertToDai(amountIn, blockNumber);
-
-      return [
-        {
-          prices: amounts.map(amount => calcSellFn(blockNumber, amount)),
-          unit: calcSellFn(blockNumber, BI_POWS[18]),
-          gasCost: SDAI_DEPOSIT_GAS_COST,
-          exchange: this.dexKey,
-          data: { exchange: `${this.sdaiAddress}` },
-          poolAddresses: [`${this.sdaiAddress}`],
-        },
-      ];
+      if (isSrcAsset) {
+        calcFunction = this.previewDeposit.bind(this);
+      } else {
+        calcFunction = this.previewRedeem.bind(this);
+      }
     } else {
-      const calcBuyFn = (blockNumber: number, amountIn: bigint) =>
-        this.isDai(srcToken.address)
-          ? this.eventPool.convertToDai(amountIn, blockNumber)
-          : this.eventPool.convertToSDai(amountIn, blockNumber);
-
-      return [
-        {
-          prices: amounts.map(amount => calcBuyFn(blockNumber, amount)),
-          unit: calcBuyFn(blockNumber, BI_POWS[18]),
-          gasCost: SDAI_REDEEM_GAS_COST,
-          exchange: this.dexKey,
-          data: { exchange: `${this.sdaiAddress}` },
-          poolAddresses: [`${this.sdaiAddress}`],
-        },
-      ];
+      if (isSrcAsset) {
+        calcFunction = this.previewMint.bind(this);
+      } else {
+        calcFunction = this.previewWithdraw.bind(this);
+      }
     }
+
+    return [
+      {
+        // cannot produce 1:1 price without making an rpc call for block.timestamp and using it for price calculation in `calcChi` function
+        prices: amounts.map(amount => calcFunction(amount, state)),
+        unit: BI_POWS[18],
+        gasCost: SDAI_DEPOSIT_GAS_COST,
+        exchange: this.dexKey,
+        data: { exchange: `${this.sdaiAddress}` },
+        poolAddresses: [`${this.sdaiAddress}`],
+      },
+    ];
   }
 
   // Returns estimated gas cost of calldata for this DEX in multiSwap
@@ -185,13 +186,19 @@ export class Spark
 
     let swapData: string;
     if (this.isDai(srcToken)) {
+      const calldata = [isSell ? srcAmount : destAmount, this.augustusAddress];
+
+      if (this.referralCode) {
+        calldata.push(this.referralCode);
+      }
+
       swapData = this.sdaiInterface.encodeFunctionData(
-        isSell ? SparkSDaiFunctions.deposit : SparkSDaiFunctions.mint,
-        [isSell ? srcAmount : destAmount, this.augustusAddress],
+        isSell ? this.swapFunctions.deposit : this.swapFunctions.mint,
+        calldata,
       );
     } else {
       swapData = this.sdaiInterface.encodeFunctionData(
-        isSell ? SparkSDaiFunctions.redeem : SparkSDaiFunctions.withdraw,
+        isSell ? this.swapFunctions.redeem : this.swapFunctions.withdraw,
         [
           isSell ? srcAmount : destAmount,
           this.augustusAddress,
@@ -229,14 +236,21 @@ export class Spark
     const { exchange } = data;
 
     let swapData: string;
+
     if (this.isDai(srcToken)) {
+      const calldata = [isSell ? srcAmount : destAmount, recipient];
+
+      if (this.referralCode) {
+        calldata.push(this.referralCode);
+      }
+
       swapData = this.sdaiInterface.encodeFunctionData(
-        isSell ? SparkSDaiFunctions.deposit : SparkSDaiFunctions.mint,
-        [isSell ? srcAmount : destAmount, recipient],
+        isSell ? this.swapFunctions.deposit : this.swapFunctions.mint,
+        calldata,
       );
     } else {
       swapData = this.sdaiInterface.encodeFunctionData(
-        isSell ? SparkSDaiFunctions.redeem : SparkSDaiFunctions.withdraw,
+        isSell ? this.swapFunctions.redeem : this.swapFunctions.withdraw,
         [isSell ? srcAmount : destAmount, recipient, executorAddress],
       );
     }
@@ -250,8 +264,8 @@ export class Spark
         ? extractReturnAmountPosition(
             this.sdaiInterface,
             this.isDai(srcToken)
-              ? SparkSDaiFunctions.deposit
-              : SparkSDaiFunctions.redeem,
+              ? this.swapFunctions.deposit
+              : this.swapFunctions.redeem,
             this.isDai(srcToken) ? 'shares' : 'assets',
           )
         : undefined,
@@ -285,5 +299,25 @@ export class Spark
       payload,
       networkFee: '0',
     };
+  }
+
+  previewRedeem(shares: bigint, state: SparkSDaiPoolState) {
+    return (shares * calcChi(state)) / RAY;
+  }
+
+  previewMint(shares: bigint, state: SparkSDaiPoolState) {
+    return this.divUp(shares * calcChi(state), RAY);
+  }
+
+  previewWithdraw(assets: bigint, state: SparkSDaiPoolState) {
+    return this.divUp(assets * RAY, calcChi(state));
+  }
+
+  previewDeposit(assets: bigint, state: SparkSDaiPoolState) {
+    return (assets * RAY) / calcChi(state);
+  }
+
+  divUp(x: bigint, y: bigint): bigint {
+    return x !== 0n ? (x - 1n) / y + 1n : 0n;
   }
 }

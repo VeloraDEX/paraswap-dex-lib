@@ -8,6 +8,7 @@ import { Address } from '../../types';
 import { DummyDexHelper } from '../../dex-helper/index';
 import { testEventSubscriber } from '../../../tests/utils-events';
 import { PoolState } from './types';
+import { Tokens } from '../../../tests/constants-e2e';
 
 /*
   README
@@ -49,8 +50,13 @@ async function fetchPoolState(
   blockNumber: number,
   poolAddress: string,
 ): Promise<PoolState> {
-  // TODO: complete me!
-  return {};
+  const message = `ApexDefi: ${poolAddress} blockNumber ${blockNumber}`;
+  console.log(`Fetching state ${message}`);
+
+  const state = await apexDefiPools.generateState(blockNumber);
+
+  console.log(`Done ${message}`);
+  return state;
 }
 
 // eventName -> blockNumbers
@@ -58,14 +64,16 @@ type EventMappings = Record<string, number[]>;
 
 describe('ApexDefi EventPool Mainnet', function () {
   const dexKey = 'ApexDefi';
-  const network = Network.MAINNET;
+  const network = Network.AVALANCHE;
   const dexHelper = new DummyDexHelper(network);
   const logger = dexHelper.getLogger(dexKey);
   let apexDefiPool: ApexDefiEventPool;
 
   // poolAddress -> EventMappings
   const eventsToTest: Record<Address, EventMappings> = {
-    // TODO: complete me!
+    [Tokens[network].APEX.address]: {
+      Swap: [65243326, 65243466, 65247603],
+    },
   };
 
   beforeEach(async () => {
@@ -73,8 +81,11 @@ describe('ApexDefi EventPool Mainnet', function () {
       dexKey,
       network,
       dexHelper,
+      Tokens[network].AVAX.address, // token0
+      Tokens[network].APEX.address, // token1
+      Tokens[network].APEX.address, // poolAddress
       logger,
-      /* TODO: Put here additional constructor arguments if needed */
+      '0x754A0c42C35562eE7a41eb824d14bc1259820f01', // apexDefiFactoryAddress
     );
   });
 

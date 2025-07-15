@@ -45,7 +45,7 @@ export class Synthetix extends SimpleExchange implements IDex<SynthetixData> {
   synthetixState: SynthetixState;
 
   // It is intermediate measure before we have event base Oracles
-  statePollingTimer?: NodeJS.Timer;
+  statePollingTimer?: NodeJS.Timeout;
 
   public static dexKeysWithNetwork: { key: string; networks: Network[] }[] =
     getDexKeysWithNetwork(SynthetixConfig);
@@ -198,6 +198,7 @@ export class Synthetix extends SimpleExchange implements IDex<SynthetixData> {
 
       if (
         state.isSystemSuspended ||
+        state.isExchangeSuspended ||
         state.areSynthsSuspended[_srcAddress] ||
         state.areSynthsSuspended[_destAddress]
       ) {
@@ -373,15 +374,12 @@ export class Synthetix extends SimpleExchange implements IDex<SynthetixData> {
 
   async updatePoolState(): Promise<void> {
     try {
-      this.synthetixState.onchainConfigValues;
+      await this.synthetixState.updateOnchainConfigValues();
     } catch (e) {
-      if (
-        e instanceof Error &&
-        e.message.endsWith('onchain config values are not initialized')
-      ) {
-        await this.synthetixState.updateOnchainConfigValues();
-        return;
-      }
+      this.logger.error(
+        `${this.dexKey}: Failed to update onchain config values: `,
+        e,
+      );
       throw e;
     }
   }
@@ -396,6 +394,14 @@ export class Synthetix extends SimpleExchange implements IDex<SynthetixData> {
       return [];
     }
 
+    if (
+      this.onchainConfigValues.isSystemSuspended ||
+      this.onchainConfigValues.isExchangeSuspended ||
+      this.onchainConfigValues.areSynthsSuspended[_tokenAddress]
+    ) {
+      return [];
+    }
+
     return [
       {
         exchange: this.dexKey,
@@ -403,7 +409,10 @@ export class Synthetix extends SimpleExchange implements IDex<SynthetixData> {
         connectorTokens: this.config.synths.filter(
           s => s.address !== _tokenAddress,
         ),
-        liquidityUSD: this.onchainConfigValues.liquidityEstimationInUSD,
+        // liquidityUSD: this.onchainConfigValues.liquidityEstimationInUSD,
+        // current supply is around 20-40m USD which is not how much we can trade
+        // so use low hardcoded value
+        liquidityUSD: 100_000,
       },
     ];
   }

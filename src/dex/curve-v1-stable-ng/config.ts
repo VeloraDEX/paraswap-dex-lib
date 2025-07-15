@@ -15,7 +15,9 @@ const CurveV1StableNgConfig: DexConfigMap<DexParams> = {
       ],
       router: '0x16C6521Dff6baB339122a0FE25a9116693265353', // https://github.com/curvefi/curve-router-ng
       stateUpdatePeriodMs: 5 * 1000,
-      disabledPools: new Set([]),
+      disabledPools: new Set([
+        '0x37636263da44423349788326b860311f5db0dd20', // USDC - USDT - SPANK
+      ]),
       disabledImplementations: new Set([]),
       factoryPoolImplementations: {
         '0xdcc91f930b42619377c200ba05b7513f2958b202': {
@@ -102,21 +104,27 @@ const CurveV1StableNgConfig: DexConfigMap<DexParams> = {
       },
       customPools: {},
     },
-    [Network.FANTOM]: {
+    [Network.SONIC]: {
       factories: [
         {
-          address: '0xe61Fb97Ef6eBFBa12B36Ffd7be785c1F5A2DE66b',
+          address: '0x7c2085419be6a04f4ad88ea91bc9f5c6e6c463d8',
           isStableNg: true,
         },
       ],
-      router: '0x0DCDED3545D565bA3B19E683431381007245d983', // https://github.com/curvefi/curve-router-ng
+      router: '0x5eeE3091f747E60a045a2E715a4c71e600e31F6E',
       stateUpdatePeriodMs: 2 * 1000,
       disabledPools: new Set([]),
       disabledImplementations: new Set([]),
       factoryPoolImplementations: {
-        '0x5702bdb1ec244704e3cbbaae11a0275ae5b07499': {
+        '0xe61Fb97Ef6eBFBa12B36Ffd7be785c1F5A2DE66b': {
           name: ImplementationNames.FACTORY_STABLE_NG,
-          address: '0x5702bdb1ec244704e3cbbaae11a0275ae5b07499',
+          address: '0xe61Fb97Ef6eBFBa12B36Ffd7be785c1F5A2DE66b',
+          liquidityApiSlug: '/factory-stable-ng',
+          isStoreRateSupported: true,
+        },
+        '0x8663426e8713922d81e44d73295759e74afc230f': {
+          name: ImplementationNames.FACTORY_STABLE_NG,
+          address: '0x8663426e8713922d81e44d73295759e74afc230f',
           liquidityApiSlug: '/factory-stable-ng',
           isStoreRateSupported: true,
         },
@@ -192,6 +200,34 @@ const CurveV1StableNgConfig: DexConfigMap<DexParams> = {
       },
       customPools: {},
     },
+    [Network.GNOSIS]: {
+      factories: [
+        {
+          address: '0xbc0797015fcfc47d9c1856639cae50d0e69fbee8',
+          isStableNg: true,
+        },
+      ],
+      router: '0x0dcded3545d565ba3b19e683431381007245d983', // https://github.com/curvefi/curve-router-ng
+      stateUpdatePeriodMs: 5 * 1000,
+      disabledPools: new Set([]),
+      disabledImplementations: new Set([]),
+      factoryPoolImplementations: {
+        // TODO-gnosis: check if there's no missing implementations
+        '0x3d6cb2f6dcf47cdd9c13e4e3beae9af041d8796a': {
+          name: ImplementationNames.FACTORY_STABLE_NG,
+          address: '0x3d6cb2f6dcf47cdd9c13e4e3beae9af041d8796a',
+          liquidityApiSlug: '/factory-stable-ng',
+          isStoreRateSupported: true,
+        },
+        '0xc1b393efef38140662b91441c6710aa704973228': {
+          name: ImplementationNames.FACTORY_STABLE_NG,
+          address: '0xc1b393efef38140662b91441c6710aa704973228',
+          liquidityApiSlug: '/factory-stable-ng',
+          isStoreRateSupported: true,
+        },
+      },
+      customPools: {},
+    },
   },
 };
 
@@ -221,20 +257,6 @@ export const Adapters: Record<number, AdapterMappings> = {
       {
         name: 'PolygonBuyAdapter',
         index: 11,
-      },
-    ],
-  },
-  [Network.FANTOM]: {
-    [SwapSide.SELL]: [
-      {
-        name: 'FantomAdapter02',
-        index: 2,
-      },
-    ],
-    [SwapSide.BUY]: [
-      {
-        name: 'FantomBuyAdapter',
-        index: 7,
       },
     ],
   },

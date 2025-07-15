@@ -27,9 +27,12 @@ import { MaverickV2EventPool } from './maverick-v2-pool';
 import { SUBGRAPH_TIMEOUT } from '../../constants';
 import { Interface } from '@ethersproject/abi';
 import MaverickV2PoolABI from '../../abi/maverick-v2/MaverickV2Pool.json';
+import MaverickV2RouterABI from '../../abi/maverick-v2/MaverickV2Router.json';
 import ERC20ABI from '../../abi/erc20.json';
 import { extractReturnAmountPosition } from '../../executor/utils';
-const EFFICIENCY_FACTOR = 3;
+
+const POOL_LIST_CACHE_KEY = 'maverickv2-pool-list';
+const POOL_LIST_TTL_SECONDS = 60;
 
 export class MaverickV2 extends SimpleExchange implements IDex<MaverickV2Data> {
   pools: { [key: string]: MaverickV2EventPool } = {};
@@ -52,13 +55,14 @@ export class MaverickV2 extends SimpleExchange implements IDex<MaverickV2Data> {
     protected adapters = {},
     protected config = MaverickV2Config[dexKey][network],
     protected maverickV2Iface = new Interface(MaverickV2PoolABI),
+    protected maverickV2RouterIface = new Interface(MaverickV2RouterABI),
   ) {
     super(dexHelper, dexKey);
     this.logger = dexHelper.getLogger(dexKey);
   }
 
   async initializePricing(blockNumber: number) {
-    const pools = await this._queryPoolsAPI(SUBGRAPH_TIMEOUT);
+    const pools = await this._queryPoolsAPI();
 
     await Promise.all(
       pools.map(async pool => {
@@ -97,15 +101,30 @@ export class MaverickV2 extends SimpleExchange implements IDex<MaverickV2Data> {
     return null;
   }
 
+  async getEventPools(srcToken: Token, destToken: Token) {
+    const fromToken = this.dexHelper.config.wrapETH(srcToken);
+    const toToken = this.dexHelper.config.wrapETH(destToken);
+
+    return Object.values(this.pools).filter((pool: MaverickV2EventPool) => {
+      const tokenA = pool.tokenA.address.toLowerCase();
+      const tokenB = pool.tokenB.address.toLowerCase();
+
+      const fromAddress = fromToken.address.toLowerCase();
+      const toAddress = toToken.address.toLowerCase();
+
+      return (
+        (tokenA === fromAddress && tokenB === toAddress) ||
+        (tokenA === toAddress && tokenB === fromAddress)
+      );
+    });
+  }
+
   async getPoolIdentifiers(
     srcToken: Token,
     destToken: Token,
     side: SwapSide,
     blockNumber: number,
   ): Promise<string[]> {
-    // TODO:
-    if (side === SwapSide.BUY) return [];
-
     const from = this.dexHelper.config.wrapETH(srcToken);
     const to = this.dexHelper.config.wrapETH(destToken);
 
@@ -113,23 +132,8 @@ export class MaverickV2 extends SimpleExchange implements IDex<MaverickV2Data> {
       return [];
     }
 
-    const pools = await this.getPools(from, to);
+    const pools = await this.getEventPools(from, to);
     return pools.map(pool => pool.name);
-  }
-
-  async getPools(srcToken: Token, destToken: Token) {
-    srcToken = this.dexHelper.config.wrapETH(srcToken);
-    destToken = this.dexHelper.config.wrapETH(destToken);
-
-    return Object.values(this.pools).filter((pool: MaverickV2EventPool) => {
-      return (
-        (pool.tokenA.address.toLowerCase() === srcToken.address.toLowerCase() ||
-          pool.tokenA.address.toLowerCase() ===
-            destToken.address.toLowerCase()) &&
-        (pool.tokenB.address.toLowerCase() === srcToken.address.toLowerCase() ||
-          pool.tokenB.address.toLowerCase() === destToken.address.toLowerCase())
-      );
-    });
   }
 
   async getPricesVolume(
@@ -148,10 +152,7 @@ export class MaverickV2 extends SimpleExchange implements IDex<MaverickV2Data> {
         return null;
       }
 
-      // TODO:
-      if (side === SwapSide.BUY) return null;
-
-      const allPools = await this.getPools(from, to);
+      const allPools = await this.getEventPools(from, to);
 
       const allowedPools = limitPools
         ? allPools.filter(pool => limitPools.includes(pool.name))
@@ -159,11 +160,9 @@ export class MaverickV2 extends SimpleExchange implements IDex<MaverickV2Data> {
 
       if (!allowedPools.length) return null;
 
-      // const unitAmount = getBigIntPow(
-      //   side === SwapSide.BUY ? to.decimals : from.decimals,
-      // );
-
-      const unitAmount = getBigIntPow(from.decimals);
+      const unitAmount = getBigIntPow(
+        side === SwapSide.BUY ? to.decimals : from.decimals,
+      );
 
       const tasks = allowedPools.map(async (pool: MaverickV2EventPool) => {
         try {
@@ -173,8 +172,7 @@ export class MaverickV2 extends SimpleExchange implements IDex<MaverickV2Data> {
             return null;
           }
 
-          // const [unit] = pool.swap(unitAmount, from, to, side === SwapSide.BUY);
-          const [unit] = pool.swap(unitAmount, from, to, false);
+          const [unit] = pool.swap(unitAmount, from, to, side === SwapSide.BUY);
           let lastOutput = 1n;
 
           const dataList: [bigint, bigint][] = amounts.map(amount => {
@@ -182,8 +180,7 @@ export class MaverickV2 extends SimpleExchange implements IDex<MaverickV2Data> {
               return [0n, 0n];
             }
 
-            // const output = pool.swap(amount, from, to, side === SwapSide.BUY);
-            const output = pool.swap(amount, from, to, false);
+            const output = pool.swap(amount, from, to, side === SwapSide.BUY);
             lastOutput = output[0];
             return output;
           });
@@ -259,47 +256,60 @@ export class MaverickV2 extends SimpleExchange implements IDex<MaverickV2Data> {
     recipient: Address,
     data: MaverickV2Data,
     side: SwapSide,
-    _: Context,
-    executorAddress: Address,
   ): DexExchangeParam {
-    // TODO:
-    if (side === SwapSide.BUY) throw new Error(`Buy not supported`);
-
     const { pool } = data;
 
-    srcToken = this.dexHelper.config.wrapETH(srcToken);
-    destToken = this.dexHelper.config.wrapETH(destToken);
+    const from = this.dexHelper.config.wrapETH(srcToken);
+    const tokenAIn = data.tokenA.toLowerCase() === from.toLowerCase();
+    const tickLimit = tokenAIn
+      ? BigInt(data.activeTick) + 100n
+      : BigInt(data.activeTick) - 100n;
 
-    const exchangeData = this.maverickV2Iface.encodeFunctionData('swap', [
-      recipient,
-      {
-        amount: side === SwapSide.SELL ? srcAmount : destAmount,
-        tokenAIn: data.tokenA.toLowerCase() === srcToken.toLowerCase(),
-        // exactOutput: side === SwapSide.BUY,
-        exactOutput: false,
-        tickLimit:
-          data.tokenA.toLowerCase() === srcToken.toLowerCase()
-            ? BigInt(data.activeTick) + 100n
-            : BigInt(data.activeTick) - 100n,
-      },
-      '0x',
-    ]);
+    if (side === SwapSide.SELL) {
+      // Perform direct swap for SELL side
+
+      const exchangeData = this.maverickV2Iface.encodeFunctionData('swap', [
+        recipient,
+        {
+          amount: srcAmount,
+          tokenAIn,
+          exactOutput: false,
+          tickLimit,
+        },
+        '0x',
+      ]);
+
+      return {
+        needWrapNative: this.needWrapNative,
+        transferSrcTokenBeforeSwap: pool,
+        skipApproval: true,
+        targetExchange: pool,
+        dexFuncHasRecipient: true,
+        exchangeData,
+        returnAmountPos: extractReturnAmountPosition(
+          this.maverickV2Iface,
+          'swap',
+          'amountOut',
+        ),
+      };
+    }
+
+    // perform "exactOutputSingleMinimal" via MaverickV2's Router
+    const exchangeData = this.maverickV2RouterIface.encodeFunctionData(
+      'exactOutputSingleMinimal',
+      [recipient, pool, tokenAIn, destAmount, tickLimit],
+    );
 
     return {
       needWrapNative: this.needWrapNative,
-      transferSrcTokenBeforeSwap: pool,
-      // skipApproval: true,
-      targetExchange: pool,
+      targetExchange: this.config.routerAddress,
       dexFuncHasRecipient: true,
       exchangeData,
-      returnAmountPos:
-        side === SwapSide.SELL
-          ? extractReturnAmountPosition(
-              this.maverickV2Iface,
-              'swap',
-              'amountOut',
-            )
-          : undefined,
+      returnAmountPos: extractReturnAmountPosition(
+        this.maverickV2RouterIface,
+        'exactOutputSingleMinimal',
+        'amountOut_',
+      ),
     };
   }
 
@@ -318,9 +328,11 @@ export class MaverickV2 extends SimpleExchange implements IDex<MaverickV2Data> {
     tokenAddress: Address,
     limit: number,
   ): Promise<PoolLiquidity[]> {
-    const _tokenAddress = this.dexHelper.config.wrapETH(tokenAddress);
+    const _tokenAddress = this.dexHelper.config
+      .wrapETH(tokenAddress)
+      .toLowerCase();
 
-    const pools = await this._queryPoolsAPI(SUBGRAPH_TIMEOUT);
+    const pools = await this._queryPoolsAPI();
 
     if (!pools.length) {
       this.logger.error(
@@ -329,7 +341,7 @@ export class MaverickV2 extends SimpleExchange implements IDex<MaverickV2Data> {
       return [];
     }
 
-    const filteredPools = _.filter(pools, pool => {
+    const filteredPools = pools.filter(pool => {
       return (
         pool.tokenA.address.toLowerCase() === _tokenAddress ||
         pool.tokenB.address.toLowerCase() === _tokenAddress
@@ -351,26 +363,44 @@ export class MaverickV2 extends SimpleExchange implements IDex<MaverickV2Data> {
             decimals: token.decimals,
           },
         ],
-        liquidityUSD: pool.tvl.amount * EFFICIENCY_FACTOR,
+        liquidityUSD: pool.tvl.amount,
       };
     });
 
-    return _.slice(
-      _.sortBy(labeledPools, [pool => -1 * pool.liquidityUSD]),
-      0,
-      limit,
-    );
+    const sortedPools = _.sortBy(labeledPools, [
+      pool => -1 * pool.liquidityUSD,
+    ]);
+
+    return _.slice(sortedPools, 0, limit);
   }
 
-  private async _queryPoolsAPI(
-    timeout = 30000,
-  ): Promise<PoolAPIResponse['pools'] | []> {
+  private async _queryPoolsAPI(): Promise<PoolAPIResponse['pools'] | []> {
+    let cachedPoolsJson = await this.dexHelper.cache.getAndCacheLocally(
+      this.dexKey,
+      this.network,
+      POOL_LIST_CACHE_KEY,
+      POOL_LIST_TTL_SECONDS,
+    );
+
+    if (cachedPoolsJson) return JSON.parse(cachedPoolsJson);
+
     try {
       const res = await this.dexHelper.httpRequest.get<PoolAPIResponse>(
         `${MAVERICK_API_URL}/api/v5/poolsNoBins/${this.network}`,
-        timeout,
+        SUBGRAPH_TIMEOUT,
       );
-      return res.pools || [];
+
+      const pools = res.pools || [];
+
+      await this.dexHelper.cache.setex(
+        this.dexKey,
+        this.network,
+        POOL_LIST_CACHE_KEY,
+        POOL_LIST_TTL_SECONDS,
+        JSON.stringify(pools),
+      );
+
+      return pools;
     } catch (e) {
       this.logger.error(`${this.dexKey}: can not query subgraph: `, e);
       return [];

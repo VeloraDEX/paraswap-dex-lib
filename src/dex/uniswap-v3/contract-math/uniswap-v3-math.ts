@@ -1,4 +1,3 @@
-import _ from 'lodash';
 import { OutputResult, PoolState, Slot0, TickInfo } from '../types';
 import { LiquidityMath } from './LiquidityMath';
 import { Oracle } from './Oracle';
@@ -59,6 +58,7 @@ function _priceComputationCycles(
   sqrtPriceLimitX96: bigint,
   zeroForOne: boolean,
   exactInput: boolean,
+  side: SwapSide,
 ): [
   // result
   PriceComputationState,
@@ -225,7 +225,7 @@ function _priceComputationCycles(
     latestFullCycleCache.tickCount += i - 1;
   }
 
-  if (state.amountSpecifiedRemaining !== 0n) {
+  if (state.amountSpecifiedRemaining !== 0n && side === SwapSide.BUY) {
     state.amountSpecifiedRemaining = 0n;
     state.amountCalculated = 0n;
   }
@@ -247,7 +247,12 @@ class UniswapV3Math {
 
     // While calculating, ticks are changing, so to not change the actual state,
     // we use copy
-    const ticksCopy = _.cloneDeep(poolState.ticks);
+    const ticksCopy = Object.keys(poolState.ticks).reduce<
+      Record<NumberAsString, TickInfo>
+    >((memo, index) => {
+      memo[index] = { ...poolState.ticks[index] };
+      return memo;
+    }, {} as Record<NumberAsString, TickInfo>);
 
     const sqrtPriceLimitX96 = zeroForOne
       ? TickMath.MIN_SQRT_RATIO + 1n
@@ -325,6 +330,7 @@ class UniswapV3Math {
             sqrtPriceLimitX96,
             zeroForOne,
             exactInput,
+            side,
           );
         if (
           finalState.amountSpecifiedRemaining === 0n &&

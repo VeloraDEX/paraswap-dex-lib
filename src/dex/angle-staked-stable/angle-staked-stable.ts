@@ -22,7 +22,8 @@ import { SimpleExchange } from '../simple-exchange';
 import { AngleStakedStableConfig, Adapters } from './config';
 import { AngleStakedStableEventPool } from './angle-staked-stable-pool';
 
-const AngleStakedGasCost = 80000;
+// https://dashboard.tenderly.co/paraswap/paraswap/simulator/51688afb-c603-48cf-aa2c-9629c65b1bf9/gas-usage
+const AngleStakedGasCost = 70_000;
 
 export class AngleStakedStable
   extends SimpleExchange

@@ -61,17 +61,13 @@ type PoolPairsInfo = {
 
 const PoolsRegistryHashKey = `${CACHE_PREFIX}_poolsRegistry`;
 
-// const ALGEBRA_CLEAN_NOT_EXISTING_POOL_TTL_MS = 3 * 24 * 60 * 60 * 1000; // 3 days
-// const ALGEBRA_CLEAN_NOT_EXISTING_POOL_INTERVAL_MS = 24 * 60 * 60 * 1000; // Once in a day
+const ALGEBRA_CLEAN_NOT_EXISTING_POOL_TTL_MS = 3 * 24 * 60 * 60 * 1000; // 3 days
+const ALGEBRA_CLEAN_NOT_EXISTING_POOL_INTERVAL_MS = 24 * 60 * 60 * 1000; // Once in a day
 const ALGEBRA_EFFICIENCY_FACTOR = 3;
 const ALGEBRA_TICK_GAS_COST = 24_000; // Ceiled
 const ALGEBRA_TICK_BASE_OVERHEAD = 75_000;
 const ALGEBRA_POOL_SEARCH_OVERHEAD = 10_000;
 const ALGEBRA_QUOTE_GASLIMIT = 2_000_000;
-
-const MAX_STALE_STATE_BLOCK_AGE = {
-  [Network.ZKEVM]: 150, // approximately 3min
-};
 
 type IAlgebraEventPool =
   | AlgebraEventPoolV1_1
@@ -168,23 +164,24 @@ export class Algebra extends SimpleExchange implements IDex<AlgebraData> {
     // Init listening to new pools creation
     await this.factory.initialize(blockNumber);
 
-    //// COMMENTING DEPRECATED LOGIC: as we now  invalidate pools on creation this is not needed anymore
-    // if (!this.dexHelper.config.isSlave) {
-    //   const cleanExpiredNotExistingPoolsKeys = async () => {
-    //     const maxTimestamp =
-    //       Date.now() - ALGEBRA_CLEAN_NOT_EXISTING_POOL_TTL_MS;
-    //     await this.dexHelper.cache.zremrangebyscore(
-    //       this.notExistingPoolSetKey,
-    //       0,
-    //       maxTimestamp,
-    //     );
-    //   };
+    if (!this.dexHelper.config.isSlave) {
+      const cleanExpiredNotExistingPoolsKeys = async () => {
+        const maxTimestamp =
+          Date.now() - ALGEBRA_CLEAN_NOT_EXISTING_POOL_TTL_MS;
+        await this.dexHelper.cache.zremrangebyscore(
+          this.notExistingPoolSetKey,
+          0,
+          maxTimestamp,
+        );
+      };
 
-    //   this.intervalTask = setInterval(
-    //     cleanExpiredNotExistingPoolsKeys.bind(this),
-    //     ALGEBRA_CLEAN_NOT_EXISTING_POOL_INTERVAL_MS,
-    //   );
-    // }
+      void cleanExpiredNotExistingPoolsKeys();
+
+      this.intervalTask = setInterval(
+        cleanExpiredNotExistingPoolsKeys.bind(this),
+        ALGEBRA_CLEAN_NOT_EXISTING_POOL_INTERVAL_MS,
+      );
+    }
   }
 
   /*
@@ -239,20 +236,6 @@ export class Algebra extends SimpleExchange implements IDex<AlgebraData> {
 
     if (pool) {
       if (!pool.initFailed) {
-        if (this.network !== Network.ZKEVM) return pool;
-
-        if (
-          pool.getStaleState() === null ||
-          (pool.getState(blockNumber) === null &&
-            blockNumber - pool.getStateBlockNumber() >
-              MAX_STALE_STATE_BLOCK_AGE[this.network])
-        ) {
-          /* reload state, on zkEVM this would most likely timeout during request life
-           * but would allow to rely on staleState for couple of min for next requests
-           */
-          await pool.initialize(blockNumber, { forceRegenerate: true });
-        }
-
         return pool;
       } else {
         // if init failed then prefer to early return pool with empty state to fallback to rpc call
@@ -614,37 +597,16 @@ export class Algebra extends SimpleExchange implements IDex<AlgebraData> {
       let state = pool.getState(blockNumber);
 
       if (state === null) {
-        if (this.network === Network.ZKEVM) {
-          if (pool.initFailed) return null;
+        const rpcPrice = await this.getPricingFromRpc(
+          _srcToken,
+          _destToken,
+          amounts,
+          side,
+          pool,
+          transferFees,
+        );
 
-          if (
-            blockNumber - pool.getStateBlockNumber() <=
-            MAX_STALE_STATE_BLOCK_AGE[this.network]
-          ) {
-            this.logger.warn(
-              `${_srcAddress}_${_destAddress}_${pool.name}_${
-                pool.poolAddress
-              } state fallback to latest early enough state. Current blockNumber=${blockNumber}, stateBlockNumber=${pool.getStateBlockNumber()}`,
-            );
-            state = pool.getStaleState();
-          } else {
-            this.logger.warn(
-              `${_srcAddress}_${_destAddress}_${pool.name}_${pool.poolAddress} state is unhealthy, cannot compute price (no fallback on this chain)`,
-            );
-            return null; // never fallback as takes more time
-          }
-        } else {
-          const rpcPrice = await this.getPricingFromRpc(
-            _srcToken,
-            _destToken,
-            amounts,
-            side,
-            pool,
-            transferFees,
-          );
-
-          return rpcPrice;
-        }
+        return rpcPrice;
       }
 
       if (!state) return null;

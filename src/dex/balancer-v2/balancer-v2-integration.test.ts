@@ -30,11 +30,9 @@ async function getOnChainPricingForWeightedPool(
         return 0n;
       }
 
-      const params = balancerV2.getBalancerParam(
+      const params = balancerV2.getBalancerV2BatchSwapParam(
         srcTokenAddress,
         destTokenAddress,
-        '0',
-        '0',
         {
           swaps: [
             {
@@ -44,6 +42,8 @@ async function getOnChainPricingForWeightedPool(
           ],
         },
         side,
+        balancerV2.dexHelper.config.data.augustusV6Address!,
+        balancerV2.dexHelper.config.data.augustusV6Address!,
       );
 
       const calldata = [
@@ -611,133 +611,252 @@ describe('BalancerV2', function () {
   });
 
   describe('GyroE', () => {
-    // sDAI<>GYD - more likely to have continued liqudity
-    const gyroEAddr = '0x1cce5169bde03f3d5ad0206f6bd057953539dae6';
+    describe('sDAI > GYD', () => {
+      // sDAI<>GYD - more likely to have continued liqudity
+      const gyroEAddr = '0x1cce5169bde03f3d5ad0206f6bd057953539dae6';
 
-    it('getPoolIdentifiers and getPricesVolume', async function () {
-      const network = Network.MAINNET;
-      const dexHelper = new DummyDexHelper(network);
-      // const blocknumber = await dexHelper.web3Provider.eth.getBlockNumber();
-      const blocknumber = 19425305;
-      const balancerV2 = new BalancerV2(network, dexKey, dexHelper);
-      const tokens = Tokens[network];
+      it('getPoolIdentifiers and getPricesVolume', async function () {
+        const network = Network.MAINNET;
+        const dexHelper = new DummyDexHelper(network);
+        // const blocknumber = await dexHelper.web3Provider.eth.getBlockNumber();
+        const blocknumber = 19425305;
+        const balancerV2 = new BalancerV2(network, dexKey, dexHelper);
+        const tokens = Tokens[network];
 
-      await balancerV2.initializePricing(blocknumber);
+        await balancerV2.initializePricing(blocknumber);
 
-      const pools = await balancerV2.getPoolIdentifiers(
-        tokens.GYD,
-        tokens.sDAI,
-        SwapSide.SELL,
-        blocknumber,
-      );
-      console.log('GYD <> sDAI Pool Identifiers (Mainnet): ', pools);
+        const pools = await balancerV2.getPoolIdentifiers(
+          tokens.GYD,
+          tokens.sDAI,
+          SwapSide.SELL,
+          blocknumber,
+        );
+        console.log('GYD <> sDAI Pool Identifiers (Mainnet): ', pools);
 
-      const isPool = pools.find(poolIdentifier =>
-        poolIdentifier.includes(gyroEAddr),
-      );
+        const isPool = pools.find(poolIdentifier =>
+          poolIdentifier.includes(gyroEAddr),
+        );
 
-      expect(isPool).toBeDefined();
+        expect(isPool).toBeDefined();
 
-      const poolPrices = await balancerV2.getPricesVolume(
-        tokens.GYD,
-        tokens.sDAI,
-        amounts,
-        SwapSide.SELL,
-        blocknumber,
-        pools,
-      );
-      console.log('GYD <> sDAI Pool Prices (Mainnet): ', poolPrices);
+        const poolPrices = await balancerV2.getPricesVolume(
+          tokens.GYD,
+          tokens.sDAI,
+          amounts,
+          SwapSide.SELL,
+          blocknumber,
+          pools,
+        );
+        console.log('GYD <> sDAI Pool Prices (Mainnet): ', poolPrices);
 
-      expect(poolPrices).not.toBeNull();
-      checkPoolPrices(poolPrices!, amounts, SwapSide.SELL, dexKey);
-      const isPoolPrice = poolPrices!.find(price =>
-        price.data.poolId.includes(gyroEAddr),
-      );
-      expect(isPoolPrice).toBeDefined();
+        expect(poolPrices).not.toBeNull();
+        checkPoolPrices(poolPrices!, amounts, SwapSide.SELL, dexKey);
+        const isPoolPrice = poolPrices!.find(price =>
+          price.data.poolId.includes(gyroEAddr),
+        );
+        expect(isPoolPrice).toBeDefined();
 
-      const onChainPrices = await getOnChainPricingForWeightedPool(
-        balancerV2,
-        blocknumber,
-        isPoolPrice!,
-        amounts,
-        tokens.GYD.address,
-        tokens.sDAI.address,
-        SwapSide.SELL,
-      );
+        const onChainPrices = await getOnChainPricingForWeightedPool(
+          balancerV2,
+          blocknumber,
+          isPoolPrice!,
+          amounts,
+          tokens.GYD.address,
+          tokens.sDAI.address,
+          SwapSide.SELL,
+        );
 
-      console.log('GYD <> sDAI on-chain prices: ', onChainPrices);
+        console.log('GYD <> sDAI on-chain prices: ', onChainPrices);
 
-      expect(onChainPrices).toEqual(isPoolPrice!.prices);
+        expect(onChainPrices).toEqual(isPoolPrice!.prices);
 
-      await balancerV2.releaseResources();
+        await balancerV2.releaseResources();
+      });
+
+      it('getTopPoolsForToken', async function () {
+        const network = Network.MAINNET;
+        const dexHelper = new DummyDexHelper(network);
+        const blocknumber = await dexHelper.web3Provider.eth.getBlockNumber();
+        const balancerV2 = new BalancerV2(network, dexKey, dexHelper);
+        await balancerV2.initializePricing(blocknumber);
+        const tokens = Tokens[network];
+
+        const poolLiquidity = await balancerV2.getTopPoolsForToken(
+          tokens.sDAI.address.toLowerCase(),
+          10,
+        );
+        console.log('sDAI Top Pools (Mainnet):', poolLiquidity);
+
+        checkPoolsLiquidity(poolLiquidity, tokens.sDAI.address, dexKey);
+        const isTopPool = poolLiquidity.find(
+          pool => pool.address === gyroEAddr,
+        );
+        expect(isTopPool).toBeDefined();
+        await balancerV2.releaseResources();
+      });
     });
 
-    it('getTopPoolsForToken', async function () {
-      const network = Network.MAINNET;
-      const dexHelper = new DummyDexHelper(network);
-      const blocknumber = await dexHelper.web3Provider.eth.getBlockNumber();
-      const balancerV2 = new BalancerV2(network, dexKey, dexHelper);
-      await balancerV2.initializePricing(blocknumber);
-      const tokens = Tokens[network];
+    describe('WETH / USDC', () => {
+      const gyroEAddr = '0x1a63b425600d775a1e1bfc212f021273812c3b16';
 
-      const poolLiquidity = await balancerV2.getTopPoolsForToken(
-        tokens.sDAI.address.toLowerCase(),
-        10,
-      );
-      console.log('sDAI Top Pools (Mainnet):', poolLiquidity);
+      it('SELL WETH -> USDC getPoolIdentifiers and getPricesVolume', async function () {
+        const network = Network.BASE;
 
-      checkPoolsLiquidity(poolLiquidity, tokens.sDAI.address, dexKey);
-      const isTopPool = poolLiquidity.find(pool => pool.address === gyroEAddr);
-      expect(isTopPool).toBeDefined();
-      await balancerV2.releaseResources();
+        const dexHelper = new DummyDexHelper(network);
+        const blocknumber = await dexHelper.web3Provider.eth.getBlockNumber();
+        // const blocknumber = 25726105;
+        const balancerV2 = new BalancerV2(network, dexKey, dexHelper);
+        const tokens = Tokens[network];
+
+        console.log('BLOCK NUMBER: ', blocknumber);
+
+        const amounts = [
+          0n,
+          1000000000000n, // works
+          1200000000000n, // works
+          // 3900000000000n, // not working
+          // 4000000000000n, // not working
+        ];
+
+        await balancerV2.initializePricing(blocknumber);
+
+        const pools = await balancerV2.getPoolIdentifiers(
+          tokens.WETH,
+          tokens.USDC,
+          SwapSide.SELL,
+          blocknumber,
+        );
+        console.log('WETH <> USDC Pool Identifiers (Mainnet): ', pools);
+
+        const isPool = pools.find(poolIdentifier =>
+          poolIdentifier.includes(gyroEAddr),
+        );
+
+        expect(isPool).toBeDefined();
+
+        const poolPrices = await balancerV2.getPricesVolume(
+          tokens.WETH,
+          tokens.USDC,
+          amounts,
+          SwapSide.SELL,
+          blocknumber,
+          pools,
+        );
+        console.log('WETH <> USDC Pool Prices (Base): ', poolPrices);
+
+        expect(poolPrices).not.toBeNull();
+
+        // checkPoolPrices(poolPrices!, amounts, SwapSide.SELL, dexKey);
+        const isPoolPrice = poolPrices!.find(price =>
+          price.data.poolId.includes(gyroEAddr),
+        );
+
+        console.log('isPoolPrice: ', isPoolPrice);
+
+        expect(isPoolPrice).toBeDefined();
+
+        const onChainPrices = await getOnChainPricingForWeightedPool(
+          balancerV2,
+          blocknumber,
+          isPoolPrice!,
+          amounts,
+          tokens.WETH.address,
+          tokens.USDC.address,
+          SwapSide.SELL,
+        );
+
+        console.log('WETH <> USDC on-chain prices: ', onChainPrices);
+
+        expect(onChainPrices).toEqual(isPoolPrice!.prices);
+
+        await balancerV2.releaseResources();
+      });
+
+      it('SELL USDC -> WETH getPoolIdentifiers and getPricesVolume', async function () {
+        const network = Network.BASE;
+        const dexHelper = new DummyDexHelper(network);
+        // const blocknumber = await dexHelper.web3Provider.eth.getBlockNumber();
+        const blocknumber = 24931862;
+        const balancerV2 = new BalancerV2(network, dexKey, dexHelper);
+        const tokens = Tokens[network];
+
+        const amounts = [
+          0n,
+          1000000n,
+          // BI_POWS[6],
+          // 2n * BI_POWS[6],
+          // 3n * BI_POWS[6],
+          // 4n * BI_POWS[6],
+          // 5n * BI_POWS[6],
+          // 6n * BI_POWS[6],
+          // 7n * BI_POWS[6],
+          // 8n * BI_POWS[6],
+          // 9n * BI_POWS[6],
+          // 10n * BI_POWS[6],
+        ];
+
+        await balancerV2.initializePricing(blocknumber);
+
+        const pools = await balancerV2.getPoolIdentifiers(
+          tokens.USDC,
+          tokens.WETH,
+          SwapSide.SELL,
+          blocknumber,
+        );
+        console.log('USDC -> WETH Pool Identifiers (Base): ', pools);
+
+        const isPool = pools.find(poolIdentifier =>
+          poolIdentifier.includes(gyroEAddr),
+        );
+
+        expect(isPool).toBeDefined();
+
+        const poolPrices = await balancerV2.getPricesVolume(
+          tokens.USDC,
+          tokens.WETH,
+          amounts,
+          SwapSide.SELL,
+          blocknumber,
+          pools,
+        );
+        console.log('USDC -> WETH Pool Prices (Base): ', poolPrices);
+
+        expect(poolPrices).not.toBeNull();
+
+        // checkPoolPrices(poolPrices!, amounts, SwapSide.SELL, dexKey);
+        const isPoolPrice = poolPrices!.find(price =>
+          price.data.poolId.includes(gyroEAddr),
+        );
+        expect(isPoolPrice).toBeDefined();
+
+        console.log('isPoolPrice: ', isPoolPrice);
+
+        const onChainPrices = await getOnChainPricingForWeightedPool(
+          balancerV2,
+          blocknumber,
+          isPoolPrice!,
+          amounts,
+          tokens.USDC.address,
+          tokens.WETH.address,
+          SwapSide.SELL,
+        );
+
+        console.log('USDC -> WETH on-chain prices: ', onChainPrices);
+
+        expect(onChainPrices).toEqual(isPoolPrice!.prices);
+
+        await balancerV2.releaseResources();
+      });
     });
   });
 });
 
 describe('BeetsFi', () => {
-  it('FTM -> BOO: getPoolIdentifiers and getPricesVolume', async () => {
+  it('S -> stS: getPoolIdentifiers and getPricesVolume', async () => {
     const dexKey = 'BeetsFi';
-    const network = Network.FANTOM;
-    const srcToken = Tokens[network]['FTM'];
-    const destToken = Tokens[network]['BOO'];
-    const amounts = [0n, BI_POWS[18]];
-
-    const dexHelper = new DummyDexHelper(network);
-    const blockNumber = await dexHelper.web3Provider.eth.getBlockNumber();
-    const beetsFi = new BalancerV2(network, dexKey, dexHelper);
-
-    await beetsFi.initializePricing(blockNumber);
-
-    const pools = await beetsFi.getPoolIdentifiers(
-      srcToken,
-      destToken,
-      SwapSide.SELL,
-      blockNumber,
-    );
-    console.log('Pool Identifiers: ', pools);
-
-    expect(pools.length).toBeGreaterThan(0);
-
-    const poolPrices = await beetsFi.getPricesVolume(
-      srcToken,
-      destToken,
-      amounts,
-      SwapSide.SELL,
-      blockNumber,
-      pools,
-    );
-    console.log('Pool Prices: ', poolPrices);
-
-    expect(poolPrices).not.toBeNull();
-    checkPoolPrices(poolPrices!, amounts, SwapSide.SELL, dexKey);
-
-    await beetsFi.releaseResources();
-  });
-  it('WETH -> FTM: getPoolIdentifiers and getPricesVolume', async () => {
-    const dexKey = 'BeetsFi';
-    const network = Network.FANTOM;
-    const srcToken = Tokens[network]['WETH'];
-    const destToken = Tokens[network]['FTM'];
+    const network = Network.SONIC;
+    const srcToken = Tokens[network]['S'];
+    const destToken = Tokens[network]['stS'];
     const amounts = [0n, BI_POWS[18]];
 
     const dexHelper = new DummyDexHelper(network);

@@ -14,7 +14,6 @@ import { LidoData, stETHFunctions } from './types';
 import { stETH } from './config';
 import { WethFunctions } from '../weth/types';
 import ERC20ABI from '../../abi/erc20.json';
-import { extractReturnAmountPosition } from '../../executor/utils';
 
 export class Lido implements IDexTxBuilder<LidoData, any> {
   static dexKeys = ['lido'];
@@ -23,15 +22,19 @@ export class Lido implements IDexTxBuilder<LidoData, any> {
 
   needWrapNative = false;
 
-  private network: number;
-  private wethAddress: Address =
-    '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2'.toLowerCase();
+  private readonly network: number;
+  private readonly referralAddress: Address;
+  private readonly wethAddress: Address;
 
   constructor(dexHelper: IDexHelper) {
     this.network = dexHelper.config.data.network;
 
     this.stETHInterface = new Interface(stETHAbi as JsonFragment[]);
     this.erc20Interface = new Interface(ERC20ABI);
+    this.referralAddress =
+      dexHelper.config.data.lidoReferralAddress ?? NULL_ADDRESS;
+    this.wethAddress =
+      dexHelper.config.data.wrappedNativeTokenAddress.toLowerCase();
   }
 
   getAdapterParam(
@@ -59,7 +62,7 @@ export class Lido implements IDexTxBuilder<LidoData, any> {
   ): Promise<SimpleExchangeParam> {
     const swapData = this.stETHInterface.encodeFunctionData(
       stETHFunctions.submit,
-      [NULL_ADDRESS],
+      [this.referralAddress],
     );
 
     return {
@@ -85,7 +88,7 @@ export class Lido implements IDexTxBuilder<LidoData, any> {
   ): DexExchangeParam {
     const swapData = this.stETHInterface.encodeFunctionData(
       stETHFunctions.submit,
-      [NULL_ADDRESS],
+      [this.referralAddress],
     );
 
     return {
@@ -98,13 +101,6 @@ export class Lido implements IDexTxBuilder<LidoData, any> {
             srcAmount,
           ])
         : undefined,
-      returnAmountPos:
-        _side === SwapSide.SELL
-          ? extractReturnAmountPosition(
-              this.stETHInterface,
-              stETHFunctions.submit,
-            )
-          : undefined,
     };
   }
 }

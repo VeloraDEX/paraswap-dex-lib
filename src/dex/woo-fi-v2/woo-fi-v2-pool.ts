@@ -26,8 +26,7 @@ export class WooFiV2PollingPool extends StatefulRpcPoller<
     poolIdentifier: string,
     dexHelper: IDexHelper,
     protected config: DexParams,
-    // It already includes quoteToken
-    protected tokens: Token[],
+    protected baseTokens: Token[],
   ) {
     const callbacks = pollingManagerCbExtractor(
       StatePollingManager.getInstance(dexHelper),
@@ -50,37 +49,66 @@ export class WooFiV2PollingPool extends StatefulRpcPoller<
           decodeFunction: uint256ToBigInt,
         },
       ] as MultiCallParams<MulticallResultOutputs>[]
-    ).concat(
-      this.tokens
-        .map(t => [
-          {
-            target: this.config.wooPPV2Address,
-            callData: ifaces.PPV2.encodeFunctionData('tokenInfos', [t.address]),
-            decodeFunction: tokenInfoDecoder,
-          },
-          {
-            target: this.config.wooPPV2Address,
-            callData: ifaces.PPV2.encodeFunctionData('decimalInfo', [
-              t.address,
-            ]),
-            decodeFunction: decimalInfoDecoder,
-          },
-          {
-            target: this.config.wooOracleV2Address,
-            callData: ifaces.oracleV2.encodeFunctionData('state', [t.address]),
-            decodeFunction: stateDecoder,
-          },
-        ])
-        .flat(),
-    );
+    )
+      .concat([
+        {
+          target: this.config.wooPPV2Address,
+          callData: ifaces.PPV2.encodeFunctionData('tokenInfos', [
+            this.config.quoteToken.address,
+          ]),
+          decodeFunction: tokenInfoDecoder,
+        },
+        {
+          target: this.config.wooPPV2Address,
+          callData: ifaces.PPV2.encodeFunctionData('decimalInfo', [
+            this.config.quoteToken.address,
+          ]),
+          decodeFunction: decimalInfoDecoder,
+        },
+      ])
+      .concat(
+        this.baseTokens
+          .map(t => [
+            {
+              target: this.config.wooPPV2Address,
+              callData: ifaces.PPV2.encodeFunctionData('tokenInfos', [
+                t.address,
+              ]),
+              decodeFunction: tokenInfoDecoder,
+            },
+            {
+              target: this.config.wooPPV2Address,
+              callData: ifaces.PPV2.encodeFunctionData('decimalInfo', [
+                t.address,
+              ]),
+              decodeFunction: decimalInfoDecoder,
+            },
+            {
+              target: this.config.wooOracleV2Address,
+              callData: ifaces.oracleV2.encodeFunctionData('state', [
+                t.address,
+              ]),
+              decodeFunction: stateDecoder,
+            },
+          ])
+          .flat(),
+      );
   }
 
   protected _parseStateFromMultiResults(
     multiOutputs: MulticallResultOutputs[],
   ): PoolState {
-    const [isPaused, oracleTimestamp, ...remained] = multiOutputs as [
+    const [
+      isPaused,
+      oracleTimestamp,
+      quoteTokenInfo,
+      quoteTokenDecimals,
+      ...remained
+    ] = multiOutputs as [
       boolean,
       bigint,
+      TokenInfo,
+      DecimalInfo,
       ...MulticallResultOutputs[],
     ];
 
@@ -88,13 +116,16 @@ export class WooFiV2PollingPool extends StatefulRpcPoller<
     const decimals: Record<string, DecimalInfo> = {};
     const tokenStates: Record<string, TokenState> = {};
 
+    tokenInfos[this.config.quoteToken.address] = quoteTokenInfo;
+    decimals[this.config.quoteToken.address] = quoteTokenDecimals;
+
     _.chunk(remained, 3).forEach((chunk, i) => {
       const [tokenInfo, decimalInfo, tokenState] = chunk as [
         TokenInfo,
         DecimalInfo,
         TokenState,
       ];
-      const token = this.tokens[i];
+      const token = this.baseTokens[i];
 
       tokenInfos[token.address] = tokenInfo;
       decimals[token.address] = decimalInfo;

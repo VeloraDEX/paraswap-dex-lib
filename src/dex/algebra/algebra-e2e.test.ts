@@ -288,4 +288,26 @@ describe('Algebra', () => {
       nativeTokenAmount,
     );
   });
+
+  describe('SwaprV3', () => {
+    const dexKey = 'SwaprV3';
+    const network = Network.GNOSIS;
+
+    const tokenASymbol: string = 'WXDAI';
+    const tokenBSymbol: string = 'USDC';
+
+    const tokenAAmount: string = '1000000000000000000';
+    const tokenBAmount: string = '100000000';
+    const nativeTokenAmount = '1000000000000000000';
+
+    testForNetwork(
+      network,
+      dexKey,
+      tokenASymbol,
+      tokenBSymbol,
+      tokenAAmount,
+      tokenBAmount,
+      nativeTokenAmount,
+    );
+  });
 });

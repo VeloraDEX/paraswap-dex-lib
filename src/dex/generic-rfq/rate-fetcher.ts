@@ -1,5 +1,5 @@
 import BigNumber from 'bignumber.js';
-import { isEmpty } from 'lodash';
+import { isEmpty, omit } from 'lodash';
 import { SwapSide } from '@paraswap/core';
 import { BN_1 } from '../../bignumber-constants';
 import { IDexHelper } from '../../dex-helper';
@@ -322,10 +322,11 @@ export class RateFetcher {
   }
 
   public async getAvailablePairs(): Promise<string[]> {
-    const pairs = await this.dexHelper.cache.get(
+    const pairs = await this.dexHelper.cache.getAndCacheLocally(
       this.dexKey,
       this.dexHelper.config.data.network,
       `pairs`,
+      this.config.rateConfig.intervalMs / 1000,
     );
 
     if (!pairs) {
@@ -344,32 +345,36 @@ export class RateFetcher {
 
     let pricesAsString: string | null = null;
     if (side === SwapSide.SELL) {
-      pricesAsString = await this.dexHelper.cache.get(
+      pricesAsString = await this.dexHelper.cache.getAndCacheLocally(
         this.dexKey,
         this.dexHelper.config.data.network,
         `${srcToken.address}_${destToken.address}_bids`,
+        this.config.rateConfig.intervalMs / 1000,
       );
 
       if (!pricesAsString) {
-        pricesAsString = await this.dexHelper.cache.get(
+        pricesAsString = await this.dexHelper.cache.getAndCacheLocally(
           this.dexKey,
           this.dexHelper.config.data.network,
           `${destToken.address}_${srcToken.address}_asks`,
+          this.config.rateConfig.intervalMs / 1000,
         );
         reversed = true;
       }
     } else {
-      pricesAsString = await this.dexHelper.cache.get(
+      pricesAsString = await this.dexHelper.cache.getAndCacheLocally(
         this.dexKey,
         this.dexHelper.config.data.network,
         `${destToken.address}_${srcToken.address}_asks`,
+        this.config.rateConfig.intervalMs / 1000,
       );
 
       if (!pricesAsString) {
-        pricesAsString = await this.dexHelper.cache.get(
+        pricesAsString = await this.dexHelper.cache.getAndCacheLocally(
           this.dexKey,
           this.dexHelper.config.data.network,
           `${srcToken.address}_${destToken.address}_bids`,
+          this.config.rateConfig.intervalMs / 1000,
         );
         reversed = true;
       }
@@ -433,14 +438,15 @@ export class RateFetcher {
         timeout: GET_FIRM_RATE_TIMEOUT_MS,
       };
 
+      this.logger.info(
+        'FirmRate Request:',
+        JSON.stringify(omit(payload, 'secret')).replace(/(?:\r\n|\r|\n)/g, ' '),
+      );
+
       if (this.firmRateAuth) {
         this.firmRateAuth(payload);
         delete payload.secret;
       }
-      this.logger.info(
-        'FirmRate Request:',
-        JSON.stringify(payload).replace(/(?:\r\n|\r|\n)/g, ' '),
-      );
       const { data } = await this.dexHelper.httpRequest.request<unknown>(
         payload,
       );

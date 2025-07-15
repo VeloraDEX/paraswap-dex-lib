@@ -18,7 +18,6 @@ import {
 import { BytesLike } from 'ethers/lib/utils';
 import { Address } from '@paraswap/core';
 import { BigNumber } from 'ethers';
-import { DexConfigMap } from '../../../types';
 
 const DEFAULT_2_ZERO_ARRAY = [0n, 0n];
 const DEFAULT_4_ZERO_ARRAY = [0n, 0n, 0n, 0n];
@@ -40,7 +39,8 @@ export class FactoryStateHandler extends PoolPollingBase {
     readonly implementationName: FactoryImplementationNames,
     implementationAddress: Address,
     readonly address: Address,
-    readonly config: DexParams,
+    readonly stateUpdatePeriodMs: number,
+    readonly factories: DexParams['factories'],
     readonly factoryAddress: Address,
     readonly poolIdentifier: string,
     readonly poolConstants: PoolConstants,
@@ -64,7 +64,7 @@ export class FactoryStateHandler extends PoolPollingBase {
       cacheStateKey,
       implementationName,
       implementationAddress,
-      config.stateUpdatePeriodMs,
+      stateUpdatePeriodMs,
       poolIdentifier,
       poolConstants,
       poolContextConstants,
@@ -84,7 +84,7 @@ export class FactoryStateHandler extends PoolPollingBase {
   }
 
   getStateMultiCalldata(): MultiCallParams<MulticallReturnedTypes>[] {
-    const factoryConfig = this.config.factories?.find(
+    const factoryConfig = this.factories?.find(
       ({ address }) =>
         address.toLowerCase() === this.factoryAddress.toLowerCase(),
     );

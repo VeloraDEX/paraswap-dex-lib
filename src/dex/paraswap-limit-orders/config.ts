@@ -10,9 +10,6 @@ export const ParaSwapLimitOrdersConfig: DexConfigMap<DexParams> = {
     [Network.BSC]: {
       rfqAddress: '0x8DcDfe88EF0351f27437284D0710cD65b20288bb',
     },
-    [Network.FANTOM]: {
-      rfqAddress: '0x2DF17455B96Dde3618FD6B1C3a9AA06D6aB89347',
-    },
     [Network.MAINNET]: {
       rfqAddress: '0xe92b586627ccA7a83dC919cc7127196d70f55a06',
     },
@@ -36,10 +33,6 @@ export const Adapters: Record<number, AdapterMappings> = {
   [Network.BSC]: {
     [SwapSide.SELL]: [{ name: 'BscAdapter01', index: 14 }],
     [SwapSide.BUY]: [{ name: 'BscBuyAdapter', index: 2 }],
-  },
-  [Network.FANTOM]: {
-    [SwapSide.SELL]: [{ name: 'FantomAdapter01', index: 9 }],
-    [SwapSide.BUY]: [{ name: 'FantomBuyAdapter', index: 2 }],
   },
   [Network.MAINNET]: {
     [SwapSide.SELL]: [{ name: 'Adapter03', index: 10 }],

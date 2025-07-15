@@ -7,6 +7,7 @@ import {
   CURVE_API_URL,
   LIQUIDITY_FETCH_TIMEOUT_MS,
   LIQUIDITY_UPDATE_PERIOD_MS,
+  MAX_ALLOWED_STATE_DELAY_FACTOR,
   NETWORK_ID_TO_NAME,
   STATE_UPDATE_PERIOD_MS,
   STATE_UPDATE_RETRY_PERIOD_MS,
@@ -48,7 +49,7 @@ export class CurveV1FactoryPoolManager {
     '/factory-stable-ng',
   ]);
 
-  private statePollingManager = StatePollingManager;
+  private statePollingManager: StatePollingManager;
   private taskScheduler: TaskScheduler;
 
   private liquidityUpdatedAtMs: number = 0;
@@ -58,12 +59,27 @@ export class CurveV1FactoryPoolManager {
 
   constructor(
     private name: string,
+    cacheStateKey: string,
     private logger: Logger,
     private dexHelper: IDexHelper,
     private allPriceHandlers: Record<string, PriceHandler>,
     stateUpdatePeriodMs: number = STATE_UPDATE_PERIOD_MS,
     stateUpdateRetryPeriodMs: number = STATE_UPDATE_RETRY_PERIOD_MS,
+    maxAllowedStateDelayFactor: number = MAX_ALLOWED_STATE_DELAY_FACTOR,
   ) {
+    this.statePollingManager = new StatePollingManager(
+      dexHelper,
+      cacheStateKey,
+      // lower than on PoolPollingBase.isStateUpToDate to increase chances of getting fresh data if pub-sub is lagging
+      Math.round(
+        (stateUpdatePeriodMs / 1000) * (maxAllowedStateDelayFactor - 1),
+      ),
+    );
+
+    if (this.dexHelper.config.isSlave) {
+      this.statePollingManager.subscribe();
+    }
+
     this.taskScheduler = new TaskScheduler(
       this.name,
       this.logger,

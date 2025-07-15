@@ -324,6 +324,27 @@ export class GenericRFQ extends ParaSwapLimitOrders {
     side: SwapSide,
     options: PreprocessTransactionOptions,
   ): Promise<[OptimalSwapExchange<ParaSwapLimitOrdersData>, ExchangeTxInfo]> {
+    if (await this.isBlacklisted(options.txOrigin)) {
+      this.logger.warn(
+        `${this.dexKey}-${this.network}: blacklisted TX Origin address '${options.txOrigin}' trying to build a transaction. Bailing...`,
+      );
+      throw new Error(
+        `${this.dexKey}-${this.network}: user=${options.txOrigin} is blacklisted`,
+      );
+    }
+
+    if (
+      options.userAddress !== options.txOrigin &&
+      (await this.isBlacklisted(options.userAddress))
+    ) {
+      this.logger.warn(
+        `${this.dexKey}-${this.network}: blacklisted user address '${options.userAddress}' trying to build a transaction. Bailing...`,
+      );
+      throw new Error(
+        `${this.dexKey}-${this.network}: user=${options.userAddress} is blacklisted`,
+      );
+    }
+
     const isSell = side === SwapSide.SELL;
 
     const order = await this.rateFetcher.getFirmRate(
@@ -334,7 +355,7 @@ export class GenericRFQ extends ParaSwapLimitOrders {
         : overOrder(optimalSwapExchange.destAmount, 1),
       side,
       options.executionContractAddress,
-      options.txOrigin,
+      options.userAddress,
       options.partner,
       options.special,
     );
@@ -356,33 +377,46 @@ export class GenericRFQ extends ParaSwapLimitOrders {
           ? (makerAssetAmount * srcAmount) / takerAssetAmount
           : makerAssetAmount;
 
-      if (
-        makerAssetAmountFilled <
-        BigInt(
-          new BigNumber(destAmount.toString()).times(slippageFactor).toFixed(0),
-        )
-      ) {
-        const message = `${this.dexKey}: too much slippage on quote ${side} makerAssetAmountFilled ${makerAssetAmountFilled} / destAmount ${destAmount} < ${slippageFactor}`;
-        this.logger.warn(message);
-        throw new SlippageCheckError(message);
+      const requiredAmountWithSlippage = new BigNumber(destAmount.toString())
+        .multipliedBy(slippageFactor)
+        .toFixed(0);
+
+      if (makerAssetAmountFilled < BigInt(requiredAmountWithSlippage)) {
+        throw new SlippageCheckError(
+          this.dexKey,
+          this.network,
+          side,
+          requiredAmountWithSlippage,
+          makerAssetAmountFilled.toString(),
+          slippageFactor,
+        );
       }
     } else {
       if (makerAssetAmount < destAmount) {
-        // Won't receive enough assets
-        const message = `${this.dexKey}: too much slippage on quote ${side}  makerAssetAmount ${makerAssetAmount} < destAmount ${destAmount}`;
-        this.logger.warn(message);
-        throw new SlippageCheckError(message);
-      } else {
-        if (
-          takerAssetAmount >
-          BigInt(slippageFactor.times(srcAmount.toString()).toFixed(0))
-        ) {
-          const message = `${
-            this.dexKey
-          }: too much slippage on quote ${side} takerAssetAmount ${takerAssetAmount} / srcAmount ${srcAmount} > ${slippageFactor.toFixed()}`;
-          this.logger.warn(message);
-          throw new SlippageCheckError(message);
-        }
+        throw new SlippageCheckError(
+          this.dexKey,
+          this.network,
+          side,
+          destAmount.toString(),
+          makerAssetAmount.toString(),
+          slippageFactor,
+          true,
+        );
+      }
+
+      const requiredAmountWithSlippage = new BigNumber(srcAmount.toString())
+        .multipliedBy(slippageFactor)
+        .toFixed(0);
+
+      if (takerAssetAmount > BigInt(requiredAmountWithSlippage)) {
+        throw new SlippageCheckError(
+          this.dexKey,
+          this.network,
+          side,
+          requiredAmountWithSlippage,
+          takerAssetAmount.toString(),
+          slippageFactor,
+        );
       }
     }
 

@@ -5,6 +5,10 @@ export interface ICache {
     cacheKey: string,
   ): Promise<string | null>;
 
+  ttl(dexKey: string, network: number, cacheKey: string): Promise<number>;
+
+  keys(dexKey: string, network: number, cacheKey: string): Promise<string[]>;
+
   rawget(key: string): Promise<string | null>;
 
   rawset(key: string, value: string, ttl: number): Promise<string | null>;
@@ -52,11 +56,15 @@ export interface ICache {
 
   sismember(setKey: string, key: string): Promise<boolean>;
 
+  smembers(setKey: string): Promise<string[]>;
+
   hset(mapKey: string, key: string, value: string): Promise<void>;
 
   hdel(mapKey: string, keys: string[]): Promise<number>;
 
   hget(mapKey: string, key: string): Promise<string | null>;
+
+  hlen(mapKey: string): Promise<number>;
 
   hmget(mapKey: string, keys: string[]): Promise<(string | null)[]>;
 

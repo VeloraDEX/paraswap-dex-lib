@@ -22,14 +22,6 @@ export const GMXConfig: DexConfigMap<DexParams> = {
     },
   },
   Morphex: {
-    [Network.FANTOM]: {
-      vault: '0x245cD6d33578de9aF75a3C0c636c726b1A8cbdAa',
-      reader: '0xcA47b9b612a152ece991F31d8D3547D73BaF2Ecc',
-      priceFeed: '0x7a451DE877CbB6551AACa671d0458B6f9dF1e29A',
-      fastPriceFeed: '0x7f54C35A38D89fcf5Fe516206E6628745ed38CC7',
-      fastPriceEvents: '0xDc7C389be5da32e326A261dC0126feCa7AE04d79',
-      usdg: '0xe135c7BFfda932b5B862Da442cF4CbC4d43DC3Ad',
-    },
     [Network.BSC]: {
       vault: '0x46940Dc651bFe3F2CC3E04cf9dC5579B50Cf0765',
       reader: '0x49A97680938B4F1f73816d1B70C3Ab801FAd124B',
@@ -67,14 +59,6 @@ export const Adapters: {
       {
         name: 'BscAdapter02',
         index: 6,
-      },
-    ],
-  },
-  [Network.FANTOM]: {
-    [SwapSide.SELL]: [
-      {
-        name: 'FantomAdapter01',
-        index: 12,
       },
     ],
   },

@@ -266,6 +266,7 @@ export class BalancerV2EventPool extends StatefulEventSubscriber<PoolStateMap> {
   buySupportedPoolTypes: Set<BalancerPoolTypes> = new Set([
     BalancerPoolTypes.Weighted,
     BalancerPoolTypes.GyroE,
+    BalancerPoolTypes.ComposableStable,
   ]);
 
   eventSupportedPoolTypes: BalancerPoolTypes[] = [
@@ -661,7 +662,7 @@ export class BalancerV2
   // In memory pool state for non-event pools
   nonEventPoolStateCache: PoolStateCache;
 
-  eventDisabledPoolsTimer?: NodeJS.Timer;
+  eventDisabledPoolsTimer?: NodeJS.Timeout;
   eventDisabledPools: Address[] = [];
 
   constructor(
@@ -789,7 +790,7 @@ export class BalancerV2
   }
 
   getAdapters(side: SwapSide): { name: string; index: number }[] | null {
-    return this.adapters[side] ? this.adapters[side] : null;
+    return this.adapters?.[side] ? this.adapters[side] : null;
   }
 
   async getPoolIdentifiers(
@@ -868,6 +869,7 @@ export class BalancerV2
         this.logger.error(`getState returned null`);
       }
       const eventPoolStates = { ...(eventPoolStatesRO || {}) };
+
       for (const addr of this.eventDisabledPools) delete eventPoolStates[addr];
 
       // Fetch previously cached non-event pool states

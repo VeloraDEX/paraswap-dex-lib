@@ -148,18 +148,6 @@ describe('SwaapV2 E2E', () => {
           buyAmount: '150000000000000000000',
         },
       ],
-      [
-        {
-          name: 'WMATIC',
-          sellAmount: '150000000000000000000',
-          buyAmount: '100000000',
-        },
-        {
-          name: 'USDCe',
-          sellAmount: '100000000',
-          buyAmount: '150000000000000000000',
-        },
-      ],
     ];
 
     sideToContractMethods.forEach((contractMethods, side) =>
@@ -228,12 +216,12 @@ describe('SwaapV2 E2E', () => {
         {
           name: 'WETH',
           sellAmount: '10000000000000000',
-          buyAmount: '1000000000000000000',
+          buyAmount: '100000',
         },
         {
           name: 'USDC',
-          sellAmount: '1000000',
-          buyAmount: '1000000',
+          sellAmount: '100000',
+          buyAmount: '10000000000000000',
         },
       ],
     ];
@@ -304,12 +292,12 @@ describe('SwaapV2 E2E', () => {
         {
           name: 'WETH',
           sellAmount: '100000000000000000',
-          buyAmount: '1000000000000000',
+          buyAmount: '100000',
         },
         {
           name: 'USDC',
-          sellAmount: '10000000',
-          buyAmount: '1000000',
+          sellAmount: '100000',
+          buyAmount: '100000000000000000',
         },
       ],
     ];
@@ -379,13 +367,13 @@ describe('SwaapV2 E2E', () => {
       [
         {
           name: 'WBNB',
-          sellAmount: '1000000000000000000',
-          buyAmount: '100000000000000000000',
+          sellAmount: '100000000000000000',
+          buyAmount: '100000000000000000',
         },
         {
           name: 'USDT',
-          sellAmount: '100000000000000000000',
-          buyAmount: '1000000000000000000',
+          sellAmount: '100000000000000000',
+          buyAmount: '100000000000000000',
         },
       ],
     ];
@@ -455,12 +443,88 @@ describe('SwaapV2 E2E', () => {
       [
         {
           name: 'WETH',
-          sellAmount: '1000000000000000000',
-          buyAmount: '100000000',
+          sellAmount: '10000000000000000',
+          buyAmount: '100000',
         },
         {
           name: 'USDC',
-          sellAmount: '45410357',
+          sellAmount: '100000',
+          buyAmount: '10000000000000000',
+        },
+      ],
+    ];
+
+    sideToContractMethods.forEach((contractMethods, side) =>
+      describe(`${side}`, () => {
+        contractMethods.forEach((contractMethod: ContractMethod) => {
+          pairs.forEach(pair => {
+            describe(`${contractMethod}`, () => {
+              it(`${pair[0].name} -> ${pair[1].name}`, async () => {
+                await testE2E(
+                  tokens[pair[0].name],
+                  tokens[pair[1].name],
+                  holders[pair[0].name],
+                  side === SwapSide.SELL
+                    ? pair[0].sellAmount
+                    : pair[0].buyAmount,
+                  side,
+                  dexKey,
+                  contractMethod,
+                  network,
+                  provider,
+                  undefined,
+                  undefined,
+                  undefined,
+                  undefined,
+                  sleepMs,
+                );
+              });
+              it(`${pair[1].name} -> ${pair[0].name}`, async () => {
+                await testE2E(
+                  tokens[pair[1].name],
+                  tokens[pair[0].name],
+                  holders[pair[1].name],
+                  side === SwapSide.SELL
+                    ? pair[1].sellAmount
+                    : pair[1].buyAmount,
+                  side,
+                  dexKey,
+                  contractMethod,
+                  network,
+                  provider,
+                  undefined,
+                  undefined,
+                  undefined,
+                  undefined,
+                  sleepMs,
+                );
+              });
+            });
+          });
+        });
+      }),
+    );
+  });
+
+  describe('Avalanche', () => {
+    const network = Network.AVALANCHE;
+    const provider = new StaticJsonRpcProvider(
+      generateConfig(network).privateHttpProvider,
+      network,
+    );
+    const tokens = Tokens[network];
+    const holders = Holders[network];
+
+    const pairs: { name: string; sellAmount: string; buyAmount: string }[][] = [
+      [
+        {
+          name: 'WAVAX',
+          sellAmount: '1000000000000000000',
+          buyAmount: '1000000',
+        },
+        {
+          name: 'USDC',
+          sellAmount: '1000000',
           buyAmount: '1000000000000000000',
         },
       ],

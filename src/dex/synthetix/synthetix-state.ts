@@ -33,6 +33,7 @@ import {
   decodeOracleObservation,
   decodeUniswapV3Slot0,
   encodeStringToBytes32,
+  exchangeSuspensionDecoder,
   synthStatusDecoder,
 } from './utils';
 import {
@@ -189,6 +190,9 @@ export class SynthetixState {
         this._buildObserveSlot0SuspensionsLatestRoundCallData(
           addressesFromPK,
           aggregatorAddressesWithoutZeros,
+          this.onchainConfigValues.atomicTwapWindow,
+          this.onchainConfigValues.systemStatusAddress,
+          this.onchainConfigValues.addressToKey,
         );
 
       const slot0TickCumulativesSuspensionsLatestRound = (
@@ -212,16 +216,17 @@ export class SynthetixState {
       const suspensions = slot0TickCumulativesSuspensionsLatestRound.slice(
         addressesFromPKBoundary,
         // Number of suspension requests
-        addressesFromPKBoundary + 3,
+        addressesFromPKBoundary + 4,
       );
 
       const latestRoundDatas = slot0TickCumulativesSuspensionsLatestRound.slice(
-        addressesFromPKBoundary + 3,
+        addressesFromPKBoundary + 4,
       ) as LatestRoundData[];
 
-      const isSystemSuspended = suspensions[0] as boolean;
-      const synthSuspensions = suspensions[1] as boolean[];
-      const synthExchangeSuspensions = suspensions[2] as boolean[];
+      const isExchangeSuspended = suspensions[0] as boolean;
+      const isSystemSuspended = suspensions[1] as boolean;
+      const synthSuspensions = suspensions[2] as boolean[];
+      const synthExchangeSuspensions = suspensions[3] as boolean[];
 
       const areSynthsSuspended = Object.keys(
         this.onchainConfigValues.addressToKey,
@@ -369,6 +374,7 @@ export class SynthetixState {
         aggregators,
         isSystemSuspended,
         areSynthsSuspended,
+        isExchangeSuspended,
       };
 
       this.fullState = {
@@ -565,7 +571,75 @@ export class SynthetixState {
       t.decimals = equivalentDecimals[i];
     });
 
+    const addressesFromPK = poolKeyCombinations
+      .map(pk => {
+        pk.fee = defaultPoolFee;
+        return pk;
+      })
+      .map(pk =>
+        dexPriceAggregatorUniswapV3.getPoolForRoute(
+          uniswapV3Factory,
+          overriddenPoolForRoute,
+          pk,
+        ),
+      );
+
+    const aggregatorAddressesWithoutZeros = Object.entries(
+      aggregatorsAddresses,
+    ).reduce<Record<string, Address>>((acc, curr) => {
+      const [key, address] = curr;
+      if (address !== NULL_ADDRESS) {
+        acc[key] = address;
+      }
+      return acc;
+    }, {});
+
+    const [_packCounter, slot0TickCumulativesSuspensionsLatestRoundCallData] =
+      this._buildObserveSlot0SuspensionsLatestRoundCallData(
+        addressesFromPK,
+        aggregatorAddressesWithoutZeros,
+        atomicTwapWindow,
+        systemStatusAddress,
+        addressToKey,
+      );
+
+    const slot0TickCumulativesSuspensionsLatestRound = (
+      await this.multiWrapper.tryAggregate<
+        Record<0 | 1, bigint> | Slot0 | boolean[] | boolean | LatestRoundData
+      >(true, slot0TickCumulativesSuspensionsLatestRoundCallData, blockNumber)
+    ).map(d => d.returnData) as (
+      | Record<0 | 1, bigint>
+      | boolean
+      | boolean[]
+      | LatestRoundData
+    )[];
+
+    let addressesFromPKBoundary = addressesFromPK.length * _packCounter;
+
+    const suspensions = slot0TickCumulativesSuspensionsLatestRound.slice(
+      addressesFromPKBoundary,
+      // Number of suspension requests
+      addressesFromPKBoundary + 4,
+    );
+
+    const isExchangeSuspended = suspensions[0] as boolean;
+    const isSystemSuspended = suspensions[1] as boolean;
+    const synthSuspensions = suspensions[2] as boolean[];
+    const synthExchangeSuspensions = suspensions[3] as boolean[];
+
+    const areSynthsSuspended = Object.keys(addressToKey).reduce<
+      Record<string, boolean>
+    >((acc, curr, i) => {
+      acc[curr] =
+        synthSuspensions[i] === true || synthExchangeSuspensions[i] === true;
+      return acc;
+    }, {});
+
     return {
+      isExchangeSuspended,
+      isSystemSuspended,
+      areSynthsSuspended,
+
       lastUpdatedInMs: Date.now(),
 
       synthetixAddress,
@@ -609,6 +683,9 @@ export class SynthetixState {
   private _buildObserveSlot0SuspensionsLatestRoundCallData(
     addressesFromPK: Address[],
     aggregatorAddressesWithoutZeros: Record<string, string>,
+    atomicTwapWindow: bigint,
+    systemStatusAddress: Address,
+    addressToKey: Record<string, string>,
   ): [
     number,
     MultiCallParams<
@@ -624,7 +701,7 @@ export class SynthetixState {
           {
             target: address,
             callData: this.combinedIface.encodeFunctionData('observe', [
-              [this.onchainConfigValues!.atomicTwapWindow, 0n],
+              [atomicTwapWindow, 0n],
             ]),
             decodeFunction: decodeObserveTickCumulatives,
           },
@@ -639,22 +716,30 @@ export class SynthetixState {
       })
       .flat();
 
-    const currencyKeys = Object.values(this.onchainConfigValues!.addressToKey);
+    const currencyKeys = Object.values(addressToKey);
     callData = callData.concat([
       {
-        target: this.onchainConfigValues!.systemStatusAddress,
+        target: systemStatusAddress,
+        callData: this.combinedIface.encodeFunctionData(
+          'exchangeSuspension',
+          [],
+        ),
+        decodeFunction: exchangeSuspensionDecoder,
+      },
+      {
+        target: systemStatusAddress,
         callData: this.combinedIface.encodeFunctionData('systemSuspended', []),
         decodeFunction: booleanDecode,
       },
       {
-        target: this.onchainConfigValues!.systemStatusAddress,
+        target: systemStatusAddress,
         callData: this.combinedIface.encodeFunctionData('getSynthSuspensions', [
           currencyKeys,
         ]),
         decodeFunction: synthStatusDecoder,
       },
       {
-        target: this.onchainConfigValues!.systemStatusAddress,
+        target: systemStatusAddress,
         callData: this.combinedIface.encodeFunctionData(
           'getSynthExchangeSuspensions',
           [currencyKeys],

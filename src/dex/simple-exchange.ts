@@ -19,6 +19,7 @@ import { AbiItem } from 'web3-utils';
 import { ParaSwapVersion } from '@paraswap/core';
 import augustusV6ABI from '../abi/augustus-v6/ABI.json';
 import { AugustusApprovals } from './augustus-approvals';
+import { NeedWrapNativeFunc } from './idex';
 
 /*
  * Context: Augustus routers have all a deadline protection logic implemented globally.
@@ -38,7 +39,7 @@ export class SimpleExchange {
   erc20Interface: Interface;
   erc20Contract: Contract;
 
-  needWrapNative = false;
+  needWrapNative: boolean | NeedWrapNativeFunc = false;
   isFeeOnTransferSupported = false;
 
   protected augustusAddress: Address;

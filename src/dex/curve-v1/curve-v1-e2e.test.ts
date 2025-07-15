@@ -15,7 +15,7 @@ import { DIRECT_METHOD_NAME_V6 } from './constants';
 describe('CurveV1 E2E', () => {
   const dexKey = 'CurveV1';
 
-  describe('CurveV1 MAINNET', () => {
+  describe('CurveV1_MAINNET', () => {
     const network = Network.MAINNET;
     const tokens = Tokens[network];
     const holders = Holders[network];
@@ -25,23 +25,33 @@ describe('CurveV1 E2E', () => {
     );
 
     const tokensToTest = [
+      // [
+      //   {
+      //     symbol: 'USDC',
+      //     amount: (10 ** 8).toString(),
+      //   },
+      //   {
+      //     symbol: 'DAI',
+      //     amount: (10 ** 8).toString(),
+      //   },
+      // ],
+      // [
+      //   {
+      //     symbol: 'CUSDC',
+      //     amount: (10 ** 8).toString(),
+      //   },
+      //   {
+      //     symbol: 'CDAI',
+      //     amount: (10 ** 8).toString(),
+      //   },
+      // ],
       [
         {
-          symbol: 'USDC',
-          amount: (10 ** 8).toString(),
+          symbol: 'sUSD',
+          amount: '76088500000000000000000',
         },
         {
           symbol: 'DAI',
-          amount: (10 ** 8).toString(),
-        },
-      ],
-      [
-        {
-          symbol: 'CUSDC',
-          amount: (10 ** 8).toString(),
-        },
-        {
-          symbol: 'CDAI',
           amount: (10 ** 8).toString(),
         },
       ],
@@ -54,7 +64,8 @@ describe('CurveV1 E2E', () => {
           // ContractMethod.simpleSwap,
           // ContractMethod.multiSwap,
           // ContractMethod.megaSwap,
-          ContractMethod.swapExactAmountInOnCurveV1,
+          // ContractMethod.swapExactAmountInOnCurveV1,
+          ContractMethod.swapExactAmountIn,
         ],
       ],
     ]);
@@ -337,6 +348,75 @@ describe('CurveV1 E2E', () => {
         provider,
       );
     });
+  });
+
+  describe('GNOSIS', () => {
+    const network = Network.GNOSIS;
+    const tokens = Tokens[network];
+    const holders = Holders[network];
+    const provider = new StaticJsonRpcProvider(
+      generateConfig(network).privateHttpProvider,
+      network,
+    );
+
+    const tokensToTest = [
+      [
+        {
+          symbol: 'WXDAI',
+          amount: (10 ** 18).toString(),
+        },
+        {
+          symbol: 'USDC',
+          amount: (10 ** 6).toString(),
+        },
+      ],
+      [
+        {
+          symbol: 'WXDAI',
+          amount: (10 ** 18).toString(),
+        },
+        {
+          symbol: 'USDT',
+          amount: (10 ** 6).toString(),
+        },
+      ],
+      [
+        {
+          symbol: 'USDC',
+          amount: (10 ** 6).toString(),
+        },
+        {
+          symbol: 'USDT',
+          amount: (10 ** 6).toString(),
+        },
+      ],
+    ];
+
+    const sideToContractMethods = new Map([
+      [SwapSide.SELL, [ContractMethod.swapExactAmountIn]],
+    ]);
+
+    sideToContractMethods.forEach((contractMethods, side) =>
+      contractMethods.forEach((contractMethod: ContractMethod) => {
+        tokensToTest.forEach(pair => {
+          describe(`${contractMethod}`, () => {
+            it(`${pair[0].symbol} -> ${pair[1].symbol}`, async () => {
+              await testE2E(
+                tokens[pair[0].symbol],
+                tokens[pair[1].symbol],
+                holders[pair[0].symbol],
+                side === SwapSide.SELL ? pair[0].amount : pair[1].amount,
+                side,
+                dexKey,
+                contractMethod,
+                network,
+                provider,
+              );
+            });
+          });
+        });
+      }),
+    );
   });
 });
 

@@ -16,6 +16,7 @@ import { OptimalRate } from '@paraswap/core';
 import BigNumber from 'bignumber.js';
 import { RFQConfig } from './dex/generic-rfq/types';
 import { Executors, Flag, SpecialDex } from './executor/types';
+import { NeedWrapNativeFunc } from './dex/idex';
 
 // Check: Should the logger be replaced with Logger Interface
 export type LoggerConstructor = (name?: string) => Logger;
@@ -158,7 +159,7 @@ export type AdapterExchangeParam = {
 };
 
 export type DexExchangeParam = {
-  needWrapNative: boolean;
+  needWrapNative: boolean | NeedWrapNativeFunc;
   skipApproval?: boolean;
   wethAddress?: string;
   exchangeData: string;
@@ -171,15 +172,22 @@ export type DexExchangeParam = {
   specialDexSupportsInsertFromAmount?: boolean;
   swappedAmountNotPresentInExchangeData?: boolean;
   preSwapUnwrapCalldata?: string;
-  returnAmountPos: number | undefined;
+  returnAmountPos?: number;
+  insertFromAmountPos?: number;
+  permit2Approval?: boolean;
 };
 
-export type DexExchangeBuildParam = DexExchangeParam & {
-  approveData?: {
-    target: Address;
-    token: Address;
-  };
+export type DexExchangeParamWithBooleanNeedWrapNative = DexExchangeParam & {
+  needWrapNative: boolean;
 };
+
+export type DexExchangeBuildParam =
+  DexExchangeParamWithBooleanNeedWrapNative & {
+    approveData?: {
+      target: Address;
+      token: Address;
+    };
+  };
 
 export type AdapterMappings = {
   [side: string]: { name: string; index: number }[];
@@ -219,13 +227,19 @@ export type PoolPrices<T> = {
   exchange: string;
   gasCost: number | number[];
   gasCostL2?: number | number[];
+  calldataGasCost?: number | number[];
   poolAddresses?: Array<Address>;
 };
 
 export type PoolLiquidity = {
+  poolIdentifier?: string;
   exchange: string;
   address: Address;
-  connectorTokens: Token[];
+  // by default, PoolLiquidity.liquidityUSD is the liquidity for token <=> connectorToken swaps
+  // but in case available liquidity is different,
+  // then PoolLiquidity.liquidityUSD is the liquidity for token => connectorToken swaps
+  // and PoolLiquidity.connectorTokens.liquidityUSD is the liquidity for connectorToken => token swaps
+  connectorTokens: (Token & { liquidityUSD?: number })[];
   liquidityUSD: number;
 };
 
@@ -288,7 +302,7 @@ export type Config = {
   wrappedNativeTokenAddress: Address;
   hasEIP1559: boolean;
   augustusAddress: Address;
-  augustusV6Address?: Address;
+  augustusV6Address: Address;
   augustusRFQAddress: Address;
   tokenTransferProxyAddress: Address;
   multicallV2Address: Address;
@@ -304,9 +318,12 @@ export type Config = {
   uniswapV3EventLoggingSampleRate?: number;
   swaapV2AuthToken?: string;
   dexalotAuthToken?: string;
+  bebopAuthName?: string;
+  bebopAuthToken?: string;
   idleDaoAuthToken?: string;
   forceRpcFallbackDexs: string[];
   apiKeyTheGraph: string;
+  lidoReferralAddress?: Address;
 };
 
 export type BigIntAsString = string;
@@ -318,6 +335,7 @@ export type ExchangeTxInfo = {
 export type PreprocessTransactionOptions = {
   slippageFactor: BigNumber;
   txOrigin: Address;
+  userAddress: Address;
   executionContractAddress: Address;
   hmac?: string;
   mockRfqAndLO?: boolean;

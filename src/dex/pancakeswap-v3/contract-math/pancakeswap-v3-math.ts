@@ -259,7 +259,12 @@ class PancakeswapV3Math {
 
     // While calculating, ticks are changing, so to not change the actual state,
     // we use copy
-    const ticksCopy = _.cloneDeep(poolState.ticks);
+    const ticksCopy = Object.keys(poolState.ticks).reduce<
+      Record<NumberAsString, TickInfo>
+    >((memo, index) => {
+      memo[index] = { ...poolState.ticks[index] };
+      return memo;
+    }, {} as Record<NumberAsString, TickInfo>);
 
     const sqrtPriceLimitX96 = zeroForOne
       ? TickMath.MIN_SQRT_RATIO + 1n

@@ -10,6 +10,7 @@ export const SwaapV2Config: DexConfigMap<DexParams> = {
     [Network.BASE]: {},
     [Network.BSC]: {},
     [Network.OPTIMISM]: {},
+    [Network.AVALANCHE]: {},
   },
 };
 

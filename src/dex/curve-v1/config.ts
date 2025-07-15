@@ -28,6 +28,11 @@ export const CurveV1Config: DexConfigMap<DexParams> = {
   CurveV1: {
     [Network.MAINNET]: {
       baseTokens: {
+        '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48': {
+          address: '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
+          decimals: 6,
+          reasonableVolume: 1000000000n,
+        },
         '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2': {
           address: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2',
           decimals: 18,
@@ -617,23 +622,6 @@ export const CurveV1Config: DexConfigMap<DexParams> = {
           isMetapool: false,
           baseToken: '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee',
         },
-        SAAVE: {
-          underlying: [
-            '0x6b175474e89094c44da98b954eedeac495271d0f',
-            '0x57Ab1ec28D129707052df4dF418D58a2D46d5f51',
-          ],
-          coins: [
-            '0x028171bCA77440897B824Ca71D1c56caC55b68A3',
-            '0x6C5024Cd4F8A59110119C56f8933403A539555EB',
-          ],
-          address: '0xeb16ae0052ed37f479f7fe63849198df1765a733',
-          name: 'SAAVE',
-          type: 2,
-          version: 3,
-          isLending: true,
-          isMetapool: false,
-          baseToken: '0x6b175474e89094c44da98b954eedeac495271d0f',
-        },
         BAC: {
           underlying: [
             '0x3449fc1cd036255ba1eb19d65ff4ba2b8903a69a',
@@ -878,109 +866,6 @@ export const CurveV1Config: DexConfigMap<DexParams> = {
         },
       },
     },
-    [Network.FANTOM]: {
-      baseTokens: {
-        '0x8D11eC38a3EB5E956B052f67Da8Bdc9bef8Abf3E': {
-          address: '0x8D11eC38a3EB5E956B052f67Da8Bdc9bef8Abf3E',
-          decimals: 18,
-          reasonableVolume: 1000000000000000000000n,
-        },
-        '0x321162Cd933E2Be498Cd2267a90534A804051b11': {
-          address: '0x321162Cd933E2Be498Cd2267a90534A804051b11',
-          decimals: 8,
-          reasonableVolume: 1000000n,
-        },
-      },
-      eventSupportedPools: [],
-      pools: {
-        main_DAI_USDC: {
-          underlying: [],
-          coins: [
-            '0x8D11eC38a3EB5E956B052f67Da8Bdc9bef8Abf3E', // DAI
-            '0x04068DA6C83AFCFA0e13ba15A6696662335D5B75', // USDC
-          ],
-          address: '0x27E611FD27b276ACbd5Ffd632E5eAEBEC9761E40',
-          name: 'main_DAI_USDC',
-          type: 2,
-          version: 3,
-          isLending: false,
-          isMetapool: false,
-          baseToken: '0x8D11eC38a3EB5E956B052f67Da8Bdc9bef8Abf3E',
-        },
-        main_fUSDT_2pool: {
-          underlying: [
-            '0x049d68029688eAbF473097a2fC38ef61633A3C7A', // fUSDT
-            '0x8D11eC38a3EB5E956B052f67Da8Bdc9bef8Abf3E', // DAI
-            '0x04068DA6C83AFCFA0e13ba15A6696662335D5B75', // USDC
-          ],
-          coins: [
-            '0x049d68029688eAbF473097a2fC38ef61633A3C7A', // fUSDT
-            '0x27E611FD27b276ACbd5Ffd632E5eAEBEC9761E40', // 2pool: DAI+USDC
-          ],
-          address: '0x92D5ebF3593a92888C25C0AbEF126583d4b5312E',
-          name: 'main_fUSDT_2pool',
-          type: 2,
-          version: 3,
-          isLending: false,
-          isMetapool: true,
-          baseToken: '0x8D11eC38a3EB5E956B052f67Da8Bdc9bef8Abf3E',
-        },
-        main_BTC_renBTC: {
-          underlying: [],
-          coins: [
-            '0x321162Cd933E2Be498Cd2267a90534A804051b11',
-            '0xDBf31dF14B66535aF65AaC99C32e9eA844e14501',
-          ],
-          address: '0x3eF6A01A0f81D6046290f3e2A8c5b843e738E604',
-          name: 'main_BTC_renBTC',
-          type: 2,
-          version: 3,
-          isLending: false,
-          isMetapool: false,
-          baseToken: '0x321162Cd933E2Be498Cd2267a90534A804051b11',
-        },
-        // Disabled pool
-        // main_gDAI_gUSDC_gUSDT: {
-        //   underlying: [
-        //     '0x8D11eC38a3EB5E956B052f67Da8Bdc9bef8Abf3E', // DAI
-        //     '0x04068DA6C83AFCFA0e13ba15A6696662335D5B75', // USDC
-        //     '0x049d68029688eAbF473097a2fC38ef61633A3C7A', // fUSDT
-        //   ],
-        //   coins: [
-        //     '0x07E6332dD090D287d3489245038daF987955DCFB', // gDAI
-        //     '0xe578C856933D8e1082740bf7661e379Aa2A30b26', // gUSDC
-        //     '0x940F41F0ec9ba1A34CF001cc03347ac092F5F6B5', // gUSDT
-        //   ],
-        //   address: '0x0fa949783947Bf6c1b171DB13AEACBB488845B3f',
-        //   name: 'main_gDAI_gUSDC_gUSDT',
-        //   type: 2,
-        //   version: 3,
-        //   isLending: true,
-        //   isMetapool: false,
-        //   baseToken: '0x8D11eC38a3EB5E956B052f67Da8Bdc9bef8Abf3E',
-        // },
-        // Disabled pool
-        // main_iDAI_iUSDC_iFUSDT: {
-        //   underlying: [
-        //     '0x8D11eC38a3EB5E956B052f67Da8Bdc9bef8Abf3E', // DAI
-        //     '0x04068DA6C83AFCFA0e13ba15A6696662335D5B75', // USDC
-        //     '0x049d68029688eAbF473097a2fC38ef61633A3C7A', // fUSDT
-        //   ],
-        //   coins: [
-        //     '0x04c762a5dF2Fa02FE868F25359E0C259fB811CfE', // iDAI
-        //     '0x328A7b4d538A2b3942653a9983fdA3C12c571141', // iUSDC
-        //     '0x70faC71debfD67394D1278D98A29dea79DC6E57A', // iFUSDT
-        //   ],
-        //   address: '0x4FC8D635c3cB1d0aa123859e2B2587d0FF2707b1',
-        //   name: 'main_iDAI_iUSDC_iFUSDT',
-        //   type: 2,
-        //   version: 3,
-        //   isLending: true,
-        //   isMetapool: false,
-        //   baseToken: '0x8D11eC38a3EB5E956B052f67Da8Bdc9bef8Abf3E',
-        // },
-      },
-    },
     [Network.AVALANCHE]: {
       baseTokens: {
         '0xd586E7F844cEa2F87f50152665BCbc2C279D8d70': {
@@ -1024,23 +909,6 @@ export const CurveV1Config: DexConfigMap<DexParams> = {
           isLending: true,
           isMetapool: false,
           baseToken: '0xd586E7F844cEa2F87f50152665BCbc2C279D8d70',
-        },
-        Ren: {
-          underlying: [
-            '0x50b7545627a5162F82A992c33b87aDc75187B218',
-            '0xDBf31dF14B66535aF65AaC99C32e9eA844e14501',
-          ],
-          coins: [
-            '0x686bEF2417b6Dc32C50a3cBfbCC3bb60E1e9a15D',
-            '0xDBf31dF14B66535aF65AaC99C32e9eA844e14501',
-          ],
-          address: '0x16a7DA911A4DD1d83F3fF066fE28F3C792C50d90',
-          name: 'ren',
-          type: 2,
-          version: 3,
-          isLending: true,
-          isMetapool: false,
-          baseToken: '0x50b7545627a5162F82A992c33b87aDc75187B218',
         },
       },
     },
@@ -1115,6 +983,42 @@ export const CurveV1Config: DexConfigMap<DexParams> = {
         },
       },
     },
+    [Network.GNOSIS]: {
+      baseTokens: {
+        '0xe91d153e0b41518a2ce8dd3d7944fa863463a97d': {
+          address: '0xe91d153e0b41518a2ce8dd3d7944fa863463a97d',
+          decimals: 18,
+          reasonableVolume: 1000000000000000000000n,
+        },
+        '0xddafbb505ad214d7b80b1f830fccc89b60fb7a83': {
+          address: '0xddafbb505ad214d7b80b1f830fccc89b60fb7a83',
+          decimals: 6,
+          reasonableVolume: 1000000000n,
+        },
+        '0x4ecaba5870353805a9f068101a40e0f32ed605c6': {
+          address: '0x4ecaba5870353805a9f068101a40e0f32ed605c6',
+          decimals: 6,
+          reasonableVolume: 1000000000n,
+        },
+      },
+      eventSupportedPools: [],
+      pools: {
+        '3pool': {
+          underlying: [],
+          coins: [
+            '0xe91D153E0b41518A2Ce8Dd3D7944Fa863463a97d',
+            '0xDDAfbb505ad214D7b80b1f830fcCc89B60fb7A83',
+            '0x4ECaBa5870353805a9F068101A40E0f32ed605C6',
+          ],
+          address: '0x7f90122BF0700F9E7e1F688fe926940E8839F353',
+          name: '3pool (x3CRV)',
+          type: 1,
+          version: 3,
+          isLending: false,
+          isMetapool: false,
+        },
+      },
+    },
   },
 };
 
@@ -1149,14 +1053,6 @@ export const Adapters: Record<number, AdapterMappings> = {
       {
         name: 'AvalancheAdapter01',
         index: 5,
-      },
-    ],
-  },
-  [Network.FANTOM]: {
-    [SwapSide.SELL]: [
-      {
-        name: 'FantomAdapter01',
-        index: 3,
       },
     ],
   },

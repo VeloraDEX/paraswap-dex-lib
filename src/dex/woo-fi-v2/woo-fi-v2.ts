@@ -27,7 +27,6 @@ import { ethers } from 'ethers';
 import { addressDecode } from '../../lib/decoders';
 import { ifaces } from './utils';
 import { StatePollingManager } from '../../lib/stateful-rpc-poller/state-polling-manager';
-import { solidityPack } from 'ethers/lib/utils';
 import { extractReturnAmountPosition } from '../../executor/utils';
 
 export class WooFiV2 extends SimpleExchange implements IDex<WooFiV2Data> {
@@ -521,7 +520,7 @@ export class WooFiV2 extends SimpleExchange implements IDex<WooFiV2Data> {
       this.getIdentifier(),
       this.dexHelper,
       this.config,
-      Object.values(this.tokenByAddress),
+      this.baseTokens,
     );
 
     this.pollingManager.initializeAllPendingPools();

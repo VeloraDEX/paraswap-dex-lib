@@ -1,6 +1,12 @@
 import _ from 'lodash';
 import { AbiItem } from 'web3-utils';
-import { NumberAsString, OptimalSwapExchange, SwapSide } from '@paraswap/core';
+import {
+  NumberAsString,
+  OptimalRate,
+  OptimalSwap,
+  OptimalSwapExchange,
+  SwapSide,
+} from '@paraswap/core';
 import { assert, AsyncOrSync } from 'ts-essentials';
 import { Interface, JsonFragment } from '@ethersproject/abi';
 import {
@@ -112,7 +118,18 @@ export class CurveV1Factory
     IDex<CurveV1FactoryData, DirectCurveV1Param | CurveV1FactoryDirectSwap>
 {
   readonly hasConstantPriceLargeAmounts = false;
-  readonly needWrapNative: boolean = false;
+
+  needWrapNative = (
+    priceRoute: OptimalRate,
+    swap: OptimalSwap,
+    se: OptimalSwapExchange<any>,
+  ) => {
+    const swapSrc = swap.srcToken;
+    const swapDest = swap.destToken;
+
+    return this._needWrapNative(swapSrc, swapDest, se.data);
+  };
+  needWrapNativeForPricing = false;
 
   readonly isFeeOnTransferSupported = true;
   readonly isStatePollingDex = true;
@@ -198,11 +215,38 @@ export class CurveV1Factory
 
     this.poolManager = new CurveV1FactoryPoolManager(
       this.dexKey,
+      // should be the same as we use for FactoryStateHandler (4th param) and others
+      this.cacheStateKey,
       dexHelper.getLogger(`${this.dexKey}-state-manager`),
       dexHelper,
       allPriceHandlers,
+      // should be the same as we use for FactoryStateHandler (8th param) and others
       this.config.stateUpdatePeriodMs,
     );
+  }
+
+  private _needWrapNative(
+    srcToken: Address,
+    destToken: Address,
+    data: CurveV1FactoryData,
+  ): boolean {
+    const wethAddress =
+      this.dexHelper.config.data.wrappedNativeTokenAddress.toLowerCase();
+
+    const path = data.path;
+
+    const tokenIn = data.path[0].tokenIn;
+    const tokenOut = data.path[path.length - 1].tokenOut;
+
+    let needWrapNative = false;
+    if (
+      (isETHAddress(srcToken) && tokenIn.toLowerCase() === wethAddress) ||
+      (isETHAddress(destToken) && tokenOut.toLowerCase() === wethAddress)
+    ) {
+      needWrapNative = true;
+    }
+
+    return needWrapNative;
   }
 
   async initializePricing(blockNumber: number) {
@@ -564,7 +608,8 @@ export class CurveV1Factory
           const allResultsFromFactory = (
             await this.dexHelper.multiWrapper.tryAggregate<
               string[] | number[] | string
-            >(true, callDataFromFactoryPools)
+              // decrease batch size to 450 to avoid 'out-of-limit' error on gnosis
+            >(true, callDataFromFactoryPools, undefined, 450)
           ).map(r => r.returnData);
 
           const resultsFromFactory = allResultsFromFactory.slice(
@@ -665,7 +710,8 @@ export class CurveV1Factory
               factoryImplementationFromConfig.name,
               implementationAddress.toLowerCase(),
               poolAddresses[i],
-              this.config,
+              this.config.stateUpdatePeriodMs,
+              this.config.factories,
               factoryAddress,
               poolIdentifier,
               poolConstants,
@@ -717,24 +763,41 @@ export class CurveV1Factory
     side: SwapSide,
     blockNumber: number,
   ): Promise<string[]> {
-    const _srcToken = this.needWrapNative
+    if (
+      this.dexHelper.config.wrapETH(srcToken).address.toLowerCase() ===
+      this.dexHelper.config.wrapETH(destToken).address.toLowerCase()
+    ) {
+      return [];
+    }
+
+    const _srcToken = this.needWrapNativeForPricing
       ? this.dexHelper.config.wrapETH(srcToken)
       : srcToken;
-    const _destToken = this.needWrapNative
+    const _destToken = this.needWrapNativeForPricing
       ? this.dexHelper.config.wrapETH(destToken)
       : destToken;
 
     const srcTokenAddress = _srcToken.address.toLowerCase();
     const destTokenAddress = _destToken.address.toLowerCase();
-
-    if (srcTokenAddress === destTokenAddress) {
-      return [];
-    }
+    const wethAddress =
+      this.dexHelper.config.data.wrappedNativeTokenAddress.toLowerCase();
 
     let pools = this.poolManager.getPoolsForPair(
       srcTokenAddress,
       destTokenAddress,
     );
+
+    if (!this.needWrapNativeForPricing && isETHAddress(_srcToken.address)) {
+      pools = pools.concat(
+        this.poolManager.getPoolsForPair(wethAddress, destTokenAddress),
+      ); // discover WETH pools for ETH src
+    }
+
+    if (!this.needWrapNativeForPricing && isETHAddress(_destToken.address)) {
+      pools = pools.concat(
+        this.poolManager.getPoolsForPair(srcTokenAddress, wethAddress),
+      ); // discover WETH pools for ETH dest
+    }
 
     if (side === SwapSide.BUY) {
       pools = pools.filter(pool =>
@@ -742,9 +805,33 @@ export class CurveV1Factory
       );
     }
 
-    return pools.map(pool =>
-      this.getPoolIdentifier(pool.address, pool.isMetaPool),
-    );
+    return pools
+      .filter(pool => {
+        // same filtering as on pricing ./curve-v1-factory.ts#L975
+        let poolData = pool.getPoolData(srcTokenAddress, destTokenAddress);
+        const state = pool.getState();
+
+        if (!state) {
+          return false;
+        }
+
+        if (poolData === null && !this.needWrapNativeForPricing) {
+          if (isETHAddress(srcTokenAddress)) {
+            poolData = pool.getPoolData(wethAddress, destTokenAddress);
+          } else if (isETHAddress(destTokenAddress)) {
+            poolData = pool.getPoolData(srcTokenAddress, wethAddress);
+          }
+        }
+
+        if (poolData === null) {
+          return false;
+        }
+
+        const j = poolData.path[0].j;
+        // same as for price-handlers/price-handler.ts#L104
+        return state.balances[j] > 0n;
+      })
+      .map(pool => this.getPoolIdentifier(pool.address, pool.isMetaPool));
   }
 
   async getPricesVolume(
@@ -762,22 +849,28 @@ export class CurveV1Factory
     },
   ): Promise<null | ExchangePrices<CurveV1FactoryData>> {
     try {
+      if (
+        this.dexHelper.config.wrapETH(srcToken).address.toLowerCase() ===
+        this.dexHelper.config.wrapETH(destToken).address.toLowerCase()
+      ) {
+        return [];
+      }
+
       const _isSrcTokenTransferFeeToBeExchanged =
         isSrcTokenTransferFeeToBeExchanged(transferFees);
 
-      const _srcToken = this.needWrapNative
+      const _srcToken = this.needWrapNativeForPricing
         ? this.dexHelper.config.wrapETH(srcToken)
         : srcToken;
-      const _destToken = this.needWrapNative
+
+      const _destToken = this.needWrapNativeForPricing
         ? this.dexHelper.config.wrapETH(destToken)
         : destToken;
 
+      const wethAddress =
+        this.dexHelper.config.data.wrappedNativeTokenAddress.toLowerCase();
       const srcTokenAddress = _srcToken.address.toLowerCase();
       const destTokenAddress = _destToken.address.toLowerCase();
-
-      if (srcTokenAddress === destTokenAddress) {
-        return null;
-      }
 
       let pools: PoolPollingBase[] = [];
       if (limitPools !== undefined) {
@@ -788,17 +881,55 @@ export class CurveV1Factory
               _isSrcTokenTransferFeeToBeExchanged,
             ),
           )
-          .filter(
-            (pool): pool is PoolPollingBase =>
-              pool !== null &&
-              pool.getPoolData(srcTokenAddress, destTokenAddress) !== null,
-          );
+          .filter((pool): pool is PoolPollingBase => {
+            if (pool === null) return false;
+
+            const isPoolWithData =
+              pool.getPoolData(srcTokenAddress, destTokenAddress) !== null;
+
+            if (
+              !this.needWrapNativeForPricing &&
+              isETHAddress(srcTokenAddress)
+            ) {
+              return (
+                isPoolWithData ||
+                pool.getPoolData(wethAddress, destTokenAddress) !== null
+              );
+            }
+
+            if (
+              !this.needWrapNativeForPricing &&
+              isETHAddress(destTokenAddress)
+            ) {
+              return (
+                isPoolWithData ||
+                pool.getPoolData(srcTokenAddress, wethAddress) !== null
+              );
+            }
+
+            return isPoolWithData;
+          });
       } else {
         pools = this.poolManager.getPoolsForPair(
           srcTokenAddress,
           destTokenAddress,
           _isSrcTokenTransferFeeToBeExchanged,
         );
+
+        if (!this.needWrapNativeForPricing && isETHAddress(_srcToken.address)) {
+          pools = pools.concat(
+            this.poolManager.getPoolsForPair(wethAddress, destTokenAddress),
+          ); // discover WETH pools for ETH src
+        }
+
+        if (
+          !this.needWrapNativeForPricing &&
+          isETHAddress(_destToken.address)
+        ) {
+          pools = pools.concat(
+            this.poolManager.getPoolsForPair(srcTokenAddress, wethAddress),
+          ); // discover WETH pools for ETH dest
+        }
       }
 
       if (side === SwapSide.BUY) {
@@ -861,10 +992,15 @@ export class CurveV1Factory
               return null;
             }
 
-            const poolData = pool.getPoolData(
-              srcTokenAddress,
-              destTokenAddress,
-            );
+            let poolData = pool.getPoolData(srcTokenAddress, destTokenAddress);
+
+            if (poolData === null && !this.needWrapNativeForPricing) {
+              if (isETHAddress(srcTokenAddress)) {
+                poolData = pool.getPoolData(wethAddress, destTokenAddress);
+              } else if (isETHAddress(destTokenAddress)) {
+                poolData = pool.getPoolData(srcTokenAddress, wethAddress);
+              }
+            }
 
             if (poolData === null) {
               this.logger.error(
@@ -952,6 +1088,7 @@ export class CurveV1Factory
       pools,
     } = this.getMultihopParam(srcAmount, destAmount, data, side);
 
+    const needWrapNative = this._needWrapNative(srcToken, destToken, data);
     const payload = this.abiCoder.encodeParameter(
       {
         ParentStruct: {
@@ -966,8 +1103,8 @@ export class CurveV1Factory
         },
       },
       {
-        needWrap: this.needWrapNative,
-        needUnwrap: this.needWrapNative,
+        needWrap: needWrapNative,
+        needUnwrap: needWrapNative,
         route: path,
         swap_params: swapParams,
         amount,
@@ -1070,6 +1207,8 @@ export class CurveV1Factory
       this.logger.warn(`isApproved is undefined, defaulting to false`);
     }
 
+    const needWrapNative = this._needWrapNative(srcToken, destToken, data);
+
     const swapParams: DirectCurveV1Param = [
       srcToken,
       destToken,
@@ -1087,7 +1226,7 @@ export class CurveV1Factory
         : CurveV1SwapType.EXCHANGE,
       beneficiary,
       // For CurveV1 we work as it is, without wrapping and unwrapping
-      this.needWrapNative,
+      needWrapNative,
       permit,
       uuidToBytes16(uuid),
     ];
@@ -1136,12 +1275,13 @@ export class CurveV1Factory
     ]);
 
     let wrapFlag = 0;
+    const needWrapNative = this._needWrapNative(srcToken, destToken, data);
 
-    if (this.needWrapNative && isETHAddress(srcToken)) {
+    if (needWrapNative && isETHAddress(srcToken)) {
       wrapFlag = 1; // wrap src eth
-    } else if (!this.needWrapNative && isETHAddress(srcToken)) {
+    } else if (!needWrapNative && isETHAddress(srcToken)) {
       wrapFlag = 3; // add msg.value to router call
-    } else if (this.needWrapNative && isETHAddress(destToken)) {
+    } else if (needWrapNative && isETHAddress(destToken)) {
       wrapFlag = 2; // unwrap dest eth
     }
 

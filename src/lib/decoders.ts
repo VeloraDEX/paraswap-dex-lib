@@ -68,7 +68,7 @@ export const uint256ArrayDecode = (
 ): bigint => {
   const [isSuccess, toDecode] = extractSuccessAndValue(result);
 
-  if (!isSuccess) {
+  if (!isSuccess || toDecode === '0x') {
     return 0n;
   }
   return defaultAbiCoder
@@ -81,7 +81,7 @@ export const uin256DecodeToBigNumber = (
 ): BigNumber => {
   const [isSuccess, toDecode] = extractSuccessAndValue(result);
 
-  if (!isSuccess) {
+  if (!isSuccess || toDecode === '0x') {
     return BN_0;
   }
   return new BigNumber(
@@ -94,7 +94,7 @@ export const uint256DecodeToNumber = (
 ): number => {
   const [isSuccess, toDecode] = extractSuccessAndValue(result);
 
-  if (!isSuccess) {
+  if (!isSuccess || toDecode === '0x') {
     return 0;
   }
   return parseInt(defaultAbiCoder.decode(['uint256'], toDecode)[0], 10);
@@ -105,7 +105,7 @@ export const uin256DecodeToFloat = (
 ): number => {
   const [isSuccess, toDecode] = extractSuccessAndValue(result);
 
-  if (!isSuccess) {
+  if (!isSuccess || toDecode === '0x') {
     return 0;
   }
   return parseFloat(defaultAbiCoder.decode(['uint256'], toDecode)[0]);
@@ -116,7 +116,7 @@ export const uin128DecodeToFloat = (
 ): number => {
   const [isSuccess, toDecode] = extractSuccessAndValue(result);
 
-  if (!isSuccess) {
+  if (!isSuccess || toDecode === '0x') {
     return 0;
   }
   return parseFloat(defaultAbiCoder.decode(['uint128'], toDecode)[0]);
@@ -127,7 +127,7 @@ export const uin128DecodeToInt = (
 ): number => {
   const [isSuccess, toDecode] = extractSuccessAndValue(result);
 
-  if (!isSuccess) {
+  if (!isSuccess || toDecode === '0x') {
     return 0;
   }
   return parseInt(defaultAbiCoder.decode(['uint128'], toDecode)[0], 10);
@@ -138,7 +138,7 @@ export const booleanDecode = (
 ): boolean => {
   const [isSuccess, toDecode] = extractSuccessAndValue(result);
 
-  if (!isSuccess) {
+  if (!isSuccess || toDecode === '0x') {
     return false;
   }
   return defaultAbiCoder.decode(['bool'], toDecode)[0];

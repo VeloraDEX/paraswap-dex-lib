@@ -43,6 +43,23 @@ class DummyCache implements ICache {
     return null;
   }
 
+  async keys(
+    dexKey: string,
+    network: number,
+    cacheKey: string,
+  ): Promise<string[]> {
+    return [];
+  }
+
+  async ttl(
+    dexKey: string,
+    network: number,
+    cacheKey: string,
+  ): Promise<number> {
+    const key = `${network}_${dexKey}_${cacheKey}`.toLowerCase();
+    return this.storage[key] ? 1 : -1;
+  }
+
   async rawget(key: string): Promise<string | null> {
     return this.storage[key] ? this.storage[key] : null;
     return null;
@@ -139,6 +156,10 @@ class DummyCache implements ICache {
     return set.has(key);
   }
 
+  async smembers(setKey: string): Promise<string[]> {
+    return Array.from(this.setMap[setKey] ?? []);
+  }
+
   async hset(mapKey: string, key: string, value: string): Promise<void> {
     if (!this.hashStorage[mapKey]) this.hashStorage[mapKey] = {};
     this.hashStorage[mapKey][key] = value;
@@ -147,6 +168,10 @@ class DummyCache implements ICache {
 
   async hget(mapKey: string, key: string): Promise<string | null> {
     return this.hashStorage[mapKey]?.[key] ?? null;
+  }
+
+  async hlen(mapKey: string): Promise<number> {
+    return Object.keys(this.hashStorage[mapKey] ?? {}).length;
   }
 
   async hmget(mapKey: string, keys: string[]): Promise<(string | null)[]> {
@@ -261,7 +286,7 @@ export class DummyRequestWrapper implements IRequestWrapper {
 }
 
 class DummyBlockManager implements IBlockManager {
-  constructor(public _blockNumber: number = 42) {}
+  constructor(public _blockNumber: number = 20569333) {}
 
   subscribeToLogs(
     subscriber: EventSubscriber,
@@ -299,6 +324,9 @@ export class DummyDexHelper implements IDexHelper {
   getLogger: LoggerConstructor;
   web3Provider: Web3;
   getTokenUSDPrice: (token: Token, amount: bigint) => Promise<number>;
+  getUsdTokenAmounts: (
+    tokenAmounts: [toke: string, amount: bigint | null][],
+  ) => Promise<number[]>;
 
   constructor(network: number, rpcUrl?: string) {
     this.config = new ConfigHelper(false, generateConfig(network), 'is');
@@ -308,6 +336,7 @@ export class DummyDexHelper implements IDexHelper {
       rpcUrl ? rpcUrl : this.config.data.privateHttpProvider,
       network,
     );
+
     this.web3Provider = new Web3(
       rpcUrl ? rpcUrl : this.config.data.privateHttpProvider,
     );
@@ -324,6 +353,16 @@ export class DummyDexHelper implements IDexHelper {
     // For testing use only full parts like 1, 2, 3 ETH, not 0.1 ETH etc
     this.getTokenUSDPrice = async (token, amount) =>
       Number(amount / BigInt(10 ** token.decimals));
+
+    // For testing use only full parts like 1, 2, 3 ETH, not 0.1 ETH etc
+    this.getUsdTokenAmounts = async (tokenAmounts: [string, bigint | null][]) =>
+      tokenAmounts.map(([token, amount]) => {
+        if (amount === null) {
+          return 0;
+        }
+        return Number(amount / BigInt(10 ** 18));
+      });
+
     this.multiWrapper = new MultiWrapper(
       this.multiContract,
       this.getLogger(`MultiWrapper-${network}`),
@@ -344,5 +383,14 @@ export class DummyDexHelper implements IDexHelper {
 
   replaceProviderWithRPC(rpcUrl: string) {
     this.provider = new StaticJsonRpcProvider(rpcUrl, this.config.data.network);
+    this.web3Provider = new Web3(rpcUrl);
+    this.multiContract = new this.web3Provider.eth.Contract(
+      multiABIV2 as any,
+      this.config.data.multicallV2Address,
+    );
+    this.multiWrapper = new MultiWrapper(
+      this.multiContract,
+      this.getLogger(`MultiWrapper-${this.config.data.network}`),
+    );
   }
 }

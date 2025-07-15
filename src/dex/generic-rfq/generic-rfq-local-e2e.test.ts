@@ -5,7 +5,7 @@ import { ethers } from 'ethers';
 import { Network, ContractMethod, SwapSide, MAX_UINT } from '../../constants';
 import { generateConfig } from '../../config';
 import { newTestE2E } from '../../../tests/utils-e2e';
-import { SmartTokens, GENERIC_ADDR1 } from '../../../tests/constants-e2e';
+import { GENERIC_ADDR1, Tokens } from '../../../tests/constants-e2e';
 import { startTestServer } from './example-api.test';
 
 const PK_KEY = process.env.TEST_PK_KEY;
@@ -26,29 +26,15 @@ describe('GenericRFQ E2E Mainnet', () => {
   });
 
   const network = Network.MAINNET;
-  const smartTokens = SmartTokens[network];
+  const tokens = Tokens[network];
 
-  const srcToken = smartTokens.WETH;
-  const destToken = smartTokens.DAI;
+  const srcToken = tokens.WETH;
+  const destToken = tokens.DAI;
 
   const config = generateConfig(network);
 
   describe('GenericRFQ', () => {
     const dexKey = 'DummyParaSwapPool';
-
-    srcToken.addBalance(testAccount.address, MAX_UINT);
-    srcToken.addAllowance(
-      testAccount.address,
-      config.augustusRFQAddress,
-      MAX_UINT,
-    );
-
-    destToken.addBalance(testAccount.address, MAX_UINT);
-    destToken.addAllowance(
-      testAccount.address,
-      config.augustusRFQAddress,
-      MAX_UINT,
-    );
 
     describe('Simpleswap', () => {
       it('SELL WETH -> DAI', async () => {
@@ -60,7 +46,7 @@ describe('GenericRFQ E2E Mainnet', () => {
           thirdPartyAddress: testAccount.address,
           _amount: '1000000000000000000',
           swapSide: SwapSide.SELL,
-          dexKey: dexKey,
+          dexKeys: dexKey,
           contractMethod: ContractMethod.simpleSwap,
           network: network,
         });
@@ -75,7 +61,7 @@ describe('GenericRFQ E2E Mainnet', () => {
           thirdPartyAddress: testAccount.address,
           _amount: '1000000000000000000',
           swapSide: SwapSide.SELL,
-          dexKey: dexKey,
+          dexKeys: dexKey,
           contractMethod: ContractMethod.simpleSwap,
           network: network,
         });
@@ -90,7 +76,7 @@ describe('GenericRFQ E2E Mainnet', () => {
           thirdPartyAddress: testAccount.address,
           _amount: '1000000000000000000',
           swapSide: SwapSide.BUY,
-          dexKey: dexKey,
+          dexKeys: dexKey,
           contractMethod: ContractMethod.simpleBuy,
           network: network,
         });
@@ -105,7 +91,7 @@ describe('GenericRFQ E2E Mainnet', () => {
           thirdPartyAddress: testAccount.address,
           _amount: '1000000000000000000',
           swapSide: SwapSide.BUY,
-          dexKey: dexKey,
+          dexKeys: dexKey,
           contractMethod: ContractMethod.simpleBuy,
           network: network,
         });
