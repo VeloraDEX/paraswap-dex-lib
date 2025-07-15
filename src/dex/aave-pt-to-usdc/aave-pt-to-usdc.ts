@@ -39,13 +39,18 @@ import axios from 'axios';
 import { extractReturnAmountPosition } from '../../executor/utils';
 
 type ExitResp = {
-  tx: { to: string; data: string };
+  success: boolean;
   data: { amountOut: string };
+  error?: string;
 };
 
 type SwapResp = {
-  tx: { to: string; data: string };
-  data: { amountOut: string };
+  success: boolean;
+  data: {
+    amountOut: string;
+    tx: { to: string; data: string };
+  };
+  error?: string;
 };
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -239,21 +244,17 @@ export class AavePtToUsdc
 
     const promises = amounts.map(amount => {
       if (amount === 0n) return Promise.resolve(null);
-      return this.callPendleSdkApi(
-        `v2/sdk/${this.network}/markets/${marketAddress}/exit-position`,
-        {
-          receiver: this.augustusAddress,
-          slippage: DEFAULT_SLIPPAGE_FOR_QUOTTING,
-          ptAmount: amount.toString(),
-          ytAmount: '0',
-          lpAmount: '0',
-          tokenOut: isUnderlying
-            ? market.underlyingRawAddress // raw sUSDe
-            : this.usdcToken.address,
-          enableAggregator: true,
-        },
-        'POST',
-      );
+      return this.callPendleSdkApi(market.marketAddress, {
+        receiver: this.augustusAddress,
+        slippage: DEFAULT_SLIPPAGE_FOR_QUOTTING,
+        ptAmount: amount.toString(),
+        ytAmount: '0',
+        lpAmount: '0',
+        tokenOut: isUnderlying
+          ? market.underlyingRawAddress // raw sUSDe
+          : this.usdcToken.address,
+        enableAggregator: true,
+      });
     });
     const settledSwapData = await Promise.allSettled(promises);
 
@@ -269,7 +270,7 @@ export class AavePtToUsdc
         continue;
       }
       const swapData = result.value;
-      if (!swapData?.data?.amountOut) {
+      if (!swapData?.success || !swapData?.data?.amountOut) {
         underlyingAmounts.push('0');
         continue;
       }
@@ -286,20 +287,16 @@ export class AavePtToUsdc
       const swapPromises = underlyingAmounts.map(amt =>
         amt === '0'
           ? Promise.resolve(null)
-          : this.callPendleSdkApi(
-              `v2/sdk/${this.network}/pendle-swap/swap`,
-              {
-                receiver: this.augustusAddress,
-                slippage: DEFAULT_SLIPPAGE_FOR_QUOTTING,
-                inputs: [{ token: market.underlyingAssetAddress, amount: amt }],
-                tokenOut: this.usdcToken.address,
-              },
-              'POST',
-            ),
+          : this.callPendleSwapApi({
+              receiver: this.augustusAddress,
+              slippage: DEFAULT_SLIPPAGE_FOR_QUOTTING,
+              inputs: [{ token: market.underlyingAssetAddress, amount: amt }],
+              tokenOut: this.usdcToken.address,
+            }),
       );
       const swapResults = await Promise.allSettled(swapPromises);
       finalPrices = swapResults.map(r =>
-        r.status === 'fulfilled' && r.value?.data?.amountOut
+        r.status === 'fulfilled' && r.value?.success && r.value?.data?.amountOut
           ? BigInt(r.value.data.amountOut)
           : 0n,
       );
@@ -398,37 +395,43 @@ export class AavePtToUsdc
     }
 
     const { marketAddress, ptAddress, underlyingAssetAddress } = data;
+    const market = this.getMarketByPtToken({ address: ptAddress } as Token);
+    if (!market) {
+      throw new Error(`Market not found for PT ${ptAddress}`);
+    }
     // 1) exit PT -> underlying
     const exitResp: ExitResp = await this.callPendleSdkApi(
-      `v2/sdk/${this.network}/markets/${marketAddress}/exit-position`,
+      market.marketAddress,
       {
         receiver: executorAddress, // keep tokens inside executor
         slippage: DEFAULT_SLIPPAGE_FOR_QUOTTING,
         ptAmount: srcAmount,
         ytAmount: '0',
         lpAmount: '0',
-        tokenOut: underlyingAssetAddress,
-        enableAggregator: 'true',
+        tokenOut: destToken,
+        enableAggregator: true,
       },
-      'GET',
     );
+
+    if (!exitResp.success) {
+      throw new Error(`Pendle exit failed: ${exitResp.error}`);
+    }
 
     // 2) underlying -> USDC
-    const swapResp: SwapResp = await this.callPendleSdkApi(
-      `v2/sdk/${this.network}/pendle-swap/swap`,
-      {
-        receiver: recipient,
-        slippage: DEFAULT_SLIPPAGE_FOR_QUOTTING,
-        inputs: [
-          { token: underlyingAssetAddress, amount: exitResp.data.amountOut },
-        ],
-        tokenOut: destToken,
-      },
-      'POST',
-    );
+    const swapResp: SwapResp = await this.callPendleSwapApi({
+      receiver: recipient,
+      slippage: DEFAULT_SLIPPAGE_FOR_QUOTTING,
+      inputs: [
+        { token: underlyingAssetAddress, amount: exitResp.data.amountOut },
+      ],
+      tokenOut: destToken,
+    });
 
     // Pendle already returns the batched tx; just forward it
-    const tx = swapResp.tx;
+    if (!swapResp.success) {
+      throw new Error(`Pendle swap failed: ${swapResp.error}`);
+    }
+    const tx = swapResp.data.tx;
     return {
       targetExchange: tx.to,
       exchangeData: tx.data,
@@ -439,39 +442,70 @@ export class AavePtToUsdc
   }
 
   private async callPendleSdkApi(
-    endpoint: string,
+    marketAddress: string,
     params: any,
-    method: 'GET' | 'POST' = 'GET',
-    attempt = 0,
-    maxRetries = 3,
-    backoff = 1000,
   ): Promise<any> {
-    const url = `${PENDLE_API_URL}/${endpoint}`;
-    this.logger.info(`Pendle API ${method} ${url} ${JSON.stringify(params)}`);
     try {
-      const response =
-        method === 'GET'
-          ? await this.dexHelper.httpRequest.get(url, 30000, params)
-          : await this.dexHelper.httpRequest.post(url, params, 30000, {});
-      return response;
-    } catch (e: unknown) {
-      this.logger.error(
-        `[AavePtToUsdc] Failed to fetch from pendle API: ${
-          (e as Error).message
-        }`,
+      const url = new URL(
+        `${PENDLE_API_URL}/core/v2/sdk/${this.network}/markets/${marketAddress}/exit-positions`,
       );
-      if (attempt < maxRetries) {
-        await new Promise(resolve => setTimeout(resolve, backoff));
-        return this.callPendleSdkApi(
-          endpoint,
-          params,
-          method,
-          attempt + 1,
-          maxRetries,
-          backoff * 2,
-        );
-      }
-      throw e;
+
+      Object.keys(params).forEach(key => {
+        if (params[key] !== undefined && params[key] !== null) {
+          url.searchParams.append(key, params[key].toString());
+        }
+      });
+
+      const response = await this.dexHelper.httpRequest.get(
+        url.toString(),
+        30000,
+        {
+          Accept: 'application/json',
+        },
+      );
+
+      return {
+        success: true,
+        data: response,
+      };
+    } catch (error: any) {
+      this.logger.error(
+        `${this.dexKey}-${this.network}: Pendle SDK API call failed:`,
+        error,
+      );
+
+      return {
+        success: false,
+        error: error?.message || 'Unknown error',
+      };
+    }
+  }
+
+  private async callPendleSwapApi(params: any): Promise<any> {
+    try {
+      const response = await this.dexHelper.httpRequest.post(
+        `${PENDLE_API_URL}/v2/sdk/${this.network}/pendle-swap/swap`,
+        params,
+        30000,
+        {
+          Accept: 'application/json',
+        },
+      );
+
+      return {
+        success: true,
+        data: response,
+      };
+    } catch (error: any) {
+      this.logger.error(
+        `${this.dexKey}-${this.network}: Pendle Swap API call failed:`,
+        error,
+      );
+
+      return {
+        success: false,
+        error: error?.message || 'Unknown error',
+      };
     }
   }
 

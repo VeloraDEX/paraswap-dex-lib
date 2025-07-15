@@ -26,7 +26,8 @@ export const AavePtToUsdcConfig: DexConfigMap<DexParams> = {
             name: 'PT-sUSDe-31JUL2025',
             expiry: 1753929600,
           },
-          marketAddress: '0x4339ffe2b7592dc783ed13cce310531ab366deac',
+          marketAddress: '0x4339ffe2b7592dc783ed13cce310531ab366deac', // V4 market address (for router)
+          exitMarketAddress: '0xEd8f8f8E5B1C0Bd3cBB0C7cE6c2b6B1E5C7D3A3B', // V2 market address (for exit-position API)
           underlyingAssetAddress: '0x5cb12D1CeE6C1353FdEF5e6627D2C1cCd0eE2A9d', // SY-sUSDe
           underlyingRawAddress: '0x9D39A5DE30e57443BfF2A8307A4256c8797A3497', // raw sUSDe
         },
@@ -37,7 +38,8 @@ export const AavePtToUsdcConfig: DexConfigMap<DexParams> = {
             name: 'PT-eUSDe-14AUG2025',
             expiry: 1755196800,
           },
-          marketAddress: '0xe93b4a93e80bd3065b290394264af5d82422ee70',
+          marketAddress: '0xe93b4a93e80bd3065b290394264af5d82422ee70', // V4 market address (for router)
+          exitMarketAddress: '0xEd8f8f8E5B1C0Bd3cBB0C7cE6c2b6B1E5C7D3A3B', // V2 market address (for exit-position API)
           underlyingAssetAddress: '0x90d2af7d622ca3141efa4d8f1f24d86e5974cc8f', // eUSDe
           underlyingRawAddress: '0x90d2af7d622ca3141efa4d8f1f24d86e5974cc8f', // raw eUSDe
         },
@@ -48,7 +50,8 @@ export const AavePtToUsdcConfig: DexConfigMap<DexParams> = {
             name: 'PT-USDe-31JUL2025',
             expiry: 1753929600,
           },
-          marketAddress: '0x9df192d13d61609d1852461c4850595e1f56e714',
+          marketAddress: '0x9df192d13d61609d1852461c4850595e1f56e714', // V4 market address (for router)
+          exitMarketAddress: '0xEd8f8f8E5B1C0Bd3cBB0C7cE6c2b6B1E5C7D3A3B', // V2 market address (for exit-position API)
           underlyingAssetAddress: '0x4c9edd5852cd905f086c759e8383e09bff1e68b3', // USDe
           underlyingRawAddress: '0x4c9edd5852cd905f086c759e8383e09bff1e68b3', // raw USDe
         },
