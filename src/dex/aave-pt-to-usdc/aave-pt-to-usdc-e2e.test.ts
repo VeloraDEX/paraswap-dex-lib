@@ -62,8 +62,9 @@ describe('AavePtToUsdc E2E', () => {
     const tokenASymbol: string = 'PT-sUSDe-31JUL2025';
     const tokenBSymbol: string = 'USDC';
 
+    // after two hops 1 PT-sUSDe ≈ ~0.98 USDC (example)
     const tokenAAmount: string = '1000000000000000000'; // 1 PT
-    const tokenBAmount: string = '1000000'; // 1 USDC
+    const tokenBAmount: string = '980000'; // ≈ 0.98 USDC
 
     testForNetwork(
       network,

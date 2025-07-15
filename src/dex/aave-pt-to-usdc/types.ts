@@ -15,6 +15,7 @@ export type PendleSDKMarket = {
 export type AavePtToUsdcData = {
   marketAddress: Address;
   ptAddress: Address;
+  underlyingAssetAddress: Address;
 };
 
 export interface PendleToken {
@@ -28,6 +29,7 @@ export interface SupportedPt {
   pt: PendleToken;
   marketAddress: string;
   underlyingAssetAddress: string;
+  underlyingRawAddress: string; // raw ERC-20
 }
 
 export interface DexParams {
