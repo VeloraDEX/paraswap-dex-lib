@@ -595,6 +595,10 @@ export const Tokens: {
       address: '0x0bfc9d54Fc184518A81162F8fB99c2eACa081202',
       decimals: 18,
     },
+    cbBTC: {
+      address: `0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf`,
+      decimals: 8,
+    },
     baoBTC: {
       address: '0x22d76e6e1d9ab4072522c1bc60c85a0d5626ca2d',
       decimals: 18,
@@ -1912,6 +1916,7 @@ export const Holders: {
     wUSDL: '0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb',
     UsualM: '0xE3f7A0c4a44b740328157A5152A85c3bCB54DA09',
     EKUBO: '0xF5b6Ee2CAEb6769659f6C091D209DfdCaF3F69Eb',
+    cbBTC: '0x5c647cE0Ae10658ec44FA4E11A51c96e94efd1Dd',
   },
   [Network.POLYGON]: {
     jGBP: '0x02aa0B826c7BA6386DdBE04C0a8715A1c0A16B24',
