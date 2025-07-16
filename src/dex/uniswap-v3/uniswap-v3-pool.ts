@@ -8,7 +8,7 @@ import {
   InitializeStateOptions,
   StatefulEventSubscriber,
 } from '../../stateful-event-subscriber';
-import { IDexHelper } from '../../dex-helper/idex-helper';
+import { IDexHelper } from '../../dex-helper';
 import {
   PoolState,
   DecodedStateMultiCallResultWithRelativeBitmaps,
@@ -212,9 +212,7 @@ export class UniswapV3EventPool extends StatefulEventSubscriber<PoolState> {
 
   protected _getStateRequestCallData() {
     if (!this._stateRequestCallData) {
-      const callData: MultiCallParams<
-        bigint | DecodedStateMultiCallResultWithRelativeBitmaps
-      >[] = [
+      this._stateRequestCallData = [
         {
           target: this.token0,
           callData: this.erc20Interface.encodeFunctionData('balanceOf', [
@@ -247,9 +245,8 @@ export class UniswapV3EventPool extends StatefulEventSubscriber<PoolState> {
               : decodeStateMultiCallResultWithRelativeBitmaps,
         },
       ];
-
-      this._stateRequestCallData = callData;
     }
+
     return this._stateRequestCallData;
   }
 
@@ -262,33 +259,6 @@ export class UniswapV3EventPool extends StatefulEventSubscriber<PoolState> {
       TICK_BITMAP_BUFFER_BY_CHAIN[networkId] ?? TICK_BITMAP_BUFFER;
 
     return tickBitMapToUse + tickBitMapBuffer;
-  }
-
-  async checkState(
-    blockNumber: number,
-  ): Promise<DeepReadonly<PoolState> | null> {
-    const state = this.getState(blockNumber);
-    if (state) {
-      return state;
-    }
-
-    this.logger.error(
-      `UniV3: No state found for ${this.name} ${this.addressesSubscribed[0]} for bn: ${blockNumber}`,
-    );
-    return null;
-  }
-
-  _setState(state: any, blockNumber: number, reason?: string): void {
-    // if (this.parentName === 'UniswapV3') {
-    // this.logger.info(
-    //   `UniV3: Setting state: '${!!state ? 'non-empty' : 'empty'}' for '${
-    //     this.name
-    //   }' for bn: '${blockNumber}' due to reason: '${
-    //     reason ?? 'outside_of_event_subscriber'
-    //   }'`,
-    // );
-    // }
-    super._setState(state, blockNumber);
   }
 
   async generateState(blockNumber: number): Promise<Readonly<PoolState>> {

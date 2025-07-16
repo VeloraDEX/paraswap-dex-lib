@@ -7,6 +7,7 @@ import {
   DexExchangeParam,
   ExchangePrices,
   ExchangeTxInfo,
+  GetPricesVolumeOptions,
   Logger,
   NumberAsString,
   PoolLiquidity,
@@ -26,8 +27,8 @@ import {
   isTruthy,
   uuidToBytes16,
 } from '../../utils';
-import { IDex } from '../../dex/idex';
-import { IDexHelper } from '../../dex-helper/idex-helper';
+import { IDex } from '../idex';
+import { IDexHelper } from '../../dex-helper';
 import {
   DexParams,
   OutputResult,
@@ -49,7 +50,6 @@ import { UniswapV3EventPool } from './uniswap-v3-pool';
 import UniswapV3RouterABI from '../../abi/uniswap-v3/UniswapV3Router.abi.json';
 import UniswapSwapRouter02ABI from '../../abi/uniswap-v3/UniswapSwapRouter02.abi.json';
 import UniswapV3QuoterV2ABI from '../../abi/uniswap-v3/UniswapV3QuoterV2.abi.json';
-import UniswapV3MultiABI from '../../abi/uniswap-v3/UniswapMulti.abi.json';
 import DirectSwapABI from '../../abi/DirectSwap.json';
 import UniswapV3StateMulticallABI from '../../abi/uniswap-v3/UniswapV3StateMulticall.abi.json';
 import {
@@ -126,7 +126,6 @@ export class UniswapV3
 
   logger: Logger;
 
-  private uniswapMulti: Contract;
   protected stateMultiContract: Contract;
 
   protected notExistingPoolSetKey: string;
@@ -152,10 +151,6 @@ export class UniswapV3
         : UniswapV3RouterABI;
     this.routerIface = new Interface(routerABI);
     this.logger = dexHelper.getLogger(dexKey + '-' + network);
-    this.uniswapMulti = new this.dexHelper.web3Provider.eth.Contract(
-      UniswapV3MultiABI as AbiItem[],
-      this.config.uniswapMulticall,
-    );
     this.stateMultiContract = new this.dexHelper.web3Provider.eth.Contract(
       this.config.stateMultiCallAbi !== undefined
         ? this.config.stateMultiCallAbi
@@ -461,11 +456,7 @@ export class UniswapV3
         : undefined,
     );
 
-    if (!pool) {
-      return false;
-    }
-
-    return true;
+    return !!pool;
   }
 
   async getPoolIdentifiers(
@@ -587,7 +578,7 @@ export class UniswapV3
     let i = 0;
 
     return pools
-      .map((pool, index) => {
+      .map(pool => {
         const balance = data[i++];
 
         if (balance < amounts[amounts.length - 1]) {
@@ -650,13 +641,7 @@ export class UniswapV3
 
         if (locallyFoundPool) return locallyFoundPool;
 
-        const newlyFetchedPool = await this.getPool(
-          srcAddress,
-          destAddress,
-          fee,
-          blockNumber,
-        );
-        return newlyFetchedPool;
+        return this.getPool(srcAddress, destAddress, fee, blockNumber);
       }),
     );
   }
@@ -668,6 +653,7 @@ export class UniswapV3
     side: SwapSide,
     blockNumber: number,
     limitPools?: string[],
+    options?: GetPricesVolumeOptions,
   ): Promise<null | ExchangePrices<UniswapV3Data>> {
     try {
       const _srcToken = this.dexHelper.config.wrapETH(srcToken);
@@ -680,7 +666,7 @@ export class UniswapV3
 
       if (_srcAddress === _destAddress) return null;
 
-      let selectedPools: UniswapV3EventPool[] = [];
+      let selectedPools: UniswapV3EventPool[];
 
       if (!limitPools) {
         selectedPools = (
@@ -706,14 +692,14 @@ export class UniswapV3
 
               const [, srcAddress, destAddress, fee, tickSpacing] =
                 identifier.split('_');
-              const newlyFetchedPool = await this.getPool(
+
+              return this.getPool(
                 srcAddress,
                 destAddress,
                 BigInt(fee),
                 blockNumber,
                 tickSpacing !== undefined ? BigInt(tickSpacing) : undefined,
               );
-              return newlyFetchedPool;
             }),
           )
         ).filter(isTruthy);
@@ -721,47 +707,31 @@ export class UniswapV3
 
       if (selectedPools.length === 0) return null;
 
-      await Promise.all(
-        selectedPools.map(pool => pool.checkState(blockNumber)),
-      );
-
-      const poolsToUse = selectedPools.reduce(
+      const poolsToUse = selectedPools.reduce<{
+        poolWithState: UniswapV3EventPool[];
+        poolWithoutState: UniswapV3EventPool[];
+      }>(
         (acc, pool) => {
           let state = pool.getState(blockNumber);
+
           if (state === null) {
-            this.logger.trace(
-              `${this.dexKey}: State === null. Fallback to rpc ${pool.name}`,
-            );
-            // as we generate state (if nullified) in previous Promise.all, here should only be pools with failed initialization
-            acc.poolWithoutState.push(pool);
+            if (!options?.fastMode) {
+              this.logger.trace(
+                `${this.dexKey}: State === null. Fallback to rpc ${pool.name}`,
+              );
+
+              acc.poolWithoutState.push(pool);
+            }
           } else {
             acc.poolWithState.push(pool);
           }
+
           return acc;
         },
         {
-          poolWithState: [] as UniswapV3EventPool[],
-          poolWithoutState: [] as UniswapV3EventPool[],
+          poolWithState: [],
+          poolWithoutState: [],
         },
-      );
-
-      poolsToUse.poolWithoutState.forEach(pool => {
-        this.logger.warn(
-          `UniV3: Pool ${pool.name} on ${this.dexKey} has no state. Fallback to rpc`,
-        );
-      });
-
-      const states = poolsToUse.poolWithState.map(
-        p => p.getState(blockNumber)!,
-      );
-
-      const rpcResultsPromise = this.getPricingFromRpc(
-        _srcToken,
-        _destToken,
-        amounts,
-        side,
-        this.network === Network.ZKEVM ? [] : poolsToUse.poolWithoutState,
-        blockNumber,
       );
 
       const unitAmount = getBigIntPow(
@@ -772,11 +742,11 @@ export class UniswapV3
 
       const [token0] = this._sortTokens(_srcAddress, _destAddress);
 
-      const zeroForOne = token0 === _srcAddress ? true : false;
+      const zeroForOne = token0 === _srcAddress;
 
-      const result = await Promise.all(
-        poolsToUse.poolWithState.map(async (pool, i) => {
-          const state = states[i];
+      const result = poolsToUse.poolWithState
+        .map<PoolPrices<UniswapV3Data> | null>(pool => {
+          const state = pool.getState(blockNumber)!;
 
           if (state.liquidity <= 0n) {
             if (state.liquidity < 0) {
@@ -840,23 +810,41 @@ export class UniswapV3
             gasCost: gasCost,
             poolAddresses: [pool.poolAddress],
           };
-        }),
-      );
-      const rpcResults = await rpcResultsPromise;
+        })
+        .filter(res => res !== null);
 
-      const notNullResult = result.filter(
-        res => res !== null,
-      ) as ExchangePrices<UniswapV3Data>;
-
-      if (rpcResults) {
-        rpcResults.forEach(r => {
-          if (r) {
-            notNullResult.push(r);
-          }
+      // `poolWithoutState` is empty when `fastMode` is `true`
+      // but still good to skip unnecessary promise creation
+      if (!options?.fastMode) {
+        poolsToUse.poolWithoutState.forEach(pool => {
+          this.logger.warn(
+            `UniV3: Pool ${pool.name} on ${this.dexKey} has no state. Fallback to rpc`,
+          );
         });
+
+        const rpcPrices = await this.getPricingFromRpc(
+          _srcToken,
+          _destToken,
+          amounts,
+          side,
+          poolsToUse.poolWithoutState,
+          blockNumber,
+        );
+
+        if (rpcPrices) {
+          rpcPrices.forEach(r => {
+            if (r) {
+              result.push(r);
+            }
+          });
+        }
       }
 
-      return notNullResult;
+      if (!result.length) {
+        return null;
+      }
+
+      return result;
     } catch (e) {
       this.logger.error(
         `Error_getPricesVolume ${srcToken.symbol || srcToken.address}, ${
@@ -1395,19 +1383,6 @@ export class UniswapV3
       ]);
     }
     return balances;
-  }
-
-  private async _getPoolsFromIdentifiers(
-    poolIdentifiers: string[],
-    blockNumber: number,
-  ): Promise<UniswapV3EventPool[]> {
-    const pools = await Promise.all(
-      poolIdentifiers.map(async identifier => {
-        const [, srcAddress, destAddress, fee] = identifier.split('_');
-        return this.getPool(srcAddress, destAddress, BigInt(fee), blockNumber);
-      }),
-    );
-    return pools.filter(pool => pool) as UniswapV3EventPool[];
   }
 
   protected _getLoweredAddresses(srcToken: Token, destToken: Token) {

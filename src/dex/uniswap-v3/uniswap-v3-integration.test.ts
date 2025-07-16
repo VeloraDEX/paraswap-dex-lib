@@ -158,8 +158,7 @@ describe('UniswapV3', () => {
       const TokenB = Tokens[network][TokenBSymbol];
 
       beforeEach(async () => {
-        // blockNumber = await dexHelper.web3Provider.eth.getBlockNumber();
-        blockNumber = 21766507;
+        blockNumber = await dexHelper.web3Provider.eth.getBlockNumber();
         uniswapV3 = new UniswapV3(network, dexKey, dexHelper);
 
         console.log('blocknumber: ', blockNumber);
@@ -319,6 +318,68 @@ describe('UniswapV3', () => {
         );
 
         expect(asserts.every(Boolean)).toEqual(true);
+      });
+
+      it('DAI -> USDC getPricesVolume no PRC fallback for `fastMode`', async () => {
+        const amounts = [
+          0n,
+          1n * BI_POWS[18],
+          2n * BI_POWS[18],
+          3n * BI_POWS[18],
+          4n * BI_POWS[18],
+          5n * BI_POWS[18],
+          6n * BI_POWS[18],
+          7n * BI_POWS[18],
+          8n * BI_POWS[18],
+          9n * BI_POWS[18],
+          10n * BI_POWS[18],
+        ];
+
+        // PRC pricing breaks if this condition is not met
+        expect(amounts.length).toBeGreaterThan(uniswapV3['config'].chunksCount);
+
+        // Get pool IDs
+        const pools = await uniswapV3.getPoolIdentifiers(
+          TokenA,
+          TokenB,
+          SwapSide.SELL,
+          await dexHelper.web3Provider.eth.getBlockNumber(),
+        );
+
+        expect(pools.length).toBeGreaterThan(0);
+
+        console.log(
+          `${TokenASymbol} <> ${TokenBSymbol} Pool Identifiers: `,
+          pools,
+        );
+
+        // Nullify pool states to trigger the fallback
+        pools.forEach(poolId => {
+          const poolInstance = uniswapV3.eventPools[poolId];
+
+          if (!poolInstance) {
+            return;
+          }
+
+          poolInstance._setState(null, blockNumber);
+        });
+
+        const poolPrices = await uniswapV3.getPricesVolume(
+          TokenA,
+          TokenB,
+          amounts,
+          SwapSide.SELL,
+          blockNumber,
+          pools,
+          { fastMode: true },
+        );
+
+        console.log(
+          `${TokenASymbol} <> ${TokenBSymbol} Pool Prices: `,
+          poolPrices,
+        );
+
+        expect(poolPrices).toBeNull();
       });
 
       it('DAI -> USDC getPoolIdentifiers and getPricesVolume BUY', async () => {
