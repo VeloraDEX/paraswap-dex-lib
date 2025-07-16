@@ -38,7 +38,6 @@ export enum Network {
   RINKEBY = 4,
   BSC = 56,
   POLYGON = 137,
-  ZKEVM = 1101,
   AVALANCHE = 43114,
   FANTOM = 250,
   SONIC = 146,

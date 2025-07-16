@@ -141,12 +141,4 @@ export const Adapters: {
       },
     ],
   },
-  [Network.ZKEVM]: {
-    [SwapSide.SELL]: [
-      {
-        name: 'PolygonZkEvmAdapter02',
-        index: 1,
-      },
-    ],
-  },
 };

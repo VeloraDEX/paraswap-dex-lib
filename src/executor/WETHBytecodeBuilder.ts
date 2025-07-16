@@ -14,7 +14,6 @@ const SUPPORTED_NETWORKS = [
   Network.BASE,
   Network.POLYGON,
   Network.OPTIMISM,
-  Network.ZKEVM,
   Network.GNOSIS,
   Network.UNICHAIN,
   Network.SONIC,

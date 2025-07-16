@@ -1474,28 +1474,6 @@ export const Tokens: {
       decimals: 18,
     },
   },
-  [Network.ZKEVM]: {
-    ETH: {
-      address: ETHER_ADDRESS,
-      decimals: 18,
-    },
-    WETH: {
-      address: '0x4F9A0e7FD2Bf6067db6994CF12E4495Df938E6e9',
-      decimals: 18,
-    },
-    MATIC: {
-      address: '0xa2036f0538221a77a3937f1379699f44945018d0',
-      decimals: 18,
-    },
-    WBTC: {
-      address: '0xea034fb02eb1808c2cc3adbc15f447b93cbe08e1',
-      decimals: 8,
-    },
-    USDC: {
-      address: '0xa8ce8aee21bc2a48a5ef670afcc9274c7bbbc035',
-      decimals: 6,
-    },
-  },
   [Network.GNOSIS]: {
     XDAI: {
       address: ETHER_ADDRESS,
@@ -2136,13 +2114,6 @@ export const Holders: {
     PSTAKE: '0xc45398444B83183b2018e0224B3D332b42D492Af',
     USDM: '0x57F5E098CaD7A3D1Eed53991D4d66C45C9AF7812',
     wUSDM: '0x1Ab0b1A5A239B524702EcE9cCe77E096d4daE75B',
-  },
-  [Network.ZKEVM]: {
-    ETH: '0x4F9A0e7FD2Bf6067db6994CF12E4495Df938E6e9',
-    WETH: '0xc44b0378e400a9958219ec8f294c23b9976e3c5d',
-    MATIC: '0x8f2a1450c040b3c19efe9676165d8f30d8280019',
-    WBTC: '0x99b31498b0a1dae01fc3433e3cb60f095340935c',
-    USDC: '0x99b31498b0a1dae01fc3433e3cb60f095340935c',
   },
   [Network.GNOSIS]: {
     GNO: '0x458cD345B4C05e8DF39d0A07220feb4Ec19F5e6f',

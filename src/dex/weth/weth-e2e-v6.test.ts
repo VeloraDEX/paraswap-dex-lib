@@ -18,7 +18,6 @@ const NETWORKS = [
   Network.OPTIMISM,
   Network.FANTOM,
   Network.ARBITRUM,
-  Network.ZKEVM,
   Network.GNOSIS,
   Network.UNICHAIN,
 ];

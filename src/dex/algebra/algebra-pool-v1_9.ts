@@ -349,16 +349,7 @@ export class AlgebraEventPoolV1_9 extends StatefulEventSubscriber<PoolState_v1_9
   ): Promise<
     [bigint, bigint, DecodedStateMultiCallResultWithRelativeBitmapsV1_9]
   > {
-    try {
-      return await this._fetchPoolState_v1_9SingleStep(blockNumber);
-    } catch (e) {
-      if (e instanceof Error && e.message.includes('Pool does not exist'))
-        throw e;
-
-      if (this.dexHelper.config.data.network != Network.ZKEVM) throw e;
-
-      return this._fetchPoolState_v1_9MultiStep(blockNumber);
-    }
+    return this._fetchPoolState_v1_9SingleStep(blockNumber);
   }
 
   async generateState(blockNumber: number): Promise<Readonly<PoolState_v1_9>> {
