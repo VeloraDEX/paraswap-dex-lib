@@ -120,9 +120,29 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
       return [];
     }
 
-    const pairAddress = this.getPoolAddress(srcToken, destToken);
+    // Check if this is a direct AVAX pair
+    const isDirectAVAXPair =
+      isETHAddress(srcToken.address) || isETHAddress(destToken.address);
 
-    return [this.getPoolIdentifier(pairAddress).toLowerCase()];
+    if (isDirectAVAXPair) {
+      // Direct AVAX pair - return single pool
+      const pairAddress = this.getPoolAddress(srcToken, destToken);
+      return [this.getPoolIdentifier(pairAddress).toLowerCase()];
+    } else {
+      // Token-to-token swap - return both AVAX pairs
+      const avaxToken = {
+        address: ETHER_ADDRESS,
+        decimals: 18,
+      };
+
+      const srcPoolAddress = this.getPoolAddress(srcToken, avaxToken);
+      const destPoolAddress = this.getPoolAddress(destToken, avaxToken);
+
+      return [
+        this.getPoolIdentifier(srcPoolAddress).toLowerCase(),
+        this.getPoolIdentifier(destPoolAddress).toLowerCase(),
+      ];
+    }
   }
 
   protected getPoolIdentifier(pairAddress: Address): string {
@@ -130,20 +150,19 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
   }
 
   protected getPoolAddress(srcToken: Token, destToken: Token): string {
-    // ApexDefi pools are always in the format of AVAX/token
-    // The pool address is always the token address (not AVAX address)
+    // ✅ Only handle direct AVAX pairs
     const isSrcNative = isETHAddress(srcToken.address);
     const isDestNative = isETHAddress(destToken.address);
 
     if (isSrcNative) {
-      // If srcToken is native AVAX, the pool address is the destToken address
+      // AVAX → Token: pool address is the token address
       return destToken.address;
     } else if (isDestNative) {
-      // If destToken is native AVAX, the pool address is the srcToken address
+      // Token → AVAX: pool address is the token address
       return srcToken.address;
     } else {
-      // Both are ERC20 tokens - this shouldn't happen for ApexDefi
-      return srcToken.address;
+      // ❌ This should never happen for direct pairs
+      throw new Error('getPoolAddress called for non-AVAX pair');
     }
   }
 
@@ -165,97 +184,223 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
         destToken,
       );
 
-      // need to check if either src or dest is AVAX
-      // Can only handle pairs with AVAX
-      const isSrcAVAX = isETHAddress(_srcAddress);
-      const isDestAVAX = isETHAddress(_destAddress);
-      if (!isSrcAVAX && !isDestAVAX) {
-        return null;
-      }
-
       if (_srcAddress === _destAddress) return null;
 
-      const poolIdentifier = await this.getPoolIdentifiers(
+      const poolIdentifiers = await this.getPoolIdentifiers(
         srcToken,
         destToken,
         side,
         blockNumber,
       );
 
-      if (limitPools && limitPools.every(p => p !== poolIdentifier[0])) {
+      // Filter pools based on limitPools if provided
+      const validPoolIdentifiers = limitPools
+        ? poolIdentifiers.filter(id => limitPools.includes(id))
+        : poolIdentifiers;
+
+      if (validPoolIdentifiers.length === 0) {
         return null;
       }
 
-      const unitAmount = getBigIntPow(
-        side === SwapSide.SELL ? srcToken.decimals : destToken.decimals,
-      );
+      // Check if this is a direct AVAX pair
+      const isDirectAVAXPair =
+        isETHAddress(srcToken.address) || isETHAddress(destToken.address);
 
-      // Get or discover the pool for this token pair
-      let pool = this.eventPools[poolIdentifier[0]];
-
-      if (!pool) {
-        // Try to discover the pool
-        pool = await this.discoverPool(srcToken, destToken, blockNumber);
-        if (!pool) {
-          return null;
-        }
+      if (isDirectAVAXPair) {
+        return this.getDirectAVAXPairPrices(
+          srcToken,
+          destToken,
+          amounts,
+          side,
+          blockNumber,
+          validPoolIdentifiers[0],
+        );
+      } else {
+        return this.getCrossPairTokenToTokenPrices(
+          srcToken,
+          destToken,
+          amounts,
+          side,
+          blockNumber,
+          validPoolIdentifiers,
+        );
       }
-
-      // Get the pool state
-      const state = await pool.getStateOrGenerate(blockNumber);
-      if (!state) {
-        return null;
-      }
-
-      // Calculate prices using the constant product formula
-      const prices = await Promise.all(
-        amounts.map(amount => {
-          if (amount === 0n) return 0n;
-
-          if (side === SwapSide.SELL) {
-            return this.getSellPrice(state, amount, srcToken, destToken);
-          } else {
-            return this.getBuyPrice(state, amount, srcToken, destToken);
-          }
-        }),
-      );
-
-      const unit =
-        side === SwapSide.SELL
-          ? this.getSellPrice(state, unitAmount, srcToken, destToken)
-          : this.getBuyPrice(state, unitAmount, srcToken, destToken);
-
-      // Prepare the exchange data
-      const exchangeData: ApexDefiData = {
-        path: [
-          {
-            tokenIn: srcToken.address.toLowerCase(),
-            tokenOut: destToken.address.toLowerCase(),
-          },
-        ],
-      };
-
-      return [
-        {
-          prices,
-          unit,
-          data: exchangeData,
-          exchange: this.dexKey,
-          poolIdentifier: poolIdentifier[0],
-          gasCost: ApexDefiConfig[this.dexKey][this.network].poolGasCost,
-          poolAddresses: [pool.poolAddress],
-        },
-      ];
     } catch (e) {
-      // if the pool is not found, we need to fallback to rpc
-      this.logger.error(
-        `Error_getPricesVolume ${srcToken.symbol || srcToken.address}, ${
-          destToken.symbol || destToken.address
-        }, ${side}:`,
-        e,
-      );
+      this.logger.error(`Error_getPricesVolume:`, e);
       return null;
     }
+  }
+
+  private async getDirectAVAXPairPrices(
+    srcToken: Token,
+    destToken: Token,
+    amounts: bigint[],
+    side: SwapSide,
+    blockNumber: number,
+    poolIdentifier: string,
+  ): Promise<ExchangePrices<ApexDefiData> | null> {
+    const unitAmount = getBigIntPow(
+      side === SwapSide.SELL ? srcToken.decimals : destToken.decimals,
+    );
+
+    // Get or discover the pool
+    let pool = this.eventPools[poolIdentifier];
+    if (!pool) {
+      pool = await this.discoverPool(srcToken, destToken, blockNumber);
+      if (!pool) return null;
+    }
+
+    const state = await pool.getStateOrGenerate(blockNumber);
+    if (!state) return null;
+
+    const prices = await Promise.all(
+      amounts.map(amount => {
+        if (amount === 0n) return 0n;
+        return side === SwapSide.SELL
+          ? this.getSellPrice(state, amount, srcToken, destToken)
+          : this.getBuyPrice(state, amount, srcToken, destToken);
+      }),
+    );
+
+    const unit =
+      side === SwapSide.SELL
+        ? this.getSellPrice(state, unitAmount, srcToken, destToken)
+        : this.getBuyPrice(state, unitAmount, srcToken, destToken);
+
+    return [
+      {
+        prices,
+        unit,
+        data: {
+          path: [
+            {
+              tokenIn: srcToken.address.toLowerCase(),
+              tokenOut: destToken.address.toLowerCase(),
+            },
+          ],
+        },
+        exchange: this.dexKey,
+        poolIdentifier,
+        gasCost: ApexDefiConfig[this.dexKey][this.network].poolGasCost,
+        poolAddresses: [pool.poolAddress],
+      },
+    ];
+  }
+
+  private async getCrossPairTokenToTokenPrices(
+    srcToken: Token,
+    destToken: Token,
+    amounts: bigint[],
+    side: SwapSide,
+    blockNumber: number,
+    poolIdentifiers: string[],
+  ): Promise<ExchangePrices<ApexDefiData> | null> {
+    const avaxToken = {
+      address: ETHER_ADDRESS,
+      decimals: 18,
+    };
+
+    // Get both pool states
+    const [srcPool, destPool] = await Promise.all([
+      this.getOrDiscoverPool(
+        srcToken,
+        avaxToken,
+        blockNumber,
+        poolIdentifiers[0],
+      ),
+      this.getOrDiscoverPool(
+        destToken,
+        avaxToken,
+        blockNumber,
+        poolIdentifiers[1],
+      ),
+    ]);
+
+    if (!srcPool || !destPool) return null;
+
+    const [srcState, destState] = await Promise.all([
+      srcPool.getStateOrGenerate(blockNumber),
+      destPool.getStateOrGenerate(blockNumber),
+    ]);
+
+    if (!srcState || !destState) return null;
+
+    const prices = await Promise.all(
+      amounts.map(amount => {
+        if (amount === 0n) return 0n;
+        return side === SwapSide.SELL
+          ? this.calculateCrossPairSellPrice(
+              amount,
+              srcToken,
+              destToken,
+              srcState,
+              destState,
+            )
+          : this.calculateCrossPairBuyPrice(
+              amount,
+              srcToken,
+              destToken,
+              srcState,
+              destState,
+            );
+      }),
+    );
+
+    const unitAmount = getBigIntPow(
+      side === SwapSide.SELL ? srcToken.decimals : destToken.decimals,
+    );
+
+    const unit =
+      side === SwapSide.SELL
+        ? this.calculateCrossPairSellPrice(
+            unitAmount,
+            srcToken,
+            destToken,
+            srcState,
+            destState,
+          )
+        : this.calculateCrossPairBuyPrice(
+            unitAmount,
+            srcToken,
+            destToken,
+            srcState,
+            destState,
+          );
+
+    const virtualPoolIdentifier =
+      `${this.dexKey}_virtual_${srcToken.address}_${destToken.address}`.toLowerCase();
+
+    return [
+      {
+        prices,
+        unit,
+        data: {
+          path: [
+            {
+              tokenIn: srcToken.address.toLowerCase(),
+              tokenOut: destToken.address.toLowerCase(),
+            },
+          ],
+        },
+        exchange: this.dexKey,
+        poolIdentifier: virtualPoolIdentifier,
+        gasCost: ApexDefiConfig[this.dexKey][this.network].poolGasCost * 1.5,
+        poolAddresses: [srcPool.poolAddress, destPool.poolAddress],
+      },
+    ];
+  }
+
+  private async getOrDiscoverPool(
+    token: Token,
+    avaxToken: Token,
+    blockNumber: number,
+    poolIdentifier: string,
+  ): Promise<ApexDefiEventPool | null> {
+    let pool = this.eventPools[poolIdentifier];
+    if (!pool) {
+      pool = await this.discoverPool(token, avaxToken, blockNumber);
+    }
+    return pool;
   }
 
   /**
@@ -378,13 +523,79 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
     return numerator === 0n ? 0n : 1n + numerator / denominator;
   }
 
+  private calculateCrossPairSellPrice(
+    amountIn: bigint,
+    srcToken: Token,
+    destToken: Token,
+    srcPoolState: ApexDefiPoolState,
+    destPoolState: ApexDefiPoolState,
+  ): bigint {
+    const avaxToken = {
+      address: ETHER_ADDRESS,
+      decimals: 18,
+    };
+
+    // Step 1: Calculate tokenA → AVAX (with fees)
+    const avaxReceived = this.getSellPrice(
+      srcPoolState,
+      amountIn,
+      srcToken,
+      avaxToken,
+    );
+
+    if (avaxReceived === 0n) return 0n;
+
+    // Step 2: Calculate AVAX → tokenB (with fees)
+    const finalOutput = this.getSellPrice(
+      destPoolState,
+      avaxReceived,
+      avaxToken,
+      destToken,
+    );
+
+    return finalOutput;
+  }
+
+  private calculateCrossPairBuyPrice(
+    amountOut: bigint,
+    srcToken: Token,
+    destToken: Token,
+    srcPoolState: ApexDefiPoolState,
+    destPoolState: ApexDefiPoolState,
+  ): bigint {
+    const avaxToken = {
+      address: ETHER_ADDRESS,
+      decimals: 18,
+    };
+
+    // Step 1: Calculate AVAX → tokenB (reverse with fees)
+    const avaxNeeded = this.getBuyPrice(
+      destPoolState,
+      amountOut,
+      avaxToken,
+      destToken,
+    );
+
+    if (avaxNeeded === 0n) return 0n;
+
+    // Step 2: Calculate tokenA → AVAX (reverse with fees)
+    const finalInput = this.getBuyPrice(
+      srcPoolState,
+      avaxNeeded,
+      srcToken,
+      avaxToken,
+    );
+
+    return finalInput;
+  }
+
   getCalldataGasCost(poolPrices: PoolPrices<ApexDefiData>): number | number[] {
     return (
       CALLDATA_GAS_COST.DEX_OVERHEAD +
       CALLDATA_GAS_COST.LENGTH_SMALL +
       // ParentStruct header
       CALLDATA_GAS_COST.OFFSET_SMALL +
-      // ParentStruct -> weth
+      // ParentStruct -> avax
       CALLDATA_GAS_COST.ADDRESS +
       // ParentStruct -> pools[] header
       CALLDATA_GAS_COST.OFFSET_SMALL +
@@ -433,7 +644,7 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
   ): DexExchangeParam {
     const { path } = data;
 
-    // ✅ Convert only for router calls
+    // ✅ Convert native AVAX to WAVAX for router calls
     const routerPath = this.fixPathForRouter(
       path.map(p => p.tokenIn).concat(path[path.length - 1].tokenOut),
     );
@@ -445,36 +656,34 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
     const isSrcAVAX = isETHAddress(srcToken);
     const isDestAVAX = isETHAddress(destToken);
 
-    this.logger.info(`isSrcAVAX: ${isSrcAVAX}, isDestAVAX: ${isDestAVAX}`);
-
     if (isSrcAVAX && !isDestAVAX) {
       // AVAX -> Token
       swapFunction = 'swapExactAVAXForTokens';
       swapParams = [
-        destAmount, // amountOutMin - will be set by the router
-        routerPath,
+        destAmount,
+        routerPath, // Use converted path
         recipient,
-        Math.floor(Date.now() / 1000) + 300, // deadline: 5 minutes from now
+        Math.floor(Date.now() / 1000) + 300,
       ];
     } else if (!isSrcAVAX && isDestAVAX) {
       // Token -> AVAX
       swapFunction = 'swapExactTokensForAVAX';
       swapParams = [
         srcAmount,
-        destAmount, // amountOutMin - will be set by the router
-        routerPath,
+        destAmount,
+        routerPath, // Use converted path
         recipient,
-        Math.floor(Date.now() / 1000) + 300, // deadline: 5 minutes from now
+        Math.floor(Date.now() / 1000) + 300,
       ];
     } else {
       // Token -> Token
       swapFunction = 'swapExactTokensForTokens';
       swapParams = [
         srcAmount,
-        destAmount, // amountOutMin - will be set by the router
-        routerPath,
+        destAmount,
+        routerPath, // Use converted path
         recipient,
-        Math.floor(Date.now() / 1000) + 300, // deadline: 5 minutes from now
+        Math.floor(Date.now() / 1000) + 300,
       ];
     }
 
@@ -483,22 +692,12 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
       swapParams,
     );
 
-    this.logger.info(
-      `swapFunction: ${swapFunction}, swapParams: ${swapParams}`,
-    );
-    this.logger.info(`exchangeData: ${exchangeData}`);
-    this.logger.info(
-      `targetExchange: ${
-        ApexDefiConfig[this.dexKey][this.network].routerAddress
-      }`,
-    );
-
     return {
       needWrapNative: this.needWrapNative,
       dexFuncHasRecipient: true,
       exchangeData,
       targetExchange: ApexDefiConfig[this.dexKey][this.network].routerAddress,
-      returnAmountPos: undefined, // ApexDefi returns amounts array, we'll get the last element
+      returnAmountPos: undefined,
     };
   }
 
@@ -513,7 +712,7 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
   ): Promise<SimpleExchangeParam> {
     const { path } = data;
 
-    // ✅ Convert only for router calls
+    // ✅ Convert native AVAX to WAVAX for router calls
     const routerPath = this.fixPathForRouter(
       path.map(p => p.tokenIn).concat(path[path.length - 1].tokenOut),
     );
@@ -530,7 +729,7 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
       swapFunction = 'swapExactAVAXForTokens';
       swapParams = [
         destAmount,
-        routerPath,
+        routerPath, // Use converted path
         this.augustusAddress, // recipient - will be set by the router
         Math.floor(Date.now() / 1000) + 300, // deadline: 5 minutes from now
       ];
@@ -540,7 +739,7 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
       swapParams = [
         srcAmount,
         destAmount,
-        routerPath,
+        routerPath, // Use converted path
         this.augustusAddress, // recipient - will be set by the router
         Math.floor(Date.now() / 1000) + 300, // deadline: 5 minutes from now
       ];
@@ -550,7 +749,7 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
       swapParams = [
         srcAmount,
         destAmount,
-        path.map(p => p.tokenIn).concat(path[path.length - 1].tokenOut),
+        routerPath, // Use converted path
         this.augustusAddress, // recipient - will be set by the router
         Math.floor(Date.now() / 1000) + 300, // deadline: 5 minutes from now
       ];
@@ -734,7 +933,8 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
             poolIdentifier: this.getPoolIdentifier(token),
             connectorTokens: [
               {
-                address: this.dexHelper.config.data.wrappedNativeTokenAddress,
+                address:
+                  this.dexHelper.config.data.wrappedNativeTokenAddress.toLowerCase(),
                 decimals: 18,
               },
             ],
@@ -802,7 +1002,8 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
             poolIdentifier: this.getPoolIdentifier(tokenAddress),
             connectorTokens: [
               {
-                address: this.dexHelper.config.data.wrappedNativeTokenAddress,
+                address:
+                  this.dexHelper.config.data.wrappedNativeTokenAddress.toLowerCase(),
                 decimals: 18,
               },
             ],
@@ -839,7 +1040,7 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
         this.dexKey,
         this.network,
         this.dexHelper,
-        ETHER_ADDRESS,
+        this.dexHelper.config.data.wrappedNativeTokenAddress,
         pairAddress,
         pairAddress,
         this.logger,
@@ -894,7 +1095,6 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
     return [srcToken.address.toLowerCase(), destToken.address.toLowerCase()];
   }
 
-  // Add this method for router path conversion
   public fixPathForRouter(path: Address[]): Address[] {
     return path.map(token => {
       // Only convert native AVAX to WAVAX for router calls
