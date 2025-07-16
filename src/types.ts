@@ -355,6 +355,7 @@ export type TransferFeeParams = {
 
 export type GetPricesVolumeOptions = {
   transferFees?: TransferFeeParams;
+  fastMode?: boolean;
 };
 
 export type TransferFeeParamsForRoute = {
