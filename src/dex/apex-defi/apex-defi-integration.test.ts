@@ -14,21 +14,7 @@ import {
 } from '../../../tests/utils';
 import { Tokens } from '../../../tests/constants-e2e';
 import { Address } from '@paraswap/core';
-
-/*
-  README
-  ======
-
-  This test script adds tests for ApexDefi general integration
-  with the DEX interface. The test cases below are example tests.
-  It is recommended to add tests which cover ApexDefi specific
-  logic.
-
-  You can run this individual test script by running:
-  `npx jest src/dex/<dex-name>/<dex-name>-integration.test.ts`
-
-  (This comment should be removed from the final implementation)
-*/
+import { ApexDefiConfig } from './config';
 
 function getReaderCalldata(
   exchangeAddress: string,
@@ -75,7 +61,8 @@ async function checkOnChainPricing(
   tokenIn: Address,
   tokenOut: Address,
 ) {
-  const exchangeAddress = '0x5d2dDA02280F55A9D4529eadFA45Ff032928082B';
+  const exchangeAddress =
+    ApexDefiConfig.ApexDefi[apexDefi.network].routerAddress;
 
   const readerIface = apexDefi.routerIface;
 
@@ -158,6 +145,30 @@ async function testPricingOnNetwork(
   );
 }
 
+// Helper to get amounts array for a token symbol
+function getAmountsForToken(symbol: string, decimals: number): bigint[] {
+  // Use smaller amounts for BTC-like tokens
+  if (symbol.toLowerCase().includes('btc')) {
+    // 0, 0.0001, 0.0002, ..., 0.001 BTC
+    return Array.from(
+      { length: 11 },
+      (_, i) => BigInt(i) * 10n ** BigInt(decimals - 4),
+    );
+  }
+  // Default: 0, 1, 2, ..., 10 units
+  return Array.from(
+    { length: 11 },
+    (_, i) => BigInt(i) * 10n ** BigInt(decimals),
+  );
+}
+
+// Token pair configuration for testing
+interface TokenPairTestConfig {
+  srcTokenSymbol: string;
+  destTokenSymbol: string;
+  description?: string;
+}
+
 describe('ApexDefi', function () {
   const dexKey = 'ApexDefi';
   let blockNumber: number;
@@ -166,38 +177,35 @@ describe('ApexDefi', function () {
   describe('Avalanche', () => {
     const network = Network.AVALANCHE;
     const dexHelper = new DummyDexHelper(network);
-
     const tokens = Tokens[network];
 
-    const srcTokenSymbol = 'WAVAX';
-    const destTokenSymbol = 'APEX';
-
-    const amountsForSell = [
-      0n,
-      1n * BI_POWS[tokens[srcTokenSymbol].decimals],
-      2n * BI_POWS[tokens[srcTokenSymbol].decimals],
-      3n * BI_POWS[tokens[srcTokenSymbol].decimals],
-      4n * BI_POWS[tokens[srcTokenSymbol].decimals],
-      5n * BI_POWS[tokens[srcTokenSymbol].decimals],
-      6n * BI_POWS[tokens[srcTokenSymbol].decimals],
-      7n * BI_POWS[tokens[srcTokenSymbol].decimals],
-      8n * BI_POWS[tokens[srcTokenSymbol].decimals],
-      9n * BI_POWS[tokens[srcTokenSymbol].decimals],
-      10n * BI_POWS[tokens[srcTokenSymbol].decimals],
-    ];
-
-    const amountsForBuy = [
-      0n,
-      1n * BI_POWS[tokens[destTokenSymbol].decimals],
-      2n * BI_POWS[tokens[destTokenSymbol].decimals],
-      3n * BI_POWS[tokens[destTokenSymbol].decimals],
-      4n * BI_POWS[tokens[destTokenSymbol].decimals],
-      5n * BI_POWS[tokens[destTokenSymbol].decimals],
-      6n * BI_POWS[tokens[destTokenSymbol].decimals],
-      7n * BI_POWS[tokens[destTokenSymbol].decimals],
-      8n * BI_POWS[tokens[destTokenSymbol].decimals],
-      9n * BI_POWS[tokens[destTokenSymbol].decimals],
-      10n * BI_POWS[tokens[destTokenSymbol].decimals],
+    // Define all token pairs to test
+    const tokenPairsToTest: TokenPairTestConfig[] = [
+      {
+        srcTokenSymbol: 'WAVAX',
+        destTokenSymbol: 'APEX',
+        description: 'WAVAX to APEX',
+      },
+      {
+        srcTokenSymbol: 'WAVAX',
+        destTokenSymbol: 'aUSDC',
+        description: 'WAVAX to aUSDC',
+      },
+      {
+        srcTokenSymbol: 'WAVAX',
+        destTokenSymbol: 'aBTCb',
+        description: 'WAVAX to aBTCb',
+      },
+      {
+        srcTokenSymbol: 'APEX',
+        destTokenSymbol: 'aBTCb',
+        description: 'APEX to aBTCb',
+      },
+      {
+        srcTokenSymbol: 'aBTCb',
+        destTokenSymbol: 'APEX',
+        description: 'aBTCb to APEX',
+      },
     ];
 
     beforeAll(async () => {
@@ -209,32 +217,47 @@ describe('ApexDefi', function () {
       }
     });
 
-    it('getPoolIdentifiers and getPricesVolume SELL', async function () {
-      await testPricingOnNetwork(
-        apexDefi,
-        network,
-        dexKey,
-        blockNumber,
-        srcTokenSymbol,
-        destTokenSymbol,
-        SwapSide.SELL,
-        amountsForSell,
-        'getAmountsOut',
-      );
-    });
+    // Test each token pair
+    tokenPairsToTest.forEach((pairConfig: TokenPairTestConfig) => {
+      const { srcTokenSymbol, destTokenSymbol, description } = pairConfig;
+      const testDescription =
+        description || `${srcTokenSymbol} <> ${destTokenSymbol}`;
 
-    it('getPoolIdentifiers and getPricesVolume BUY', async function () {
-      await testPricingOnNetwork(
-        apexDefi,
-        network,
-        dexKey,
-        blockNumber,
-        srcTokenSymbol,
-        destTokenSymbol,
-        SwapSide.BUY,
-        amountsForBuy,
-        'getAmountsIn',
-      );
+      describe(testDescription, () => {
+        const srcDecimals = tokens[srcTokenSymbol].decimals;
+        const destDecimals = tokens[destTokenSymbol].decimals;
+
+        const amountsForSell = getAmountsForToken(srcTokenSymbol, srcDecimals);
+        const amountsForBuy = getAmountsForToken(destTokenSymbol, destDecimals);
+
+        it('getPoolIdentifiers and getPricesVolume SELL', async function () {
+          await testPricingOnNetwork(
+            apexDefi,
+            network,
+            dexKey,
+            blockNumber,
+            srcTokenSymbol,
+            destTokenSymbol,
+            SwapSide.SELL,
+            amountsForSell,
+            'getAmountsOut',
+          );
+        });
+
+        it('getPoolIdentifiers and getPricesVolume BUY', async function () {
+          await testPricingOnNetwork(
+            apexDefi,
+            network,
+            dexKey,
+            blockNumber,
+            srcTokenSymbol,
+            destTokenSymbol,
+            SwapSide.BUY,
+            amountsForBuy,
+            'getAmountsIn',
+          );
+        });
+      });
     });
 
     it('getTopPoolsForToken', async function () {
@@ -245,15 +268,15 @@ describe('ApexDefi', function () {
         await newApexDefi.updatePoolState();
       }
       const poolLiquidity = await newApexDefi.getTopPoolsForToken(
-        tokens[srcTokenSymbol].address,
+        tokens.WAVAX.address,
         10,
       );
-      console.log(`${srcTokenSymbol} Top Pools:`, poolLiquidity);
+      console.log(`WAVAX Top Pools:`, poolLiquidity);
 
       if (!newApexDefi.hasConstantPriceLargeAmounts) {
         checkPoolsLiquidity(
           poolLiquidity,
-          Tokens[network][srcTokenSymbol].address,
+          Tokens[network].WAVAX.address,
           dexKey,
         );
       }

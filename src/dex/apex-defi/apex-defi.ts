@@ -17,7 +17,7 @@ import * as CALLDATA_GAS_COST from '../../calldata-gas-cost';
 import { getBigIntPow, getDexKeysWithNetwork } from '../../utils';
 import { IDex } from '../../dex/idex';
 import { IDexHelper } from '../../dex-helper/idex-helper';
-import { ApexDefiData, ApexDefiParam } from './types';
+import { ApexDefiData, ApexDefiParam, ApexDefiPoolState } from './types';
 import { SimpleExchange } from '../simple-exchange';
 import { ApexDefiConfig } from './config';
 import { ApexDefiEventPool } from './apex-defi-pool';
@@ -27,7 +27,12 @@ import ApexDefiTokenABI from '../../abi/apex-defi/ApexDefiToken.abi.json';
 import ApexDefiFactoryABI from '../../abi/apex-defi/ApexDefiFactory.abi.json';
 import ERC20ABI from '../../abi/erc20.json';
 import { ApexDefiFactory, OnPoolCreatedCallback } from './apex-defi-factory';
-import { calculateFees } from './utils';
+import {
+  calculateFees,
+  fetchApexDefiOnChainPoolData,
+  getFactoryAddressForToken,
+} from './utils';
+import { AddressZero } from '@ethersproject/constants';
 
 export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
   readonly eventPools: Record<string, ApexDefiEventPool | null> = {};
@@ -81,99 +86,10 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
 
   protected onPoolCreated(): OnPoolCreatedCallback {
     return async ({ pairAddress, blockNumber }) => {
-      const logPrefix = '[onPoolCreated]';
       const poolKey = this.getPoolIdentifier(pairAddress);
-
+      await this.fetchAndInitPool(pairAddress, blockNumber, poolKey);
       this.logger.info(
-        `${logPrefix} add pool=${poolKey}; pairAddress=${pairAddress}`,
-      );
-
-      // Get the actual reserves and fees for the new pool
-      const poolData = await this.dexHelper.multiContract.methods
-        .aggregate([
-          {
-            target: pairAddress,
-            callData: this.tokenIface.encodeFunctionData('getReserves', []),
-          },
-          {
-            target: pairAddress,
-            callData: this.tokenIface.encodeFunctionData('tradingFeeRate'),
-          },
-          {
-            target: ApexDefiConfig[this.dexKey][this.network].factoryAddress,
-            callData: this.factoryIface.encodeFunctionData('feeRate'),
-          },
-          {
-            target: ApexDefiConfig[this.dexKey][this.network].factoryAddress,
-            callData: this.factoryIface.encodeFunctionData(
-              'getFeeHookDetails',
-              [pairAddress],
-            ),
-          },
-        ])
-        .call({}, blockNumber);
-
-      // The logic here is to handle older fee structures
-      // If the token has a fee hook, then we use the getFees results
-      // Otherwise, we use the feeRate and the baseSwapRate
-      // The baseSwapRate is 0.3% and the feeRate is a portion of that
-      // The lpFee is the remaining portion of the baseSwapRate - feeRate
-      // The protocolFee is the feeRate
-      // The tradingFeeRate is the trading fee rate of the token set by the token owner and is in addition to the baseSwapRate
-      const reserves = this.tokenIface.decodeFunctionResult(
-        'getReserves',
-        poolData.returnData[0],
-      ) as [bigint, bigint];
-      const tradingFeeRate: bigint = this.tokenIface.decodeFunctionResult(
-        'tradingFeeRate',
-        poolData.returnData[1],
-      )[0];
-      // This is a portion of the baseSwapRate and will not be more than 30n
-      // If tokenFeeHook is address(0) then we use this instead of the getFees results
-      const feeRate: bigint = this.factoryIface.decodeFunctionResult(
-        'feeRate',
-        poolData.returnData[2],
-      )[0];
-      const feeHookDetails = this.factoryIface.decodeFunctionResult(
-        'getFeeHookDetails',
-        poolData.returnData[3],
-        // Fee hook details are in the following order:
-        // 0. Fee hook address
-        // 1. Base swap rate
-        // 2. LP fee
-        // 3. Protocol fee
-      ) as [Address, bigint, bigint, bigint];
-
-      const { baseSwapRate, protocolFee, lpFee } = calculateFees(
-        feeHookDetails,
-        feeRate,
-      );
-      const eventPool = new ApexDefiEventPool(
-        this.dexKey,
-        this.network,
-        this.dexHelper,
-        this.dexHelper.config.data.wrappedNativeTokenAddress,
-        pairAddress,
-        pairAddress,
-        this.logger,
-        ApexDefiConfig[this.dexKey][this.network].factoryAddress,
-      );
-
-      await eventPool.initialize(blockNumber, {
-        state: {
-          reserve0: reserves[0],
-          reserve1: reserves[1],
-          baseSwapRate: Number(baseSwapRate),
-          protocolFee: Number(protocolFee),
-          lpFee: Number(lpFee),
-          tradingFee: Number(tradingFeeRate),
-        },
-      });
-
-      this.eventPools[poolKey] = eventPool;
-
-      this.logger.info(
-        `${logPrefix} pool=${poolKey}; pairAddress=${pairAddress} initialized`,
+        `[onPoolCreated] pool=${poolKey}; pairAddress=${pairAddress} initialized`,
       );
     };
   }
@@ -183,160 +99,7 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
   // for pricing requests. It is optional for a DEX to
   // implement this function
   async initializePricing(blockNumber: number) {
-    try {
-      await this.factory.initialize(blockNumber);
-
-      // Get all supported tokens from the router
-      const tokenAddresses = await this.dexHelper.multiContract.methods
-        .aggregate([
-          {
-            target: ApexDefiConfig[this.dexKey][this.network].factoryAddress,
-            callData: this.factoryIface.encodeFunctionData('getAllTokens', []),
-          },
-        ])
-        .call({}, blockNumber);
-
-      const tokens = this.factoryIface.decodeFunctionResult(
-        'getAllTokens',
-        tokenAddresses.returnData[0],
-      )[0] as Address[];
-
-      if (!tokens.length) {
-        this.logger.info('No tokens found in ApexDefi router');
-        return;
-      }
-
-      // Get decimals, reserves, trading fee rate, and base swap rate for all tokens using multicall
-      const decimalsCallData = this.erc20Iface.encodeFunctionData('decimals');
-      const reservesCallData = this.tokenIface.encodeFunctionData(
-        'getReserves',
-        [],
-      );
-      const tradingFeeRateCallData =
-        this.tokenIface.encodeFunctionData('tradingFeeRate');
-
-      const tokenMultiCall = tokens.flatMap(token => [
-        {
-          target: token,
-          callData: decimalsCallData,
-        },
-        {
-          target: token, // The pool address is the same as the token address for ApexDefi
-          callData: reservesCallData,
-        },
-        {
-          target: token,
-          callData: tradingFeeRateCallData,
-        },
-        {
-          target: ApexDefiConfig[this.dexKey][this.network].factoryAddress,
-          callData: this.factoryIface.encodeFunctionData('feeRate'),
-        },
-        {
-          target: ApexDefiConfig[this.dexKey][this.network].factoryAddress,
-          callData: this.factoryIface.encodeFunctionData('getFeeHookDetails', [
-            token,
-          ]),
-        },
-      ]);
-
-      const result = await this.dexHelper.multiContract.methods
-        .aggregate(tokenMultiCall)
-        .call({}, blockNumber);
-
-      // Process results - each token has 5 calls (decimals + reserves + tradingFeeRate + baseSwapRate)
-      const tokenDecimals: number[] = [];
-      const tokenReserves: { amountNative: bigint; amountToken: bigint }[] = [];
-      const tokenTradingFeeRates: bigint[] = [];
-      const tokenBaseSwapRates: bigint[] = [];
-      const tokenProtocolFees: bigint[] = [];
-      const tokenLpFees: bigint[] = [];
-
-      for (let i = 0; i < result.returnData.length; i += 5) {
-        const decimals = parseInt(
-          this.erc20Iface
-            .decodeFunctionResult('decimals', result.returnData[i])[0]
-            .toString(),
-        );
-        const reserves = this.tokenIface.decodeFunctionResult(
-          'getReserves',
-          result.returnData[i + 1],
-        );
-        const tradingFeeRate = this.tokenIface.decodeFunctionResult(
-          'tradingFeeRate',
-          result.returnData[i + 2],
-        )[0];
-        const feeRate: bigint = this.factoryIface.decodeFunctionResult(
-          'feeRate',
-          result.returnData[i + 3],
-        )[0];
-        const feeHookDetails = this.factoryIface.decodeFunctionResult(
-          'getFeeHookDetails',
-          result.returnData[i + 4],
-          // Fee hook details are in the following order:
-          // 0. Fee hook address
-          // 1. Base swap rate
-          // 2. LP fee
-          // 3. Protocol fee
-        ) as [Address, bigint, bigint, bigint];
-
-        const { baseSwapRate, protocolFee, lpFee } = calculateFees(
-          feeHookDetails,
-          feeRate,
-        );
-        tokenDecimals.push(decimals);
-        tokenReserves.push({
-          amountNative: reserves[0],
-          amountToken: reserves[1],
-        });
-        tokenTradingFeeRates.push(tradingFeeRate);
-        tokenBaseSwapRates.push(baseSwapRate);
-        tokenProtocolFees.push(protocolFee);
-        tokenLpFees.push(lpFee);
-      }
-
-      tokens.forEach(async (token, i) => {
-        const tokenObj: Token = {
-          address: token.toLowerCase(),
-          decimals: tokenDecimals[i],
-        };
-        this.supportedTokensMap[token.toLowerCase()] = tokenObj;
-
-        // Create event pool for each token
-        // Since we got all tokens from the factory the token address is also the pair address
-        const poolKey = this.getPoolIdentifier(token);
-        if (!this.eventPools[poolKey]) {
-          const eventPool = new ApexDefiEventPool(
-            this.dexKey,
-            this.network,
-            this.dexHelper,
-            this.dexHelper.config.data.wrappedNativeTokenAddress,
-            token,
-            token,
-            this.logger,
-            ApexDefiConfig[this.dexKey][this.network].factoryAddress,
-          );
-
-          this.eventPools[poolKey] = eventPool;
-          await eventPool.initialize(blockNumber, {
-            state: {
-              reserve0: tokenReserves[i].amountNative,
-              reserve1: tokenReserves[i].amountToken,
-              baseSwapRate: Number(tokenBaseSwapRates[i]),
-              protocolFee: Number(tokenProtocolFees[i]),
-              lpFee: Number(tokenLpFees[i]),
-              tradingFee: Number(tokenTradingFeeRates[i]),
-            },
-          });
-        }
-      });
-
-      this.logger.info(
-        `Initialized ${tokens.length} tokens for ApexDefi on network ${this.network}`,
-      );
-    } catch (error) {
-      this.logger.error('Error initializing ApexDefi pricing:', error);
-    }
+    await this.factory.initialize(blockNumber);
   }
 
   // Legacy: was only used for V5
@@ -415,90 +178,19 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
         side === SwapSide.SELL ? srcToken.decimals : destToken.decimals,
       );
 
-      // Get the pool for this token pair
-      const pool = this.eventPools[poolIdentifier[0]];
+      // Get or discover the pool for this token pair
+      let pool = this.eventPools[poolIdentifier[0]];
 
       if (!pool) {
         // Try to discover the pool
-        const discoveredPool = await this.discoverPool(
-          srcToken,
-          destToken,
-          blockNumber,
-        );
-        if (!discoveredPool) {
+        pool = await this.discoverPool(srcToken, destToken, blockNumber);
+        if (!pool) {
           return null;
         }
-        // Use the discovered pool
-        const discoveredState = await discoveredPool.getStateOrGenerate(
-          blockNumber,
-        );
-        if (!discoveredState) {
-          return null;
-        }
-
-        // Calculate prices using the constant product formula
-        const prices = await Promise.all(
-          amounts.map(amount => {
-            if (amount === 0n) return 0n;
-
-            if (side === SwapSide.SELL) {
-              return this.getSellPrice(
-                discoveredState,
-                amount,
-                srcToken,
-                destToken,
-              );
-            } else {
-              return this.getBuyPrice(
-                discoveredState,
-                amount,
-                srcToken,
-                destToken,
-              );
-            }
-          }),
-        );
-
-        const unit =
-          side === SwapSide.SELL
-            ? this.getSellPrice(
-                discoveredState,
-                unitAmount,
-                srcToken,
-                destToken,
-              )
-            : this.getBuyPrice(
-                discoveredState,
-                unitAmount,
-                srcToken,
-                destToken,
-              );
-
-        // Prepare the exchange data
-        const exchangeData: ApexDefiData = {
-          path: [
-            {
-              tokenIn: srcToken.address.toLowerCase(),
-              tokenOut: destToken.address.toLowerCase(),
-            },
-          ],
-        };
-
-        return [
-          {
-            prices,
-            unit,
-            data: exchangeData,
-            exchange: this.dexKey,
-            poolIdentifier: poolIdentifier[0],
-            gasCost: this.DefaultApexDefiPoolGasCost, // Will be calculated by getCalldataGasCost
-            poolAddresses: [discoveredPool.poolAddress],
-          },
-        ];
       }
 
-      let state = await pool.getStateOrGenerate(blockNumber);
-
+      // Get the pool state
+      const state = await pool.getStateOrGenerate(blockNumber);
       if (!state) {
         return null;
       }
@@ -538,7 +230,7 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
           data: exchangeData,
           exchange: this.dexKey,
           poolIdentifier: poolIdentifier[0],
-          gasCost: 0, // Will be calculated by getCalldataGasCost
+          gasCost: this.DefaultApexDefiPoolGasCost,
           poolAddresses: [pool.poolAddress],
         },
       ];
@@ -563,102 +255,10 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
     destToken: Token,
     blockNumber: number,
   ): Promise<ApexDefiEventPool | null> {
-    try {
-      const pairAddress = this.getPoolAddress(srcToken, destToken);
-      const poolKey = this.getPoolIdentifier(pairAddress);
-
-      // Check if pool already exists
-      if (this.eventPools[poolKey]) {
-        return this.eventPools[poolKey];
-      }
-
-      // Get pool data from on-chain
-      const poolData = await this.dexHelper.multiContract.methods
-        .aggregate([
-          {
-            target: pairAddress,
-            callData: this.tokenIface.encodeFunctionData('getReserves', []),
-          },
-          {
-            target: pairAddress,
-            callData: this.tokenIface.encodeFunctionData('tradingFeeRate'),
-          },
-          {
-            target: ApexDefiConfig[this.dexKey][this.network].factoryAddress,
-            callData: this.factoryIface.encodeFunctionData('feeRate'),
-          },
-          {
-            target: ApexDefiConfig[this.dexKey][this.network].factoryAddress,
-            callData: this.factoryIface.encodeFunctionData(
-              'getFeeHookDetails',
-              [pairAddress],
-            ),
-          },
-        ])
-        .call({}, blockNumber);
-
-      const reserves = this.tokenIface.decodeFunctionResult(
-        'getReserves',
-        poolData.returnData[0],
-      );
-      const tradingFeeRate: bigint = this.tokenIface.decodeFunctionResult(
-        'tradingFeeRate',
-        poolData.returnData[1],
-      )[0];
-      const feeRate: bigint = this.factoryIface.decodeFunctionResult(
-        'feeRate',
-        poolData.returnData[2],
-      )[0];
-      const feeHookDetails = this.factoryIface.decodeFunctionResult(
-        'getFeeHookDetails',
-        poolData.returnData[3],
-        // Fee hook details are in the following order:
-        // 0. Fee hook address
-        // 1. Base swap rate
-        // 2. LP fee
-        // 3. Protocol fee
-      ) as [Address, bigint, bigint, bigint];
-
-      const { baseSwapRate, protocolFee, lpFee } = calculateFees(
-        feeHookDetails,
-        feeRate,
-      );
-      // Create new event pool
-      const eventPool = new ApexDefiEventPool(
-        this.dexKey,
-        this.network,
-        this.dexHelper,
-        this.dexHelper.config.data.wrappedNativeTokenAddress,
-        pairAddress,
-        pairAddress,
-        this.logger,
-        ApexDefiConfig[this.dexKey][this.network].factoryAddress,
-      );
-
-      await eventPool.initialize(blockNumber, {
-        state: {
-          reserve0: reserves[0],
-          reserve1: reserves[1],
-          baseSwapRate: Number(baseSwapRate),
-          protocolFee: Number(protocolFee),
-          lpFee: Number(lpFee),
-          tradingFee: Number(tradingFeeRate),
-        },
-      });
-
-      this.eventPools[poolKey] = eventPool;
-
-      this.logger.debug(
-        `Discovered new pool: ${poolKey} for ${
-          srcToken.symbol || srcToken.address
-        } -> ${destToken.symbol || destToken.address}`,
-      );
-
-      return eventPool;
-    } catch (error) {
-      this.logger.error('Error discovering pool:', error);
-      return null;
-    }
+    const pairAddress = this.getPoolAddress(srcToken, destToken);
+    const poolKey = this.getPoolIdentifier(pairAddress);
+    if (this.eventPools[poolKey]) return this.eventPools[poolKey];
+    return this.fetchAndInitPool(pairAddress, blockNumber, poolKey);
   }
 
   /**
@@ -666,7 +266,7 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
    * Uses the constant product formula: amountOut = (amountIn * reserveOut) / (reserveIn + amountIn)
    */
   private getSellPrice(
-    state: any,
+    state: ApexDefiPoolState,
     amountIn: bigint,
     srcToken: Token,
     destToken: Token,
@@ -717,7 +317,7 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
    * Uses the constant product formula: amountIn = (amountOut * reserveIn * feeFactor) / ((reserveOut - amountOut) * (feeFactor - totalFee))
    */
   private getBuyPrice(
-    state: any,
+    state: ApexDefiPoolState,
     amountOut: bigint,
     srcToken: Token,
     destToken: Token,
@@ -1184,6 +784,53 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
         `Token ${tokenAddress} is not a valid ApexDefi pool: ${error}`,
       );
       return [];
+    }
+  }
+
+  // Shared logic for pool discovery/creation
+  private async fetchAndInitPool(
+    pairAddress: Address,
+    blockNumber: number,
+    poolKey: string,
+  ): Promise<ApexDefiEventPool | null> {
+    try {
+      const poolData = await fetchApexDefiOnChainPoolData(
+        pairAddress,
+        this.network,
+        blockNumber,
+        this.dexHelper,
+        this.tokenIface,
+        this.factoryIface,
+      );
+
+      const eventPool = new ApexDefiEventPool(
+        this.dexKey,
+        this.network,
+        this.dexHelper,
+        this.dexHelper.config.data.wrappedNativeTokenAddress,
+        pairAddress,
+        pairAddress,
+        this.logger,
+        poolData.factoryAddress,
+      );
+
+      await eventPool.initialize(blockNumber, {
+        state: {
+          reserve0: poolData.reserve0,
+          reserve1: poolData.reserve1,
+          baseSwapRate: poolData.baseSwapRate,
+          protocolFee: poolData.protocolFee,
+          lpFee: poolData.lpFee,
+          tradingFee: poolData.tradingFee,
+          isLegacy: poolData.isLegacy,
+        },
+      });
+
+      this.eventPools[poolKey] = eventPool;
+      return eventPool;
+    } catch (error) {
+      this.logger.error('Error fetching/initializing pool:', error);
+      return null;
     }
   }
 

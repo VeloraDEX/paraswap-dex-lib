@@ -10,6 +10,7 @@ export type ApexDefiPoolState = {
   lpFee: number;
   // This is a % additional to the baseSwapRate
   tradingFee: number;
+  isLegacy: boolean;
 };
 
 export type ApexDefiData = {
@@ -23,6 +24,7 @@ export type DexParams = {
   factoryAddress: Address;
   routerAddress: Address;
   wrapperFactoryAddress: Address;
+  legacyFactoryMappings: Record<Address, Address>;
 };
 
 export type ApexDefiParam = [
