@@ -7,6 +7,7 @@ import {
   ExchangePrices,
   UnoptimizedRate,
   TransferFeeParams,
+  GetPricesVolumeOptions,
 } from './types';
 import {
   SwapSide,
@@ -193,6 +194,10 @@ export class PricingHelper {
     },
     rollupL1CalldataCostToL2GasCost?: (calldataCost: number) => number,
   ): Promise<PoolPrices<any>[]> {
+    const pricingOptions: GetPricesVolumeOptions = {
+      transferFees,
+    };
+
     const dexPoolPrices = await Promise.all(
       dexKeys.map(async key => {
         try {
@@ -225,7 +230,7 @@ export class PricingHelper {
                   side,
                   blockNumber,
                   limitPools ? limitPools : undefined,
-                  transferFees,
+                  pricingOptions,
                 )
                 .then(poolPrices => {
                   try {

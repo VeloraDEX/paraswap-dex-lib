@@ -332,9 +332,9 @@ export class Utils {
 }
 
 export const isSrcTokenTransferFeeToBeExchanged = (
-  transferFees: TransferFeeParams,
-) => {
-  return !!(transferFees.srcFee || transferFees.srcDexFee);
+  transferFees?: TransferFeeParams,
+): boolean => {
+  return !!(transferFees?.srcFee || transferFees?.srcDexFee);
 };
 
 // This function is throwing error if address is not correct
@@ -349,9 +349,9 @@ export function currentBigIntTimestampInS() {
 }
 
 export const isDestTokenTransferFeeToBeExchanged = (
-  transferFees: TransferFeeParams,
-) => {
-  return !!(transferFees.destFee || transferFees.destDexFee);
+  transferFees?: TransferFeeParams,
+): boolean => {
+  return !!(transferFees?.destFee || transferFees?.destDexFee);
 };
 
 export const isTruthy = <T>(x: T | undefined | null | '' | false | 0): x is T =>

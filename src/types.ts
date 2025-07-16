@@ -353,6 +353,11 @@ export type TransferFeeParams = {
   destDexFee: number;
 };
 
+export type GetPricesVolumeOptions = {
+  transferFees?: TransferFeeParams;
+  fastMode?: boolean;
+};
+
 export type TransferFeeParamsForRoute = {
   srcTokenTransferFee: number;
   destTokenTransferFee: number;

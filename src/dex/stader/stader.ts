@@ -9,7 +9,6 @@ import {
   PoolLiquidity,
   PoolPrices,
   Token,
-  TransferFeeParams,
 } from '../../types';
 import { IDexTxBuilder } from '../idex';
 import SSPMAbi from '../../abi/SSPM.json';
@@ -105,9 +104,6 @@ export class Stader
     amountsIn: bigint[],
     side: SwapSide,
     blockNumber: number,
-    limitPools?: string[] | undefined,
-    transferFees?: TransferFeeParams | undefined,
-    isFirstSwap?: boolean | undefined,
   ): Promise<ExchangePrices<StaderData> | null> {
     if (side === SwapSide.BUY) return null;
     if (!this.isEligibleSwap(srcToken, destToken)) return null;

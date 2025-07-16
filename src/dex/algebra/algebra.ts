@@ -15,6 +15,7 @@ import {
   Token,
   DexExchangeParam,
   NumberAsString,
+  GetPricesVolumeOptions,
 } from '../../types';
 import { SwapSide, Network, CACHE_PREFIX } from '../../constants';
 import * as CALLDATA_GAS_COST from '../../calldata-gas-cost';
@@ -543,13 +544,15 @@ export class Algebra extends SimpleExchange implements IDex<AlgebraData> {
     side: SwapSide,
     blockNumber: number,
     limitPools?: string[],
-    transferFees: TransferFeeParams = {
+    options?: GetPricesVolumeOptions,
+  ): Promise<null | ExchangePrices<AlgebraData>> {
+    const transferFees = options?.transferFees || {
       srcFee: 0,
       destFee: 0,
       srcDexFee: 0,
       destDexFee: 0,
-    },
-  ): Promise<null | ExchangePrices<AlgebraData>> {
+    };
+
     try {
       const _srcToken = this.dexHelper.config.wrapETH(srcToken);
       const _destToken = this.dexHelper.config.wrapETH(destToken);

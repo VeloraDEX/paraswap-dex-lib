@@ -11,6 +11,7 @@ import {
   Address,
   DexExchangeParam,
   ExchangePrices,
+  GetPricesVolumeOptions,
   PoolLiquidity,
   Token,
   TransferFeeParams,
@@ -271,13 +272,15 @@ export class Infusion extends UniswapV2 {
     blockNumber: number,
     // list of pool identifiers to use for pricing, if undefined use all pools
     limitPools?: string[],
-    transferFees: TransferFeeParams = {
+    options?: GetPricesVolumeOptions,
+  ): Promise<ExchangePrices<InfusionData> | null> {
+    const transferFees: TransferFeeParams = options?.transferFees || {
       srcFee: 0,
       destFee: 0,
       srcDexFee: 0,
       destDexFee: 0,
-    },
-  ): Promise<ExchangePrices<InfusionData> | null> {
+    };
+
     try {
       if (side === SwapSide.BUY) return null; // Buy side not implemented yet
       const from = this.dexHelper.config.wrapETH(_from);

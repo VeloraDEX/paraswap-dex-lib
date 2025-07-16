@@ -13,6 +13,7 @@ import {
   Logger,
   DexExchangeParam,
   NumberAsString,
+  GetPricesVolumeOptions,
 } from '../../types';
 import {
   SwapSide,
@@ -317,13 +318,15 @@ export class AlgebraIntegral
     side: SwapSide,
     blockNumber: number,
     limitPools?: string[],
-    transferFees: TransferFeeParams = {
+    options?: GetPricesVolumeOptions,
+  ): Promise<null | ExchangePrices<AlgebraIntegralData>> {
+    const transferFees = options?.transferFees || {
       srcFee: 0,
       destFee: 0,
       srcDexFee: 0,
       destDexFee: 0,
-    },
-  ): Promise<null | ExchangePrices<AlgebraIntegralData>> {
+    };
+
     try {
       const _isSrcTokenTransferFeeToBeExchanged =
         isSrcTokenTransferFeeToBeExchanged(transferFees);

@@ -10,6 +10,7 @@ import {
   Address,
   DexExchangeParam,
   ExchangePrices,
+  GetPricesVolumeOptions,
   Log,
   Logger,
   PoolLiquidity,
@@ -562,13 +563,15 @@ export class Camelot
     blockNumber: number,
     // list of pool identifiers to use for pricing, if undefined use all pools
     limitPools?: string[],
-    transferFees: TransferFeeParams = {
+    options?: GetPricesVolumeOptions,
+  ): Promise<ExchangePrices<SolidlyData> | null> {
+    const transferFees: TransferFeeParams = options?.transferFees || {
       srcFee: 0,
       destFee: 0,
       srcDexFee: 0,
       destDexFee: 0,
-    },
-  ): Promise<ExchangePrices<SolidlyData> | null> {
+    };
+
     try {
       const from = this.dexHelper.config.wrapETH(_from);
       const to = this.dexHelper.config.wrapETH(_to);

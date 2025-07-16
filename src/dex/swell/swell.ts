@@ -10,7 +10,6 @@ import {
   PoolPrices,
   SimpleExchangeParam,
   Token,
-  TransferFeeParams,
 } from '../../types';
 import { IDex } from '../idex';
 import SWETH_ABI from '../../abi/swETH.json';
@@ -173,9 +172,6 @@ export class Swell
     amountsIn: bigint[],
     side: SwapSide,
     blockNumber: number,
-    limitPools?: string[] | undefined,
-    transferFees?: TransferFeeParams | undefined,
-    isFirstSwap?: boolean | undefined,
   ): Promise<ExchangePrices<SwellData> | null> {
     if (!this.isEligibleSwap(srcToken, destToken, side)) return null;
 
