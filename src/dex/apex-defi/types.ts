@@ -1,9 +1,14 @@
 import { Address, NumberAsString } from '../../types';
 
-export type PoolState = {
+export type ApexDefiPoolState = {
   reserve0: bigint;
   reserve1: bigint;
-  fee: number;
+  baseSwapRate: number;
+  // This is a % of the baseSwapRate
+  protocolFee: number;
+  // This is a % of the baseSwapRate
+  lpFee: number;
+  // This is a % additional to the baseSwapRate
   tradingFee: number;
 };
 

@@ -27,6 +27,7 @@ import ApexDefiTokenABI from '../../abi/apex-defi/ApexDefiToken.abi.json';
 import ApexDefiFactoryABI from '../../abi/apex-defi/ApexDefiFactory.abi.json';
 import ERC20ABI from '../../abi/erc20.json';
 import { ApexDefiFactory, OnPoolCreatedCallback } from './apex-defi-factory';
+import { calculateFees } from './utils';
 
 export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
   readonly eventPools: Record<string, ApexDefiEventPool | null> = {};
@@ -100,26 +101,53 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
           },
           {
             target: ApexDefiConfig[this.dexKey][this.network].factoryAddress,
-            callData: this.factoryIface.encodeFunctionData('getBaseSwapRate', [
-              pairAddress,
-            ]),
+            callData: this.factoryIface.encodeFunctionData('feeRate'),
+          },
+          {
+            target: ApexDefiConfig[this.dexKey][this.network].factoryAddress,
+            callData: this.factoryIface.encodeFunctionData(
+              'getFeeHookDetails',
+              [pairAddress],
+            ),
           },
         ])
         .call({}, blockNumber);
 
+      // The logic here is to handle older fee structures
+      // If the token has a fee hook, then we use the getFees results
+      // Otherwise, we use the feeRate and the baseSwapRate
+      // The baseSwapRate is 0.3% and the feeRate is a portion of that
+      // The lpFee is the remaining portion of the baseSwapRate - feeRate
+      // The protocolFee is the feeRate
+      // The tradingFeeRate is the trading fee rate of the token set by the token owner and is in addition to the baseSwapRate
       const reserves = this.tokenIface.decodeFunctionResult(
         'getReserves',
         poolData.returnData[0],
-      );
-      const tradingFeeRate = this.tokenIface.decodeFunctionResult(
+      ) as [bigint, bigint];
+      const tradingFeeRate: bigint = this.tokenIface.decodeFunctionResult(
         'tradingFeeRate',
         poolData.returnData[1],
       )[0];
-      const baseSwapRate = this.factoryIface.decodeFunctionResult(
-        'getBaseSwapRate',
+      // This is a portion of the baseSwapRate and will not be more than 30n
+      // If tokenFeeHook is address(0) then we use this instead of the getFees results
+      const feeRate: bigint = this.factoryIface.decodeFunctionResult(
+        'feeRate',
         poolData.returnData[2],
       )[0];
+      const feeHookDetails = this.factoryIface.decodeFunctionResult(
+        'getFeeHookDetails',
+        poolData.returnData[3],
+        // Fee hook details are in the following order:
+        // 0. Fee hook address
+        // 1. Base swap rate
+        // 2. LP fee
+        // 3. Protocol fee
+      ) as [Address, bigint, bigint, bigint];
 
+      const { baseSwapRate, protocolFee, lpFee } = calculateFees(
+        feeHookDetails,
+        feeRate,
+      );
       const eventPool = new ApexDefiEventPool(
         this.dexKey,
         this.network,
@@ -135,7 +163,9 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
         state: {
           reserve0: reserves[0],
           reserve1: reserves[1],
-          fee: Number(baseSwapRate),
+          baseSwapRate: Number(baseSwapRate),
+          protocolFee: Number(protocolFee),
+          lpFee: Number(lpFee),
           tradingFee: Number(tradingFeeRate),
         },
       });
@@ -200,10 +230,13 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
         },
         {
           target: ApexDefiConfig[this.dexKey][this.network].factoryAddress,
-          callData: this.factory.factoryIface.encodeFunctionData(
-            'getBaseSwapRate',
-            [token],
-          ),
+          callData: this.factoryIface.encodeFunctionData('feeRate'),
+        },
+        {
+          target: ApexDefiConfig[this.dexKey][this.network].factoryAddress,
+          callData: this.factoryIface.encodeFunctionData('getFeeHookDetails', [
+            token,
+          ]),
         },
       ]);
 
@@ -211,13 +244,15 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
         .aggregate(tokenMultiCall)
         .call({}, blockNumber);
 
-      // Process results - each token has 4 calls (decimals + reserves + tradingFeeRate + baseSwapRate)
+      // Process results - each token has 5 calls (decimals + reserves + tradingFeeRate + baseSwapRate)
       const tokenDecimals: number[] = [];
       const tokenReserves: { amountNative: bigint; amountToken: bigint }[] = [];
       const tokenTradingFeeRates: bigint[] = [];
       const tokenBaseSwapRates: bigint[] = [];
+      const tokenProtocolFees: bigint[] = [];
+      const tokenLpFees: bigint[] = [];
 
-      for (let i = 0; i < result.returnData.length; i += 4) {
+      for (let i = 0; i < result.returnData.length; i += 5) {
         const decimals = parseInt(
           this.erc20Iface
             .decodeFunctionResult('decimals', result.returnData[i])[0]
@@ -231,11 +266,24 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
           'tradingFeeRate',
           result.returnData[i + 2],
         )[0];
-        const baseSwapRate = this.factory.factoryIface.decodeFunctionResult(
-          'getBaseSwapRate',
+        const feeRate: bigint = this.factoryIface.decodeFunctionResult(
+          'feeRate',
           result.returnData[i + 3],
         )[0];
+        const feeHookDetails = this.factoryIface.decodeFunctionResult(
+          'getFeeHookDetails',
+          result.returnData[i + 4],
+          // Fee hook details are in the following order:
+          // 0. Fee hook address
+          // 1. Base swap rate
+          // 2. LP fee
+          // 3. Protocol fee
+        ) as [Address, bigint, bigint, bigint];
 
+        const { baseSwapRate, protocolFee, lpFee } = calculateFees(
+          feeHookDetails,
+          feeRate,
+        );
         tokenDecimals.push(decimals);
         tokenReserves.push({
           amountNative: reserves[0],
@@ -243,6 +291,8 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
         });
         tokenTradingFeeRates.push(tradingFeeRate);
         tokenBaseSwapRates.push(baseSwapRate);
+        tokenProtocolFees.push(protocolFee);
+        tokenLpFees.push(lpFee);
       }
 
       tokens.forEach(async (token, i) => {
@@ -272,7 +322,9 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
             state: {
               reserve0: tokenReserves[i].amountNative,
               reserve1: tokenReserves[i].amountToken,
-              fee: Number(tokenBaseSwapRates[i]),
+              baseSwapRate: Number(tokenBaseSwapRates[i]),
+              protocolFee: Number(tokenProtocolFees[i]),
+              lpFee: Number(tokenLpFees[i]),
               tradingFee: Number(tokenTradingFeeRates[i]),
             },
           });
@@ -533,9 +585,14 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
           },
           {
             target: ApexDefiConfig[this.dexKey][this.network].factoryAddress,
-            callData: this.factoryIface.encodeFunctionData('getBaseSwapRate', [
-              pairAddress,
-            ]),
+            callData: this.factoryIface.encodeFunctionData('feeRate'),
+          },
+          {
+            target: ApexDefiConfig[this.dexKey][this.network].factoryAddress,
+            callData: this.factoryIface.encodeFunctionData(
+              'getFeeHookDetails',
+              [pairAddress],
+            ),
           },
         ])
         .call({}, blockNumber);
@@ -544,15 +601,28 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
         'getReserves',
         poolData.returnData[0],
       );
-      const tradingFeeRate = this.tokenIface.decodeFunctionResult(
+      const tradingFeeRate: bigint = this.tokenIface.decodeFunctionResult(
         'tradingFeeRate',
         poolData.returnData[1],
       )[0];
-      const baseSwapRate = this.factoryIface.decodeFunctionResult(
-        'getBaseSwapRate',
+      const feeRate: bigint = this.factoryIface.decodeFunctionResult(
+        'feeRate',
         poolData.returnData[2],
       )[0];
+      const feeHookDetails = this.factoryIface.decodeFunctionResult(
+        'getFeeHookDetails',
+        poolData.returnData[3],
+        // Fee hook details are in the following order:
+        // 0. Fee hook address
+        // 1. Base swap rate
+        // 2. LP fee
+        // 3. Protocol fee
+      ) as [Address, bigint, bigint, bigint];
 
+      const { baseSwapRate, protocolFee, lpFee } = calculateFees(
+        feeHookDetails,
+        feeRate,
+      );
       // Create new event pool
       const eventPool = new ApexDefiEventPool(
         this.dexKey,
@@ -569,7 +639,9 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
         state: {
           reserve0: reserves[0],
           reserve1: reserves[1],
-          fee: Number(baseSwapRate),
+          baseSwapRate: Number(baseSwapRate),
+          protocolFee: Number(protocolFee),
+          lpFee: Number(lpFee),
           tradingFee: Number(tradingFeeRate),
         },
       });
@@ -599,13 +671,13 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
     srcToken: Token,
     destToken: Token,
   ): bigint {
-    const { reserve0, reserve1, fee, tradingFee } = state;
+    const { reserve0, reserve1, baseSwapRate, tradingFee } = state;
 
     // Validate state
     if (
       !reserve0 ||
       !reserve1 ||
-      fee === undefined ||
+      baseSwapRate === undefined ||
       tradingFee === undefined
     ) {
       this.logger.warn('Invalid pool state for pricing calculation');
@@ -620,10 +692,11 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
     if (reserveIn === 0n || reserveOut === 0n) return 0n;
 
     // Apply fees (base swap rate + trading fee)
-    const feeNum = typeof fee === 'bigint' ? Number(fee) : fee;
+    const baseSwapRateNum =
+      typeof baseSwapRate === 'bigint' ? Number(baseSwapRate) : baseSwapRate;
     const tradingFeeNum =
       typeof tradingFee === 'bigint' ? Number(tradingFee) : tradingFee;
-    const totalFee = feeNum + tradingFeeNum;
+    const totalFee = baseSwapRateNum + tradingFeeNum;
 
     // Validate fee range
     if (totalFee >= this.feeFactor) {
@@ -649,13 +722,13 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
     srcToken: Token,
     destToken: Token,
   ): bigint {
-    const { reserve0, reserve1, fee, tradingFee } = state;
+    const { reserve0, reserve1, baseSwapRate, tradingFee } = state;
 
     // Validate state
     if (
       !reserve0 ||
       !reserve1 ||
-      fee === undefined ||
+      baseSwapRate === undefined ||
       tradingFee === undefined
     ) {
       this.logger.warn('Invalid pool state for pricing calculation');
@@ -671,10 +744,11 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
     if (amountOut >= reserveOut) return 0n;
 
     // Apply fees (base swap rate + trading fee)
-    const feeNum = typeof fee === 'bigint' ? Number(fee) : fee;
+    const baseSwapRateNum =
+      typeof baseSwapRate === 'bigint' ? Number(baseSwapRate) : baseSwapRate;
     const tradingFeeNum =
       typeof tradingFee === 'bigint' ? Number(tradingFee) : tradingFee;
-    const totalFee = feeNum + tradingFeeNum;
+    const totalFee = baseSwapRateNum + tradingFeeNum;
 
     // Validate fee range
     if (totalFee >= this.feeFactor) {

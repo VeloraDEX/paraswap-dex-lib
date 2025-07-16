@@ -981,6 +981,14 @@ export const Tokens: {
       address: '0x98B172A09102869adD73116FC92A0A60BFF4778F',
       decimals: 18,
     },
+    aBTCb: {
+      address: '0xCbC002DD50a9C2A44637B4C9A189F291f72813fD',
+      decimals: 18,
+    },
+    aUSDC: {
+      address: '0x4DF08C8f17fB7BC1261CD308b049DfCe59F5dC9a',
+      decimals: 18,
+    },
     PHAR: {
       address: '0xAAAB9D12A30504559b0C5a9A5977fEE4A6081c6b',
       decimals: 18,

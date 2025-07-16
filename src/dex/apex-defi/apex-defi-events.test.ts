@@ -3,11 +3,12 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 import { ApexDefiEventPool } from './apex-defi-pool';
+import { ApexDefiConfig } from './config';
 import { Network } from '../../constants';
 import { Address } from '../../types';
 import { DummyDexHelper } from '../../dex-helper/index';
 import { testEventSubscriber } from '../../../tests/utils-events';
-import { PoolState } from './types';
+import { ApexDefiPoolState } from './types';
 import { Tokens } from '../../../tests/constants-e2e';
 
 /*
@@ -49,7 +50,7 @@ async function fetchPoolState(
   apexDefiPools: ApexDefiEventPool,
   blockNumber: number,
   poolAddress: string,
-): Promise<PoolState> {
+): Promise<ApexDefiPoolState> {
   const message = `ApexDefi: ${poolAddress} blockNumber ${blockNumber}`;
   console.log(`Fetching state ${message}`);
 
@@ -62,17 +63,18 @@ async function fetchPoolState(
 // eventName -> blockNumbers
 type EventMappings = Record<string, number[]>;
 
-describe('ApexDefi EventPool Mainnet', function () {
+describe('ApexDefi EventPool', function () {
   const dexKey = 'ApexDefi';
   const network = Network.AVALANCHE;
   const dexHelper = new DummyDexHelper(network);
   const logger = dexHelper.getLogger(dexKey);
+  const config = ApexDefiConfig[dexKey][network];
   let apexDefiPool: ApexDefiEventPool;
 
   // poolAddress -> EventMappings
   const eventsToTest: Record<Address, EventMappings> = {
     [Tokens[network].APEX.address]: {
-      Swap: [65243326, 65243466, 65247603],
+      Swap: [65514084],
     },
   };
 
@@ -81,13 +83,32 @@ describe('ApexDefi EventPool Mainnet', function () {
       dexKey,
       network,
       dexHelper,
-      Tokens[network].AVAX.address, // token0
+      Tokens[network].WAVAX.address, // token0 (WAVAX, not AVAX)
       Tokens[network].APEX.address, // token1
       Tokens[network].APEX.address, // poolAddress
       logger,
-      '0x754A0c42C35562eE7a41eb824d14bc1259820f01', // apexDefiFactoryAddress
+      config.factoryAddress, // Use factory address from config
     );
   });
+
+  // const eventsToTest: Record<Address, EventMappings> = {
+  //   [Tokens[network].aUSDC.address]: {
+  //     Swap: [65529928],
+  //   },
+  // };
+
+  // beforeEach(async () => {
+  //   apexDefiPool = new ApexDefiEventPool(
+  //     dexKey,
+  //     network,
+  //     dexHelper,
+  //     Tokens[network].WAVAX.address, // token0 (WAVAX, not AVAX)
+  //     Tokens[network].aUSDC.address, // token1
+  //     Tokens[network].aUSDC.address, // poolAddress
+  //     logger,
+  //     config.factoryAddress, // Use factory address from config
+  //   );
+  // });
 
   Object.entries(eventsToTest).forEach(
     ([poolAddress, events]: [string, EventMappings]) => {
