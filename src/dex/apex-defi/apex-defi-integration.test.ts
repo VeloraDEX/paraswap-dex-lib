@@ -198,6 +198,11 @@ describe('ApexDefi', function () {
         destTokenSymbol: 'aBTCb',
         description: 'AVAX to aBTCb',
       },
+      {
+        srcTokenSymbol: 'AVAX',
+        destTokenSymbol: 'BTCb',
+        description: 'AVAX to BTCb',
+      },
       // {
       //   srcTokenSymbol: 'APEX',
       //   destTokenSymbol: 'aBTCb',

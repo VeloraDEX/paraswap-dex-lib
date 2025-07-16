@@ -375,16 +375,21 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
         prices,
         unit,
         data: {
+          // ✅ Fix: Include both hops in the path
           path: [
             {
               tokenIn: srcToken.address.toLowerCase(),
-              tokenOut: destToken.address.toLowerCase(),
+              tokenOut: ETHER_ADDRESS.toLowerCase(), // First hop: Token → AVAX
+            },
+            {
+              tokenIn: ETHER_ADDRESS.toLowerCase(),
+              tokenOut: destToken.address.toLowerCase(), // Second hop: AVAX → Token
             },
           ],
         },
         exchange: this.dexKey,
         poolIdentifier: virtualPoolIdentifier,
-        gasCost: ApexDefiConfig[this.dexKey][this.network].poolGasCost * 1.5,
+        gasCost: ApexDefiConfig[this.dexKey][this.network].poolGasCost * 2, // Two direct swaps
         poolAddresses: [srcPool.poolAddress, destPool.poolAddress],
       },
     ];
@@ -644,48 +649,93 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
   ): DexExchangeParam {
     const { path } = data;
 
+    // Check if this is a direct AVAX pair (can use direct token swaps)
+    const isDirectAVAXPair = isETHAddress(srcToken) || isETHAddress(destToken);
+
+    if (isDirectAVAXPair) {
+      // ✅ Use direct token swaps (much cheaper!)
+      return this.getDirectTokenSwap(
+        srcToken,
+        destToken,
+        srcAmount,
+        destAmount,
+      );
+    } else {
+      // ✅ Use router for cross-pairs (need to call two different tokens)
+      return this.getRouterSwap(srcAmount, destAmount, recipient, data);
+    }
+  }
+
+  private getDirectTokenSwap(
+    srcToken: Address,
+    destToken: Address,
+    srcAmount: NumberAsString,
+    destAmount: NumberAsString,
+  ): DexExchangeParam {
+    const isSrcAVAX = isETHAddress(srcToken);
+    const isDestAVAX = isETHAddress(destToken);
+
+    let swapFunction: string;
+    let swapParams: any[];
+    let targetExchange: Address;
+
+    if (isSrcAVAX && !isDestAVAX) {
+      // AVAX → Token: call swapNativeToToken on the token
+      swapFunction = 'swapNativeToToken';
+      swapParams = [
+        destAmount, // minimumTokensOut
+        Math.floor(Date.now() / 1000) + 300, // deadline
+      ];
+      targetExchange = destToken; // Call directly on the token
+    } else if (!isSrcAVAX && isDestAVAX) {
+      // Token → AVAX: call swapTokenToNative on the token
+      swapFunction = 'swapTokenToNative';
+      swapParams = [
+        srcAmount, // tokensSold
+        destAmount, // minimumNativeOut
+        Math.floor(Date.now() / 1000) + 300, // deadline
+      ];
+      targetExchange = srcToken; // Call directly on the token
+    } else {
+      throw new Error('Invalid direct swap pair');
+    }
+
+    const exchangeData = this.tokenIface.encodeFunctionData(
+      swapFunction,
+      swapParams,
+    );
+
+    return {
+      needWrapNative: false,
+      dexFuncHasRecipient: false,
+      exchangeData,
+      targetExchange,
+      returnAmountPos: undefined,
+    };
+  }
+
+  private getRouterSwap(
+    srcAmount: NumberAsString,
+    destAmount: NumberAsString,
+    recipient: Address,
+    data: ApexDefiData,
+  ): DexExchangeParam {
+    const { path } = data;
+
     // ✅ Convert native AVAX to WAVAX for router calls
     const routerPath = this.fixPathForRouter(
       path.map(p => p.tokenIn).concat(path[path.length - 1].tokenOut),
     );
 
-    // Determine the swap function based on the side and token types
-    let swapFunction: string;
-    let swapParams: any[];
-
-    const isSrcAVAX = isETHAddress(srcToken);
-    const isDestAVAX = isETHAddress(destToken);
-
-    if (isSrcAVAX && !isDestAVAX) {
-      // AVAX -> Token
-      swapFunction = 'swapExactAVAXForTokens';
-      swapParams = [
-        destAmount,
-        routerPath, // Use converted path
-        recipient,
-        Math.floor(Date.now() / 1000) + 300,
-      ];
-    } else if (!isSrcAVAX && isDestAVAX) {
-      // Token -> AVAX
-      swapFunction = 'swapExactTokensForAVAX';
-      swapParams = [
-        srcAmount,
-        destAmount,
-        routerPath, // Use converted path
-        recipient,
-        Math.floor(Date.now() / 1000) + 300,
-      ];
-    } else {
-      // Token -> Token
-      swapFunction = 'swapExactTokensForTokens';
-      swapParams = [
-        srcAmount,
-        destAmount,
-        routerPath, // Use converted path
-        recipient,
-        Math.floor(Date.now() / 1000) + 300,
-      ];
-    }
+    // For cross-pairs, always use swapExactTokensForTokens
+    const swapFunction = 'swapExactTokensForTokens';
+    const swapParams = [
+      srcAmount,
+      destAmount,
+      routerPath, // [TokenA, WAVAX, TokenB]
+      recipient,
+      Math.floor(Date.now() / 1000) + 300,
+    ];
 
     const exchangeData = this.routerIface.encodeFunctionData(
       swapFunction,
