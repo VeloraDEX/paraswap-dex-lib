@@ -5,7 +5,6 @@ import {
   ExchangePrices,
   PoolPrices,
   AdapterExchangeParam,
-  SimpleExchangeParam,
   PoolLiquidity,
   Logger,
   NumberAsString,

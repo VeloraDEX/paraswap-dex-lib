@@ -11,6 +11,7 @@ import {
   NumberAsString,
   DexExchangeParam,
   TransferFeeParams,
+  GetPricesVolumeOptions,
 } from '../../types';
 import {
   SwapSide,
@@ -206,13 +207,15 @@ export class OSwap extends SimpleExchange implements IDex<OSwapData> {
     side: SwapSide,
     blockNumber: number,
     limitPools?: string[],
-    transferFees: TransferFeeParams = {
+    options?: GetPricesVolumeOptions,
+  ): Promise<null | ExchangePrices<OSwapData>> {
+    const transferFees: TransferFeeParams = options?.transferFees || {
       srcFee: 0,
       destFee: 0,
       srcDexFee: 0,
       destDexFee: 0,
-    },
-  ): Promise<null | ExchangePrices<OSwapData>> {
+    };
+
     try {
       // Get the pool to use.
       const pool = this.getPoolByTokenPair(srcToken, destToken);

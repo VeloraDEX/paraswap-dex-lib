@@ -18,6 +18,7 @@ import {
   DexExchangeParam,
   NumberAsString,
   DexConfigMap,
+  GetPricesVolumeOptions,
 } from '../../types';
 import { getBigIntPow, getDexKeysWithNetwork } from '../../utils';
 import { DexParams, UniswapV2Data } from './types';
@@ -191,13 +192,15 @@ export class RingV2 extends UniswapV2 {
     blockNumber: number,
     // list of pool identifiers to use for pricing, if undefined use all pools
     limitPools?: string[],
-    transferFees: TransferFeeParams = {
+    options?: GetPricesVolumeOptions,
+  ): Promise<ExchangePrices<UniswapV2Data> | null> {
+    const transferFees: TransferFeeParams = options?.transferFees || {
       srcFee: 0,
       destFee: 0,
       srcDexFee: 0,
       destDexFee: 0,
-    },
-  ): Promise<ExchangePrices<UniswapV2Data> | null> {
+    };
+
     try {
       const [from, to] = this.getTokenAddresses(_from, _to);
 

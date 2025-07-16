@@ -514,8 +514,6 @@ export class Cables extends SimpleExchange implements IDex<any> {
     side: SwapSide,
     blockNumber: number,
     limitPools?: string[],
-    transferFees?: TransferFeeParams,
-    isFirstSwap?: boolean,
   ): Promise<ExchangePrices<CablesData> | null> {
     try {
       const normalizedSrcToken = this.normalizeToken(srcToken);

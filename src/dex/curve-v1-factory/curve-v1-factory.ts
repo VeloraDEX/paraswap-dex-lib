@@ -15,6 +15,7 @@ import {
   DexExchangeParam,
   ExchangePrices,
   ExchangeTxInfo,
+  GetPricesVolumeOptions,
   Logger,
   PoolLiquidity,
   PoolPrices,
@@ -841,13 +842,15 @@ export class CurveV1Factory
     side: SwapSide,
     blockNumber: number,
     limitPools?: string[],
-    transferFees: TransferFeeParams = {
+    options?: GetPricesVolumeOptions,
+  ): Promise<null | ExchangePrices<CurveV1FactoryData>> {
+    const transferFees: TransferFeeParams = options?.transferFees || {
       srcFee: 0,
       destFee: 0,
       srcDexFee: 0,
       destDexFee: 0,
-    },
-  ): Promise<null | ExchangePrices<CurveV1FactoryData>> {
+    };
+
     try {
       if (
         this.dexHelper.config.wrapETH(srcToken).address.toLowerCase() ===

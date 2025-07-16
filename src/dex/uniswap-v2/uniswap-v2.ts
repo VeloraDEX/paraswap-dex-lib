@@ -17,6 +17,7 @@ import {
   TxInfo,
   TransferFeeParams,
   DexExchangeParam,
+  GetPricesVolumeOptions,
 } from '../../types';
 import {
   UniswapData,
@@ -59,7 +60,7 @@ import { UniswapV2Config, Adapters } from './config';
 import { Uniswapv2ConstantProductPool } from './uniswap-v2-constant-product-pool';
 import { applyTransferFee } from '../../lib/token-transfer-fee';
 import _rebaseTokens from '../../rebase-tokens.json';
-import { Flag, SpecialDex } from '../../executor/types';
+import { SpecialDex } from '../../executor/types';
 import { hexZeroPad, hexlify, solidityPack, hexConcat } from 'ethers/lib/utils';
 import { BigNumber } from 'ethers';
 import { OnPoolCreatedCallback, UniswapV2Factory } from './uniswap-v2-factory';
@@ -563,13 +564,15 @@ export class UniswapV2
     blockNumber: number,
     // list of pool identifiers to use for pricing, if undefined use all pools
     limitPools?: string[],
-    transferFees: TransferFeeParams = {
+    options?: GetPricesVolumeOptions,
+  ): Promise<ExchangePrices<UniswapV2Data> | null> {
+    const transferFees: TransferFeeParams = options?.transferFees || {
       srcFee: 0,
       destFee: 0,
       srcDexFee: 0,
       destDexFee: 0,
-    },
-  ): Promise<ExchangePrices<UniswapV2Data> | null> {
+    };
+
     try {
       const from = this.dexHelper.config.wrapETH(_from);
       const to = this.dexHelper.config.wrapETH(_to);

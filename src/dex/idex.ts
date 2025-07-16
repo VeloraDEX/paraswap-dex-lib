@@ -15,6 +15,7 @@ import {
   PreprocessTransactionOptions,
   TransferFeeParams,
   Config,
+  GetPricesVolumeOptions,
 } from '../types';
 import { SwapSide, Network } from '../constants';
 import { IDexHelper } from '../dex-helper/idex-helper';
@@ -182,11 +183,7 @@ export interface IDexPricing<ExchangeData> {
     blockNumber: number,
     // list of pool identifiers to use for pricing, if undefined use all pools
     limitPools?: string[],
-
-    // I don't like putting this as new params, but in order to not change interface
-    // across all integrations, done it like this
-    transferFees?: TransferFeeParams,
-    isFirstSwap?: boolean,
+    options?: GetPricesVolumeOptions,
   ): Promise<ExchangePrices<ExchangeData> | null>;
 
   // Returns estimated gas cost for calldata for DEX when used in multiSwap.

@@ -13,6 +13,7 @@ import {
   DexExchangeParam,
   ExchangePrices,
   ExchangeTxInfo,
+  GetPricesVolumeOptions,
   PoolLiquidity,
   PoolPrices,
   PreprocessTransactionOptions,
@@ -615,15 +616,16 @@ export class CurveV1
     amounts: bigint[],
     side: SwapSide,
     blockNumber: number,
-    // list of pool identifiers to use for pricing, if undefined use all pools
     limitPools?: string[],
-    transferFees: TransferFeeParams = {
+    options?: GetPricesVolumeOptions,
+  ): Promise<ExchangePrices<CurveV1Data> | null> {
+    const transferFees: TransferFeeParams = options?.transferFees || {
       srcFee: 0,
       destFee: 0,
       srcDexFee: 0,
       destDexFee: 0,
-    },
-  ): Promise<ExchangePrices<CurveV1Data> | null> {
+    };
+
     try {
       if (side === SwapSide.BUY) {
         return null;

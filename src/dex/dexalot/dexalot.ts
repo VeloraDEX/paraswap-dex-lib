@@ -440,7 +440,6 @@ export class Dexalot extends SimpleExchange implements IDex<DexalotData> {
     side: SwapSide,
     blockNumber: number,
     limitPools?: string[],
-    transferFees?: TransferFeeParams,
   ): Promise<null | ExchangePrices<DexalotData>> {
     try {
       const normalizedSrcToken = this.normalizeToken(srcToken);
