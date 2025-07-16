@@ -111,6 +111,7 @@ import { PancakeSwapV2 } from './uniswap-v2/pancake-swap-v2';
 import { uniswapV4Merge } from './uniswap-v4/optimizer';
 import { AaveV3PtRollOver } from './aave-v3-pt-roll-over/aave-v3-pt-roll-over';
 import { RingV2 } from './uniswap-v2/ring-v2';
+import { AirSwap } from './airswap/airswap';
 import { UsdcTransmuter } from './usdc-transmuter/usdc-transmuter';
 
 const LegacyDexes = [
@@ -216,6 +217,7 @@ const Dexes = [
   Ekubo,
   AaveV3PtRollOver,
   RingV2,
+  AirSwap,
   UsdcTransmuter,
 ];
 

@@ -51,6 +51,11 @@
     "checks": "yarn check:pq && yarn check:tsc && yarn check:es"
   },
   "dependencies": {
+    "@airswap/constants": "4.1.8",
+    "@airswap/registry": "4.1.3",
+    "@airswap/swap-erc20": "4.1.6",
+    "@airswap/types": "4.1.3",
+    "@airswap/utils": "4.1.12",
     "@balancer-labs/balancer-maths": "^0.0.35",
     "@balancer-labs/sor": "4.1.3",
     "@bgd-labs/aave-address-book": "4.15.1",

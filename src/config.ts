@@ -26,6 +26,7 @@ type BaseConfig = {
   executorsAddresses?: { [name: string]: Address };
   uniswapV2ExchangeRouterAddress: Address;
   uniswapV3EventLoggingSampleRate?: number;
+  airSwapOverrideServerURLs: string[];
   rfqConfigs: Record<string, RFQConfig>;
   rpcPollingMaxAllowedStateDelayInBlocks: number;
   rpcPollingBlocksBackToTriggerUpdate: number;
@@ -81,6 +82,8 @@ const baseConfigs: { [network: number]: BaseConfig } = {
     hashFlowDisabledMMs:
       process.env[`HASHFLOW_DISABLED_MMS_1`]?.split(',') || [],
     uniswapV3EventLoggingSampleRate: 0,
+    airSwapOverrideServerURLs:
+      process.env[`AIRSWAP_SERVER_URLS_1`]?.split(',') || [],
     rfqConfigs: {
       DummyParaSwapPool: {
         maker: process.env.TEST_ADDRESS!,
@@ -170,6 +173,8 @@ const baseConfigs: { [network: number]: BaseConfig } = {
     rpcPollingBlocksBackToTriggerUpdate: 1,
     uniswapV2ExchangeRouterAddress:
       '0x53e693c6C7FFC4446c53B205Cf513105Bf140D7b',
+    airSwapOverrideServerURLs:
+      process.env[`AIRSWAP_SERVER_URLS_56`]?.split(',') || [],
     rfqConfigs: {},
     forceRpcFallbackDexs: [],
   },
@@ -204,6 +209,8 @@ const baseConfigs: { [network: number]: BaseConfig } = {
     uniswapV2ExchangeRouterAddress:
       '0xf3938337F7294fEf84e9B2c6D548A93F956Cc281',
     uniswapV3EventLoggingSampleRate: 0,
+    airSwapOverrideServerURLs:
+      process.env[`AIRSWAP_SERVER_URLS_137`]?.split(',') || [],
     rfqConfigs: {},
     rpcPollingMaxAllowedStateDelayInBlocks: 2,
     rpcPollingBlocksBackToTriggerUpdate: 1,
@@ -240,6 +247,8 @@ const baseConfigs: { [network: number]: BaseConfig } = {
     },
     uniswapV2ExchangeRouterAddress:
       '0x53e693c6C7FFC4446c53B205Cf513105Bf140D7b',
+    airSwapOverrideServerURLs:
+      process.env[`AIRSWAP_SERVER_URLS_43114`]?.split(',') || [],
     rfqConfigs: {},
     rpcPollingMaxAllowedStateDelayInBlocks: 2,
     rpcPollingBlocksBackToTriggerUpdate: 1,
@@ -271,6 +280,8 @@ const baseConfigs: { [network: number]: BaseConfig } = {
     adapterAddresses: {},
     uniswapV2ExchangeRouterAddress:
       '0xCd8eA16F74d96E1000df8a57267e098c58399e8b',
+    airSwapOverrideServerURLs:
+      process.env[`AIRSWAP_SERVER_URLS_250`]?.split(',') || [],
     rfqConfigs: {},
     rpcPollingMaxAllowedStateDelayInBlocks: 2,
     rpcPollingBlocksBackToTriggerUpdate: 1,
@@ -312,6 +323,8 @@ const baseConfigs: { [network: number]: BaseConfig } = {
     uniswapV2ExchangeRouterAddress:
       '0xB41dD984730dAf82f5C41489E21ac79D5e3B61bC',
     uniswapV3EventLoggingSampleRate: 0,
+    airSwapOverrideServerURLs:
+      process.env[`AIRSWAP_SERVER_URLS_42161`]?.split(',') || [],
     rfqConfigs: {},
     rpcPollingMaxAllowedStateDelayInBlocks: 4,
     rpcPollingBlocksBackToTriggerUpdate: 3,
@@ -348,6 +361,8 @@ const baseConfigs: { [network: number]: BaseConfig } = {
     uniswapV2ExchangeRouterAddress:
       '0xB41dD984730dAf82f5C41489E21ac79D5e3B61bC',
     uniswapV3EventLoggingSampleRate: 0,
+    airSwapOverrideServerURLs:
+      process.env[`AIRSWAP_SERVER_URLS_10`]?.split(',') || [],
     bebopAuthName: process.env.API_KEY_BEBOP_AUTH_NAME || '',
     bebopAuthToken: process.env.API_KEY_BEBOP_AUTH_TOKEN || '',
     rfqConfigs: {},
@@ -384,6 +399,8 @@ const baseConfigs: { [network: number]: BaseConfig } = {
     hashFlowDisabledMMs:
       process.env[`HASHFLOW_DISABLED_MMS_10`]?.split(',') || [],
     uniswapV3EventLoggingSampleRate: 0,
+    airSwapOverrideServerURLs:
+      process.env[`AIRSWAP_SERVER_URLS_1101`]?.split(',') || [],
     rfqConfigs: {},
     forceRpcFallbackDexs: [],
     // FIXME: Not set properly
@@ -417,6 +434,8 @@ const baseConfigs: { [network: number]: BaseConfig } = {
     forceRpcFallbackDexs: [],
     uniswapV2ExchangeRouterAddress:
       '0xfa39c1c670b48956eeF9fd0BbD0E81A290326330',
+    airSwapOverrideServerURLs:
+      process.env[`AIRSWAP_SERVER_URLS_100`]?.split(',') || [],
   },
   [Network.BASE]: {
     network: Network.BASE,
@@ -451,6 +470,8 @@ const baseConfigs: { [network: number]: BaseConfig } = {
     uniswapV2ExchangeRouterAddress:
       '0x75d199EfB540e47D27D52c62Da3E7daC2B9e834F',
     uniswapV3EventLoggingSampleRate: 0,
+    airSwapOverrideServerURLs:
+      process.env[`AIRSWAP_SERVER_URLS_8453`]?.split(',') || [],
     rfqConfigs: {},
     rpcPollingMaxAllowedStateDelayInBlocks: 5,
     rpcPollingBlocksBackToTriggerUpdate: 3,
@@ -484,6 +505,8 @@ const baseConfigs: { [network: number]: BaseConfig } = {
     rpcPollingBlocksBackToTriggerUpdate: 0,
     uniswapV3EventLoggingSampleRate: 0,
     forceRpcFallbackDexs: [],
+    airSwapOverrideServerURLs:
+      process.env[`AIRSWAP_SERVER_URLS_11155111`]?.split(',') || [],
   },
   [Network.UNICHAIN]: {
     network: Network.UNICHAIN,
@@ -513,6 +536,8 @@ const baseConfigs: { [network: number]: BaseConfig } = {
     forceRpcFallbackDexs: [],
     uniswapV2ExchangeRouterAddress:
       '0x21D2B4641c1802C5f9767FfED28708F3A76Ed0aa',
+    airSwapOverrideServerURLs:
+      process.env[`AIRSWAP_SERVER_URLS_130`]?.split(',') || [],
   },
 };
 
@@ -550,6 +575,7 @@ export function generateConfig(network: number): Config {
     executorsAddresses: { ...baseConfig.executorsAddresses },
     uniswapV2ExchangeRouterAddress: baseConfig.uniswapV2ExchangeRouterAddress,
     uniswapV3EventLoggingSampleRate: baseConfig.uniswapV3EventLoggingSampleRate,
+    airSwapOverrideServerURLs: baseConfig.airSwapOverrideServerURLs,
     rfqConfigs: baseConfig.rfqConfigs,
     rpcPollingMaxAllowedStateDelayInBlocks:
       baseConfig.rpcPollingMaxAllowedStateDelayInBlocks,
