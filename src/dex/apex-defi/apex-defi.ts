@@ -12,12 +12,12 @@ import {
   TxInfo,
   DexExchangeParam,
 } from '../../types';
-import { SwapSide, Network } from '../../constants';
+import { SwapSide, Network, ETHER_ADDRESS } from '../../constants';
 import * as CALLDATA_GAS_COST from '../../calldata-gas-cost';
-import { getBigIntPow, getDexKeysWithNetwork } from '../../utils';
+import { getBigIntPow, getDexKeysWithNetwork, isETHAddress } from '../../utils';
 import { IDex } from '../../dex/idex';
 import { IDexHelper } from '../../dex-helper/idex-helper';
-import { ApexDefiData, ApexDefiParam, ApexDefiPoolState } from './types';
+import { ApexDefiData, ApexDefiPoolState } from './types';
 import { SimpleExchange } from '../simple-exchange';
 import { ApexDefiConfig } from './config';
 import { ApexDefiEventPool } from './apex-defi-pool';
@@ -25,14 +25,10 @@ import { Interface } from '@ethersproject/abi';
 import ApexDefiRouterABI from '../../abi/apex-defi/ApexDefiRouter.abi.json';
 import ApexDefiTokenABI from '../../abi/apex-defi/ApexDefiToken.abi.json';
 import ApexDefiFactoryABI from '../../abi/apex-defi/ApexDefiFactory.abi.json';
+import ApexDefiWrapperFactoryABI from '../../abi/apex-defi/ApexDefiWrapperFactory.abi.json';
 import ERC20ABI from '../../abi/erc20.json';
 import { ApexDefiFactory, OnPoolCreatedCallback } from './apex-defi-factory';
-import {
-  calculateFees,
-  fetchApexDefiOnChainPoolData,
-  getFactoryAddressForToken,
-} from './utils';
-import { AddressZero } from '@ethersproject/constants';
+import { fetchApexDefiOnChainPoolData } from './utils';
 
 export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
   readonly eventPools: Record<string, ApexDefiEventPool | null> = {};
@@ -44,9 +40,9 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
   readonly erc20Iface: Interface;
   readonly tokenIface: Interface;
   readonly factoryIface: Interface;
+  readonly wrapperFactoryIface: Interface;
 
   feeFactor = 10000;
-  DefaultApexDefiPoolGasCost = 90 * 1000;
 
   readonly hasConstantPriceLargeAmounts = false;
 
@@ -69,6 +65,7 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
     this.erc20Iface = new Interface(ERC20ABI);
     this.tokenIface = new Interface(ApexDefiTokenABI);
     this.factoryIface = new Interface(ApexDefiFactoryABI);
+    this.wrapperFactoryIface = new Interface(ApexDefiWrapperFactoryABI);
     this.logger = dexHelper.getLogger(dexKey + '-' + network);
 
     this.factory = this.getFactoryInstance();
@@ -133,12 +130,19 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
   }
 
   protected getPoolAddress(srcToken: Token, destToken: Token): string {
-    // ERC314 pairs are always in the format of WETH/token
-    // If the srcToken is WETH, then the pair address is the destToken address
-    // Otherwise, the pair address is the srcToken address
-    if (this.dexHelper.config.isWETH(srcToken.address)) {
+    // ApexDefi pools are always in the format of AVAX/token
+    // The pool address is always the token address (not AVAX address)
+    const isSrcNative = isETHAddress(srcToken.address);
+    const isDestNative = isETHAddress(destToken.address);
+
+    if (isSrcNative) {
+      // If srcToken is native AVAX, the pool address is the destToken address
       return destToken.address;
+    } else if (isDestNative) {
+      // If destToken is native AVAX, the pool address is the srcToken address
+      return srcToken.address;
     } else {
+      // Both are ERC20 tokens - this shouldn't happen for ApexDefi
       return srcToken.address;
     }
   }
@@ -160,6 +164,14 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
         srcToken,
         destToken,
       );
+
+      // need to check if either src or dest is AVAX
+      // Can only handle pairs with AVAX
+      const isSrcAVAX = isETHAddress(_srcAddress);
+      const isDestAVAX = isETHAddress(_destAddress);
+      if (!isSrcAVAX && !isDestAVAX) {
+        return null;
+      }
 
       if (_srcAddress === _destAddress) return null;
 
@@ -230,7 +242,7 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
           data: exchangeData,
           exchange: this.dexKey,
           poolIdentifier: poolIdentifier[0],
-          gasCost: this.DefaultApexDefiPoolGasCost,
+          gasCost: ApexDefiConfig[this.dexKey][this.network].poolGasCost,
           poolAddresses: [pool.poolAddress],
         },
       ];
@@ -285,7 +297,7 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
     }
 
     // Determine which reserve is for input and which is for output
-    const isSrcToken0 = this.dexHelper.config.isWETH(srcToken.address);
+    const isSrcToken0 = isETHAddress(srcToken.address);
     const reserveIn = BigInt(isSrcToken0 ? reserve0 : reserve1);
     const reserveOut = BigInt(isSrcToken0 ? reserve1 : reserve0);
 
@@ -336,7 +348,7 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
     }
 
     // Determine which reserve is for input and which is for output
-    const isSrcToken0 = this.dexHelper.config.isWETH(srcToken.address);
+    const isSrcToken0 = isETHAddress(srcToken.address);
     const reserveIn = BigInt(isSrcToken0 ? reserve0 : reserve1);
     const reserveOut = BigInt(isSrcToken0 ? reserve1 : reserve0);
 
@@ -421,19 +433,26 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
   ): DexExchangeParam {
     const { path } = data;
 
+    // ✅ Convert only for router calls
+    const routerPath = this.fixPathForRouter(
+      path.map(p => p.tokenIn).concat(path[path.length - 1].tokenOut),
+    );
+
     // Determine the swap function based on the side and token types
     let swapFunction: string;
     let swapParams: any[];
 
-    const isSrcAVAX = this.dexHelper.config.isWETH(srcToken);
-    const isDestAVAX = this.dexHelper.config.isWETH(destToken);
+    const isSrcAVAX = isETHAddress(srcToken);
+    const isDestAVAX = isETHAddress(destToken);
+
+    this.logger.info(`isSrcAVAX: ${isSrcAVAX}, isDestAVAX: ${isDestAVAX}`);
 
     if (isSrcAVAX && !isDestAVAX) {
       // AVAX -> Token
       swapFunction = 'swapExactAVAXForTokens';
       swapParams = [
         destAmount, // amountOutMin - will be set by the router
-        path.map(p => p.tokenIn).concat(path[path.length - 1].tokenOut),
+        routerPath,
         recipient,
         Math.floor(Date.now() / 1000) + 300, // deadline: 5 minutes from now
       ];
@@ -443,7 +462,7 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
       swapParams = [
         srcAmount,
         destAmount, // amountOutMin - will be set by the router
-        path.map(p => p.tokenIn).concat(path[path.length - 1].tokenOut),
+        routerPath,
         recipient,
         Math.floor(Date.now() / 1000) + 300, // deadline: 5 minutes from now
       ];
@@ -453,7 +472,7 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
       swapParams = [
         srcAmount,
         destAmount, // amountOutMin - will be set by the router
-        path.map(p => p.tokenIn).concat(path[path.length - 1].tokenOut),
+        routerPath,
         recipient,
         Math.floor(Date.now() / 1000) + 300, // deadline: 5 minutes from now
       ];
@@ -462,6 +481,16 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
     const exchangeData = this.routerIface.encodeFunctionData(
       swapFunction,
       swapParams,
+    );
+
+    this.logger.info(
+      `swapFunction: ${swapFunction}, swapParams: ${swapParams}`,
+    );
+    this.logger.info(`exchangeData: ${exchangeData}`);
+    this.logger.info(
+      `targetExchange: ${
+        ApexDefiConfig[this.dexKey][this.network].routerAddress
+      }`,
     );
 
     return {
@@ -484,19 +513,24 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
   ): Promise<SimpleExchangeParam> {
     const { path } = data;
 
+    // ✅ Convert only for router calls
+    const routerPath = this.fixPathForRouter(
+      path.map(p => p.tokenIn).concat(path[path.length - 1].tokenOut),
+    );
+
     // Determine the swap function based on the token types
     let swapFunction: string;
     let swapParams: any[];
 
-    const isSrcAVAX = this.dexHelper.config.isWETH(srcToken);
-    const isDestAVAX = this.dexHelper.config.isWETH(destToken);
+    const isSrcAVAX = isETHAddress(srcToken);
+    const isDestAVAX = isETHAddress(destToken);
 
     if (isSrcAVAX && !isDestAVAX) {
       // AVAX -> Token
       swapFunction = 'swapExactAVAXForTokens';
       swapParams = [
         destAmount,
-        path.map(p => p.tokenIn).concat(path[path.length - 1].tokenOut),
+        routerPath,
         this.augustusAddress, // recipient - will be set by the router
         Math.floor(Date.now() / 1000) + 300, // deadline: 5 minutes from now
       ];
@@ -506,7 +540,7 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
       swapParams = [
         srcAmount,
         destAmount,
-        path.map(p => p.tokenIn).concat(path[path.length - 1].tokenOut),
+        routerPath,
         this.augustusAddress, // recipient - will be set by the router
         Math.floor(Date.now() / 1000) + 300, // deadline: 5 minutes from now
       ];
@@ -631,11 +665,11 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
       const blockNumber =
         await this.dexHelper.web3Provider.eth.getBlockNumber();
 
-      // Check if the input token is WAVAX
-      const isWAVAX = this.dexHelper.config.isWETH(tokenAddress);
+      // Check if the input token is AVAX
+      const isAVAX = isETHAddress(tokenAddress);
 
-      if (isWAVAX) {
-        // If asking for WAVAX pools, return all tokens that have WAVAX pairs
+      if (isAVAX) {
+        // If asking for AVAX pools, return all tokens that have AVAX pairs
         const tokenAddresses = await this.dexHelper.multiContract.methods
           .aggregate([
             {
@@ -700,8 +734,7 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
             poolIdentifier: this.getPoolIdentifier(token),
             connectorTokens: [
               {
-                address:
-                  this.dexHelper.config.data.wrappedNativeTokenAddress.toLowerCase(),
+                address: this.dexHelper.config.data.wrappedNativeTokenAddress,
                 decimals: 18,
               },
             ],
@@ -714,7 +747,7 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
           .sort((a, b) => b.liquidityUSD - a.liquidityUSD)
           .slice(0, limit);
       } else {
-        // For non-WAVAX tokens, check if they exist as a pool
+        // For non-AVAX tokens, check if they exist as a pool
         const tokenInfo = await this.dexHelper.multiContract.methods
           .aggregate([
             {
@@ -769,8 +802,7 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
             poolIdentifier: this.getPoolIdentifier(tokenAddress),
             connectorTokens: [
               {
-                address:
-                  this.dexHelper.config.data.wrappedNativeTokenAddress.toLowerCase(),
+                address: this.dexHelper.config.data.wrappedNativeTokenAddress,
                 decimals: 18,
               },
             ],
@@ -807,7 +839,7 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
         this.dexKey,
         this.network,
         this.dexHelper,
-        this.dexHelper.config.data.wrappedNativeTokenAddress,
+        ETHER_ADDRESS,
         pairAddress,
         pairAddress,
         this.logger,
@@ -860,5 +892,16 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
 
   protected _getLoweredAddresses(srcToken: Token, destToken: Token) {
     return [srcToken.address.toLowerCase(), destToken.address.toLowerCase()];
+  }
+
+  // Add this method for router path conversion
+  public fixPathForRouter(path: Address[]): Address[] {
+    return path.map(token => {
+      // Only convert native AVAX to WAVAX for router calls
+      if (token.toLowerCase() === ETHER_ADDRESS.toLowerCase()) {
+        return this.dexHelper.config.data.wrappedNativeTokenAddress;
+      }
+      return token;
+    });
   }
 }

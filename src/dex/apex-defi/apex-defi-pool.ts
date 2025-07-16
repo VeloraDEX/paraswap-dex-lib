@@ -9,6 +9,7 @@ import ApexDefiTokenABI from '../../abi/apex-defi/ApexDefiToken.abi.json';
 import ApexDefiFactoryABI from '../../abi/apex-defi/ApexDefiFactory.abi.json';
 import { AbiCoder } from '@ethersproject/abi';
 import { fetchApexDefiOnChainPoolData, toBigInt } from './utils';
+import { ETHER_ADDRESS } from '../../constants';
 
 export class ApexDefiEventPool extends StatefulEventSubscriber<ApexDefiPoolState> {
   handlers: {
@@ -60,7 +61,7 @@ export class ApexDefiEventPool extends StatefulEventSubscriber<ApexDefiPoolState
     // If the token0 is WETH, then the pool address is the token1 address
     // Otherwise, the pool address is the token0 address
     if (this._poolAddress === undefined) {
-      if (this.dexHelper.config.isWETH(this.token0)) {
+      if (this.token0.toLowerCase() === ETHER_ADDRESS.toLowerCase()) {
         this._poolAddress = this.token1;
       } else {
         this._poolAddress = this.token0;

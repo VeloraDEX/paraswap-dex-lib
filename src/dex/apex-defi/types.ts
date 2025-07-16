@@ -25,6 +25,7 @@ export type DexParams = {
   routerAddress: Address;
   wrapperFactoryAddress: Address;
   legacyFactoryMappings: Record<Address, Address>;
+  poolGasCost: number;
 };
 
 export type ApexDefiParam = [

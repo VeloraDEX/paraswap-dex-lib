@@ -5,7 +5,6 @@ dotenv.config();
 import { Interface, Result } from '@ethersproject/abi';
 import { DummyDexHelper } from '../../dex-helper/index';
 import { Network, SwapSide } from '../../constants';
-import { BI_POWS } from '../../bigint-constants';
 import { ApexDefi } from './apex-defi';
 import {
   checkPoolPrices,
@@ -66,13 +65,16 @@ async function checkOnChainPricing(
 
   const readerIface = apexDefi.routerIface;
 
+  // ✅ Convert only for router calls
+  const routerPath = apexDefi.fixPathForRouter([tokenIn, tokenOut]);
+
   const readerCallData = getReaderCalldata(
     exchangeAddress,
     readerIface,
     amounts.slice(1),
     funcName,
-    tokenIn,
-    tokenOut,
+    routerPath[0], // Use WAVAX for router
+    routerPath[1], // Use WAVAX for router
   );
   const readerResult = (
     await apexDefi.dexHelper.multiContract.methods
@@ -182,30 +184,30 @@ describe('ApexDefi', function () {
     // Define all token pairs to test
     const tokenPairsToTest: TokenPairTestConfig[] = [
       {
-        srcTokenSymbol: 'WAVAX',
+        srcTokenSymbol: 'AVAX',
         destTokenSymbol: 'APEX',
-        description: 'WAVAX to APEX',
+        description: 'AVAX to APEX',
       },
       {
-        srcTokenSymbol: 'WAVAX',
+        srcTokenSymbol: 'AVAX',
         destTokenSymbol: 'aUSDC',
-        description: 'WAVAX to aUSDC',
+        description: 'AVAX to aUSDC',
       },
       {
-        srcTokenSymbol: 'WAVAX',
+        srcTokenSymbol: 'AVAX',
         destTokenSymbol: 'aBTCb',
-        description: 'WAVAX to aBTCb',
+        description: 'AVAX to aBTCb',
       },
-      {
-        srcTokenSymbol: 'APEX',
-        destTokenSymbol: 'aBTCb',
-        description: 'APEX to aBTCb',
-      },
-      {
-        srcTokenSymbol: 'aBTCb',
-        destTokenSymbol: 'APEX',
-        description: 'aBTCb to APEX',
-      },
+      // {
+      //   srcTokenSymbol: 'APEX',
+      //   destTokenSymbol: 'aBTCb',
+      //   description: 'APEX to aBTCb',
+      // },
+      // {
+      //   srcTokenSymbol: 'aBTCb',
+      //   destTokenSymbol: 'APEX',
+      //   description: 'aBTCb to APEX',
+      // },
     ];
 
     beforeAll(async () => {
@@ -268,15 +270,15 @@ describe('ApexDefi', function () {
         await newApexDefi.updatePoolState();
       }
       const poolLiquidity = await newApexDefi.getTopPoolsForToken(
-        tokens.WAVAX.address,
+        tokens.AVAX.address,
         10,
       );
-      console.log(`WAVAX Top Pools:`, poolLiquidity);
+      console.log(`AVAX Top Pools:`, poolLiquidity);
 
       if (!newApexDefi.hasConstantPriceLargeAmounts) {
         checkPoolsLiquidity(
           poolLiquidity,
-          Tokens[network].WAVAX.address,
+          Tokens[network].AVAX.address,
           dexKey,
         );
       }

@@ -136,6 +136,7 @@ export const ApexDefiConfig: DexConfigMap<DexParams> = {
       routerAddress: '0x5d2dDA02280F55A9D4529eadFA45Ff032928082B',
       wrapperFactoryAddress: '0x709D667c0f7cb42e6099B1a2b2B71409086315Cc',
       legacyFactoryMappings: buildLegacyFactoryMappings(),
+      poolGasCost: 90 * 1000,
     },
   },
 };
