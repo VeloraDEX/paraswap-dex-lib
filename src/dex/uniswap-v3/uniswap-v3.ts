@@ -95,6 +95,9 @@ export class UniswapV3
   readonly isFeeOnTransferSupported: boolean = false;
   readonly eventPools: Record<string, UniswapV3EventPool | null> = {};
 
+  protected totalPoolsCount = 0;
+  protected nonNullPoolsCount = 0;
+
   readonly hasConstantPriceLargeAmounts = false;
   readonly needWrapNative = true;
 
@@ -295,6 +298,9 @@ export class UniswapV3
         }
         // else pursue with re-try initialization
       }
+    } else {
+      // new pool going to be added to the mapping
+      this.totalPoolsCount++;
     }
 
     const [token0, token1] = this._sortTokens(srcAddress, destAddress);
@@ -370,19 +376,16 @@ export class UniswapV3
     }
 
     if (pool !== null) {
-      const allEventPools = Object.values(this.eventPools);
       // if pool was created, delete pool record from non existing set
       this.dexHelper.cache
         .zrem(this.notExistingPoolSetKey, [key])
         .catch(() => {});
-      this.logger.info(
-        `starting to listen to new non-null pool: ${key}. Already following ${allEventPools
-          // Not that I like this reduce, but since it is done only on initialization, expect this to be ok
-          .reduce(
-            (acc, curr) => (curr !== null ? ++acc : acc),
-            0,
-          )} non-null pools or ${allEventPools.length} total pools`,
-      );
+      if (!pool.initFailed) {
+        this.nonNullPoolsCount++;
+        this.logger.info(
+          `starting to listen to new non-null pool: ${key}. Already following ${this.nonNullPoolsCount} non-null pools or ${this.totalPoolsCount} total pools`,
+        );
+      }
     }
 
     this.eventPools[

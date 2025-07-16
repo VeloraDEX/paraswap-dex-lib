@@ -11,12 +11,16 @@ import { TickBitMap } from '../../contract-math/TickBitMap';
 import { uint24ToBigInt } from '../../../../lib/decoders';
 import { Interface } from 'ethers/lib/utils';
 import PangolinV3PoolABI from '../../../../abi/pangolin-v3/PangolinV3Pool.abi.json';
+import UniswapV3PoolABI from '../../../../abi/uniswap-v3/UniswapV3Pool.abi.json';
 import { IDexHelper } from '../../../../dex-helper';
 import { Contract } from 'web3-eth-contract';
 import { Address, Logger } from '../../../../types';
 
 export class PangolinV3EventPool extends UniswapV3EventPool {
-  public readonly poolIface = new Interface(PangolinV3PoolABI);
+  public readonly poolIface = new Interface([
+    ...PangolinV3PoolABI,
+    ...UniswapV3PoolABI,
+  ]);
 
   constructor(
     readonly dexHelper: IDexHelper,
@@ -91,6 +95,8 @@ export class PangolinV3EventPool extends UniswapV3EventPool {
       DecodedStateMultiCallResultWithRelativeBitmaps,
       bigint,
     ];
+
+    this._assertActivePool(_state);
 
     const tickBitmap = {};
     const ticks = {};
