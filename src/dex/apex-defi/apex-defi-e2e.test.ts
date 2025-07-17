@@ -38,8 +38,14 @@ function testForNetwork(
 
   // Cover all contract methods and both sides
   const sideToContractMethods = new Map([
-    [SwapSide.SELL, [ContractMethod.swapExactAmountIn]],
-    // [SwapSide.BUY, [ContractMethod.swapExactAmountOut]],
+    [
+      SwapSide.SELL,
+      [ContractMethod.swapExactAmountIn, ContractMethod.simpleSwap],
+    ],
+    [
+      SwapSide.BUY,
+      [ContractMethod.swapExactAmountOut, ContractMethod.simpleBuy],
+    ],
   ]);
 
   describe(`${network}`, () => {
@@ -143,38 +149,69 @@ describe('ApexDefi E2E', () => {
   const network = Network.AVALANCHE;
   const dexKey = 'ApexDefi';
 
-  // Only need token pairs - AVAX pairs are handled automatically by testForNetwork
-  const combos = [
-    // ERC20 <-> ERC20
-    ['USDC', 'USDT', AMOUNT_USD, AMOUNT_USD],
+  // Test Suite 1: Direct AVAX Pairs
+  describe('Direct AVAX Pairs', () => {
+    const directPairs = [
+      ['USDC', 'USDT', AMOUNT_USD, AMOUNT_USD],
+      ['USDC', 'APEX', AMOUNT_USD, AMOUNT_ERC314],
+      ['USDT', 'APEX', AMOUNT_USD, AMOUNT_ERC314],
+      ['BTCb', 'BENSI', AMOUNT_BTC, AMOUNT_ERC314],
+    ];
 
-    // ERC20 <-> ERC314
-    ['USDC', 'APEX', AMOUNT_USD, AMOUNT_ERC314],
-    ['USDT', 'APEX', AMOUNT_USD, AMOUNT_ERC314],
-    ['BTCb', 'BENSI', AMOUNT_BTC, AMOUNT_ERC314],
+    directPairs.forEach(([tokenA, tokenB, amountA, amountB]) => {
+      testForNetwork(
+        network,
+        dexKey,
+        tokenA,
+        tokenB,
+        amountA,
+        amountB,
+        AMOUNT_AVAX,
+      );
+    });
+  });
 
-    // ERC314 <-> ERC314
-    ['APEX', 'aUSDC', AMOUNT_ERC314, AMOUNT_ERC314],
-    ['APEX', 'BENSI', AMOUNT_ERC314, AMOUNT_ERC314],
-    ['APEX', 'awUSDT', AMOUNT_ERC314, AMOUNT_ERC314],
-    ['aUSDC', 'awUSDT', AMOUNT_ERC314, AMOUNT_ERC314],
-    ['aBTCb', 'awUSDT', AMOUNT_ERC314_BTC, AMOUNT_ERC314],
+  // Test Suite 2: Cross-Pair ERC314 Swaps
+  describe('Cross-Pair ERC314 Swaps', () => {
+    const crossPairs = [
+      ['APEX', 'aUSDC', AMOUNT_ERC314, AMOUNT_ERC314],
+      ['APEX', 'BENSI', AMOUNT_ERC314, AMOUNT_ERC314],
+      ['APEX', 'awUSDT', AMOUNT_ERC314, AMOUNT_ERC314],
+      ['aUSDC', 'awUSDT', AMOUNT_ERC314, AMOUNT_ERC314],
+      ['aBTCb', 'awUSDT', AMOUNT_ERC314_BTC, AMOUNT_ERC314],
+    ];
 
-    // Wrapping/Unwrapping
-    ['USDC', 'aUSDC', AMOUNT_USD, AMOUNT_ERC314],
-    ['USDT', 'awUSDT', AMOUNT_USD, AMOUNT_ERC314],
-    ['BTCb', 'aBTCb', AMOUNT_BTC, AMOUNT_ERC314_BTC],
-  ];
+    crossPairs.forEach(([tokenA, tokenB, amountA, amountB]) => {
+      testForNetwork(
+        network,
+        dexKey,
+        tokenA,
+        tokenB,
+        amountA,
+        amountB,
+        AMOUNT_AVAX,
+      );
+    });
+  });
 
-  combos.forEach(([tokenA, tokenB, amountA, amountB]) => {
-    testForNetwork(
-      network,
-      dexKey,
-      tokenA,
-      tokenB,
-      amountA,
-      amountB,
-      AMOUNT_AVAX,
-    );
+  // Test Suite 3: Wrapper Operations
+  describe('Wrapper Operations', () => {
+    const wrapperPairs = [
+      ['USDC', 'aUSDC', AMOUNT_USD, AMOUNT_ERC314],
+      ['USDT', 'awUSDT', AMOUNT_USD, AMOUNT_ERC314],
+      ['BTCb', 'aBTCb', AMOUNT_BTC, AMOUNT_ERC314_BTC],
+    ];
+
+    wrapperPairs.forEach(([tokenA, tokenB, amountA, amountB]) => {
+      testForNetwork(
+        network,
+        dexKey,
+        tokenA,
+        tokenB,
+        amountA,
+        amountB,
+        AMOUNT_AVAX,
+      );
+    });
   });
 });

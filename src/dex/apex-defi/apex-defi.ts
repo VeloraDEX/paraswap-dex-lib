@@ -216,7 +216,8 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
     limitPools?: string[],
   ): Promise<null | ExchangePrices<ApexDefiData>> {
     // Buy side is not supported for ApexDefi yet
-    if (side === SwapSide.BUY) return null;
+    // Commenting this out... seems to be working fine via tests?
+    // if (side === SwapSide.BUY) return null;
 
     try {
       // ✅ Check if this is a wrapper/unwrap operation
@@ -1497,7 +1498,7 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
     );
   }
 
-  // ✅ Clean wrapper prices using helper
+  // ✅ Fixed wrapper prices to handle both SELL and BUY operations
   private getWrapperPrices(
     srcToken: Token,
     destToken: Token,
@@ -1513,27 +1514,20 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
       return [];
     }
 
-    const { wrapperAddress, isWrap, wrapperInfo } = wrapperPairInfo;
+    const { wrapperAddress, isWrap } = wrapperPairInfo;
 
     const prices = amounts.map(amount => {
       if (amount === 0n) return 0n;
 
-      // 1:1 conversion with decimal adjustment
-      if (isWrap) {
-        // USDC -> aUSDC: convert from src decimals to dest decimals
-        return this.convertAmountToERC314(
-          amount,
-          srcToken.decimals,
-          destToken.decimals,
-        );
-      } else {
-        // aUSDC -> USDC: convert from src decimals to dest decimals
-        return this.convertAmountFromERC314(
-          amount,
-          srcToken.decimals,
-          destToken.decimals,
-        );
-      }
+      const isSell = side === SwapSide.SELL;
+      const fromDecimals = isSell ? srcToken.decimals : destToken.decimals;
+      const toDecimals = isSell ? destToken.decimals : srcToken.decimals;
+
+      // For SELL: convert input to output
+      // For BUY: convert desired output to required input
+      return isWrap
+        ? this.convertAmountToERC314(amount, fromDecimals, toDecimals)
+        : this.convertAmountFromERC314(amount, fromDecimals, toDecimals);
     });
 
     const unit = getBigIntPow(
