@@ -319,7 +319,7 @@ export const UniswapV3Config: DexConfigMap<DexParams> = {
   SpookySwapV3: {
     [Network.SONIC]: {
       factory: '0x3D91B700252e0E3eE7805d12e048a988Ab69C8ad',
-      quoter: '0x593856bbfd6Aaf0b714277c0BF06307900d1Aa68',
+      quoter: '0x3F2026Cae76b987C4002e62B9dF70988b4388234',
       router: '0x0C2BC01d435CfEb2DC6Ad7cEC0E473e2DBaBdd87',
       routerType: UniswapV3Router.SwapRouter02,
       supportedFees: SUPPORTED_FEES,

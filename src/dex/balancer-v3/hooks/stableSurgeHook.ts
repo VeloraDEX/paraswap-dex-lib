@@ -5,7 +5,8 @@ import { HookStateMap } from './balancer-hook-event-subscriber';
 import { Interface } from '@ethersproject/abi';
 import { Contract } from 'ethers';
 import { IDexHelper } from '../../../dex-helper';
-import { callData, decodeThrowError } from '../getOnChainState';
+import { callData } from '../types';
+import { decodeThrowError } from '../getOnChainState';
 import { Logger } from 'log4js';
 
 export const StableSurge = {
@@ -16,8 +17,9 @@ export const StableSurge = {
 export type StableSurgeConfig = {
   type: typeof StableSurge.type;
   apiName: typeof StableSurge.apiName;
-  factory: string;
-  address: string;
+  factoryAddress: string;
+  factoryDeploymentBlock: number;
+  hookAddress: string;
 };
 
 export type StableSurgePoolSetting = {
@@ -35,9 +37,13 @@ export async function getStableSurgeHookState(
   hookInterface: Interface,
   hookAddress: string,
   factoryAddress: string,
+  factoryDeploymentBlock: number,
   dexHelper: IDexHelper,
   blockNumber: number,
 ): Promise<StableSurgeHookState> {
+  if (blockNumber < factoryDeploymentBlock) {
+    return {};
+  }
   // Find all pools with hook
   const resolverContract = new Contract(
     factoryAddress,

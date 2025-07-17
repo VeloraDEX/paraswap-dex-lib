@@ -693,8 +693,8 @@ describe('UniswapV2 E2E Avalanche', () => {
     );
   });
 
-  describe('CanarySwap', () => {
-    const dexKey = 'CanarySwap';
+  describe('Canary', () => {
+    const dexKey = 'Canary';
 
     describe('simpleSwap', () => {
       it('AVAX -> PNG', async () => {

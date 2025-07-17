@@ -4,17 +4,18 @@ import {
   CommonMutableState,
   PoolStateMap,
   StableMutableState,
+  callData,
 } from './types';
 import { BalancerV3Config } from './config';
 import { Interface, Result } from '@ethersproject/abi';
 import { IDexHelper } from '../../dex-helper';
 import { WAD } from './balancer-v3-pool';
-import { ReClammMutableState } from './reClammPool';
-
-export interface callData {
-  target: string;
-  callData: string;
-}
+import { QuantAmmImmutable, QuantAMMMutableState } from './quantAMMPool';
+import {
+  ReClammMutableState,
+  encodeReClammOnChainData,
+  decodeReClammOnChainData,
+} from './reClammPool';
 
 // Encoding & Decoding for onchain calls to fetch mutable pool data
 // Each supported pool type should have its own specific calls if needed
@@ -272,11 +273,65 @@ const poolOnChain: Record<
       contractInterface: Interface,
       address: string,
     ): callData[] => {
+      return encodeReClammOnChainData(contractInterface, address);
+    },
+    ['decode']: (
+      contractInterface: Interface,
+      poolAddress: string,
+      data: any,
+      startIndex: number,
+    ): ReClammMutableState => {
+      return decodeReClammOnChainData(
+        contractInterface,
+        poolAddress,
+        data,
+        startIndex,
+        decodeThrowError,
+      );
+    },
+  },
+  ['RECLAMM_V2']: {
+    count: 1,
+    ['encode']: (
+      network: number,
+      contractInterface: Interface,
+      address: string,
+    ): callData[] => {
+      return encodeReClammOnChainData(contractInterface, address);
+    },
+    ['decode']: (
+      contractInterface: Interface,
+      poolAddress: string,
+      data: any,
+      startIndex: number,
+    ): ReClammMutableState => {
+      return decodeReClammOnChainData(
+        contractInterface,
+        poolAddress,
+        data,
+        startIndex,
+        decodeThrowError,
+      );
+    },
+  },
+  ['QUANT_AMM_WEIGHTED']: {
+    count: 2,
+    ['encode']: (
+      network: number,
+      contractInterface: Interface,
+      address: string,
+    ): callData[] => {
       return [
         {
           target: address,
           callData: contractInterface.encodeFunctionData(
-            'getReClammPoolDynamicData',
+            'getQuantAMMWeightedPoolDynamicData',
+          ),
+        },
+        {
+          target: address,
+          callData: contractInterface.encodeFunctionData(
+            'getQuantAMMWeightedPoolImmutableData',
           ),
         },
       ];
@@ -286,38 +341,38 @@ const poolOnChain: Record<
       poolAddress: string,
       data: any,
       startIndex: number,
-    ): ReClammMutableState => {
+    ): QuantAMMMutableState & QuantAmmImmutable => {
       const resultDynamicData = decodeThrowError(
         contractInterface,
-        'getReClammPoolDynamicData',
+        'getQuantAMMWeightedPoolDynamicData',
         data[startIndex++],
         poolAddress,
       );
       if (!resultDynamicData)
         throw new Error(
-          `Failed to get result for getReClammPoolDynamicData for ${poolAddress}`,
+          `Failed to get result for getQuantAMMWeightedPoolDynamicData for ${poolAddress}`,
         );
-
+      const resultImmutableData = decodeThrowError(
+        contractInterface,
+        'getQuantAMMWeightedPoolImmutableData',
+        data[startIndex++],
+        poolAddress,
+      );
+      if (!resultImmutableData)
+        throw new Error(
+          `Failed to get result for getQuantAMMWeightedPoolImmutableData for ${poolAddress}`,
+        );
       return {
-        lastTimestamp: BigInt(resultDynamicData[0].lastTimestamp),
-        lastVirtualBalances: resultDynamicData[0].lastVirtualBalances.map(
-          (b: any) => BigInt(b),
+        lastUpdateTime: BigInt(resultDynamicData[0][8]),
+        firstFourWeightsAndMultipliers: resultDynamicData[0][6].map((w: any) =>
+          w.toBigInt(),
         ),
-        dailyPriceShiftBase: BigInt(resultDynamicData[0].dailyPriceShiftBase),
-        centerednessMargin: BigInt(resultDynamicData[0].centerednessMargin),
-        startFourthRootPriceRatio: BigInt(
-          resultDynamicData[0].startFourthRootPriceRatio,
+        secondFourWeightsAndMultipliers: resultDynamicData[0][7].map((w: any) =>
+          w.toBigInt(),
         ),
-        endFourthRootPriceRatio: BigInt(
-          resultDynamicData[0].endFourthRootPriceRatio,
-        ),
-        priceRatioUpdateStartTime: BigInt(
-          resultDynamicData[0].priceRatioUpdateStartTime,
-        ),
-        priceRatioUpdateEndTime: BigInt(
-          resultDynamicData[0].priceRatioUpdateEndTime,
-        ),
-        currentTimestamp: 0n, // This will be updated at swap time
+        lastInteropTime: BigInt(resultDynamicData[0][9]),
+        currentTimestamp: 0n, // This will be updated at time of swap
+        maxTradeSizeRatio: BigInt(resultImmutableData[0][8]),
       };
     },
   },
