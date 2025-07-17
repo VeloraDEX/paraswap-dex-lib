@@ -82,10 +82,9 @@ const checkOnChainPricing = async (
       if (amount === 0n) {
         expectedPrices.push(0n);
       } else {
+        // Calculate the actual output amount for this input amount
         const outputAmount = (amount * exchangeRate) / BigInt(1e18);
-        // Removed the slippage adjustment (was previously 0.1%)
-        const effectivePrice = (outputAmount * BigInt(1e18)) / amount;
-        expectedPrices.push(effectivePrice);
+        expectedPrices.push(outputAmount);
       }
     }
 
@@ -187,8 +186,8 @@ describe('AaveV3Pendle', function () {
 
     const tokens = Tokens[network];
 
-    const srcTokenSymbol = 'PT-sUSDe-29MAY2025';
-    const destTokenSymbol = 'PT-sUSDe-31JUL2025';
+    const srcTokenSymbol = 'PT-sUSDe-31JUL2025';
+    const destTokenSymbol = 'PT-sUSDe-25SEP2025';
 
     const amountsForSell = [
       0n,
@@ -243,9 +242,10 @@ describe('AaveV3Pendle', function () {
     it('getPoolIdentifiers and getPricesVolume BUY', async function () {
       // PT rollover only supports SELL side (rolling from expiring PT to new PT)
       // BUY side is not applicable for this use case
+      // For BUY, tokens are reversed: we want to buy the old PT with the new PT
       const pools = await aaveV3PtRollOver.getPoolIdentifiers(
-        tokens[srcTokenSymbol],
-        tokens[destTokenSymbol],
+        tokens[destTokenSymbol], // PT-sUSDe-25SEP2025 (new) - trying to sell this
+        tokens[srcTokenSymbol], // PT-sUSDe-31JUL2025 (old) - trying to buy this
         SwapSide.BUY,
         blockNumber,
       );

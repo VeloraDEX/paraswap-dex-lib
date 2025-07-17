@@ -238,6 +238,10 @@ export class AaveV3PtRollOver
     side: SwapSide,
     blockNumber: number,
   ): Promise<string[]> {
+    if (side === SwapSide.BUY) {
+      return [];
+    }
+
     if (!this.isAppropriatePair(srcToken, destToken)) {
       return [];
     }

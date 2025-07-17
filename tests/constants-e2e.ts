@@ -38,6 +38,10 @@ export const Tokens: {
       address: '0x3b3fb9c57858ef816833dc91565efcd85d96f634',
       decimals: 18,
     },
+    'PT-sUSDe-25SEP2025': {
+      address: '0x9f56094c450763769ba0ea9fe2876070c0fd5f77',
+      decimals: 18,
+    },
     AA_wstETH: {
       decimals: 18,
       address: '0x2688fc68c4eac90d9e5e1b94776cf14eade8d877',

@@ -25,7 +25,8 @@ function testForNetwork(
 
   const sideToContractMethods = new Map([
     [SwapSide.SELL, [ContractMethod.swapExactAmountIn]],
-    [SwapSide.BUY, [ContractMethod.swapExactAmountOut]],
+    // BUY side is not supported for PT roll over (one-way only)
+    // [SwapSide.BUY, [ContractMethod.swapExactAmountOut]],
   ]);
 
   describe(`${network}`, () => {
@@ -59,8 +60,8 @@ describe('AaveV3Pendle E2E', () => {
   describe('Mainnet', () => {
     const network = Network.MAINNET;
 
-    const tokenASymbol: string = 'PT-sUSDe-29MAY2025';
-    const tokenBSymbol: string = 'PT-sUSDe-31JUL2025';
+    const tokenASymbol: string = 'PT-sUSDe-31JUL2025';
+    const tokenBSymbol: string = 'PT-sUSDe-25SEP2025';
 
     const tokenAAmount: string = '1000000000000000000';
     const tokenBAmount: string = '1000000000000000000';
