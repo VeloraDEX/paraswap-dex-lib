@@ -228,11 +228,6 @@ describe('ApexDefi', function () {
         destTokenSymbol: 'APEX',
         description: 'aBTCb to APEX',
       },
-      // {
-      //   srcTokenSymbol: 'AVAX',
-      //   destTokenSymbol: 'POPS',
-      //   description: 'AVAX to POPS',
-      // },
     ];
 
     beforeAll(async () => {
@@ -270,19 +265,19 @@ describe('ApexDefi', function () {
           );
         });
 
-        it('getPoolIdentifiers and getPricesVolume BUY', async function () {
-          await testPricingOnNetwork(
-            apexDefi,
-            network,
-            dexKey,
-            blockNumber,
-            srcTokenSymbol,
-            destTokenSymbol,
-            SwapSide.BUY,
-            amountsForBuy,
-            'getAmountsIn',
-          );
-        });
+        // it('getPoolIdentifiers and getPricesVolume BUY', async function () {
+        //   await testPricingOnNetwork(
+        //     apexDefi,
+        //     network,
+        //     dexKey,
+        //     blockNumber,
+        //     srcTokenSymbol,
+        //     destTokenSymbol,
+        //     SwapSide.BUY,
+        //     amountsForBuy,
+        //     'getAmountsIn',
+        //   );
+        // });
       });
     });
 

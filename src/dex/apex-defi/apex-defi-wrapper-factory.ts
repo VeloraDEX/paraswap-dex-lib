@@ -322,6 +322,60 @@ export class ApexDefiWrapperFactory extends StatefulEventSubscriber<WrapperFacto
     return Array.from(this.wrapperCache.values());
   }
 
+  // ✅ New helper methods for wrapper operations
+  /**
+   * Check if two tokens form a wrapper pair and return wrapper info
+   */
+  getWrapperPairInfo(
+    srcToken: Address,
+    destToken: Address,
+  ): {
+    wrapperAddress: Address;
+    isWrap: boolean;
+    wrapperInfo: WrapperInfo;
+  } | null {
+    // Check if srcToken has a wrapper that matches destToken (wrap operation)
+    const srcWrapper = this.getWrapperByOriginalToken(srcToken);
+    if (srcWrapper) {
+      const wrapperInfo = this.getWrapperInfo(srcWrapper);
+      if (
+        wrapperInfo &&
+        wrapperInfo.wrappedToken.toLowerCase() === destToken.toLowerCase()
+      ) {
+        return {
+          wrapperAddress: srcWrapper,
+          isWrap: true,
+          wrapperInfo,
+        };
+      }
+    }
+
+    // Check if destToken has a wrapper that matches srcToken (unwrap operation)
+    const destWrapper = this.getWrapperByOriginalToken(destToken);
+    if (destWrapper) {
+      const wrapperInfo = this.getWrapperInfo(destWrapper);
+      if (
+        wrapperInfo &&
+        wrapperInfo.wrappedToken.toLowerCase() === srcToken.toLowerCase()
+      ) {
+        return {
+          wrapperAddress: destWrapper,
+          isWrap: false,
+          wrapperInfo,
+        };
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * Check if two tokens form a wrapper operation
+   */
+  isWrapperOperation(srcToken: Address, destToken: Address): boolean {
+    return this.getWrapperPairInfo(srcToken, destToken) !== null;
+  }
+
   // Release resources
   releaseResources(): void {
     this.wrapperCache.clear();

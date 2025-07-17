@@ -215,7 +215,17 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
     blockNumber: number,
     limitPools?: string[],
   ): Promise<null | ExchangePrices<ApexDefiData>> {
+    // Buy side is not supported for ApexDefi yet
+    if (side === SwapSide.BUY) return null;
+
     try {
+      // ✅ Check if this is a wrapper/unwrap operation
+      const isWrapperOperation = this.isWrapperOperation(srcToken, destToken);
+
+      if (isWrapperOperation) {
+        return this.getWrapperPrices(srcToken, destToken, amounts, side);
+      }
+
       const [_srcAddress, _destAddress] = this._getLoweredAddresses(
         srcToken,
         destToken,
@@ -367,8 +377,6 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
                 tokenOut: originalDestToken.address.toLowerCase(),
               },
             ],
-            isDirectSwap: true,
-            isERC314Pair,
             swapType: isERC314Pair ? 'direct' : 'router',
           },
           exchange: this.dexKey,
@@ -489,8 +497,6 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
               tokenOut: originalDestToken.address.toLowerCase(),
             },
           ],
-          isDirectSwap: false,
-          isERC314Pair: false,
           swapType: 'router',
         },
         exchange: this.dexKey,
@@ -828,6 +834,18 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
     data: ApexDefiData,
     side: SwapSide,
   ): DexExchangeParam {
+    // ✅ Handle wrapper operations
+    if (data.swapType === 'wrapper') {
+      return this.getWrapperSwap(
+        srcToken,
+        destToken,
+        srcAmount,
+        destAmount,
+        recipient,
+        data,
+      );
+    }
+
     if (data.swapType === 'direct') {
       return this.getDirectTokenSwap(
         data.path[0].tokenIn,
@@ -962,6 +980,17 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
     data: ApexDefiData,
     side: SwapSide,
   ): Promise<SimpleExchangeParam> {
+    // ✅ Handle wrapper operations
+    if (data.swapType === 'wrapper') {
+      return this.getWrapperSimpleParam(
+        srcToken,
+        destToken,
+        srcAmount,
+        destAmount,
+        data,
+      );
+    }
+
     const { path } = data;
 
     // ✅ Convert native AVAX to WAVAX for router calls
@@ -1458,5 +1487,143 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
       if (price === 0n) return 0n;
       return this.convertAmountFromERC314(price, 18, toDecimals);
     });
+  }
+
+  // ✅ Simplified wrapper detection using helper
+  private isWrapperOperation(srcToken: Token, destToken: Token): boolean {
+    return this.wrapperFactory.isWrapperOperation(
+      srcToken.address,
+      destToken.address,
+    );
+  }
+
+  // ✅ Clean wrapper prices using helper
+  private getWrapperPrices(
+    srcToken: Token,
+    destToken: Token,
+    amounts: bigint[],
+    side: SwapSide,
+  ): ExchangePrices<ApexDefiData> {
+    const wrapperPairInfo = this.wrapperFactory.getWrapperPairInfo(
+      srcToken.address,
+      destToken.address,
+    );
+
+    if (!wrapperPairInfo) {
+      return [];
+    }
+
+    const { wrapperAddress, isWrap, wrapperInfo } = wrapperPairInfo;
+
+    const prices = amounts.map(amount => {
+      if (amount === 0n) return 0n;
+
+      // 1:1 conversion with decimal adjustment
+      if (isWrap) {
+        // USDC -> aUSDC: convert from src decimals to dest decimals
+        return this.convertAmountToERC314(
+          amount,
+          srcToken.decimals,
+          destToken.decimals,
+        );
+      } else {
+        // aUSDC -> USDC: convert from src decimals to dest decimals
+        return this.convertAmountFromERC314(
+          amount,
+          srcToken.decimals,
+          destToken.decimals,
+        );
+      }
+    });
+
+    const unit = getBigIntPow(
+      side === SwapSide.SELL ? srcToken.decimals : destToken.decimals,
+    );
+
+    return [
+      {
+        prices,
+        unit,
+        data: {
+          path: [
+            {
+              tokenIn: srcToken.address.toLowerCase(),
+              tokenOut: destToken.address.toLowerCase(),
+            },
+          ],
+          swapType: 'wrapper',
+          wrapperAddress,
+          isWrap,
+        },
+        exchange: this.dexKey,
+        poolIdentifier: `${
+          this.dexKey
+        }_wrapper_${srcToken.address.toLowerCase()}`,
+        gasCost: 100000,
+        poolAddresses: [wrapperAddress],
+      },
+    ];
+  }
+
+  // ✅ Simplified wrapper swap
+  private getWrapperSwap(
+    srcToken: Address,
+    destToken: Address,
+    srcAmount: NumberAsString,
+    destAmount: NumberAsString,
+    recipient: Address,
+    data: ApexDefiData,
+  ): DexExchangeParam {
+    const { wrapperAddress, isWrap } = data;
+    if (!wrapperAddress) throw new Error('Wrapper address not found');
+    if (isWrap === undefined) throw new Error('isWrap not found in data');
+
+    const swapFunction = isWrap ? 'wrap' : 'unwrap';
+    const swapParams = [srcAmount];
+
+    const exchangeData = this.wrapperIface.encodeFunctionData(
+      swapFunction,
+      swapParams,
+    );
+
+    return {
+      needWrapNative: false,
+      dexFuncHasRecipient: false,
+      exchangeData,
+      targetExchange: wrapperAddress,
+      returnAmountPos: undefined,
+    };
+  }
+
+  // ✅ Simplified wrapper simple param
+  private async getWrapperSimpleParam(
+    srcToken: Address,
+    destToken: Address,
+    srcAmount: NumberAsString,
+    destAmount: NumberAsString,
+    data: ApexDefiData,
+  ): Promise<SimpleExchangeParam> {
+    const { wrapperAddress, isWrap } = data;
+    if (!wrapperAddress) throw new Error('Wrapper address not found');
+    if (isWrap === undefined) throw new Error('isWrap not found in data');
+
+    const swapFunction = isWrap ? 'wrap' : 'unwrap';
+    const swapParams = [srcAmount];
+
+    const swapData = this.wrapperIface.encodeFunctionData(
+      swapFunction,
+      swapParams,
+    );
+
+    return this.buildSimpleParamWithoutWETHConversion(
+      srcToken,
+      srcAmount,
+      destToken,
+      destAmount,
+      swapData,
+      wrapperAddress,
+      wrapperAddress,
+      '0',
+    );
   }
 }

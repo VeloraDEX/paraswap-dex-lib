@@ -19,9 +19,9 @@ export type ApexDefiData = {
     tokenIn: Address;
     tokenOut: Address;
   }[];
-  isDirectSwap: boolean; // true for single hop, false for cross-pair
-  isERC314Pair: boolean; // true if both tokens are ERC314 (no wrappers)
-  swapType: 'direct' | 'router';
+  swapType: 'direct' | 'router' | 'wrapper';
+  wrapperAddress?: Address;
+  isWrap?: boolean; // true for wrap (USDC->aUSDC), false for unwrap (aUSDC->USDC)
 };
 
 export type DexParams = {
