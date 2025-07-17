@@ -193,9 +193,11 @@ export class PricingHelper {
       destDexFee: 0,
     },
     rollupL1CalldataCostToL2GasCost?: (calldataCost: number) => number,
+    fastMode = false,
   ): Promise<PoolPrices<any>[]> {
     const pricingOptions: GetPricesVolumeOptions = {
       transferFees,
+      fastMode,
     };
 
     const dexPoolPrices = await Promise.all(
