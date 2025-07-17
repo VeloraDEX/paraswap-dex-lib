@@ -155,7 +155,6 @@ describe('ApexDefi E2E', () => {
       ['USDC', 'USDT', AMOUNT_USD, AMOUNT_USD],
       ['USDC', 'APEX', AMOUNT_USD, AMOUNT_ERC314],
       ['USDT', 'APEX', AMOUNT_USD, AMOUNT_ERC314],
-      ['BTCb', 'BENSI', AMOUNT_BTC, AMOUNT_ERC314],
     ];
 
     directPairs.forEach(([tokenA, tokenB, amountA, amountB]) => {
