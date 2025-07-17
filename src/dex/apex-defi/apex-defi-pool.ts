@@ -129,6 +129,7 @@ export class ApexDefiEventPool extends StatefulEventSubscriber<ApexDefiPoolState
       this.dexHelper,
       this.apexDefiTokenIface,
       this.apexDefiFactoryIface,
+      this.logger,
     );
 
     if (!poolData) {
@@ -143,6 +144,7 @@ export class ApexDefiEventPool extends StatefulEventSubscriber<ApexDefiPoolState
       lpFee: poolData.lpFee,
       tradingFee: poolData.tradingFee,
       isLegacy: poolData.isLegacy,
+      tradingEnabled: poolData.tradingEnabled,
     };
 
     return state;
@@ -214,6 +216,7 @@ export class ApexDefiEventPool extends StatefulEventSubscriber<ApexDefiPoolState
 
       return {
         ...state,
+        tradingEnabled: true, // if we are here, the pool is trading
         reserve0: newReserve0,
         reserve1: newReserve1,
       };

@@ -3,7 +3,7 @@ import { ApexDefiConfig, defaultBaseSwapRate } from './config';
 import { Network } from '../../constants';
 import { Interface } from '@ethersproject/abi';
 import { IDexHelper } from '../../dex-helper/idex-helper';
-import { Address } from '../../types';
+import { Address, Logger } from '../../types';
 
 /**
  * Converts any value to a BigInt, handling ethers.js BigNumber objects
@@ -76,6 +76,7 @@ export interface ApexDefiOnChainPoolData {
   tradingFee: number;
   factoryAddress: Address;
   isLegacy: boolean;
+  tradingEnabled: boolean;
 }
 
 export async function fetchApexDefiOnChainPoolData(
@@ -85,6 +86,7 @@ export async function fetchApexDefiOnChainPoolData(
   dexHelper: IDexHelper,
   tokenIface: Interface,
   factoryIface: Interface,
+  logger: Logger,
 ): Promise<ApexDefiOnChainPoolData | null> {
   const { factoryAddress, isLegacy } = getFactoryAddressForToken(
     pairAddress,
@@ -95,11 +97,15 @@ export async function fetchApexDefiOnChainPoolData(
   const multicall = [
     {
       target: pairAddress,
-      callData: tokenIface.encodeFunctionData('getReserves', []),
+      callData: tokenIface.encodeFunctionData('getReserves'),
     },
     {
       target: pairAddress,
       callData: tokenIface.encodeFunctionData('tradingFeeRate'),
+    },
+    {
+      target: pairAddress,
+      callData: tokenIface.encodeFunctionData('tradingEnabled'),
     },
   ];
 
@@ -125,13 +131,25 @@ export async function fetchApexDefiOnChainPoolData(
   // Check if all calls succeeded
   const [reservesSuccess, reservesData] = poolData[0];
   const [tradingFeeSuccess, tradingFeeData] = poolData[1];
-  const [feeSuccess, feeData] = poolData[2];
+  const [tradingEnabledSuccess, tradingEnabledData] = poolData[2];
+  const [feeSuccess, feeData] = poolData[3];
 
-  if (!reservesSuccess || !tradingFeeSuccess || !feeSuccess) {
+  if (
+    !reservesSuccess ||
+    !tradingFeeSuccess ||
+    !feeSuccess ||
+    !tradingEnabledSuccess
+  ) {
     return null;
   }
 
+  const tradingEnabled = tokenIface.decodeFunctionResult(
+    'tradingEnabled',
+    tradingEnabledData,
+  )[0];
+
   const reserves = tokenIface.decodeFunctionResult('getReserves', reservesData);
+
   const tradingFeeRate: bigint = tokenIface.decodeFunctionResult(
     'tradingFeeRate',
     tradingFeeData,
@@ -171,5 +189,6 @@ export async function fetchApexDefiOnChainPoolData(
     tradingFee: Number(tradingFeeRate),
     factoryAddress,
     isLegacy,
+    tradingEnabled,
   };
 }

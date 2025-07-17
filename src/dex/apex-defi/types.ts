@@ -11,6 +11,7 @@ export type ApexDefiPoolState = {
   // This is a % additional to the baseSwapRate
   tradingFee: number;
   isLegacy: boolean;
+  tradingEnabled: boolean;
 };
 
 export type ApexDefiData = {

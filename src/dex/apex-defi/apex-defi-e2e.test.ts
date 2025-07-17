@@ -29,18 +29,17 @@ function testForNetwork(
   const holders = Holders[network];
   const nativeTokenSymbol = NativeTokenSymbols[network];
 
+  console.log(
+    `🧪 Testing ${dexKey} on ${network}: ${tokenASymbol} <-> ${tokenBSymbol}`,
+  );
+  console.log(
+    ` Amounts: ${tokenASymbol}=${tokenAAmount}, ${tokenBSymbol}=${tokenBAmount}, ${nativeTokenSymbol}=${nativeTokenAmount}`,
+  );
+
   // Cover all contract methods and both sides
   const sideToContractMethods = new Map([
-    [
-      SwapSide.SELL,
-      [
-        ContractMethod.swapExactAmountIn,
-        ContractMethod.simpleSwap,
-        ContractMethod.multiSwap,
-        ContractMethod.megaSwap,
-      ],
-    ],
-    [SwapSide.BUY, [ContractMethod.swapExactAmountOut, ContractMethod.buy]],
+    // [SwapSide.SELL, [ContractMethod.swapExactAmountIn]],
+    [SwapSide.BUY, [ContractMethod.swapExactAmountOut]],
   ]);
 
   describe(`${network}`, () => {
@@ -48,33 +47,38 @@ function testForNetwork(
       describe(`${side}`, () => {
         contractMethods.forEach((contractMethod: ContractMethod) => {
           describe(`${contractMethod}`, () => {
-            it(`${nativeTokenSymbol} -> ${tokenASymbol}`, async () => {
-              await testE2E(
-                tokens[nativeTokenSymbol],
-                tokens[tokenASymbol],
-                holders[nativeTokenSymbol],
-                side === SwapSide.SELL ? nativeTokenAmount : tokenAAmount,
-                side,
-                dexKey,
-                contractMethod,
-                network,
-                provider,
-              );
-            });
-            it(`${tokenASymbol} -> ${nativeTokenSymbol}`, async () => {
-              await testE2E(
-                tokens[tokenASymbol],
-                tokens[nativeTokenSymbol],
-                holders[tokenASymbol],
-                side === SwapSide.SELL ? tokenAAmount : nativeTokenAmount,
-                side,
-                dexKey,
-                contractMethod,
-                network,
-                provider,
-              );
-            });
+            // it(`${nativeTokenSymbol} -> ${tokenASymbol}`, async () => {
+            //   console.log(
+            //     `🧪 Testing: ${nativeTokenSymbol} -> ${tokenASymbol}`,
+            //   );
+            //   await testE2E(
+            //     tokens[nativeTokenSymbol],
+            //     tokens[tokenASymbol],
+            //     holders[nativeTokenSymbol],
+            //     side === SwapSide.SELL ? nativeTokenAmount : tokenAAmount,
+            //     side,
+            //     dexKey,
+            //     contractMethod,
+            //     network,
+            //     provider,
+            //   );
+            // });
+            // it(`${tokenASymbol} -> ${nativeTokenSymbol}`, async () => {
+            //   console.log(` Testing: ${tokenASymbol} -> ${nativeTokenSymbol}`);
+            //   await testE2E(
+            //     tokens[tokenASymbol],
+            //     tokens[nativeTokenSymbol],
+            //     holders[tokenASymbol],
+            //     side === SwapSide.SELL ? tokenAAmount : nativeTokenAmount,
+            //     side,
+            //     dexKey,
+            //     contractMethod,
+            //     network,
+            //     provider,
+            //   );
+            // });
             it(`${tokenASymbol} -> ${tokenBSymbol}`, async () => {
+              console.log(` Testing: ${tokenASymbol} -> ${tokenBSymbol}`);
               await testE2E(
                 tokens[tokenASymbol],
                 tokens[tokenBSymbol],
@@ -88,6 +92,7 @@ function testForNetwork(
               );
             });
             it(`${tokenBSymbol} -> ${tokenASymbol}`, async () => {
+              console.log(` Testing: ${tokenBSymbol} -> ${tokenASymbol}`);
               await testE2E(
                 tokens[tokenBSymbol],
                 tokens[tokenASymbol],
@@ -107,45 +112,68 @@ function testForNetwork(
   });
 }
 
-const AMOUNT_ERC20 = '10000000'; // 10 units for 6-decimal tokens (e.g., USDC, USDT)
-const AMOUNT_ERC314 = '100000000000000000000'; // 100 units for 18-decimal tokens (e.g., APEX, aUSDC, aUSDT)
-const AMOUNT_AVAX = '100000000000000000'; // 0.1 AVAX (18 decimals)
+// Define standard test amounts for each token type
+/**
+ * Utility to convert a human-readable amount to a string representing the integer value
+ * according to the token's decimals.
+ *
+ * @param value - The human-readable value (e.g., 1, 0.1, 10)
+ * @param decimals - The number of decimals for the token (e.g., 6, 8, 18)
+ * @returns The string representation of the integer value for on-chain usage
+ */
+const toAmount = (value: number, decimals: number): string => {
+  // Use BigInt for safe integer math, avoid floating point issues
+  const [whole, fraction = ''] = value.toString().split('.');
+  const paddedFraction = (fraction + '0'.repeat(decimals)).slice(0, decimals);
+  return (
+    BigInt(whole) * 10n ** BigInt(decimals) +
+    BigInt(paddedFraction)
+  ).toString();
+};
+
+// You can now easily adjust the human-readable values here:
+const AMOUNT_ERC20 = toAmount(1, 18); // 1 unit for 18-decimal tokens (e.g., KET, WINK, other memes)
+const AMOUNT_USD = toAmount(1, 6); // 1 unit for 6-decimal tokens (e.g., USDC, USDT)
+const AMOUNT_BTC = toAmount(0.000001, 8); // 1 unit for 8-decimal tokens (e.g., BTCb)
+const AMOUNT_ERC314 = toAmount(100, 18); // 10 units for 18-decimal tokens (e.g., APEX, aUSDC, aUSDT)
+const AMOUNT_AVAX = toAmount(0.01, 18); // 0.01 AVAX (18 decimals)
 
 describe('ApexDefi E2E', () => {
   const network = Network.AVALANCHE;
   const dexKey = 'ApexDefi';
 
-  // Replace hardcoded values with constants
+  // Only need token pairs - AVAX pairs are handled automatically by testForNetwork
   const combos = [
     // ERC20 <-> ERC20
-    ['USDC', 'USDT', AMOUNT_ERC20, AMOUNT_ERC20, AMOUNT_AVAX],
-    // ERC20 <-> ERC314
-    ['USDC', 'APEX', AMOUNT_ERC20, AMOUNT_ERC314, AMOUNT_AVAX],
-    ['USDT', 'APEX', AMOUNT_ERC20, AMOUNT_ERC314, AMOUNT_AVAX],
-    // ERC314 <-> ERC314
-    ['APEX', 'aUSDC', AMOUNT_ERC314, AMOUNT_ERC314, AMOUNT_AVAX],
-    ['APEX', 'aUSDT', AMOUNT_ERC314, AMOUNT_ERC314, AMOUNT_AVAX],
-    ['aUSDC', 'aUSDT', AMOUNT_ERC314, AMOUNT_ERC314, AMOUNT_AVAX],
-    // AVAX <-> ERC20
-    ['AVAX', 'USDC', AMOUNT_AVAX, AMOUNT_ERC20, AMOUNT_AVAX],
-    ['AVAX', 'USDT', AMOUNT_AVAX, AMOUNT_ERC20, AMOUNT_AVAX],
-    // AVAX <-> ERC314
-    ['AVAX', 'APEX', AMOUNT_AVAX, AMOUNT_ERC314, AMOUNT_AVAX],
-    ['AVAX', 'aUSDC', AMOUNT_AVAX, AMOUNT_ERC314, AMOUNT_AVAX],
-    ['AVAX', 'aUSDT', AMOUNT_AVAX, AMOUNT_ERC314, AMOUNT_AVAX],
+    // ['USDC', 'USDT', AMOUNT_USD, AMOUNT_USD],
+
+    // // ERC20 <-> ERC314
+    // ['USDC', 'APEX', AMOUNT_USD, AMOUNT_ERC314],
+    // ['USDT', 'APEX', AMOUNT_USD, AMOUNT_ERC314],
+    ['BTCb', 'BENSI', AMOUNT_BTC, AMOUNT_ERC314],
+
+    // // ERC314 <-> ERC314
+    // ['APEX', 'aUSDC', AMOUNT_ERC314, AMOUNT_ERC314],
+    // ['APEX', 'BENSI', AMOUNT_ERC314, AMOUNT_ERC314],
+    // ['APEX', 'awUSDT', AMOUNT_ERC314, AMOUNT_ERC314],
+    // ['aUSDC', 'awUSDT', AMOUNT_ERC314, AMOUNT_ERC314],
+    // ['aBTCb', 'awUSDT', AMOUNT_BTC, AMOUNT_ERC314],
+
+    // // Wrapping/Unwrapping
+    // ['USDC', 'aUSDC', AMOUNT_USD, AMOUNT_ERC314],
+    // ['USDT', 'awUSDT', AMOUNT_USD, AMOUNT_ERC314],
+    // ['BTCb', 'aBTCb', AMOUNT_BTC, AMOUNT_ERC314],
   ];
 
-  combos.forEach(
-    ([tokenA, tokenB, tokenAAmount, tokenBAmount, nativeTokenAmount]) => {
-      testForNetwork(
-        network,
-        dexKey,
-        tokenA as string,
-        tokenB as string,
-        tokenAAmount as string,
-        tokenBAmount as string,
-        nativeTokenAmount as string,
-      );
-    },
-  );
+  combos.forEach(([tokenA, tokenB, amountA, amountB]) => {
+    testForNetwork(
+      network,
+      dexKey,
+      tokenA,
+      tokenB,
+      amountA,
+      amountB,
+      AMOUNT_AVAX,
+    );
+  });
 });

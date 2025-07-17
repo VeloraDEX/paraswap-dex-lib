@@ -32,9 +32,9 @@ import { ApexDefiFactory, OnPoolCreatedCallback } from './apex-defi-factory';
 import { fetchApexDefiOnChainPoolData } from './utils';
 import {
   ApexDefiWrapperFactory,
-  WrapperInfo,
   OnWrapperCreatedCallback,
 } from './apex-defi-wrapper-factory';
+import { getLocalDeadlineAsFriendlyPlaceholder } from '../simple-exchange';
 
 export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
   readonly eventPools: Record<string, ApexDefiEventPool | null> = {};
@@ -161,7 +161,8 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
     if (isDirectAVAXPair) {
       // Direct AVAX pair - return single pool
       const pairAddress = this.getPoolAddress(srcTokenToUse, destTokenToUse);
-      return [this.getPoolIdentifier(pairAddress).toLowerCase()];
+      const poolIdentifier = this.getPoolIdentifier(pairAddress).toLowerCase();
+      return [poolIdentifier];
     } else {
       // Token-to-token swap - return both AVAX pairs
       const avaxToken = {
@@ -172,10 +173,12 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
       const srcPoolAddress = this.getPoolAddress(srcTokenToUse, avaxToken);
       const destPoolAddress = this.getPoolAddress(destTokenToUse, avaxToken);
 
-      return [
-        this.getPoolIdentifier(srcPoolAddress).toLowerCase(),
-        this.getPoolIdentifier(destPoolAddress).toLowerCase(),
-      ];
+      const srcPoolIdentifier =
+        this.getPoolIdentifier(srcPoolAddress).toLowerCase();
+      const destPoolIdentifier =
+        this.getPoolIdentifier(destPoolAddress).toLowerCase();
+
+      return [srcPoolIdentifier, destPoolIdentifier];
     }
   }
 
@@ -218,7 +221,9 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
         destToken,
       );
 
-      if (_srcAddress === _destAddress) return null;
+      if (_srcAddress === _destAddress) {
+        return null;
+      }
 
       // Get underlying ERC314 tokens for pool discovery and pricing
       const srcTokenERC314 = this.getERC314Token(srcToken.address);
@@ -237,6 +242,9 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
         : poolIdentifiers;
 
       if (validPoolIdentifiers.length === 0) {
+        this.logger.warn(
+          `No valid pool identifiers found for ${srcToken.address} -> ${destToken.address}`,
+        );
         return null;
       }
 
@@ -269,7 +277,12 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
         );
       }
     } catch (e) {
-      this.logger.error(`Error_getPricesVolume:`, e);
+      this.logger.error(
+        `Error_getPricesVolume ${srcToken.symbol || srcToken.address}, ${
+          destToken.symbol || destToken.address
+        }, ${side}:`,
+        e,
+      );
       return null;
     }
   }
@@ -284,72 +297,93 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
     originalSrcToken: Token,
     originalDestToken: Token,
   ): Promise<ExchangePrices<ApexDefiData> | null> {
-    // Get or discover the pool
-    let pool = this.eventPools[poolIdentifier];
-    if (!pool) {
-      pool = await this.discoverPool(
-        srcTokenERC314,
-        destTokenERC314,
-        blockNumber,
+    try {
+      // Get or discover the pool
+      let pool = this.eventPools[poolIdentifier];
+      if (!pool) {
+        pool = await this.discoverPool(
+          srcTokenERC314,
+          destTokenERC314,
+          blockNumber,
+        );
+        if (!pool) {
+          this.logger.warn(`Failed to discover pool for ${poolIdentifier}`);
+          return null;
+        }
+      }
+
+      const state = await pool.getStateOrGenerate(blockNumber);
+      if (!state) {
+        this.logger.warn(`Failed to get pool state for ${poolIdentifier}`);
+        return null;
+      }
+
+      if (!state.tradingEnabled) {
+        this.logger.warn(`Pool ${poolIdentifier} is not trading`);
+        return null;
+      }
+
+      const { prices, unit } = await this.calculatePrices(
+        amounts,
+        side,
+        originalSrcToken,
+        originalDestToken,
+        async amount =>
+          side === SwapSide.SELL
+            ? this.getSellPrice(state, amount, srcTokenERC314, destTokenERC314)
+            : this.getBuyPrice(state, amount, srcTokenERC314, destTokenERC314),
+        async unitAmount =>
+          side === SwapSide.SELL
+            ? this.getSellPrice(
+                state,
+                unitAmount,
+                srcTokenERC314,
+                destTokenERC314,
+              )
+            : this.getBuyPrice(
+                state,
+                unitAmount,
+                srcTokenERC314,
+                destTokenERC314,
+              ),
       );
-      if (!pool) return null;
-    }
 
-    const state = await pool.getStateOrGenerate(blockNumber);
-    if (!state) return null;
+      const isERC314Pair =
+        !this.wrapperFactory.getWrapperByOriginalToken(
+          originalSrcToken.address,
+        ) &&
+        !this.wrapperFactory.getWrapperByOriginalToken(
+          originalDestToken.address,
+        );
 
-    const { prices, unit } = await this.calculatePrices(
-      amounts,
-      side,
-      originalSrcToken,
-      originalDestToken,
-      async amount =>
-        side === SwapSide.SELL
-          ? this.getSellPrice(state, amount, srcTokenERC314, destTokenERC314)
-          : this.getBuyPrice(state, amount, srcTokenERC314, destTokenERC314),
-      async unitAmount =>
-        side === SwapSide.SELL
-          ? this.getSellPrice(
-              state,
-              unitAmount,
-              srcTokenERC314,
-              destTokenERC314,
-            )
-          : this.getBuyPrice(
-              state,
-              unitAmount,
-              srcTokenERC314,
-              destTokenERC314,
-            ),
-    );
-
-    const isERC314Pair =
-      !this.wrapperFactory.getWrapperByOriginalToken(
-        originalSrcToken.address,
-      ) &&
-      !this.wrapperFactory.getWrapperByOriginalToken(originalDestToken.address);
-
-    return [
-      {
-        prices,
-        unit,
-        data: {
-          path: [
-            {
-              tokenIn: originalSrcToken.address.toLowerCase(),
-              tokenOut: originalDestToken.address.toLowerCase(),
-            },
-          ],
-          isDirectSwap: true,
-          isERC314Pair,
-          swapType: isERC314Pair ? 'direct' : 'router',
+      return [
+        {
+          prices,
+          unit,
+          data: {
+            path: [
+              {
+                tokenIn: originalSrcToken.address.toLowerCase(),
+                tokenOut: originalDestToken.address.toLowerCase(),
+              },
+            ],
+            isDirectSwap: true,
+            isERC314Pair,
+            swapType: isERC314Pair ? 'direct' : 'router',
+          },
+          exchange: this.dexKey,
+          poolIdentifier,
+          gasCost: ApexDefiConfig[this.dexKey][this.network].poolGasCost,
+          poolAddresses: [pool.poolAddress],
         },
-        exchange: this.dexKey,
-        poolIdentifier,
-        gasCost: ApexDefiConfig[this.dexKey][this.network].poolGasCost,
-        poolAddresses: [pool.poolAddress],
-      },
-    ];
+      ];
+    } catch (e) {
+      this.logger.error(
+        `Error in getDirectAVAXPairPrices for ${poolIdentifier}:`,
+        e,
+      );
+      return null;
+    }
   }
 
   private async getCrossPairTokenToTokenPrices(
@@ -380,14 +414,23 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
       ),
     ]);
 
-    if (!srcPool || !destPool) return null;
+    if (!srcPool || !destPool) {
+      return null;
+    }
 
     const [srcState, destState] = await Promise.all([
       srcPool.getStateOrGenerate(blockNumber),
       destPool.getStateOrGenerate(blockNumber),
     ]);
 
-    if (!srcState || !destState) return null;
+    if (!srcState || !destState) {
+      return null;
+    }
+
+    if (!srcState.tradingEnabled || !destState.tradingEnabled) {
+      this.logger.warn('Pool is not trading');
+      return null;
+    }
 
     const { prices, unit } = await this.calculatePrices(
       amounts,
@@ -482,7 +525,11 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
   ): Promise<ApexDefiEventPool | null> {
     const pairAddress = this.getPoolAddress(srcToken, destToken);
     const poolKey = this.getPoolIdentifier(pairAddress);
-    if (this.eventPools[poolKey]) return this.eventPools[poolKey];
+
+    if (this.eventPools[poolKey]) {
+      return this.eventPools[poolKey];
+    }
+
     return this.fetchAndInitPool(pairAddress, blockNumber, poolKey);
   }
 
@@ -496,7 +543,13 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
     srcToken: Token,
     destToken: Token,
   ): bigint {
-    const { reserve0, reserve1, baseSwapRate, tradingFee } = state;
+    const { reserve0, reserve1, baseSwapRate, tradingFee, tradingEnabled } =
+      state;
+
+    if (!tradingEnabled) {
+      this.logger.warn('Pool is not trading');
+      return 0n;
+    }
 
     // Validate state
     if (
@@ -542,7 +595,13 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
     srcToken: Token,
     destToken: Token,
   ): bigint {
-    const { reserve0, reserve1, baseSwapRate, tradingFee } = state;
+    const { reserve0, reserve1, baseSwapRate, tradingFee, tradingEnabled } =
+      state;
+
+    if (!tradingEnabled) {
+      this.logger.warn('Pool is not trading');
+      return 0n;
+    }
 
     if (
       !reserve0 ||
@@ -592,6 +651,11 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
       decimals: 18,
     };
 
+    if (!srcPoolState.tradingEnabled || !destPoolState.tradingEnabled) {
+      this.logger.warn('Pool is not trading');
+      return 0n;
+    }
+
     // Step 1: Calculate tokenA → AVAX (with fees)
     const avaxReceived = this.getSellPrice(
       srcPoolState,
@@ -624,6 +688,11 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
       address: ETHER_ADDRESS,
       decimals: 18,
     };
+
+    if (!srcPoolState.tradingEnabled || !destPoolState.tradingEnabled) {
+      this.logger.warn('Pool is not trading');
+      return 0n;
+    }
 
     // Step 1: Calculate AVAX → tokenB (reverse with fees)
     const avaxNeeded = this.getBuyPrice(
@@ -789,7 +858,7 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
       swapFunction = 'swapNativeToToken';
       swapParams = [
         destAmount, // minimumTokensOut
-        Math.floor(Date.now() / 1000) + 300, // deadline
+        getLocalDeadlineAsFriendlyPlaceholder(), // deadline
       ];
       targetExchange = destToken; // Call directly on the token
     } else if (!isSrcAVAX && isDestAVAX) {
@@ -798,7 +867,7 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
       swapParams = [
         srcAmount, // tokensSold
         destAmount, // minimumNativeOut
-        Math.floor(Date.now() / 1000) + 300, // deadline
+        getLocalDeadlineAsFriendlyPlaceholder(), // deadline
       ];
       targetExchange = srcToken; // Call directly on the token
     } else {
@@ -846,7 +915,7 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
         destAmount, // Keep original amount - router handles decimal conversion
         routerPath,
         recipient,
-        Math.floor(Date.now() / 1000) + 300,
+        getLocalDeadlineAsFriendlyPlaceholder(),
       ];
     } else if (!isSrcAVAX && isDestAVAX) {
       // Token -> AVAX
@@ -856,7 +925,7 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
         destAmount,
         routerPath,
         recipient,
-        Math.floor(Date.now() / 1000) + 300,
+        getLocalDeadlineAsFriendlyPlaceholder(),
       ];
     } else {
       // Token -> Token (cross-pair via AVAX)
@@ -866,7 +935,7 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
         destAmount,
         routerPath,
         recipient,
-        Math.floor(Date.now() / 1000) + 300,
+        getLocalDeadlineAsFriendlyPlaceholder(),
       ];
     }
 
@@ -907,14 +976,17 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
     const isSrcAVAX = isETHAddress(srcToken);
     const isDestAVAX = isETHAddress(destToken);
 
+    const targetExchange =
+      ApexDefiConfig[this.dexKey][this.network].routerAddress;
+
     if (isSrcAVAX && !isDestAVAX) {
       // AVAX -> Token
       swapFunction = 'swapExactAVAXForTokens';
       swapParams = [
         destAmount,
         routerPath, // Use converted path
-        this.augustusAddress, // recipient - will be set by the router
-        Math.floor(Date.now() / 1000) + 300, // deadline: 5 minutes from now
+        targetExchange, // recipient - will be set by the router
+        getLocalDeadlineAsFriendlyPlaceholder(), // deadline: 7 days from now
       ];
     } else if (!isSrcAVAX && isDestAVAX) {
       // Token -> AVAX
@@ -923,8 +995,8 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
         srcAmount,
         destAmount,
         routerPath, // Use converted path
-        this.augustusAddress, // recipient - will be set by the router
-        Math.floor(Date.now() / 1000) + 300, // deadline: 5 minutes from now
+        targetExchange, // recipient - will be set by the router
+        getLocalDeadlineAsFriendlyPlaceholder(), // deadline: 7 days from now
       ];
     } else {
       // Token -> Token
@@ -933,8 +1005,8 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
         srcAmount,
         destAmount,
         routerPath, // Use converted path
-        this.augustusAddress, // recipient - will be set by the router
-        Math.floor(Date.now() / 1000) + 300, // deadline: 5 minutes from now
+        targetExchange, // recipient - will be set by the router
+        getLocalDeadlineAsFriendlyPlaceholder(), // deadline: 7 days from now
       ];
     }
 
@@ -949,8 +1021,8 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
       destToken,
       destAmount,
       swapData,
-      ApexDefiConfig[this.dexKey][this.network].routerAddress,
-      ApexDefiConfig[this.dexKey][this.network].routerAddress,
+      targetExchange,
+      targetExchange,
       '0',
     );
   }
@@ -972,7 +1044,6 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
     beneficiary: string,
     contractMethod: string,
   ): TxInfo<null> {
-    // ApexDefi doesn't support direct swaps in the same way as UniswapV2
     // This method is not implemented for ApexDefi
     throw new Error('Direct swaps not supported for ApexDefi');
   }
@@ -993,7 +1064,6 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
     blockNumber: number,
     contractMethod: string,
   ): TxInfo<null> {
-    // ApexDefi doesn't support direct swaps in the same way as UniswapV2
     // This method is not implemented for ApexDefi
     throw new Error('Direct swaps not supported for ApexDefi');
   }
@@ -1038,7 +1108,6 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
 
   // Returns list of top pools based on liquidity. Max
   // limit number pools should be returned.
-  // ApexDefi is a single pool DEX, so we return the token itself as a pool with AVAX
   async getTopPoolsForToken(
     tokenAddress: Address,
     limit: number,
@@ -1047,7 +1116,7 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
       const blockNumber =
         await this.dexHelper.web3Provider.eth.getBlockNumber();
 
-      // ✅ Check if this token has a wrapper
+      // Check if this token has a wrapper
       const tokenInfo = this.getERC314Token(tokenAddress);
       const hasWrapper = tokenInfo.address !== tokenAddress;
 
@@ -1188,7 +1257,7 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
         return [
           {
             exchange: this.dexKey,
-            address: tokenAddress.toLowerCase(), // ✅ Return original token address
+            address: tokenAddress.toLowerCase(), // Return original token address
             poolIdentifier: this.getPoolIdentifier(tokenToCheck), // Use underlying token for pool ID
             connectorTokens: [
               {
@@ -1224,6 +1293,7 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
         this.dexHelper,
         this.tokenIface,
         this.factoryIface,
+        this.logger,
       );
 
       // No pool data found, return null
@@ -1251,6 +1321,7 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
           lpFee: poolData.lpFee,
           tradingFee: poolData.tradingFee,
           isLegacy: poolData.isLegacy,
+          tradingEnabled: poolData.tradingEnabled,
         },
       });
 
@@ -1297,12 +1368,12 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
 
   public fixPathForRouter(path: Address[]): Address[] {
     return path.map(token => {
-      // ✅ Only convert native AVAX to WAVAX for router calls
+      // Only convert native AVAX to WAVAX for router calls
       if (token.toLowerCase() === ETHER_ADDRESS.toLowerCase()) {
         return this.dexHelper.config.data.wrappedNativeTokenAddress;
       }
 
-      // ✅ Leave all other tokens as-is (including ERC20 tokens like USDC)
+      // Leave all other tokens as-is (including ERC20 tokens like USDC)
       return token;
     });
   }
@@ -1310,6 +1381,14 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
   // Helper method to get ERC314 token for pricing/pools
   // Simplified getERC314Token method - always return ERC314 token for pricing
   private getERC314Token(tokenAddress: Address): Token {
+    // if token is AVAX, return AVAX
+    if (isETHAddress(tokenAddress)) {
+      return {
+        address: tokenAddress,
+        decimals: 18,
+      };
+    }
+
     // PRIORITY 1: Check if this is an original token (ERC20) that has a wrapper
     const wrapperAddress =
       this.wrapperFactory.getWrapperByOriginalToken(tokenAddress);
@@ -1355,13 +1434,12 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
     if (fromDecimals === toDecimals) return amount;
 
     if (fromDecimals > toDecimals) {
-      return amount / BigInt(10 ** (fromDecimals - toDecimals)); // ✅ DIVIDE!
+      return amount / BigInt(10 ** (fromDecimals - toDecimals));
     } else {
       return amount * BigInt(10 ** (toDecimals - fromDecimals));
     }
   }
 
-  // NEW: Clean conversion methods
   private convertAmountsToERC314(
     amounts: bigint[],
     fromDecimals: number,

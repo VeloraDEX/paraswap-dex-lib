@@ -989,6 +989,10 @@ export const Tokens: {
       address: '0x4DF08C8f17fB7BC1261CD308b049DfCe59F5dC9a',
       decimals: 18,
     },
+    awUSDT: {
+      address: '0x9Fa9B0ffF6AAedf635b9a52e0Cc4661eff92C15e',
+      decimals: 18,
+    },
     PHAR: {
       address: '0xAAAB9D12A30504559b0C5a9A5977fEE4A6081c6b',
       decimals: 18,
@@ -2069,6 +2073,7 @@ export const Holders: {
     APEX: '0x531d00D3FE0535675B22bb51Db3aB1278567EA75',
     aUSDC: '0x531d00D3FE0535675B22bb51Db3aB1278567EA75',
     aBTCb: '0x531d00D3FE0535675B22bb51Db3aB1278567EA75',
+    awUSDT: '0x531d00D3FE0535675B22bb51Db3aB1278567EA75',
     BENSI: '0x531d00D3FE0535675B22bb51Db3aB1278567EA75',
     PHAR: '0x654296D56532f62B7d91d335791d3c364a9385b5',
     stataUSDT: '', // no holders yet

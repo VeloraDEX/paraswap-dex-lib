@@ -237,7 +237,6 @@ describe('ApexDefi', function () {
 
     beforeAll(async () => {
       blockNumber = await dexHelper.web3Provider.eth.getBlockNumber();
-      console.log('blockNumber', blockNumber);
       apexDefi = new ApexDefi(network, dexKey, dexHelper);
       if (apexDefi.initializePricing) {
         await apexDefi.initializePricing(blockNumber);
