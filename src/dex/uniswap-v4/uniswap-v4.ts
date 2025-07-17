@@ -3,6 +3,7 @@ import {
   Address,
   DexExchangeParam,
   ExchangePrices,
+  GetPricesVolumeOptions,
   NumberAsString,
   PoolLiquidity,
   PoolPrices,
@@ -115,10 +116,9 @@ export class UniswapV4 extends SimpleExchange implements IDex<UniswapV4Data> {
     side: SwapSide,
     blockNumber: number,
   ): Promise<string[]> {
-    const pools = await this.poolManager.getAvailablePoolsForPair(
+    const pools = this.poolManager.getAvailablePoolsForPair(
       from.address.toLowerCase(),
       to.address.toLowerCase(),
-      blockNumber,
     );
 
     const eventPools = (
@@ -138,7 +138,6 @@ export class UniswapV4 extends SimpleExchange implements IDex<UniswapV4Data> {
     amounts: bigint[],
     zeroForOne: boolean,
     side: SwapSide,
-    reqId: number,
   ): bigint[] | null {
     try {
       const outputsResult = uniswapV4PoolMath.queryOutputs(
@@ -147,8 +146,6 @@ export class UniswapV4 extends SimpleExchange implements IDex<UniswapV4Data> {
         amounts,
         zeroForOne,
         side,
-        this.logger,
-        reqId,
       );
 
       if (
@@ -176,14 +173,11 @@ export class UniswapV4 extends SimpleExchange implements IDex<UniswapV4Data> {
     side: SwapSide,
     blockNumber: number,
     limitPools?: string[],
+    options?: GetPricesVolumeOptions,
   ): Promise<ExchangePrices<UniswapV4Data> | null> {
-    const reqId = Math.floor(Math.random() * 10000);
-    // const getPricesVolumeStart = Date.now();
-
-    const pools: Pool[] = await this.poolManager.getAvailablePoolsForPair(
+    const pools: Pool[] = this.poolManager.getAvailablePoolsForPair(
       from.address.toLowerCase(),
       to.address.toLowerCase(),
-      blockNumber,
     );
 
     const availablePools =
@@ -214,28 +208,17 @@ export class UniswapV4 extends SimpleExchange implements IDex<UniswapV4Data> {
         blockNumber,
       );
 
-      const poolState = (await eventPool?.getState(blockNumber)) || null;
+      if (!eventPool) {
+        return null;
+      }
 
-      let prices: bigint[] | null;
+      const poolState = eventPool.getState(blockNumber);
+
+      let prices: bigint[] | null = null;
+
       if (poolState !== null && poolState.isValid) {
-        // const getOutputsStart = Date.now();
-        prices = this._getOutputs(
-          pool,
-          poolState,
-          amounts,
-          zeroForOne,
-          side,
-          reqId,
-        );
-
-        // this.logger.info(
-        //   `_getOutputs_${pool.id}_${reqId}: ${
-        //     Date.now() - getOutputsStart
-        //   } ms (src: ${from.address}, dest: ${
-        //     to.address
-        //   }, amounts: ${JSON.stringify(amounts)})`,
-        // );
-      } else {
+        prices = this._getOutputs(pool, poolState, amounts, zeroForOne, side);
+      } else if (!options?.fastMode) {
         this.logger.warn(
           `${this.dexKey}-${this.network}: pool ${poolId} state was not found...falling back to rpc`,
         );
@@ -280,11 +263,7 @@ export class UniswapV4 extends SimpleExchange implements IDex<UniswapV4Data> {
     });
 
     const prices = await Promise.all(pricesPromises);
-    // this.logger.info(
-    //   `getPricesVolume_${from.address}_${to.address}_${reqId}: ${
-    //     Date.now() - getPricesVolumeStart
-    //   } ms`,
-    // );
+
     return prices.filter(res => res !== null);
   }
 
@@ -391,7 +370,7 @@ export class UniswapV4 extends SimpleExchange implements IDex<UniswapV4Data> {
       },
     }));
 
-    const results = await this.dexHelper.multiWrapper!.tryAggregate(
+    const results = await this.dexHelper.multiWrapper.tryAggregate(
       false,
       calls,
       blockNumber,
