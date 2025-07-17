@@ -149,12 +149,13 @@ describe('ApexDefi E2E', () => {
   const network = Network.AVALANCHE;
   const dexKey = 'ApexDefi';
 
-  // Test Suite 1: Direct AVAX Pairs
-  describe('Direct AVAX Pairs', () => {
+  // Test Suite 1: ERC20(314) <-> ERC20(314)
+  describe('ERC20(314) <-> ERC20(314)', () => {
     const directPairs = [
       ['USDC', 'USDT', AMOUNT_USD, AMOUNT_USD],
       ['USDC', 'APEX', AMOUNT_USD, AMOUNT_ERC314],
       ['USDT', 'APEX', AMOUNT_USD, AMOUNT_ERC314],
+      ['BENSI', 'USDT', AMOUNT_ERC314, AMOUNT_USD],
     ];
 
     directPairs.forEach(([tokenA, tokenB, amountA, amountB]) => {
@@ -170,12 +171,12 @@ describe('ApexDefi E2E', () => {
     });
   });
 
-  // Test Suite 2: Cross-Pair ERC314 Swaps
-  describe('Cross-Pair ERC314 Swaps', () => {
+  // Test Suite 2: ERC314 <-> ERC314
+  describe('ERC314 <-> ERC314', () => {
     const crossPairs = [
       ['APEX', 'aUSDC', AMOUNT_ERC314, AMOUNT_ERC314],
       ['APEX', 'BENSI', AMOUNT_ERC314, AMOUNT_ERC314],
-      ['APEX', 'awUSDT', AMOUNT_ERC314, AMOUNT_ERC314],
+      ['awUSDT', 'APEX', AMOUNT_ERC314, AMOUNT_ERC314],
       ['aUSDC', 'awUSDT', AMOUNT_ERC314, AMOUNT_ERC314],
       ['aBTCb', 'awUSDT', AMOUNT_ERC314_BTC, AMOUNT_ERC314],
     ];
