@@ -82,10 +82,10 @@ export async function fetchApexDefiOnChainPoolData(
   pairAddress: Address,
   network: Network,
   blockNumber: number,
-  dexHelper: IDexHelper, // IDexHelper
-  tokenIface: Interface, // ethers Interface
-  factoryIface: Interface, // ethers Interface
-): Promise<ApexDefiOnChainPoolData> {
+  dexHelper: IDexHelper,
+  tokenIface: Interface,
+  factoryIface: Interface,
+): Promise<ApexDefiOnChainPoolData | null> {
   const { factoryAddress, isLegacy } = getFactoryAddressForToken(
     pairAddress,
     network,
@@ -117,17 +117,24 @@ export async function fetchApexDefiOnChainPoolData(
     });
   }
 
+  // Use tryAggregate - no try/catch needed
   const poolData = await dexHelper.multiContract.methods
-    .aggregate(multicall)
+    .tryAggregate(false, multicall)
     .call({}, blockNumber);
 
-  const reserves = tokenIface.decodeFunctionResult(
-    'getReserves',
-    poolData.returnData[0],
-  );
+  // Check if all calls succeeded
+  const [reservesSuccess, reservesData] = poolData[0];
+  const [tradingFeeSuccess, tradingFeeData] = poolData[1];
+  const [feeSuccess, feeData] = poolData[2];
+
+  if (!reservesSuccess || !tradingFeeSuccess || !feeSuccess) {
+    return null;
+  }
+
+  const reserves = tokenIface.decodeFunctionResult('getReserves', reservesData);
   const tradingFeeRate: bigint = tokenIface.decodeFunctionResult(
     'tradingFeeRate',
-    poolData.returnData[1],
+    tradingFeeData,
   )[0];
 
   let feeHookDetails: [Address, bigint, bigint, bigint] = [
@@ -141,12 +148,12 @@ export async function fetchApexDefiOnChainPoolData(
   if (isLegacy) {
     feeRate = factoryIface.decodeFunctionResult(
       'feeRate',
-      poolData.returnData[2],
+      feeData,
     )[0] as bigint;
   } else {
     feeHookDetails = factoryIface.decodeFunctionResult(
       'getFeeHookDetails',
-      poolData.returnData[2],
+      feeData,
     ) as [Address, bigint, bigint, bigint];
   }
 

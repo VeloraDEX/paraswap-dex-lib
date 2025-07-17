@@ -65,7 +65,7 @@ async function checkOnChainPricing(
 
   const readerIface = apexDefi.routerIface;
 
-  // ✅ Convert only for router calls
+  // Convert only for router calls
   const routerPath = apexDefi.fixPathForRouter([tokenIn, tokenOut]);
 
   const readerCallData = getReaderCalldata(
@@ -195,6 +195,11 @@ describe('ApexDefi', function () {
       },
       {
         srcTokenSymbol: 'AVAX',
+        destTokenSymbol: 'USDC',
+        description: 'AVAX to USDC',
+      },
+      {
+        srcTokenSymbol: 'AVAX',
         destTokenSymbol: 'aBTCb',
         description: 'AVAX to aBTCb',
       },
@@ -203,15 +208,30 @@ describe('ApexDefi', function () {
         destTokenSymbol: 'BTCb',
         description: 'AVAX to BTCb',
       },
+      {
+        srcTokenSymbol: 'aBTCb',
+        destTokenSymbol: 'aUSDC',
+        description: 'aBTCb to aUSDC',
+      },
+      {
+        srcTokenSymbol: 'BTCb',
+        destTokenSymbol: 'aUSDC',
+        description: 'BTCb to aUSDC',
+      },
+      {
+        srcTokenSymbol: 'APEX',
+        destTokenSymbol: 'aBTCb',
+        description: 'APEX to aBTCb',
+      },
+      {
+        srcTokenSymbol: 'aBTCb',
+        destTokenSymbol: 'APEX',
+        description: 'aBTCb to APEX',
+      },
       // {
-      //   srcTokenSymbol: 'APEX',
-      //   destTokenSymbol: 'aBTCb',
-      //   description: 'APEX to aBTCb',
-      // },
-      // {
-      //   srcTokenSymbol: 'aBTCb',
-      //   destTokenSymbol: 'APEX',
-      //   description: 'aBTCb to APEX',
+      //   srcTokenSymbol: 'AVAX',
+      //   destTokenSymbol: 'POPS',
+      //   description: 'AVAX to POPS',
       // },
     ];
 

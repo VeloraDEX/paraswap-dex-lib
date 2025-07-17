@@ -131,6 +131,10 @@ export class ApexDefiEventPool extends StatefulEventSubscriber<ApexDefiPoolState
       this.apexDefiFactoryIface,
     );
 
+    if (!poolData) {
+      throw new Error('No pool data found');
+    }
+
     const state = {
       reserve0: toBigInt(poolData.reserve0),
       reserve1: toBigInt(poolData.reserve1),
