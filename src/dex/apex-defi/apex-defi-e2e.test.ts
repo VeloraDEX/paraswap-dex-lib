@@ -29,9 +29,18 @@ function testForNetwork(
   const holders = Holders[network];
   const nativeTokenSymbol = NativeTokenSymbols[network];
 
-  // TODO: Add any direct swap contractMethod name if it exists
+  // Cover all contract methods and both sides
   const sideToContractMethods = new Map([
-    [SwapSide.SELL, [ContractMethod.swapExactAmountIn]],
+    [
+      SwapSide.SELL,
+      [
+        ContractMethod.swapExactAmountIn,
+        ContractMethod.simpleSwap,
+        ContractMethod.multiSwap,
+        ContractMethod.megaSwap,
+      ],
+    ],
+    [SwapSide.BUY, [ContractMethod.swapExactAmountOut, ContractMethod.buy]],
   ]);
 
   describe(`${network}`, () => {
@@ -78,6 +87,19 @@ function testForNetwork(
                 provider,
               );
             });
+            it(`${tokenBSymbol} -> ${tokenASymbol}`, async () => {
+              await testE2E(
+                tokens[tokenBSymbol],
+                tokens[tokenASymbol],
+                holders[tokenBSymbol],
+                side === SwapSide.SELL ? tokenBAmount : tokenAAmount,
+                side,
+                dexKey,
+                contractMethod,
+                network,
+                provider,
+              );
+            });
           });
         });
       }),
@@ -85,29 +107,45 @@ function testForNetwork(
   });
 }
 
+const AMOUNT_ERC20 = '10000000'; // 10 units for 6-decimal tokens (e.g., USDC, USDT)
+const AMOUNT_ERC314 = '100000000000000000000'; // 100 units for 18-decimal tokens (e.g., APEX, aUSDC, aUSDT)
+const AMOUNT_AVAX = '100000000000000000'; // 0.1 AVAX (18 decimals)
+
 describe('ApexDefi E2E', () => {
+  const network = Network.AVALANCHE;
   const dexKey = 'ApexDefi';
 
-  describe('Avalanche', () => {
-    const network = Network.AVALANCHE;
+  // Replace hardcoded values with constants
+  const combos = [
+    // ERC20 <-> ERC20
+    ['USDC', 'USDT', AMOUNT_ERC20, AMOUNT_ERC20, AMOUNT_AVAX],
+    // ERC20 <-> ERC314
+    ['USDC', 'APEX', AMOUNT_ERC20, AMOUNT_ERC314, AMOUNT_AVAX],
+    ['USDT', 'APEX', AMOUNT_ERC20, AMOUNT_ERC314, AMOUNT_AVAX],
+    // ERC314 <-> ERC314
+    ['APEX', 'aUSDC', AMOUNT_ERC314, AMOUNT_ERC314, AMOUNT_AVAX],
+    ['APEX', 'aUSDT', AMOUNT_ERC314, AMOUNT_ERC314, AMOUNT_AVAX],
+    ['aUSDC', 'aUSDT', AMOUNT_ERC314, AMOUNT_ERC314, AMOUNT_AVAX],
+    // AVAX <-> ERC20
+    ['AVAX', 'USDC', AMOUNT_AVAX, AMOUNT_ERC20, AMOUNT_AVAX],
+    ['AVAX', 'USDT', AMOUNT_AVAX, AMOUNT_ERC20, AMOUNT_AVAX],
+    // AVAX <-> ERC314
+    ['AVAX', 'APEX', AMOUNT_AVAX, AMOUNT_ERC314, AMOUNT_AVAX],
+    ['AVAX', 'aUSDC', AMOUNT_AVAX, AMOUNT_ERC314, AMOUNT_AVAX],
+    ['AVAX', 'aUSDT', AMOUNT_AVAX, AMOUNT_ERC314, AMOUNT_AVAX],
+  ];
 
-    const tokenASymbol: string = 'aUSDC';
-    const tokenBSymbol: string = 'APEX';
-
-    const tokenAAmount: string = '100000000000000000000'; // 100 aUSDC
-    const tokenBAmount: string = '100000000000000000000'; // 100 APEX
-    const nativeTokenAmount = '100000000000000000'; // 1 AVAX
-
-    testForNetwork(
-      network,
-      dexKey,
-      tokenASymbol,
-      tokenBSymbol,
-      tokenAAmount,
-      tokenBAmount,
-      nativeTokenAmount,
-    );
-
-    // TODO: Add any additional test cases required to test ApexDefi
-  });
+  combos.forEach(
+    ([tokenA, tokenB, tokenAAmount, tokenBAmount, nativeTokenAmount]) => {
+      testForNetwork(
+        network,
+        dexKey,
+        tokenA as string,
+        tokenB as string,
+        tokenAAmount as string,
+        tokenBAmount as string,
+        nativeTokenAmount as string,
+      );
+    },
+  );
 });
