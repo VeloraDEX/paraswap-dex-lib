@@ -91,11 +91,11 @@ describe('ApexDefi E2E', () => {
   describe('Avalanche', () => {
     const network = Network.AVALANCHE;
 
-    const tokenASymbol: string = 'USDC'; // 6 decimals
-    const tokenBSymbol: string = 'APEX'; // 18 decimals
+    const tokenASymbol: string = 'aUSDC';
+    const tokenBSymbol: string = 'APEX';
 
-    const tokenAAmount: string = '10000000'; // 10 USDC
-    const tokenBAmount: string = '100000000000000000000'; // 100 APEX (18 decimals)
+    const tokenAAmount: string = '100000000000000000000'; // 100 aUSDC
+    const tokenBAmount: string = '100000000000000000000'; // 100 APEX
     const nativeTokenAmount = '100000000000000000'; // 1 AVAX
 
     testForNetwork(

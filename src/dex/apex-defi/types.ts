@@ -18,6 +18,9 @@ export type ApexDefiData = {
     tokenIn: Address;
     tokenOut: Address;
   }[];
+  isDirectSwap: boolean; // true for single hop, false for cross-pair
+  isERC314Pair: boolean; // true if both tokens are ERC314 (no wrappers)
+  swapType: 'direct' | 'router';
 };
 
 export type DexParams = {
