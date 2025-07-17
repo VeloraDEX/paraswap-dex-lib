@@ -36,6 +36,8 @@ export function getGasCost(steps: Step[]): number {
         return GYROECLP_GAS_COST;
       case 'RECLAMM':
         return RECLAMM_GAS_COST;
+      case 'RECLAMM_V2':
+        return RECLAMM_GAS_COST;
       default:
         return WEIGHTED_GAS_COST;
     }
