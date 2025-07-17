@@ -57,42 +57,44 @@ function testForNetwork(
       describe(`${side}`, () => {
         contractMethods.forEach((contractMethod: ContractMethod) => {
           describe(`${contractMethod}`, () => {
-            // it(`${nativeTokenSymbol} -> ${tokenASymbol}`, async () => {
-            //   await testE2E(
-            //     tokens[nativeTokenSymbol],
-            //     tokens[tokenASymbol],
-            //     holders[nativeTokenSymbol],
-            //     side === SwapSide.SELL ? nativeTokenAmount : tokenAAmount,
-            //     side,
-            //     dexKey,
-            //     contractMethod,
-            //     network,
-            //     provider,
-            //     undefined,
-            //     undefined,
-            //     undefined,
-            //     slippage,
-            //     2000,
-            //   );
-            // });
-            // it(`${tokenASymbol} -> ${nativeTokenSymbol}`, async () => {
-            //   await testE2E(
-            //     tokens[tokenASymbol],
-            //     tokens[nativeTokenSymbol],
-            //     holders[tokenASymbol],
-            //     side === SwapSide.SELL ? tokenAAmount : nativeTokenAmount,
-            //     side,
-            //     dexKey,
-            //     contractMethod,
-            //     network,
-            //     provider,
-            //     undefined,
-            //     undefined,
-            //     undefined,
-            //     slippage,
-            //     2000,
-            //   );
-            // });
+            if (tokenASymbol !== 'WETH') {
+              it(`${nativeTokenSymbol} -> ${tokenASymbol}`, async () => {
+                await testE2E(
+                  tokens[nativeTokenSymbol],
+                  tokens[tokenASymbol],
+                  holders[nativeTokenSymbol],
+                  side === SwapSide.SELL ? nativeTokenAmount : tokenAAmount,
+                  side,
+                  dexKey,
+                  contractMethod,
+                  network,
+                  provider,
+                  undefined,
+                  undefined,
+                  undefined,
+                  slippage,
+                  2000,
+                );
+              });
+              it(`${tokenASymbol} -> ${nativeTokenSymbol}`, async () => {
+                await testE2E(
+                  tokens[tokenASymbol],
+                  tokens[nativeTokenSymbol],
+                  holders[tokenASymbol],
+                  side === SwapSide.SELL ? tokenAAmount : nativeTokenAmount,
+                  side,
+                  dexKey,
+                  contractMethod,
+                  network,
+                  provider,
+                  undefined,
+                  undefined,
+                  undefined,
+                  slippage,
+                  2000,
+                );
+              });
+            }
             it(`${tokenASymbol} -> ${tokenBSymbol}`, async () => {
               await testE2E(
                 tokens[tokenASymbol],
@@ -1290,6 +1292,10 @@ describe('UniswapV3 E2E', () => {
           );
         });
       });
+    });
+
+    describe('VelodromeSlipstream', () => {
+      const dexKey = 'VelodromeSlipstream';
 
       describe('Unichain', () => {
         const network = Network.UNICHAIN;
@@ -1299,6 +1305,44 @@ describe('UniswapV3 E2E', () => {
           const tokenBSymbol: string = 'USDC';
 
           const tokenAAmount: string = '1000000000000000000';
+          const tokenBAmount: string = '1000000';
+          const nativeTokenAmount = '1000000000000000000';
+
+          testForNetwork(
+            network,
+            dexKey,
+            tokenASymbol,
+            tokenBSymbol,
+            tokenAAmount,
+            tokenBAmount,
+            nativeTokenAmount,
+          );
+        });
+
+        describe('WETH -> USDT0', () => {
+          const tokenASymbol: string = 'WETH';
+          const tokenBSymbol: string = 'USD₮0';
+
+          const tokenAAmount: string = '1000000000000000000';
+          const tokenBAmount: string = '1000000';
+          const nativeTokenAmount = '1000000000000000000';
+
+          testForNetwork(
+            network,
+            dexKey,
+            tokenASymbol,
+            tokenBSymbol,
+            tokenAAmount,
+            tokenBAmount,
+            nativeTokenAmount,
+          );
+        });
+
+        describe('USDC -> USDT0', () => {
+          const tokenASymbol: string = 'USDC';
+          const tokenBSymbol: string = 'USD₮0';
+
+          const tokenAAmount: string = '1000000';
           const tokenBAmount: string = '1000000';
           const nativeTokenAmount = '1000000000000000000';
 
@@ -1350,6 +1394,31 @@ describe('UniswapV3 E2E', () => {
 
       const tokenAAmount: string = '1000000000000000000';
       const tokenBAmount: string = '1000000000000000000';
+      const nativeTokenAmount = '1000000000000000000';
+
+      testForNetwork(
+        network,
+        dexKey,
+        tokenASymbol,
+        tokenBSymbol,
+        tokenAAmount,
+        tokenBAmount,
+        nativeTokenAmount,
+      );
+    });
+  });
+
+  describe('PangolinV3', () => {
+    const dexKey = 'PangolinV3';
+
+    describe('Avalanche', () => {
+      const network = Network.AVALANCHE;
+
+      const tokenASymbol: string = 'USDC';
+      const tokenBSymbol: string = 'USDT';
+
+      const tokenAAmount: string = '100000';
+      const tokenBAmount: string = '100000';
       const nativeTokenAmount = '1000000000000000000';
 
       testForNetwork(

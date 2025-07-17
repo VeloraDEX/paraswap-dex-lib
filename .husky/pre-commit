@@ -1,4 +1,31 @@
 #!/bin/sh
 . "$(dirname "$0")/_/husky.sh"
 
-yarn checks && yarn build
+if ! command -v git-secrets &> /dev/null
+then
+    echo "git-secrets is not installed. Please run 'brew install git-secrets' or visit https://github.com/awslabs/git-secrets#installing-git-secrets"
+    exit 1
+fi
+
+
+HOOK_FLAG=".husky/.git-secrets-installed"
+if [[ ! -f "$HOOK_FLAG" ]]; then
+    git-secrets --register-aws > /dev/null
+    git secrets --add -- 'ghp_[A-Za-z0-9_]\{36\}'
+    git secrets --add -- 'github_pat_[A-Za-z0-9_]\{36\}'
+    git secrets --add -- 'xox[apb]-[0-9]\{12\}-[0-9]\{12\}-[A-Za-z0-9]\{24\}'
+    git secrets --add -- 'sk_live_[A-Za-z0-9]\{24\}'
+    git secrets --add -- 'pk_live_[A-Za-z0-9]\{24\}'
+    git secrets --add -- 'AIza[0-9A-Za-z_-]\{35\}'
+    git secrets --add -- '^[0-9a-f]\{8\}-[0-9a-f]\{4\}-[0-9a-f]\{4\}-[0-9a-f]\{4\}-[0-9a-f]\{12\}$'
+    git secrets --add -- '[A-Za-z0-9_-]\{20,\}\.[A-Za-z0-9_-]\{20,\}\.[A-Za-z0-9_-]\{20,\}'
+    git secrets --add -- 'postgres:\/\/[A-Za-z0-9@:\-_.\/?%=+]+'
+    git secrets --add -- 'BEGIN'
+    touch "$HOOK_FLAG"
+fi
+
+echo "🔍 Running git-secrets..."
+git-secrets --pre_commit_hook -- "$@"
+
+echo "🧶 Running yarn checks..."
+yarn checks

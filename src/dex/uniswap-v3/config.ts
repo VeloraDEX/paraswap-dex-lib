@@ -10,9 +10,11 @@ import { decodeStateMultiCallResultWithRelativeBitmaps as decodeStateMultiCallRe
 import { RamsesV2EventPool } from './forks/ramses-v2/ramses-v2-pool';
 import { VelodromeSlipstreamEventPool } from './forks/velodrome-slipstream/velodrome-slipstream-pool';
 import { VelodromeSlipstreamFactory } from './forks/velodrome-slipstream/velodrome-slipstream-factory';
+import { PangolinV3EventPool } from './forks/pangolin-v3/pangolin-v3-pool';
 
 const SUPPORTED_FEES = [10000n, 3000n, 500n, 100n];
 const RAMSES_FORKS_FEES = [...SUPPORTED_FEES, 50n, 250n];
+const PANGOLIN_SUPPORTED_FEES = [8000n, 2500n, 500n, 100n];
 
 // Pools that will be initialized on app startup
 // They are added for testing
@@ -371,6 +373,7 @@ export const UniswapV3Config: DexConfigMap<DexParams> = {
       initRetryFrequency: 10,
       initHash: `0xe34f199b19b2b4f47f68442619d555527d244f78a3297ea89325f843f87b8b54`,
       subgraphURL: '6Cz9KkQ7mj4B3DCKorR4W9y72ice2wCTD2qU68tAhJnp',
+      liquidityField: 'liquidity',
     },
   },
   OkuTradeV3: {
@@ -413,30 +416,34 @@ export const UniswapV3Config: DexConfigMap<DexParams> = {
       initHash: '0xc28ad28853a547556780bebf7847628501a3bcbb', // pool implementation address from factory contract is used instead of initHash here
       subgraphURL: 'BsBDqDf6rJJyxKACZrCHAa8Gaf384cmL2hxfLaDuB8XM',
     },
-    // [Network.UNICHAIN]: {
-    //   factory: '0x04625B046C69577EfC40e6c0Bb83CDBAfab5a55F',
-    //   quoter: '0x3FA596fAC2D6f7d16E01984897Ac04200Cb9cA05',
-    //   router: '0x63951637d667f23D5251DEdc0f9123D22d8595be',
-    //   supportedFees: SUPPORTED_FEES,
-    //   tickSpacings: [1n, 50n, 100n, 200n, 2000n],
-    //   tickSpacingsToFees: {
-    //     '1': 100n,
-    //     '50': 500n,
-    //     '100': 500n,
-    //     '200': 3000n,
-    //     '2000': 10000n,
-    //   },
-    //   stateMulticall: '0x9f52C4fd5cD2134F755c6C5f0098c9575197d5ad',
-    //   stateMultiCallAbi: VelodromeSlipstreamMulticallABi as AbiItem[],
-    //   eventPoolImplementation: VelodromeSlipstreamEventPool,
-    //   factoryImplementation: VelodromeSlipstreamFactory,
-    //   decodeStateMultiCallResultWithRelativeBitmaps:
-    //     decodeStateMultiCallResultWithRelativeBitmapsForVelodromeSlipstream,
-    //   uniswapMulticall: '0xB7610f9b733e7d45184be3a1bc966960ccc54f0B',
-    //   chunksCount: 10,
-    //   initRetryFrequency: 10,
-    //   initHash: '0x321f7dfb9b2ea9131b8c17691cf6e01e5c149ca8', // pool implementation address from factory contract is used instead of initHash here
-    // },
+  },
+  VelodromeSlipstream: {
+    [Network.UNICHAIN]: {
+      factory: '0x04625B046C69577EfC40e6c0Bb83CDBAfab5a55F',
+      quoter: '0x3FA596fAC2D6f7d16E01984897Ac04200Cb9cA05',
+      router: '0x63951637d667f23D5251DEdc0f9123D22d8595be',
+      supportedFees: SUPPORTED_FEES,
+      tickSpacings: [1n, 50n, 100n, 200n, 2000n],
+      tickSpacingsToFees: {
+        '1': 100n,
+        '50': 500n,
+        '100': 500n,
+        '200': 3000n,
+        '2000': 10000n,
+      },
+      stateMulticall: '0x9f52C4fd5cD2134F755c6C5f0098c9575197d5ad',
+      stateMultiCallAbi: VelodromeSlipstreamMulticallABi as AbiItem[],
+      eventPoolImplementation: VelodromeSlipstreamEventPool,
+      factoryImplementation: VelodromeSlipstreamFactory,
+      decodeStateMultiCallResultWithRelativeBitmaps:
+        decodeStateMultiCallResultWithRelativeBitmapsForVelodromeSlipstream,
+      uniswapMulticall: '0xB7610f9b733e7d45184be3a1bc966960ccc54f0B',
+      chunksCount: 10,
+      initRetryFrequency: 10,
+      initHash: '0x321f7dfb9b2ea9131b8c17691cf6e01e5c149ca8', // pool implementation address from factory contract is used instead of initHash here
+      subgraphURL: '3xqRjKD8dQhWnennAswpff5AFcYYXudFA4UWch4AB2Hb',
+      liquidityField: 'liquidity',
+    },
   },
   AerodromeSlipstream: {
     [Network.BASE]: {
@@ -464,6 +471,22 @@ export const UniswapV3Config: DexConfigMap<DexParams> = {
       initRetryFrequency: 10,
       initHash: '0xeC8E5342B19977B4eF8892e02D8DAEcfa1315831', // pool implementation address from factory contract is used instead of initHash here
       subgraphURL: 'GENunSHWLBXm59mBSgPzQ8metBEp9YDfdqwFr91Av1UM',
+    },
+  },
+  PangolinV3: {
+    [Network.AVALANCHE]: {
+      factory: '0x1128F23D0bc0A8396E9FBC3c0c68f5EA228B8256',
+      quoter: '0xA86522CCc412dBC4FA10991900FE46De95983822',
+      router: '0x5485A0751a249225D3bA2f6f296551507e22547f',
+      supportedFees: PANGOLIN_SUPPORTED_FEES,
+      stateMulticall: '0x30F6B9b6485ff0B67E881f5ac80D3F1c70A4B23d',
+      eventPoolImplementation: PangolinV3EventPool,
+      uniswapMulticall: '0x7d115C1fb6152C5Aed1750183Ae59107160694a2',
+      chunksCount: 10,
+      initRetryFrequency: 10,
+      initHash:
+        '0xa9bb1321d78097b23af97a9c07d5ec13e1adc404334585171c54ecccb5ad93b2',
+      subgraphURL: 'EMnAvnfc1fwGSU6ToqYJCeEkXmSgmDmhwtyaha1tM5oi',
     },
   },
   Wagmi: {
