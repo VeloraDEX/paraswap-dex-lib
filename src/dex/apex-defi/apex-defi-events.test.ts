@@ -49,18 +49,24 @@ describe('ApexDefi EventPool', function () {
       tokenAddress: Tokens[network].APEX.address,
       events: {
         Swap: [65514084],
+        AddLiquidity: [65593621],
+        RemoveLiquidity: [65415110],
       },
     },
     {
       tokenAddress: Tokens[network].aUSDC.address,
       events: {
         Swap: [65529928],
+        AddLiquidity: [65627080],
+        RemoveLiquidity: [65600531],
       },
     },
     {
       tokenAddress: Tokens[network].aBTCb.address,
       events: {
         Swap: [65555724],
+        AddLiquidity: [65337262],
+        RemoveLiquidity: [65616945],
       },
     },
     // Add more tokens here as needed:

@@ -53,6 +53,8 @@ export class ApexDefiEventPool extends StatefulEventSubscriber<ApexDefiPoolState
 
     // Add handlers
     this.handlers['Swap'] = this.handleSwap.bind(this);
+    this.handlers['AddLiquidity'] = this.handleAddLiquidity.bind(this);
+    this.handlers['RemoveLiquidity'] = this.handleRemoveLiquidity.bind(this);
   }
 
   get poolAddress() {
@@ -222,6 +224,80 @@ export class ApexDefiEventPool extends StatefulEventSubscriber<ApexDefiPoolState
       };
     } catch (error) {
       this.logger.error('Error in handleSwap:', error);
+      this.logger.error('Error stack:', (error as Error).stack);
+      return null;
+    }
+  }
+
+  // Handle AddLiquidity events to update pool state
+  handleAddLiquidity(
+    event: any,
+    state: DeepReadonly<ApexDefiPoolState>,
+    log: Readonly<Log>,
+  ): DeepReadonly<ApexDefiPoolState> | null {
+    try {
+      const { nativeAmount, tokenAmount } = event.args;
+
+      // Use bigIntify for safety
+      const nativeAdded = bigIntify(nativeAmount);
+      const tokenAdded = bigIntify(tokenAmount);
+
+      // Convert state reserves to BigInt
+      const currentReserve0 = toBigInt(state.reserve0);
+      const currentReserve1 = toBigInt(state.reserve1);
+
+      // Add liquidity to reserves
+      // Note: In ApexDefi, reserve0 is always native (AVAX) and reserve1 is always token
+      const newReserve0 = currentReserve0 + nativeAdded;
+      const newReserve1 = currentReserve1 + tokenAdded;
+
+      return {
+        ...state,
+        reserve0: newReserve0,
+        reserve1: newReserve1,
+      };
+    } catch (error) {
+      this.logger.error('Error in handleAddLiquidity:', error);
+      this.logger.error('Error stack:', (error as Error).stack);
+      return null;
+    }
+  }
+
+  // Handle RemoveLiquidity events to update pool state
+  handleRemoveLiquidity(
+    event: any,
+    state: DeepReadonly<ApexDefiPoolState>,
+    log: Readonly<Log>,
+  ): DeepReadonly<ApexDefiPoolState> | null {
+    try {
+      const { nativeAmount, tokenAmount } = event.args;
+
+      // Use bigIntify for safety
+      const nativeRemoved = bigIntify(nativeAmount);
+      const tokenRemoved = bigIntify(tokenAmount);
+
+      // Convert state reserves to BigInt
+      const currentReserve0 = toBigInt(state.reserve0);
+      const currentReserve1 = toBigInt(state.reserve1);
+
+      // Remove liquidity from reserves
+      // Note: In ApexDefi, reserve0 is always native (AVAX) and reserve1 is always token
+      const newReserve0 = currentReserve0 - nativeRemoved;
+      const newReserve1 = currentReserve1 - tokenRemoved;
+
+      // Ensure reserves don't go negative (safety check)
+      if (newReserve0 < 0n || newReserve1 < 0n) {
+        this.logger.warn('Reserves would go negative, keeping current state');
+        return state;
+      }
+
+      return {
+        ...state,
+        reserve0: newReserve0,
+        reserve1: newReserve1,
+      };
+    } catch (error) {
+      this.logger.error('Error in handleRemoveLiquidity:', error);
       this.logger.error('Error stack:', (error as Error).stack);
       return null;
     }
