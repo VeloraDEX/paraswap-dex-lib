@@ -1785,6 +1785,10 @@ export const Tokens: {
       address: '0x8f187aA05619a017077f5308904739877ce9eA21',
       decimals: 18,
     },
+    ezETH: {
+      address: '0x2416092f143378750bb29b79eD961ab195CcEea5',
+      decimals: 18,
+    },
   },
 };
 
