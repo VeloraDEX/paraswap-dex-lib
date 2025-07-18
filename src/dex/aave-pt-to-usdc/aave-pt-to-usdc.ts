@@ -7,12 +7,7 @@ import {
   Logger,
   NumberAsString,
 } from '../../types';
-import {
-  SwapSide,
-  Network,
-  NULL_ADDRESS,
-  NO_USD_LIQUIDITY,
-} from '../../constants';
+import { SwapSide, Network, NULL_ADDRESS } from '../../constants';
 import * as CALLDATA_GAS_COST from '../../calldata-gas-cost';
 import { getDexKeysWithNetwork } from '../../utils';
 import { Context, IDex } from '../../dex/idex';
@@ -31,30 +26,8 @@ import {
   AAVE_PT_TO_USDC_GAS_COST,
   DEFAULT_SLIPPAGE_FOR_QUOTTING,
   PENDLE_API_URL,
-  STABLE_COINS,
 } from './constants';
-import { BI_POWS } from '../../bigint-constants';
 import { DexExchangeParam } from '../../types';
-import axios from 'axios';
-import { extractReturnAmountPosition } from '../../executor/utils';
-
-type ExitResp = {
-  data: {
-    amountOut: string;
-    priceImpact: number;
-  };
-  tx: { to: string; data: string };
-  tokenApprovals: Array<{ token: string; amount: string }>;
-};
-
-type SwapResp = {
-  data: {
-    amountOut: string;
-  };
-  tx: { to: string; data: string };
-};
-
-const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 const MAINNET_USDC = {
   address: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
@@ -76,16 +49,24 @@ export class AavePtToUsdc
   private oracleInterface: Interface;
   private usdcToken: Token;
   private readonly supportedMarkets: SupportedPt[];
+  private lastApiCallTime = 0;
+  // FIX: Increase the minimum delay between API calls to avoid rate limiting
+  private readonly minApiCallInterval = 1500; // 1.5 seconds
+  private priceCache: Map<string, any> = new Map();
 
   logger: Logger;
 
   public static dexKeysWithNetwork: { key: string; networks: Network[] }[] =
     getDexKeysWithNetwork(AavePtToUsdcConfig);
 
-  constructor(readonly dexHelper: IDexHelper) {
-    super(dexHelper, 'AavePtToUsdc');
-    this.config = AavePtToUsdcConfig[this.dexKey][this.network];
-    this.logger = dexHelper.getLogger(this.dexKey);
+  constructor(
+    readonly network: Network,
+    readonly dexKey: string,
+    readonly dexHelper: IDexHelper,
+  ) {
+    super(dexHelper, dexKey);
+    this.config = AavePtToUsdcConfig[dexKey][network];
+    this.logger = dexHelper.getLogger(dexKey);
     this.oracleInterface = new Interface(PENDLE_ORACLE_ABI);
     if (this.network !== Network.MAINNET) {
       throw new Error('AavePtToUsdc is only supported on Mainnet');
@@ -108,7 +89,7 @@ export class AavePtToUsdc
         address: ptConfig.marketAddress,
         ptAddress: ptConfig.pt.address,
         ptDecimals: ptConfig.pt.decimals,
-        ytAddress: NULL_ADDRESS, // Not needed
+        ytAddress: NULL_ADDRESS,
         underlyingAssetAddress: ptConfig.underlyingAssetAddress,
         name: ptConfig.pt.name,
         expiry: ptConfig.pt.expiry,
@@ -143,7 +124,8 @@ export class AavePtToUsdc
 
     return (
       otherToken.address.toLowerCase() ===
-      market.underlyingAssetAddress.toLowerCase()
+        market.underlyingRawAddress.toLowerCase() ||
+      otherToken.address.toLowerCase() === this.usdcToken.address.toLowerCase()
     );
   }
 
@@ -157,16 +139,30 @@ export class AavePtToUsdc
       )}`,
     );
     this.logger.info(
-      `Checking srcToken: ${srcToken.symbol} (${srcToken.address})`,
+      `Checking srcToken: ${srcToken.symbol || 'undefined'} (${
+        srcToken.address
+      })`,
     );
     this.logger.info(
-      `Checking destToken: ${destToken.symbol} (${destToken.address})`,
+      `Checking destToken: ${destToken.symbol || 'undefined'} (${
+        destToken.address
+      })`,
     );
-    return [srcToken, destToken].find(t =>
-      supportedMarkets.some(
+
+    const result = [srcToken, destToken].find(t => {
+      const found = supportedMarkets.some(
         m => m.pt.address.toLowerCase() === t.address.toLowerCase(),
-      ),
+      );
+      this.logger.info(
+        `Checking token ${t.address.toLowerCase()} against supported markets: ${found}`,
+      );
+      return found;
+    });
+
+    this.logger.info(
+      `_findPtToken final result: ${result?.address || 'undefined'}`,
     );
+    return result;
   }
 
   getPoolIdentifier(marketAddress: string): string {
@@ -180,14 +176,18 @@ export class AavePtToUsdc
     blockNumber: number,
   ): Promise<string[]> {
     this.logger.info(
-      `getPoolIdentifiers called with src: ${srcToken.symbol}, dest: ${destToken.symbol}`,
+      `getPoolIdentifiers called with src: ${
+        srcToken.symbol || 'undefined'
+      }, dest: ${destToken.symbol || 'undefined'}`,
     );
     const ptToken = this._findPtToken(srcToken, destToken);
-    this.logger.info(`_findPtToken result: ${ptToken?.symbol}`);
+    this.logger.info(`_findPtToken result: ${ptToken?.address || 'undefined'}`);
 
     if (!ptToken) {
       this.logger.warn(
-        `Could not find PT token for pair ${srcToken.symbol}-${destToken.symbol}`,
+        `Could not find PT token for pair ${srcToken.symbol || 'undefined'}-${
+          destToken.symbol || 'undefined'
+        }`,
       );
       return [];
     }
@@ -199,7 +199,9 @@ export class AavePtToUsdc
     this.logger.info(`found market: ${market?.marketAddress}`);
 
     if (!market) {
-      this.logger.warn(`Could not find market for PT ${ptToken.symbol}`);
+      this.logger.warn(
+        `Could not find market for PT ${ptToken.address || 'undefined'}`,
+      );
       return [];
     }
 
@@ -221,106 +223,95 @@ export class AavePtToUsdc
     limitPools?: string[],
   ): Promise<ExchangePrices<AavePtToUsdcData> | null> {
     if (side === SwapSide.BUY) {
-      // This implementation only supports selling PT for its underlying asset.
       return null;
     }
 
     const pt = this._findPtToken(srcToken, destToken);
     if (!pt || pt.address.toLowerCase() !== srcToken.address.toLowerCase()) {
-      return null; // Ensure we are selling the PT
+      return null;
     }
 
     const market = this.getMarketByPtToken(pt);
     if (!market) return null;
 
-    const isUnderlying =
-      destToken.address.toLowerCase() ===
-      '0x9d39a5de30e57443bff2a8307a4256c8797a3497'; // raw sUSDe
     const isUsdc =
       destToken.address.toLowerCase() === this.usdcToken.address.toLowerCase();
+    const isUnderlying =
+      destToken.address.toLowerCase() ===
+      market.underlyingRawAddress.toLowerCase();
 
-    if (!isUnderlying && !isUsdc) return null;
+    if (!isUsdc && !isUnderlying) return null;
 
     const marketAddress = market.marketAddress;
 
-    const promises = amounts.map(amount => {
-      if (amount === 0n) return Promise.resolve(null);
-      return this.callPendleSdkApi(market.marketAddress, {
-        receiver: this.augustusAddress,
-        slippage: DEFAULT_SLIPPAGE_FOR_QUOTTING,
-        ptAmount: amount.toString(),
-        ytAmount: '0',
-        lpAmount: '0',
-        tokenOut: isUnderlying
-          ? market.underlyingRawAddress // raw sUSDe
-          : this.usdcToken.address,
-        enableAggregator: true,
-      });
-    });
-    const settledSwapData = await Promise.allSettled(promises);
-
-    const underlyingAmounts: string[] = [];
-    for (let i = 0; i < settledSwapData.length; i++) {
-      if (amounts[i] === 0n) {
-        underlyingAmounts.push('0');
-        continue;
-      }
-      const result = settledSwapData[i];
-      if (result.status === 'rejected') {
-        underlyingAmounts.push('0');
-        continue;
-      }
-      const swapData = result.value;
-
-      // ✅ FIXED: Access amountOut from data object
-      if (!swapData?.data?.amountOut) {
-        underlyingAmounts.push('0');
+    const destAmounts: string[] = [];
+    for (const amount of amounts) {
+      if (amount === 0n) {
+        destAmounts.push('0');
         continue;
       }
 
-      underlyingAmounts.push(swapData.data.amountOut);
+      try {
+        this.logger.info(
+          `Calling Pendle SDK API for amount ${amount} (${
+            isUsdc ? 'USDC' : 'underlying'
+          } route)`,
+        );
+        const params = {
+          receiver: this.augustusAddress,
+          slippage: DEFAULT_SLIPPAGE_FOR_QUOTTING,
+          ptAmount: amount.toString(),
+          ytAmount: '0',
+          lpAmount: '0',
+          tokenOut: destToken.address,
+          enableAggregator: isUsdc,
+        };
+
+        const swapData = await this.callPendleSdkApi(
+          market.marketAddress,
+          params,
+        );
+
+        if (!swapData?.success || !swapData?.data?.amountOut) {
+          this.logger.warn(
+            `Invalid response for amount ${amount}: ${JSON.stringify(
+              swapData,
+            )}`,
+          );
+          destAmounts.push('0');
+          continue;
+        }
+
+        this.logger.info(
+          `Got dest amount: ${swapData.data.amountOut} for PT amount: ${amount}`,
+        );
+        destAmounts.push(swapData.data.amountOut);
+      } catch (error) {
+        this.logger.warn(`Failed to get price for amount ${amount}: ${error}`);
+        destAmounts.push('0');
+      }
     }
 
-    let finalPrices: bigint[];
-    let gasCost = AAVE_PT_TO_USDC_GAS_COST;
+    const finalPrices = destAmounts.map(amt =>
+      amt === '0' ? 0n : BigInt(amt),
+    );
+    const gasCost = isUsdc
+      ? AAVE_PT_TO_USDC_GAS_COST + 250_000
+      : AAVE_PT_TO_USDC_GAS_COST;
 
-    if (
-      destToken.address.toLowerCase() === this.usdcToken.address.toLowerCase()
-    ) {
-      // two hops: PT -> underlying -> USDC
-      const swapPromises = underlyingAmounts.map(amt =>
-        amt === '0'
-          ? Promise.resolve(null)
-          : this.callPendleSwapApi({
-              receiver: this.augustusAddress,
-              slippage: DEFAULT_SLIPPAGE_FOR_QUOTTING,
-              inputs: [{ token: market.underlyingAssetAddress, amount: amt }],
-              tokenOut: this.usdcToken.address,
-            }),
+    if (finalPrices.every(p => p === 0n)) {
+      this.logger.warn(
+        `All prices are zero for ${srcToken.symbol} -> ${destToken.symbol}`,
       );
-      const swapResults = await Promise.allSettled(swapPromises);
-      finalPrices = swapResults.map(r =>
-        r.status === 'fulfilled' && r.value?.data?.amountOut // ✅ Added .data
-          ? BigInt(r.value.data.amountOut)
-          : 0n,
-      );
-      gasCost += 250_000;
-    } else {
-      // single hop: PT -> underlying
-      finalPrices = underlyingAmounts.map(amt =>
-        amt === '0' ? 0n : BigInt(amt),
-      );
+      return null;
     }
-
-    // Return all prices including zeros - test expects same number of prices as amounts
-    if (finalPrices.every(p => p === 0n)) return null;
 
     return [
       {
         exchange: this.dexKey,
         poolIdentifier: this.getPoolIdentifier(marketAddress),
         poolAddresses: [marketAddress, 'PendleSwap'],
-        prices: finalPrices, // Include all prices including zeros
+        prices: finalPrices,
         unit: 1n,
         gasCost,
         data: {
@@ -344,8 +335,6 @@ export class AavePtToUsdc
     data: AavePtToUsdcData,
     side: SwapSide,
   ): AdapterExchangeParam {
-    // This is for V5, not used in V6.
-    // The target is the pendle router.
     const payload = '0x';
     return {
       targetExchange: this.config.pendleRouterAddress,
@@ -371,7 +360,7 @@ export class AavePtToUsdc
               liquidityUSD: 10_000_000,
             },
           ],
-          liquidityUSD: 10_000_000, // Dummy liquidity
+          liquidityUSD: 10_000_000,
         },
       ];
     }
@@ -399,38 +388,33 @@ export class AavePtToUsdc
       throw new Error('AavePtToUsdc: Buying PT is not supported');
     }
 
-    const { marketAddress, ptAddress, underlyingAssetAddress } = data;
+    const { ptAddress } = data;
     const market = this.getMarketByPtToken({ address: ptAddress } as Token);
     if (!market) {
       throw new Error(`Market not found for PT ${ptAddress}`);
     }
-    // 1) exit PT -> underlying
-    const exitResp: ExitResp = await this.callPendleSdkApi(
-      market.marketAddress,
-      {
-        receiver: executorAddress, // keep tokens inside executor
-        slippage: DEFAULT_SLIPPAGE_FOR_QUOTTING,
-        ptAmount: srcAmount,
-        ytAmount: '0',
-        lpAmount: '0',
-        tokenOut: destToken,
-        enableAggregator: true,
-      },
-    );
 
-    // Exit response is valid if we reach here (no exception thrown)
+    const isUsdc =
+      destToken.toLowerCase() === this.usdcToken.address.toLowerCase();
 
-    // 2) underlying -> USDC
-    const swapResp: SwapResp = await this.callPendleSwapApi({
+    const swapResp = await this.callPendleSdkApi(market.marketAddress, {
       receiver: recipient,
       slippage: DEFAULT_SLIPPAGE_FOR_QUOTTING,
-      inputs: [
-        { token: underlyingAssetAddress, amount: exitResp.data.amountOut },
-      ],
+      ptAmount: srcAmount,
+      ytAmount: '0',
+      lpAmount: '0',
       tokenOut: destToken,
+      enableAggregator: isUsdc,
     });
 
-    // Pendle already returns the batched tx; just forward it
+    if (!swapResp.success || !swapResp.tx) {
+      throw new Error(
+        `Pendle SDK exit-positions endpoint failed: ${
+          swapResp.error || 'No transaction data returned'
+        }`,
+      );
+    }
+
     const tx = swapResp.tx;
     return {
       targetExchange: tx.to,
@@ -445,9 +429,15 @@ export class AavePtToUsdc
     marketAddress: string,
     params: any,
   ): Promise<any> {
-    try {
+    const cacheKey = this.generateCacheKey(marketAddress, params);
+
+    if (this.priceCache.has(cacheKey)) {
+      return this.priceCache.get(cacheKey);
+    }
+
+    const result = await this.executeWithRetry(async () => {
       const url = new URL(
-        `${PENDLE_API_URL}/core/v2/sdk/${this.network}/markets/${marketAddress}/exit-positions`,
+        `${PENDLE_API_URL}/v2/sdk/${this.network}/markets/${marketAddress}/exit-positions`,
       );
 
       Object.keys(params).forEach(key => {
@@ -464,73 +454,67 @@ export class AavePtToUsdc
         },
       );
 
-      return response as any;
-    } catch (error: any) {
-      this.logger.error(
-        `${this.dexKey}-${this.network}: Pendle SDK API call failed:`,
-        error,
-      );
-
-      throw error;
-    }
-  }
-
-  private async callPendleSwapApi(params: any): Promise<any> {
-    try {
-      const response = await this.dexHelper.httpRequest.post(
-        `${PENDLE_API_URL}/v2/sdk/${this.network}/pendle-swap/swap`,
-        params,
-        30000,
-        {
-          Accept: 'application/json',
-        },
-      );
-
-      return response as any;
-    } catch (error: any) {
-      this.logger.error(
-        `${this.dexKey}-${this.network}: Pendle Swap API call failed:`,
-        error,
-      );
-
-      throw error;
-    }
-  }
-
-  private _calculateMarginalPrice(
-    amount: bigint,
-    swapData: any,
-    tokenIn: string,
-    tokenOut: string,
-  ): bigint {
-    // Find the swap route that matches the tokens
-    const route = swapData.routes.find(
-      (r: any) =>
-        r.tokenIn === tokenIn.toLowerCase() &&
-        r.tokenOut === tokenOut.toLowerCase(),
-    );
-    if (!route) {
-      throw new Error('Route not found');
-    }
-
-    // The amountOut is the marginal price for the given amountIn
-    return BigInt(route.amountOut);
-  }
-
-  private async _getPendleSwapDataBatch(
-    marketRequests: { marketAddress: string; queryParams: any }[],
-  ): Promise<any[]> {
-    const promises = marketRequests.map(request => {
-      return this.callPendleSdkApi(`v1/router/swap`, request.queryParams);
+      const responseData = response as any;
+      return {
+        success: true,
+        data: responseData.data || responseData,
+        tx: responseData.tx || responseData.data?.tx,
+      };
     });
 
-    const results = await Promise.all(promises);
-
-    return results.map(result => (result as any).data);
+    this.priceCache.set(cacheKey, result);
+    return result;
   }
 
   private getSupportedMarkets(): SupportedPt[] {
-    const configData = this.dexHelper.config.data as any;
-    return configData.supportedPts || [];
+    return this.config.supportedPts;
+  }
+
+  private generateCacheKey(marketAddress: string, params: any): string {
+    return `${marketAddress}_${JSON.stringify(params)}`;
+  }
+
+  private async waitForRateLimit(): Promise<void> {
+    const now = Date.now();
+    const timeSinceLastCall = now - this.lastApiCallTime;
+
+    if (timeSinceLastCall < this.minApiCallInterval) {
+      const waitTime = this.minApiCallInterval - timeSinceLastCall;
+      await new Promise(resolve => setTimeout(resolve, waitTime));
+    }
+
+    this.lastApiCallTime = Date.now();
+  }
+
+  private async executeWithRetry<T>(
+    operation: () => Promise<T>,
+    maxRetries: number = 2,
+  ): Promise<T> {
+    let lastError: any;
+
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        await this.waitForRateLimit();
+        return await operation();
+      } catch (error: any) {
+        lastError = error;
+
+        if (error?.response?.status === 429 && attempt < maxRetries) {
+          // FINAL FIX: Increase the initial backoff delay even more.
+          const delay = 3000 * Math.pow(2, attempt); // 3s, 6s, 12s
+          this.logger.warn(
+            `Rate limit hit, retrying in ${delay}ms (attempt ${attempt + 1}/${
+              maxRetries + 1
+            })`,
+          );
+          await new Promise(resolve => setTimeout(resolve, delay));
+          continue;
+        }
+
+        throw error;
+      }
+    }
+
+    throw lastError;
   }
 }
