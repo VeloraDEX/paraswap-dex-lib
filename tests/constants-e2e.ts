@@ -29,6 +29,11 @@ export const Tokens: {
       address: '0x9f8f72aa9304c8b593d555f12ef6589cc3a579a2',
       decimals: 18,
     },
+    // Pendle PT tokens for testing AaveV3PtRollOver
+    'PT-sUSDe-29MAY2025': {
+      address: '0xb7de5dfcb74d25c2f21841fbd6230355c50d9308',
+      decimals: 18,
+    },
     'PT-sUSDe-31JUL2025': {
       address: '0x3b3fb9c57858ef816833dc91565efcd85d96f634',
       decimals: 18,
