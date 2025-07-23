@@ -86,6 +86,10 @@ export const Tokens: {
       decimals: 18,
       address: '0x990b3aF34dDB502715E1070CE6778d8eB3c8Ea82',
     },
+    SUSDE: {
+      address: '0x9d39a5de30e57443bff2a8307a4256c8797a3497',
+      decimals: 18,
+    },
     USDE: {
       address: '0x4c9edd5852cd905f086c759e8383e09bff1e68b3',
       decimals: 18,
