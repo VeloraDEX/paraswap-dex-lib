@@ -18,7 +18,7 @@ export const disabledPoolIds: Record<string, Record<number, string[]>> = {
 };
 
 // Balancer API - aggregatorSpecific query serves all useful static pool data
-export const apiUrl = 'https://test-api-v3.balancer.fi/';
+export const apiUrl = 'https://api-v3.balancer.fi/';
 
 // TODO Full config added after V3 release
 export const BalancerV3Config: DexConfigMap<DexParams> = {
@@ -175,6 +175,28 @@ export const BalancerV3Config: DexConfigMap<DexParams> = {
           factoryAddress: '0x3BEb058DE1A25dd24223fd9e1796df8589429AcE', // Pools with StableSurge hook will always be deployed from this factory
           factoryDeploymentBlock: 134097700,
           hookAddress: '0xF39CA6ede9BF7820a952b52f3c94af526bAB9015', // Address of the hook that will be used by pools
+        },
+      ],
+    },
+    [Network.SONIC]: {
+      vaultAddress: '0xbA1333333333a1BA1108E8412f11850A5C319bA9',
+      apiNetworkName: 'SONIC',
+      balancerRouterAddress: '0x93db4682A40721e7c698ea0a842389D10FA8Dae5', // Router V2
+      balancerBatchRouterAddress: '0x7761659F9e9834ad367e4d25E0306ba7A4968DAf', // Batch Router
+      hooks: [
+        {
+          type: 'StableSurge',
+          apiName: 'STABLE_SURGE',
+          factoryAddress: '0x6187F6C78ca4d89490d959e9c629B93214e6776e', // Pools with StableSurge hook will always be deployed from this factory
+          factoryDeploymentBlock: 20250121,
+          hookAddress: '0x8A83Aa9bb7C4Cff14ae0aEcec0fB9ef234901c0C', // Address of the hook that will be used by pools
+        },
+        {
+          type: 'StableSurge', // StableSurgeV2 - Is same as V1 with changes: up to 50k amp factor (vs 5k on v1) and ability to set a swap fee manager
+          apiName: 'STABLE_SURGE',
+          factoryAddress: '0x3D9319BB29DAF6081D01DC56b6203EfcC90f0bAD', // Pools with StableSurge hook will always be deployed from this factory
+          factoryDeploymentBlock: 20250404,
+          hookAddress: '0x049919Ae32E50aEe5ea1A0998a841d175ec6f1b3', // Address of the hook that will be used by pools
         },
       ],
     },
