@@ -3,19 +3,19 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 import { Interface, Result } from '@ethersproject/abi';
-import { DummyDexHelper } from '../../dex-helper/index';
-import { Network, SwapSide } from '../../constants';
-import { BI_POWS } from '../../bigint-constants';
-import { Ekubo } from './ekubo';
+import { Tokens } from '../../../tests/constants-e2e';
 import {
+  checkConstantPoolPrices,
   checkPoolPrices,
   checkPoolsLiquidity,
-  checkConstantPoolPrices,
 } from '../../../tests/utils';
-import { Tokens } from '../../../tests/constants-e2e';
-import { EkuboData } from './types';
-import { MAX_SQRT_RATIO, MIN_SQRT_RATIO } from './pools/math/tick';
+import { BI_POWS } from '../../bigint-constants';
+import { Network, SwapSide } from '../../constants';
+import { DummyDexHelper } from '../../dex-helper/index';
+import { Ekubo } from './ekubo';
 import { isPriceIncreasing } from './pools/math/swap';
+import { MAX_SQRT_RATIO, MIN_SQRT_RATIO } from './pools/math/tick';
+import { EkuboData } from './types';
 
 function getReaderCalldata(
   quoterAddress: string,
