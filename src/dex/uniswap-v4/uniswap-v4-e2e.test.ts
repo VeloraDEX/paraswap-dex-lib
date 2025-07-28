@@ -48,6 +48,9 @@ function testForNetwork(
                 undefined,
                 undefined,
                 500,
+                undefined,
+                undefined,
+                50,
               );
             });
             it(`${tokenBSymbol} -> ${tokenASymbol}`, async () => {
@@ -61,6 +64,13 @@ function testForNetwork(
                 contractMethod,
                 network,
                 provider,
+                undefined,
+                undefined,
+                undefined,
+                500,
+                undefined,
+                undefined,
+                50,
               );
             });
           });

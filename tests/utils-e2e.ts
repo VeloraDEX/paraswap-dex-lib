@@ -179,9 +179,8 @@ export async function testE2E(
   // Specified in BPS: part of 10000
   slippage?: number,
   sleepMs?: number,
-  // could be used for networks without tenderly support (e.g. zkEVM)
-  replaceTenderlyWithEstimateGas?: boolean,
   forceRoute?: AddressOrSymbol[],
+  chunks?: number,
 ) {
   const useAPI = testingEndpoint && !poolIdentifiers;
   // The API currently doesn't allow for specifying poolIdentifiers
@@ -205,6 +204,7 @@ export async function testE2E(
     poolIdentifiers,
     transferFees,
     forceRoute,
+    chunks,
   );
   // log the route for visibility
   console.log('Price Route:', JSON.stringify(priceRoute, null, 2));

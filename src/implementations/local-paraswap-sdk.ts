@@ -36,6 +36,7 @@ export interface IParaSwapSDK {
     _poolIdentifiers?: { [key: string]: string[] | null } | null,
     transferFees?: TransferFeeParams,
     forceRoute?: AddressOrSymbol[],
+    chunks?: number,
   ): Promise<OptimalRate>;
 
   buildTransaction(
@@ -52,8 +53,6 @@ export interface IParaSwapSDK {
     replaceProviderWithRPC?: (rpcUrl: string) => void;
   };
 }
-
-const chunks = 10;
 
 export class LocalParaswapSDK implements IParaSwapSDK {
   dexHelper: IDexHelper;
@@ -116,6 +115,7 @@ export class LocalParaswapSDK implements IParaSwapSDK {
     _poolIdentifiers?: { [key: string]: string[] | null } | null,
     transferFees?: TransferFeeParams,
     forceRoute?: AddressOrSymbol[],
+    chunks = 10,
   ): Promise<OptimalRate> {
     const blockNumber = await this.dexHelper.provider.getBlockNumber();
     const poolIdentifiers =
