@@ -676,7 +676,7 @@ export class UniswapV3
       const _destToken = this.dexHelper.config.wrapETH(destToken);
 
       this.logger.info(
-        `${this.dexKey}: ${srcToken.address}_${destToken.address}: ${amounts.length}`,
+        `chunks: ${this.dexKey}: ${srcToken.address}_${destToken.address}: ${amounts.length}`,
       );
 
       const [_srcAddress, _destAddress] = this._getLoweredAddresses(

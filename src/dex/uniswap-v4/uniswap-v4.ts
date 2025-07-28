@@ -183,7 +183,7 @@ export class UniswapV4 extends SimpleExchange implements IDex<UniswapV4Data> {
     // const getPricesVolumeStart = Date.now();
 
     this.logger.info(
-      `${this.dexKey}: ${from.address}_${to.address}: ${amounts.length}`,
+      `chunks: ${this.dexKey}: ${from.address}_${to.address}: ${amounts.length}`,
     );
 
     const pools: Pool[] = await this.poolManager.getAvailablePoolsForPair(
