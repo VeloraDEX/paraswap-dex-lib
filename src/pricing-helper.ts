@@ -219,9 +219,14 @@ export class PricingHelper {
                 return resolve(null);
               }
 
+              // dexInstance.reducePriceAmounts = true;
+
               let _amounts: bigint[] = [];
 
-              if (reducePriceAmounts && dexInstance.reducePriceAmounts) {
+              const applyReducePriceAmounts =
+                reducePriceAmounts && dexInstance.reducePriceAmounts;
+
+              if (applyReducePriceAmounts) {
                 for (let i = 0; i < amounts.length; i++) {
                   if (i === 0 || i % 2 === 1 || i === amounts.length - 1) {
                     _amounts.push(amounts[i]);
@@ -230,6 +235,10 @@ export class PricingHelper {
               } else {
                 _amounts = amounts;
               }
+
+              this.logger.info(
+                `chunks-new: ${reducePriceAmounts} ${dexInstance.dexKey}: ${from.address}_${to.address}: ${amounts.length}: `,
+              );
 
               dexInstance
                 .getPricesVolume(
@@ -242,7 +251,7 @@ export class PricingHelper {
                   transferFees,
                 )
                 .then(poolPrices => {
-                  if (!poolPrices || !dexInstance.reducePriceAmounts) {
+                  if (!poolPrices || !applyReducePriceAmounts) {
                     return poolPrices;
                   }
 
