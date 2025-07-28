@@ -81,7 +81,7 @@ export class BunniV2EventPool extends StatefulEventSubscriber<ProtocolState> {
       [this.config.bunniHook.address]: 'BUNNI_HOOK',
       [this.config.floodPlain]: 'FLOOD_PLAIN',
       ...Object.fromEntries(
-        this.config.feeOverrideHooklets.map(hooklet => [
+        Object.keys(this.config.hooklets).map(hooklet => [
           hooklet,
           'FEE_OVERRIDE_HOOKLET',
         ]),
@@ -113,7 +113,7 @@ export class BunniV2EventPool extends StatefulEventSubscriber<ProtocolState> {
       this.config.bunniHub,
       this.config.bunniHook.address,
       this.config.floodPlain,
-      ...this.config.feeOverrideHooklets,
+      ...Object.keys(this.config.hooklets),
     ];
 
     // Core Events
@@ -375,6 +375,7 @@ export class BunniV2EventPool extends StatefulEventSubscriber<ProtocolState> {
         this.config.bunniHook.deploymentBlock,
         this._K(bigIntify(blockHeader.number)),
         this.dexHelper,
+        this.config,
       );
     } catch (error) {
       this.logger.warn(error);
@@ -480,6 +481,7 @@ export class BunniV2EventPool extends StatefulEventSubscriber<ProtocolState> {
           this.config.bunniHook.deploymentBlock,
           this._K(bigIntify(blockHeader.number)),
           this.dexHelper,
+          this.config,
         );
       } catch (error) {
         this.logger.warn(error);
@@ -860,6 +862,7 @@ export class BunniV2EventPool extends StatefulEventSubscriber<ProtocolState> {
       this.config.bunniHook.deploymentBlock,
       this._K(blockNumber),
       this.vaults,
+      this.config,
     );
   }
 

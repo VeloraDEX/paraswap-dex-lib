@@ -593,8 +593,9 @@ export async function updateFeeOverrides(
   config: DexParams,
 ): Promise<void> {
   const poolsToQuery = poolStates.filter(poolState =>
-    config.feeOverrideHooklets.some(
-      hooklet => hooklet.toLowerCase() === poolState.hooklet.toLowerCase(),
+    Object.prototype.hasOwnProperty.call(
+      config.hooklets,
+      poolState.hooklet.toLowerCase(),
     ),
   );
 

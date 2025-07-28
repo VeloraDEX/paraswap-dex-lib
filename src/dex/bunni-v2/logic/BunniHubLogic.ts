@@ -3,6 +3,7 @@ import {
   DepositLogicInputData,
   DepositLogicReturnData,
   DepositParams,
+  DexParams,
   PoolState,
   WithdrawParams,
 } from '../types';
@@ -30,6 +31,7 @@ export async function deposit(
   deploymentBlock: bigint,
   K: bigint,
   dexHelper: IDexHelper,
+  dexParams: DexParams,
 ): Promise<void> {
   let amount0: bigint;
   let amount1: bigint;
@@ -48,6 +50,7 @@ export async function deposit(
     blockNumber,
     blockTimestamp,
     dexHelper,
+    dexParams,
   );
 
   let reserveAmount0: bigint = depositReturnData.reserveAmount0;
@@ -282,6 +285,7 @@ async function _depositLogic(
   blockNumber: bigint,
   blockTimestamp: bigint,
   dexHelper: IDexHelper,
+  dexParams: DexParams,
 ): Promise<DepositLogicReturnData> {
   const returnData: DepositLogicReturnData = {
     reserveAmount0: 0n,
@@ -337,6 +341,7 @@ async function _depositLogic(
       inputData.params.amount0Desired,
       inputData.params.amount1Desired,
       IdleBalanceLibrary.ZERO,
+      dexParams,
     );
 
     if (inputData.state.ldfType === LDFType.DYNAMIC_AND_STATEFUL) {

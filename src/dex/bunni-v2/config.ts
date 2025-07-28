@@ -2,6 +2,13 @@ import { DexParams } from './types';
 import { DexConfigMap } from '../../types';
 import { Network } from '../../constants';
 
+import { UniformDistribution } from './ldf/UniformDistribution';
+import { GeometricDistribution } from './ldf/GeometricDistribution';
+import { DoubleGeometricDistribution } from './ldf/DoubleGeometricDistribution';
+import { CarpetedGeometricDistribution } from './ldf/CarpetedGeometricDistribution';
+import { CarpetedDoubleGeometricDistribution } from './ldf/CarpetedDoubleGeometricDistribution';
+import { FeeOverrideHooklet } from './hooklet/FeeOverrideHooklet';
+
 export const BunniV2Config: DexConfigMap<DexParams> = {
   BunniV2: {
     [Network.MAINNET]: {
@@ -14,10 +21,24 @@ export const BunniV2Config: DexConfigMap<DexParams> = {
         address: '0x000052423c1dB6B7ff8641b85A7eEfc7B2791888', // v1.2.1
         deploymentBlock: 22684594n,
       },
-      feeOverrideHooklets: [
-        '0x0000e819b8A536Cf8e5d70B9C49256911033000C', // v1.0.0
-        '0x00eCE5a72612258f20eB24573C544f9dD8c5000C', // v1.0.1
-      ],
+      liquidityDensityFunctions: {
+        ['0x00000000d5248262c18C5a8c706B2a3E740B8760'.toLowerCase()]:
+          UniformDistribution,
+        ['0x00000000B79037C909ff75dAFbA91b374bE2124f'.toLowerCase()]:
+          GeometricDistribution,
+        ['0x000000004a3e16323618D0E43e93b4DD64151eDB'.toLowerCase()]:
+          DoubleGeometricDistribution,
+        ['0x000000007cA9919151b275FABEA64A4f557Aa1F6'.toLowerCase()]:
+          CarpetedGeometricDistribution,
+        ['0x000000000b757686c9596caDA54fa28f8C429E0d'.toLowerCase()]:
+          CarpetedDoubleGeometricDistribution,
+      },
+      hooklets: {
+        ['0x0000e819b8A536Cf8e5d70B9C49256911033000C'.toLowerCase()]:
+          FeeOverrideHooklet, // v1.0.0
+        ['0x00eCE5a72612258f20eB24573C544f9dD8c5000C'.toLowerCase()]:
+          FeeOverrideHooklet, // v1.0.1
+      },
       subgraphURL: '5NFnHtgpdzB3JhVyiKQgnV9dZsewqJtX5HZfAT9Kg66r',
     },
     [Network.ARBITRUM]: {
@@ -30,10 +51,24 @@ export const BunniV2Config: DexConfigMap<DexParams> = {
         address: '0x0000EB22c45bDB564F985acE0B4d05a64fa71888', // v1.2.1
         deploymentBlock: 351214280n,
       },
-      feeOverrideHooklets: [
-        '0x0000e819b8A536Cf8e5d70B9C49256911033000C', // v1.0.0
-        '0x00eCE5a72612258f20eB24573C544f9dD8c5000C', // v1.0.1
-      ],
+      liquidityDensityFunctions: {
+        ['0x00000000Ca63Db33B83c0048De8B29e0FF3eb085'.toLowerCase()]:
+          UniformDistribution,
+        ['0x00000000Cf810fBCDd50699c7934E6a3bA76C6f7'.toLowerCase()]:
+          GeometricDistribution,
+        ['0x000000008F092B3A2eD144A4b9A6E17c4C90d8be'.toLowerCase()]:
+          DoubleGeometricDistribution,
+        ['0x00000000db3bb322a6c5866C3f0290a4b3eC858A'.toLowerCase()]:
+          CarpetedGeometricDistribution,
+        ['0x00000000f5cf92Bf887e22E1800fA15A2375B4b9'.toLowerCase()]:
+          CarpetedDoubleGeometricDistribution,
+      },
+      hooklets: {
+        ['0x0000e819b8A536Cf8e5d70B9C49256911033000C'.toLowerCase()]:
+          FeeOverrideHooklet, // v1.0.0
+        ['0x00eCE5a72612258f20eB24573C544f9dD8c5000C'.toLowerCase()]:
+          FeeOverrideHooklet, // v1.0.1
+      },
       subgraphURL: '96tZMr51QupqWYamom12Yki5AqCJEiHWbVUpzUpvu9oB',
     },
     [Network.BASE]: {
@@ -46,10 +81,24 @@ export const BunniV2Config: DexConfigMap<DexParams> = {
         address: '0x000052423c1dB6B7ff8641b85A7eEfc7B2791888', // v1.2.1
         deploymentBlock: 31446454n,
       },
-      feeOverrideHooklets: [
-        '0x0000e819b8A536Cf8e5d70B9C49256911033000C', // v1.0.0
-        '0x00eCE5a72612258f20eB24573C544f9dD8c5000C', // v1.0.1
-      ],
+      liquidityDensityFunctions: {
+        ['0x00000000d5248262c18C5a8c706B2a3E740B8760'.toLowerCase()]:
+          UniformDistribution,
+        ['0x00000000B79037C909ff75dAFbA91b374bE2124f'.toLowerCase()]:
+          GeometricDistribution,
+        ['0x000000004a3e16323618D0E43e93b4DD64151eDB'.toLowerCase()]:
+          DoubleGeometricDistribution,
+        ['0x000000007cA9919151b275FABEA64A4f557Aa1F6'.toLowerCase()]:
+          CarpetedGeometricDistribution,
+        ['0x000000000b757686c9596caDA54fa28f8C429E0d'.toLowerCase()]:
+          CarpetedDoubleGeometricDistribution,
+      },
+      hooklets: {
+        ['0x0000e819b8A536Cf8e5d70B9C49256911033000C'.toLowerCase()]:
+          FeeOverrideHooklet, // v1.0.0
+        ['0x00eCE5a72612258f20eB24573C544f9dD8c5000C'.toLowerCase()]:
+          FeeOverrideHooklet, // v1.0.1
+      },
       subgraphURL: '3oawHiCt7L9wJTEY9DynwAEmoThy8bvRhuMZdaaAooqW',
     },
     [Network.BSC]: {
@@ -62,10 +111,24 @@ export const BunniV2Config: DexConfigMap<DexParams> = {
         address: '0x000052423c1dB6B7ff8641b85A7eEfc7B2791888', // v1.2.1
         deploymentBlock: 51294769n,
       },
-      feeOverrideHooklets: [
-        '0x0000e819b8A536Cf8e5d70B9C49256911033000C', // v1.0.0
-        '0x00eCE5a72612258f20eB24573C544f9dD8c5000C', // v1.0.1
-      ],
+      liquidityDensityFunctions: {
+        ['0x00000000d5248262c18C5a8c706B2a3E740B8760'.toLowerCase()]:
+          UniformDistribution,
+        ['0x00000000B79037C909ff75dAFbA91b374bE2124f'.toLowerCase()]:
+          GeometricDistribution,
+        ['0x000000004a3e16323618D0E43e93b4DD64151eDB'.toLowerCase()]:
+          DoubleGeometricDistribution,
+        ['0x000000007cA9919151b275FABEA64A4f557Aa1F6'.toLowerCase()]:
+          CarpetedGeometricDistribution,
+        ['0x000000000b757686c9596caDA54fa28f8C429E0d'.toLowerCase()]:
+          CarpetedDoubleGeometricDistribution,
+      },
+      hooklets: {
+        ['0x0000e819b8A536Cf8e5d70B9C49256911033000C'.toLowerCase()]:
+          FeeOverrideHooklet, // v1.0.0
+        ['0x00eCE5a72612258f20eB24573C544f9dD8c5000C'.toLowerCase()]:
+          FeeOverrideHooklet, // v1.0.1
+      },
       subgraphURL: 'FfnRstqDWGGevsbf9rRg1vNctrb38Hd791zzaaKc7AGz',
     },
     [Network.UNICHAIN]: {
@@ -78,10 +141,24 @@ export const BunniV2Config: DexConfigMap<DexParams> = {
         address: '0x000052423c1dB6B7ff8641b85A7eEfc7B2791888', // v1.2.1
         deploymentBlock: 18937832n,
       },
-      feeOverrideHooklets: [
-        '0x0000e819b8A536Cf8e5d70B9C49256911033000C', // v1.0.0
-        '0x00eCE5a72612258f20eB24573C544f9dD8c5000C', // v1.0.1
-      ],
+      liquidityDensityFunctions: {
+        ['0x00000000d5248262c18C5a8c706B2a3E740B8760'.toLowerCase()]:
+          UniformDistribution,
+        ['0x00000000B79037C909ff75dAFbA91b374bE2124f'.toLowerCase()]:
+          GeometricDistribution,
+        ['0x000000004a3e16323618D0E43e93b4DD64151eDB'.toLowerCase()]:
+          DoubleGeometricDistribution,
+        ['0x000000007cA9919151b275FABEA64A4f557Aa1F6'.toLowerCase()]:
+          CarpetedGeometricDistribution,
+        ['0x000000000b757686c9596caDA54fa28f8C429E0d'.toLowerCase()]:
+          CarpetedDoubleGeometricDistribution,
+      },
+      hooklets: {
+        ['0x0000e819b8A536Cf8e5d70B9C49256911033000C'.toLowerCase()]:
+          FeeOverrideHooklet, // v1.0.0
+        ['0x00eCE5a72612258f20eB24573C544f9dD8c5000C'.toLowerCase()]:
+          FeeOverrideHooklet, // v1.0.1
+      },
       subgraphURL: 'J22JEPtqL847G44v7E5gTsxmNosoLtKQUDAvnhRhzj25',
     },
   },
