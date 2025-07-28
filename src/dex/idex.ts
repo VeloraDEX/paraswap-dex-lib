@@ -114,6 +114,10 @@ export interface IDexTxBuilder<ExchangeData, DirectParam = null>
   extends IDexTxBuilderV5<ExchangeData, DirectParam>,
     IDexTxBuilderV6<ExchangeData, DirectParam> {
   needWrapNative: boolean | NeedWrapNativeFunc;
+  // If true, only 50% of all amounts is going to be calculated, other will be interpolated
+  // can be used for dexs with heavy computation like UniswapV3/V4
+  reducePriceAmounts?: boolean;
+
   needsSequentialPreprocessing?: boolean;
 
   // Returns the ETH fee required to swap

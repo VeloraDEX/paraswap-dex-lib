@@ -16,7 +16,7 @@ import {
 } from './constants';
 import { DexAdapterService } from './dex';
 import { IDex, IRouteOptimizer } from './dex/idex';
-import { isSrcTokenTransferFeeToBeExchanged } from './utils';
+import { interpolate, isSrcTokenTransferFeeToBeExchanged } from './utils';
 
 export class PricingHelper {
   logger: Logger;
@@ -217,16 +217,63 @@ export class PricingHelper {
                 return resolve(null);
               }
 
+              let _amounts: bigint[] = [];
+
+              if (dexInstance.reducePriceAmounts) {
+                for (let i = 0; i < amounts.length; i++) {
+                  if (i === 0 || i % 2 === 1 || i === amounts.length - 1) {
+                    _amounts.push(amounts[i]);
+                  }
+                }
+              } else {
+                _amounts = amounts;
+              }
+
               dexInstance
                 .getPricesVolume(
                   from,
                   to,
-                  amounts,
+                  _amounts,
                   side,
                   blockNumber,
                   limitPools ? limitPools : undefined,
                   transferFees,
                 )
+                .then(poolPrices => {
+                  if (!poolPrices || !dexInstance.reducePriceAmounts) {
+                    return poolPrices;
+                  }
+
+                  poolPrices.forEach(p => {
+                    p.prices = interpolate(_amounts, p.prices, amounts, side);
+
+                    if (p.prices.length !== amounts.length) {
+                      throw new Error(
+                        `interpolatedPrices length mismatch: expected ${amounts.length}, got ${p.prices.length}`,
+                      );
+                    }
+
+                    if (typeof p.gasCost !== 'number') {
+                      p.gasCost = interpolate(
+                        _amounts,
+                        p.gasCost.map(t => BigInt(t)),
+                        amounts,
+                        side,
+                      ).map(t => Number(t));
+                    }
+
+                    if (p.gasCostL2 && typeof p.gasCostL2 !== 'number') {
+                      p.gasCostL2 = interpolate(
+                        _amounts,
+                        p.gasCostL2.map(t => BigInt(t)),
+                        amounts,
+                        side,
+                      ).map(t => Number(t));
+                    }
+                  });
+
+                  return poolPrices;
+                })
                 .then(poolPrices => {
                   try {
                     if (!poolPrices || !rollupL1CalldataCostToL2GasCost) {
