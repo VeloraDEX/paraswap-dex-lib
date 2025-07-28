@@ -42,6 +42,8 @@ import { PoolsRegistryHashKey } from '../uniswap-v3/uniswap-v3';
 export class UniswapV4 extends SimpleExchange implements IDex<UniswapV4Data> {
   readonly hasConstantPriceLargeAmounts = false;
 
+  reducePriceAmounts = true;
+
   // to prevent wrap/unwrap on v6 contract level, because we are doing wrap/unwrap on UniV4 Router level, check tx encoder for details
   needWrapNative = false;
 

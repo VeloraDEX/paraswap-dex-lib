@@ -101,6 +101,8 @@ export class UniswapV3
   readonly hasConstantPriceLargeAmounts = false;
   readonly needWrapNative = true;
 
+  readonly reducePriceAmounts = true;
+
   readonly directSwapIface = new Interface(DirectSwapABI);
 
   intervalTask?: NodeJS.Timeout;
