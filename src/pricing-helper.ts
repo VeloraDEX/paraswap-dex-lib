@@ -237,7 +237,7 @@ export class PricingHelper {
               }
 
               this.logger.info(
-                `chunks-new-2: ${reducePriceAmounts} ${dexInstance.dexKey}: ${from.address}_${to.address}: ${_amounts.length}: `,
+                `chunks-new-7: ${reducePriceAmounts} ${dexInstance.dexKey}: ${from.address}_${to.address}: ${_amounts.length}: `,
               );
 
               dexInstance
