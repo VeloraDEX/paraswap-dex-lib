@@ -22,5 +22,4 @@ export const endpoints: Record<number, string> = {
   [Network.MAINNET]: 'https://api.idle.finance/pools',
   [Network.POLYGON]: 'https://api-polygon.idle.finance/pools',
   [Network.OPTIMISM]: 'https://api-optimism.idle.finance/pools',
-  [Network.ZKEVM]: 'https://api-zkevm.idle.finance/pools',
 };
