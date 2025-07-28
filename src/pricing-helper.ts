@@ -192,6 +192,8 @@ export class PricingHelper {
       destDexFee: 0,
     },
     rollupL1CalldataCostToL2GasCost?: (calldataCost: number) => number,
+    // temporary flag for tests
+    reducePriceAmounts: boolean = false,
   ): Promise<PoolPrices<any>[]> {
     const dexPoolPrices = await Promise.all(
       dexKeys.map(async key => {
@@ -219,7 +221,7 @@ export class PricingHelper {
 
               let _amounts: bigint[] = [];
 
-              if (dexInstance.reducePriceAmounts) {
+              if (reducePriceAmounts && dexInstance.reducePriceAmounts) {
                 for (let i = 0; i < amounts.length; i++) {
                   if (i === 0 || i % 2 === 1 || i === amounts.length - 1) {
                     _amounts.push(amounts[i]);
