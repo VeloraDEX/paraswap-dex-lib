@@ -13,6 +13,9 @@ export const DexalotConfig: DexConfigMap<DexParams> = {
     [Network.BASE]: {
       mainnetRFQAddress: '0x1fd108cf42a59c635bd4703b8dbc8a741ff834be',
     },
+    [Network.BSC]: {
+      mainnetRFQAddress: '0xB45b00a5011c40D34fcaDB8D54104c1461d18937',
+    },
   },
 };
 

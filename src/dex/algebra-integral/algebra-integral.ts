@@ -53,6 +53,7 @@ import { extractReturnAmountPosition } from '../../executor/utils';
 import { AlgebraIntegralFactory } from './algebra-integral-factory';
 
 const ALGEBRA_QUOTE_GASLIMIT = 2_000_000;
+const ALGEBRA_GAS_COST = 180_000;
 const ALGEBRA_EFFICIENCY_FACTOR = 3;
 
 export class AlgebraIntegral
@@ -256,10 +257,6 @@ export class AlgebraIntegral
       return BigInt(decoded[0].toString());
     };
 
-    const averageGasCost = !totalSuccessFullSwaps
-      ? ALGEBRA_QUOTE_GASLIMIT
-      : Math.round(totalGasCost / totalSuccessFullSwaps);
-
     let i = 0;
     const result = pools.map((pool, poolIndex) => {
       const amountsForPool = amountsWithFeePerPool[poolIndex];
@@ -302,7 +299,7 @@ export class AlgebraIntegral
           pool.deployer,
         ),
         exchange: this.dexKey,
-        gasCost: prices.map(p => (p === 0n ? 0 : averageGasCost)),
+        gasCost: ALGEBRA_GAS_COST,
         poolAddresses: [pool.poolAddress],
       };
     });
@@ -388,8 +385,23 @@ export class AlgebraIntegral
   getCalldataGasCost(
     poolPrices: PoolPrices<AlgebraIntegralData>,
   ): number | number[] {
-    // TODO: update if there is any payload in getAdapterParam
-    return CALLDATA_GAS_COST.DEX_NO_PAYLOAD;
+    return (
+      CALLDATA_GAS_COST.FUNCTION_SELECTOR +
+      // path offset
+      CALLDATA_GAS_COST.OFFSET_SMALL +
+      // receipient
+      CALLDATA_GAS_COST.ADDRESS +
+      // deadline
+      CALLDATA_GAS_COST.TIMESTAMP +
+      // amountIn
+      CALLDATA_GAS_COST.AMOUNT +
+      // amountOut
+      CALLDATA_GAS_COST.AMOUNT +
+      // path bytes (tokenIn, tokenOut, and deployer)
+      60 * CALLDATA_GAS_COST.NONZERO_BYTE +
+      // path padding
+      4 * CALLDATA_GAS_COST.ZERO_BYTE
+    );
   }
 
   getDexParam(

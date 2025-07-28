@@ -177,6 +177,8 @@ export abstract class StatefulEventSubscriber<State>
       }
     }
 
+    this.addressesSubscribed = this.addressesSubscribed.filter(a => !!a);
+
     // always subscribeToLogs
     this.dexHelper.blockManager.subscribeToLogs(
       this,

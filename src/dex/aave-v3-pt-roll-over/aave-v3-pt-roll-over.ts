@@ -31,7 +31,6 @@ import {
 import { BI_POWS } from '../../bigint-constants';
 import { MultiCallParams } from '../../lib/multi-wrapper';
 import { oracleStateDecoder, ptToAssetRateDecoder } from './utils';
-import { extractReturnAmountPosition } from '../../executor/utils';
 
 export class AaveV3PtRollOver
   extends SimpleExchange

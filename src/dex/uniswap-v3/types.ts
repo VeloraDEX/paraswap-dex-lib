@@ -99,6 +99,7 @@ export type DexParams = {
   eventPoolImplementation?: typeof UniswapV3EventPool;
   factoryImplementation?: typeof UniswapV3Factory;
   decodeStateMultiCallResultWithRelativeBitmaps?: DecodeStateMultiCallFunc;
+  liquidityField?: string;
 };
 
 export type UniswapV3SimpleSwapSellParam = {

@@ -101,7 +101,7 @@ export class Dexalot extends SimpleExchange implements IDex<DexalotData> {
     protected rfqInterface = new Interface(mainnetRFQAbi),
   ) {
     super(dexHelper, dexKey);
-    this.logger = dexHelper.getLogger(dexKey);
+    this.logger = dexHelper.getLogger(`${dexKey}-${network}`);
 
     const authToken = dexHelper.config.data.dexalotAuthToken;
     assert(

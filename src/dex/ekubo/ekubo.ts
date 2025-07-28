@@ -125,7 +125,7 @@ export class Ekubo extends SimpleExchange implements IDex<EkuboData> {
   public static dexKeysWithNetwork: { key: string; networks: Network[] }[] =
     getDexKeysWithNetwork(EkuboConfig);
 
-  private poolKeys: PoolKey[] = [];
+  private poolKeys: PoolKey[] | null = [];
   private readonly pools: Map<string, BasePool> = new Map();
 
   public logger;
@@ -190,17 +190,9 @@ export class Ekubo extends SimpleExchange implements IDex<EkuboData> {
     blockNumber: number,
   ): Promise<string[]> {
     const [token0, token1] = sortAndConvertTokens(srcToken, destToken);
-    const pair = hexStringTokenPair(token0, token1);
 
     let poolKeys: PoolKey[];
-    poolKeys = this.poolKeys.filter(
-      poolKey => poolKey.token0 === token0 && poolKey.token1 === token1,
-    );
-    if (poolKeys.length === 0) {
-      this.logger.error(
-        `Pool keys for token pair ${pair} not found, falling back to default pool parameters`,
-      );
-
+    if (this.poolKeys === null) {
       poolKeys = FALLBACK_POOL_PARAMETERS.map(
         params =>
           new PoolKey(
@@ -223,6 +215,10 @@ export class Ekubo extends SimpleExchange implements IDex<EkuboData> {
           ),
         );
       }
+    } else {
+      poolKeys = this.poolKeys.filter(
+        poolKey => poolKey.token0 === token0 && poolKey.token1 === token1,
+      );
     }
 
     const ids = [];
@@ -502,6 +498,7 @@ export class Ekubo extends SimpleExchange implements IDex<EkuboData> {
       this.poolKeys = await this.fetchAllPoolKeys();
     } catch (err) {
       this.logger.error(`Updating pool map from Ekubo API failed: ${err}`);
+      this.poolKeys = null;
 
       return;
     }

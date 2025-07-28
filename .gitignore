@@ -2,7 +2,9 @@ node_modules
 .DS_Store
 build/
 yarn-error.log
-.env
+.env*
+!.env.example
+!.env.sample
 .vscode/
 tests/logs.json
 tests/states.json
@@ -10,3 +12,4 @@ tests/configs.json
 .idea/
 local-scripts
 tests/debug-price-route.json
+.husky/.git-secrets-installed
