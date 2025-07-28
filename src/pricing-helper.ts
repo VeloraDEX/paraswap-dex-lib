@@ -219,7 +219,7 @@ export class PricingHelper {
                 return resolve(null);
               }
 
-              // dexInstance.reducePriceAmounts = true;
+              dexInstance.reducePriceAmounts = true;
 
               let _amounts: bigint[] = [];
 
