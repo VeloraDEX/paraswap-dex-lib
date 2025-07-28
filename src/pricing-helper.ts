@@ -219,7 +219,7 @@ export class PricingHelper {
                 return resolve(null);
               }
 
-              // dexInstance.reducePriceAmounts = true;
+              dexInstance.reducePriceAmounts = true;
 
               let _amounts: bigint[] = [];
 
@@ -237,7 +237,7 @@ export class PricingHelper {
               }
 
               this.logger.info(
-                `chunks-new: ${reducePriceAmounts} ${dexInstance.dexKey}: ${from.address}_${to.address}: ${amounts.length}: `,
+                `chunks-new-2: ${reducePriceAmounts} ${dexInstance.dexKey}: ${from.address}_${to.address}: ${amounts.length}: `,
               );
 
               dexInstance
