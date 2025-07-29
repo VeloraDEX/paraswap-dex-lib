@@ -760,7 +760,7 @@ export class UniswapV3
         _destToken,
         amounts,
         side,
-        this.network === Network.ZKEVM ? [] : poolsToUse.poolWithoutState,
+        poolsToUse.poolWithoutState,
         blockNumber,
       );
 

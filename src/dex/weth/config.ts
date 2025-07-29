@@ -19,9 +19,6 @@ export const WethConfig: DexConfigMap<DexParams> = {
     [Network.OPTIMISM]: {
       poolGasCost: WethGasCost,
     },
-    [Network.ZKEVM]: {
-      poolGasCost: WethGasCost,
-    },
     [Network.BASE]: {
       poolGasCost: WethGasCost,
     },
@@ -80,8 +77,5 @@ export const Adapters: {
   },
   [Network.BASE]: {
     [SwapSide.SELL]: [{ name: 'BaseAdapter02', index: 2 }],
-  },
-  [Network.ZKEVM]: {
-    [SwapSide.SELL]: [{ name: 'PolygonZkEvmAdapter01', index: 3 }],
   },
 };
