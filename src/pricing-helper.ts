@@ -228,7 +228,7 @@ export class PricingHelper {
 
               if (applyReducePriceAmounts) {
                 for (let i = 0; i < amounts.length; i++) {
-                  if (i === 0 || i % 2 === 1 || i === amounts.length - 1) {
+                  if (i === 0 || i % 3 === 1 || i === amounts.length - 1) {
                     _amounts.push(amounts[i]);
                   }
                 }
@@ -237,7 +237,7 @@ export class PricingHelper {
               }
 
               this.logger.info(
-                `chunks-new-7: ${reducePriceAmounts} ${dexInstance.dexKey}: ${from.address}_${to.address}: ${_amounts.length}: `,
+                `chunks-new-8: ${reducePriceAmounts} ${dexInstance.dexKey}: ${from.address}_${to.address}: ${_amounts.length}: `,
               );
 
               dexInstance
