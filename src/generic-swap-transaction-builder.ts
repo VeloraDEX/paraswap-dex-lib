@@ -698,7 +698,9 @@ export class GenericSwapTransactionBuilder {
       srcToken: _src,
       destToken: _dest,
       recipient:
-        needToWithdrawAfterSwap || !isLastSwap
+        needToWithdrawAfterSwap ||
+        !isLastSwap ||
+        priceRoute.side === SwapSide.BUY
           ? executionContractAddress
           : this.dexAdapterService.dexHelper.config.data.augustusV6Address!,
       srcAmount: _srcAmount,

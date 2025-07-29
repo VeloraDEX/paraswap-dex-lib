@@ -245,21 +245,21 @@ export class Executor03BytecodeBuilder extends ExecutorBytecodeBuilder<
     // after the last path
     if (index === exchangeParams.length - 1) {
       // if some of dexes doesn't have recipient add one transfer in the end
-      if (
-        exchangeParams.some(param => !param.dexFuncHasRecipient) &&
-        !isETHAddress(swap.destToken)
-      ) {
-        const transferCallData = this.buildTransferCallData(
-          this.erc20Interface.encodeFunctionData('transfer', [
-            this.dexHelper.config.data.augustusV6Address,
-            // insert 0 because it's still gonna be replaced with balance check result
-            '0',
-          ]),
-          swap.destToken,
-        );
-
-        swapCallData = hexConcat([swapCallData, transferCallData]);
-      }
+      // if (
+      //   exchangeParams.some(param => !param.dexFuncHasRecipient) &&
+      //   !isETHAddress(swap.destToken)
+      // ) {
+      //   const transferCallData = this.buildTransferCallData(
+      //     this.erc20Interface.encodeFunctionData('transfer', [
+      //       this.dexHelper.config.data.augustusV6Address,
+      //       // insert 0 because it's still gonna be replaced with balance check result
+      //       '0',
+      //     ]),
+      //     swap.destToken,
+      //   );
+      //
+      //   swapCallData = hexConcat([swapCallData, transferCallData]);
+      // }
 
       // withdraw WETH
       if (isETHAddress(swap.destToken) && maybeWethCallData?.withdraw) {
@@ -271,13 +271,13 @@ export class Executor03BytecodeBuilder extends ExecutorBytecodeBuilder<
       }
 
       // send ETH to augustus
-      if (
-        isETHAddress(swap.destToken) &&
-        (!curExchangeParam.dexFuncHasRecipient || maybeWethCallData?.withdraw)
-      ) {
-        const finalSpecialFlagCalldata = this.buildFinalSpecialFlagCalldata();
-        swapCallData = hexConcat([swapCallData, finalSpecialFlagCalldata]);
-      }
+      // if (
+      //   isETHAddress(swap.destToken) &&
+      //   (!curExchangeParam.dexFuncHasRecipient || maybeWethCallData?.withdraw)
+      // ) {
+      //   const finalSpecialFlagCalldata = this.buildFinalSpecialFlagCalldata();
+      //   swapCallData = hexConcat([swapCallData, finalSpecialFlagCalldata]);
+      // }
     }
 
     return this.addMetadata(
