@@ -882,6 +882,26 @@ export const Tokens: {
       address: '0x0e0Ce4D450c705F8a0B6Dd9d5123e3df2787D16B',
       decimals: 18,
     },
+    beS: {
+      address: '0x871a101dcf22fe4fe37be7b654098c801cba1c88',
+      decimals: 18,
+    },
+    anS: {
+      address: '0x0c4e186eae8acaa7f7de1315d5ad174be39ec987',
+      decimals: 18,
+    },
+    SiloWS: {
+      address: '0x016c306e103fbf48ec24810d078c65ad13c5f11b',
+      decimals: 18,
+    },
+    SHADOW: {
+      address: '0x3333b97138d4b086720b5ae8a7844b1345a33333',
+      decimals: 18,
+    },
+    BEETS: {
+      address: '0x2d0e0814e62d80056181f5cd932274405966e4f0',
+      decimals: 18,
+    },
   },
   [Network.BSC]: {
     POPS: {
