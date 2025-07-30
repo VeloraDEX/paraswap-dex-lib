@@ -21,4 +21,15 @@ export const AlgebraIntegralConfig: DexConfigMap<DexParams> = {
       chunksCount: 10,
     },
   },
+  BlackholeCL: {
+    [Network.AVALANCHE]: {
+      factory: '0x512eb749541B7cf294be882D636218c84a5e9E5F',
+      subgraphURL:
+        'https://api.goldsky.com/api/public/project_cm8gyxv0x02qv01uphvy69ey6/subgraphs/poap-subgraph-core/mainnet-1.0.1/gn',
+      quoter: '0x3e182bcf14Be6142b9217847ec1112e3c39Eb689',
+      router: '0xaBfc48e8BED7b26762745f3139555F320119709d',
+      uniswapMulticall: '0x9dF9457D5C55B4C880Dc86C67AE323B00B5be48E',
+      chunksCount: 10,
+    },
+  },
 };

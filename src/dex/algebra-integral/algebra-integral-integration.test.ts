@@ -335,3 +335,90 @@ describe('QuickSwapV4', function () {
     });
   });
 });
+
+describe('BlackholeCL', function () {
+  const dexKey = 'BlackholeCL';
+  let blockNumber: number;
+  let algebra: AlgebraIntegral;
+
+  describe('Avalanche', () => {
+    const network = Network.AVALANCHE;
+    const dexHelper = new DummyDexHelper(network);
+
+    const tokens = Tokens[network];
+
+    const srcTokenSymbol = 'WAVAX';
+    const destTokenSymbol = 'USDC';
+
+    const amountsForSell = [
+      0n,
+      1n * BI_POWS[tokens[srcTokenSymbol].decimals],
+      2n * BI_POWS[tokens[srcTokenSymbol].decimals],
+      3n * BI_POWS[tokens[srcTokenSymbol].decimals],
+      4n * BI_POWS[tokens[srcTokenSymbol].decimals],
+      5n * BI_POWS[tokens[srcTokenSymbol].decimals],
+    ];
+
+    const amountsForBuy = [
+      0n,
+      1n * BI_POWS[tokens[destTokenSymbol].decimals],
+      2n * BI_POWS[tokens[destTokenSymbol].decimals],
+      3n * BI_POWS[tokens[destTokenSymbol].decimals],
+      4n * BI_POWS[tokens[destTokenSymbol].decimals],
+      5n * BI_POWS[tokens[destTokenSymbol].decimals],
+    ];
+
+    beforeAll(async () => {
+      blockNumber = await dexHelper.web3Provider.eth.getBlockNumber();
+      algebra = new AlgebraIntegral(network, dexKey, dexHelper);
+      if (algebra.initializePricing) {
+        await algebra.initializePricing(blockNumber);
+      }
+    });
+
+    it('getPoolIdentifiers and getPricesVolume SELL', async function () {
+      await testPricingOnNetwork(
+        algebra,
+        network,
+        dexKey,
+        blockNumber,
+        srcTokenSymbol,
+        destTokenSymbol,
+        SwapSide.SELL,
+        amountsForSell,
+        'quoteExactInputSingle',
+      );
+    });
+
+    it('getPoolIdentifiers and getPricesVolume BUY', async function () {
+      await testPricingOnNetwork(
+        algebra,
+        network,
+        dexKey,
+        blockNumber,
+        srcTokenSymbol,
+        destTokenSymbol,
+        SwapSide.BUY,
+        amountsForBuy,
+        'quoteExactOutputSingle',
+      );
+    });
+
+    it('getTopPoolsForToken', async function () {
+      const newAlgebra = new AlgebraIntegral(network, dexKey, dexHelper);
+      const poolLiquidity = await newAlgebra.getTopPoolsForToken(
+        tokens[srcTokenSymbol].address,
+        10,
+      );
+      console.log(`${srcTokenSymbol} Top Pools:`, poolLiquidity);
+
+      if (!newAlgebra.hasConstantPriceLargeAmounts) {
+        checkPoolsLiquidity(
+          poolLiquidity,
+          Tokens[network][srcTokenSymbol].address,
+          dexKey,
+        );
+      }
+    });
+  });
+});

@@ -181,3 +181,68 @@ describe('QuickSwapV4 E2E', () => {
     });
   });
 });
+
+describe('BlackholeCL E2E', () => {
+  const dexKey = 'BlackholeCL';
+
+  describe('Avalanche', () => {
+    const network = Network.AVALANCHE;
+
+    describe('WAVAX -> USDC', () => {
+      const tokenASymbol: string = 'WAVAX';
+      const tokenBSymbol: string = 'USDC';
+
+      const tokenAAmount: string = '1000000000000000000';
+      const tokenBAmount: string = '1000000';
+      const nativeTokenAmount = '1000000000000000000';
+
+      testForNetwork(
+        network,
+        dexKey,
+        tokenASymbol,
+        tokenBSymbol,
+        tokenAAmount,
+        tokenBAmount,
+        nativeTokenAmount,
+      );
+    });
+
+    describe('USDC -> WAVAX', () => {
+      const tokenASymbol: string = 'USDC';
+      const tokenBSymbol: string = 'WAVAX';
+
+      const tokenAAmount: string = '1000000';
+      const tokenBAmount: string = '1000000000000000000';
+      const nativeTokenAmount = '1000000000000000000';
+
+      testForNetwork(
+        network,
+        dexKey,
+        tokenASymbol,
+        tokenBSymbol,
+        tokenAAmount,
+        tokenBAmount,
+        nativeTokenAmount,
+      );
+    });
+
+    describe('BTCb -> WAVAX', () => {
+      const tokenASymbol: string = 'BTCb';
+      const tokenBSymbol: string = 'WAVAX';
+
+      const tokenAAmount: string = '3000000000000000000';
+      const tokenBAmount: string = '1000000000000000000';
+      const nativeTokenAmount = '1000000000000000000';
+
+      testForNetwork(
+        network,
+        dexKey,
+        tokenASymbol,
+        tokenBSymbol,
+        tokenAAmount,
+        tokenBAmount,
+        nativeTokenAmount,
+      );
+    });
+  });
+});
