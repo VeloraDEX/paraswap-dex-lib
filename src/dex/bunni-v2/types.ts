@@ -10,7 +10,8 @@ export type DexParams = {
     address: Address;
     deploymentBlock: bigint;
   };
-  feeOverrideHooklets: Address[];
+  liquidityDensityFunctions: Record<Address, any>;
+  hooklets: Record<Address, any>;
   subgraphURL: string;
 };
 

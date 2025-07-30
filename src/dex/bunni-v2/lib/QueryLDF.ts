@@ -1,5 +1,5 @@
 import { _query } from '../ldf';
-import { PoolKey } from '../types';
+import { DexParams, PoolKey } from '../types';
 import { Q96, ZERO_BYTES_32 } from './Constants';
 import { FullMathX96 } from './FullMathX96';
 import { IdleBalance, IdleBalanceLibrary } from './IdleBalance';
@@ -24,6 +24,7 @@ export function queryLDF(
   balance0: bigint,
   balance1: bigint,
   idleBalance: IdleBalance,
+  dexParams: DexParams,
 ): {
   totalLiquidity: bigint;
   totalDensity0X96: bigint;
@@ -66,6 +67,7 @@ export function queryLDF(
     ldfParams,
     ldfState,
     ldf,
+    dexParams,
   ));
 
   const {

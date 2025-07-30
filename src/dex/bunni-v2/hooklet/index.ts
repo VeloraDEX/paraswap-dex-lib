@@ -1,17 +1,10 @@
 import { NULL_ADDRESS } from '../../../constants';
-import { PoolState, SwapParams } from '../types';
-import { FeeOverrideHooklet } from './FeeOverrideHooklet';
-
-const Hooklets: Record<string, any> = {
-  ['0x0000e819b8a536cf8e5d70b9c49256911033000c'.toLowerCase()]:
-    FeeOverrideHooklet, // 1.0.0
-  ['0x00eCE5a72612258f20eB24573C544f9dD8c5000C'.toLowerCase()]:
-    FeeOverrideHooklet, // 1.0.1
-};
+import { DexParams, PoolState, SwapParams } from '../types';
 
 export function _hookletBeforeSwap(
   state: PoolState,
   params: SwapParams,
+  dexParams: DexParams,
 ): {
   success: boolean;
   feeOverridden: boolean;
@@ -29,7 +22,8 @@ export function _hookletBeforeSwap(
     };
   }
 
-  const module = Hooklets[state.hooklet.toLowerCase()];
+  const map = dexParams.hooklets ?? {};
+  const module = map[state.hooklet.toLowerCase()];
 
   if (!module) {
     throw new Error(`Hooklet ${state.hooklet} not yet supported`);
@@ -41,6 +35,7 @@ export function _hookletBeforeSwap(
 export function _hookletBeforeSwapView(
   state: PoolState,
   params: SwapParams,
+  dexParams: DexParams,
 ): {
   success: boolean;
   feeOverridden: boolean;
@@ -58,7 +53,8 @@ export function _hookletBeforeSwapView(
     };
   }
 
-  const module = Hooklets[state.hooklet.toLowerCase()];
+  const map = dexParams.hooklets ?? {};
+  const module = map[state.hooklet.toLowerCase()];
 
   if (!module) {
     throw new Error(`Hooklet ${state.hooklet} not yet supported`);
@@ -67,14 +63,18 @@ export function _hookletBeforeSwapView(
   return module.beforeSwapView(state, params);
 }
 
-export function _hookletAfterSwap(state: PoolState): {
+export function _hookletAfterSwap(
+  state: PoolState,
+  dexParams: DexParams,
+): {
   success: boolean;
 } {
   if (state.hooklet === NULL_ADDRESS) {
     return { success: true };
   }
 
-  const module = Hooklets[state.hooklet.toLowerCase()];
+  const map = dexParams.hooklets ?? {};
+  const module = map[state.hooklet.toLowerCase()];
 
   if (!module) {
     throw new Error(`Hooklet ${state.hooklet} not yet supported`);
@@ -83,14 +83,18 @@ export function _hookletAfterSwap(state: PoolState): {
   return module.afterSwap();
 }
 
-export function _hookletAfterSwapView(state: PoolState): {
+export function _hookletAfterSwapView(
+  state: PoolState,
+  dexParams: DexParams,
+): {
   success: boolean;
 } {
   if (state.hooklet === NULL_ADDRESS) {
     return { success: true };
   }
 
-  const module = Hooklets[state.hooklet.toLowerCase()];
+  const map = dexParams.hooklets ?? {};
+  const module = map[state.hooklet.toLowerCase()];
 
   if (!module) {
     throw new Error(`Hooklet ${state.hooklet} not yet supported`);

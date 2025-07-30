@@ -100,6 +100,7 @@ export async function beforeSwap(
   hookDeploymentBlock: bigint,
   K: bigint,
   dexHelper: IDexHelper,
+  dexParams: DexParams,
 ): Promise<void> {
   let useAmAmmFee: boolean = false;
   let amAmmManager: string = NULL_ADDRESS;
@@ -115,7 +116,7 @@ export async function beforeSwap(
     fee: feeOverride,
     priceOverridden,
     sqrtPriceX96: sqrtPriceX96Override,
-  } = _hookletBeforeSwap(state, params));
+  } = _hookletBeforeSwap(state, params, dexParams));
 
   // override price if needed
   if (priceOverridden) {
@@ -218,6 +219,7 @@ export async function beforeSwap(
     balance0,
     balance1,
     state.idleBalance,
+    dexParams,
   );
 
   const exactIn: boolean = params.amountSpecified < 0n;
@@ -255,20 +257,23 @@ export async function beforeSwap(
 
   // compute swap result
   let { updatedSqrtPriceX96, updatedTick, inputAmount, outputAmount } =
-    computeSwap({
-      key: state.key,
-      totalLiquidity,
-      liquidityDensityOfRoundedTickX96,
-      currentActiveBalance0,
-      currentActiveBalance1,
-      sqrtPriceX96: state.slot0.sqrtPriceX96,
-      currentTick: state.slot0.tick,
-      liquidityDensityFunction: state.liquidityDensityFunction,
-      arithmeticMeanTick,
-      ldfParams: state.ldfParams,
-      ldfState: state.ldfState,
-      swapParams: params,
-    });
+    computeSwap(
+      {
+        key: state.key,
+        totalLiquidity,
+        liquidityDensityOfRoundedTickX96,
+        currentActiveBalance0,
+        currentActiveBalance1,
+        sqrtPriceX96: state.slot0.sqrtPriceX96,
+        currentTick: state.slot0.tick,
+        liquidityDensityFunction: state.liquidityDensityFunction,
+        arithmeticMeanTick,
+        ldfParams: state.ldfParams,
+        ldfState: state.ldfState,
+        swapParams: params,
+      },
+      dexParams,
+    );
 
   // revert if it's an exact output swap and outputAmount < params.amountSpecified
   if (!exactIn && outputAmount < params.amountSpecified) {

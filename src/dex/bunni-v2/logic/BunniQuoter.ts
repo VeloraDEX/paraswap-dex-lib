@@ -16,7 +16,7 @@ import { abs, max, min, mulDiv, mulDivUp } from '../lib/Math';
 import { queryLDF } from '../lib/QueryLDF';
 import { queryTwap } from '../lib/QueryTwap';
 import { TickMath } from '../lib/TickMath';
-import { PoolState, SwapParams, Vault } from '../types';
+import { DexParams, PoolState, SwapParams, Vault } from '../types';
 import { getTopBid } from './AmAmm';
 import { _shouldSurgeFromVaults, decodeParams } from './BunniHookLogic';
 
@@ -29,6 +29,7 @@ export function quoteSwap(
   hookDeploymentBlock: bigint,
   K: bigint,
   vaults: { [address: string]: Vault },
+  dexParams: DexParams,
 ): {
   success: boolean;
   updatedSqrtPriceX96: bigint;
@@ -61,7 +62,7 @@ export function quoteSwap(
     fee: feeOverride,
     priceOverridden,
     sqrtPriceX96: sqrtPriceX96Override,
-  } = _hookletBeforeSwapView(state, params);
+  } = _hookletBeforeSwapView(state, params, dexParams);
 
   if (!success_) {
     return _falsyReturnValues();
@@ -143,6 +144,7 @@ export function quoteSwap(
     balance0,
     balance1,
     state.idleBalance,
+    dexParams,
   );
   shouldSurge = shouldSurge && state.ldfType !== LDFType.STATIC;
   totalLiquidity = totalLiquidity_;
@@ -166,20 +168,23 @@ export function quoteSwap(
 
   // compute swap result
   ({ updatedSqrtPriceX96, updatedTick, inputAmount, outputAmount } =
-    computeSwap({
-      key: state.key,
-      totalLiquidity,
-      liquidityDensityOfRoundedTickX96,
-      currentActiveBalance0,
-      currentActiveBalance1,
-      sqrtPriceX96,
-      currentTick,
-      liquidityDensityFunction: state.liquidityDensityFunction,
-      arithmeticMeanTick,
-      ldfParams: state.ldfParams,
-      ldfState,
-      swapParams: params,
-    }));
+    computeSwap(
+      {
+        key: state.key,
+        totalLiquidity,
+        liquidityDensityOfRoundedTickX96,
+        currentActiveBalance0,
+        currentActiveBalance1,
+        sqrtPriceX96,
+        currentTick,
+        liquidityDensityFunction: state.liquidityDensityFunction,
+        arithmeticMeanTick,
+        ldfParams: state.ldfParams,
+        ldfState,
+        swapParams: params,
+      },
+      dexParams,
+    ));
 
   // exit if it's an exact output swap and outputAmount < params.amountSpecified
   // ensure swap never moves price in the opposite direction
@@ -316,7 +321,7 @@ export function quoteSwap(
     outputAmount = actualOutputAmount;
   }
 
-  ({ success } = _hookletAfterSwapView(state));
+  ({ success } = _hookletAfterSwapView(state, dexParams));
 
   return {
     success,

@@ -4,12 +4,15 @@ import { IdleBalanceLibrary } from '../lib/IdleBalance';
 import { max, min, roundTick, subReLU } from '../lib/Math';
 import { queryLDF } from '../lib/QueryLDF';
 import { TickMath } from '../lib/TickMath';
-import { BunniComputeSwapInput } from '../types';
+import { BunniComputeSwapInput, DexParams } from '../types';
 import { computeSwapStep, getSqrtPriceTarget } from './SwapMath';
 
 const EPSILON_FEE: bigint = 30n;
 
-export function computeSwap(input: BunniComputeSwapInput): {
+export function computeSwap(
+  input: BunniComputeSwapInput,
+  dexParams: DexParams,
+): {
   updatedSqrtPriceX96: bigint;
   updatedTick: bigint;
   inputAmount: bigint;
@@ -121,6 +124,7 @@ export function computeSwap(input: BunniComputeSwapInput): {
     input.ldfParams,
     input.ldfState,
     input.liquidityDensityFunction,
+    dexParams,
   );
 
   if (success) {
@@ -290,6 +294,7 @@ export function computeSwap(input: BunniComputeSwapInput): {
     0n,
     0n,
     IdleBalanceLibrary.ZERO,
+    dexParams,
   );
 
   const _updatedActiveBalance0 = FullMathX96.fullMulX96Up(
