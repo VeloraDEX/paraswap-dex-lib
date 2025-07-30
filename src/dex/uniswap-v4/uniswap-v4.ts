@@ -11,7 +11,12 @@ import {
 import { Logger } from 'log4js';
 import { ETHER_ADDRESS, Network, NULL_ADDRESS } from '../../constants';
 import { IDexHelper } from '../../dex-helper';
-import { getDexKeysWithNetwork, isETHAddress } from '../../utils';
+import {
+  getBigIntPow,
+  getDexKeysWithNetwork,
+  interpolate,
+  isETHAddress,
+} from '../../utils';
 import { IDex } from '../idex';
 import { SimpleExchange } from '../simple-exchange';
 import { UniswapV4Config } from './config';
@@ -62,6 +67,7 @@ export class UniswapV4 extends SimpleExchange implements IDex<UniswapV4Data> {
     protected routerAddress = UniswapV4Config[dexKey][network].router,
     protected quoterAddress = UniswapV4Config[dexKey][network].quoter,
     protected poolManagerAddress = UniswapV4Config[dexKey][network].poolManager,
+    protected chunksCount = UniswapV4Config[dexKey][network].chunksCount,
   ) {
     super(dexHelper, dexKey);
     this.logger = dexHelper.getLogger(dexKey);
@@ -240,6 +246,8 @@ export class UniswapV4 extends SimpleExchange implements IDex<UniswapV4Data> {
           `${this.dexKey}-${this.network}: pool ${poolId} state was not found...falling back to rpc`,
         );
         prices = await this.queryPriceFromRpc(
+          from,
+          to,
           zeroForOne,
           amounts,
           pool,
@@ -362,18 +370,35 @@ export class UniswapV4 extends SimpleExchange implements IDex<UniswapV4Data> {
   }
 
   async queryPriceFromRpc(
+    from: Token,
+    to: Token,
     zeroForOne: boolean,
     amounts: bigint[],
     pool: Pool,
     side: SwapSide,
     blockNumber: number,
   ): Promise<bigint[]> {
+    if (amounts.length === 0) return [];
+
+    const chunks = amounts.length - 1;
+    const width = Math.floor(chunks / this.chunksCount);
+
+    const unitVolume = getBigIntPow(
+      side === SwapSide.SELL ? from.decimals : to.decimals,
+    );
+
+    const _amounts = [unitVolume].concat(
+      Array.from(Array(this.chunksCount).keys()).map(
+        i => amounts[(i + 1) * width],
+      ),
+    );
+
     const funcName =
       side === SwapSide.SELL
         ? 'quoteExactInputSingle'
         : 'quoteExactOutputSingle';
 
-    const calls = amounts.map(amount => ({
+    const calls = _amounts.slice(1).map(amount => ({
       target: this.quoterAddress,
       callData: this.quoterIface.encodeFunctionData(funcName, [
         {
@@ -384,7 +409,7 @@ export class UniswapV4 extends SimpleExchange implements IDex<UniswapV4Data> {
         },
       ]),
       decodeFunction: (result: MultiResult<BytesLike> | BytesLike): bigint => {
-        // amountOut, gasEstimate
+        // returns [amountOut, gasEstimate], we only care about amountOut
         return generalDecoder(result, ['uint256', 'uint256'], 0n, value =>
           BigInt(value[0].toString()),
         );
@@ -396,7 +421,12 @@ export class UniswapV4 extends SimpleExchange implements IDex<UniswapV4Data> {
       calls,
       blockNumber,
     );
-    return results.map(result => (result.success ? result.returnData : 0n));
+
+    const rates = results.map(result =>
+      result.success ? result.returnData : 0n,
+    );
+
+    return interpolate(_amounts.slice(1), rates, amounts, side);
   }
 
   getDexParam(

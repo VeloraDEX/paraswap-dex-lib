@@ -117,6 +117,7 @@ export type DexParams = {
   router: Address;
   subgraphURL: string;
   stateView: string;
+  chunksCount: number;
   skipPoolsWithUnconventionalFees?: boolean;
 };
 
