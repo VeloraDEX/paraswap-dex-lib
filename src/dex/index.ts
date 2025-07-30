@@ -112,6 +112,7 @@ import { uniswapV4Merge } from './uniswap-v4/optimizer';
 import { AaveV3PtRollOver } from './aave-v3-pt-roll-over/aave-v3-pt-roll-over';
 import { RingV2 } from './uniswap-v2/ring-v2';
 import { UsdcTransmuter } from './usdc-transmuter/usdc-transmuter';
+import { ApexDefi } from './apex-defi/apex-defi';
 
 const LegacyDexes = [
   CurveV2,
@@ -217,6 +218,7 @@ const Dexes = [
   AaveV3PtRollOver,
   RingV2,
   UsdcTransmuter,
+  ApexDefi,
 ];
 
 export type LegacyDexConstructor = new (dexHelper: IDexHelper) => IDexTxBuilder<
