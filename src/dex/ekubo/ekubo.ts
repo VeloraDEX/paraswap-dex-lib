@@ -274,7 +274,8 @@ export class Ekubo extends SimpleExchange implements IDex<EkuboData> {
 
           if (isExactOut && quote.consumedAmount !== inputAmount) {
             this.logger.debug(
-              `Pool ${poolId} doesn't have enough liquidity to support exact-out swap of ${amount} ${amountToken.symbol ?? amountToken.address
+              `Pool ${poolId} doesn't have enough liquidity to support exact-out swap of ${amount} ${
+                amountToken.symbol ?? amountToken.address
               }`,
             );
 
@@ -333,7 +334,7 @@ export class Ekubo extends SimpleExchange implements IDex<EkuboData> {
     };
   }
 
-  public async updatePoolState(): Promise<void> { }
+  public async updatePoolState(): Promise<void> {}
 
   public async getTopPoolsForToken(
     tokenAddress: Address,
@@ -536,7 +537,7 @@ export class Ekubo extends SimpleExchange implements IDex<EkuboData> {
     ] as const;
 
     function constructAndInitialize<S, P extends EkuboPool<S>>(
-      constructor: { new(...args: [...typeof commonArgs, PoolKey]): P },
+      constructor: { new (...args: [...typeof commonArgs, PoolKey]): P },
       initialState: DeepReadonly<S>,
       poolKey: PoolKey,
     ): P {
@@ -668,7 +669,7 @@ export class Ekubo extends SimpleExchange implements IDex<EkuboData> {
         res =>
           this.supportedExtensions.includes(BigInt(res.extension)) &&
           BigInt(res.core_address) ===
-          BigInt(this.contracts.core.contract.address),
+            BigInt(this.contracts.core.contract.address),
       )
       .map(
         info =>
