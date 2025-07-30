@@ -1108,6 +1108,41 @@ describe('Solidly E2E', () => {
         nativeTokenAmount,
       );
     });
+    describe('Blackhole', () => {
+      const dexKey = 'Blackhole';
+
+      describe('simpleSwap', () => {
+        it('TOKEN -> TOKEN', async () => {
+          await testE2E(
+            tokens.BTCb,
+            tokens.WAVAX,
+            holders.WAVAX,
+            '3000000000000000000',
+            SwapSide.SELL,
+            dexKey,
+            ContractMethod.simpleSwap,
+
+            network,
+            provider,
+          );
+        });
+      });
+      describe('multiSwap', () => {
+        it('TOKEN -> TOKEN', async () => {
+          await testE2E(
+            tokens.BTCb,
+            tokens.WAVAX,
+            holders.WAVAX,
+            '3000000000000000000',
+            SwapSide.SELL,
+            dexKey,
+            ContractMethod.multiSwap,
+            network,
+            provider,
+          );
+        });
+      });
+    });
   });
 
   describe('Arbitrum', () => {
