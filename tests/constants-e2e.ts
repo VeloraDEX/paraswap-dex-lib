@@ -615,6 +615,14 @@ export const Tokens: {
       address: '0x22d76e6e1d9ab4072522c1bc60c85a0d5626ca2d',
       decimals: 18,
     },
+    BUNNI: {
+      address: '0x000000c396558ffbab5ea628f39658bdf61345b3',
+      decimals: 18,
+    },
+    USR: {
+      address: '0x66a1e37c9b0eaddca17d3662d6c05f4decf3e110',
+      decimals: 18,
+    },
   },
   [Network.POLYGON]: {
     jGBP: {
@@ -1388,6 +1396,18 @@ export const Tokens: {
       address: '0xdDb46999F8891663a8F2828d25298f70416d7610',
       decimals: 18,
     },
+    BUNNI: {
+      address: '0x000000c396558ffbab5ea628f39658bdf61345b3',
+      decimals: 18,
+    },
+    BOLD: {
+      address: '0x03569CC076654F82679C4BA2124D64774781B01D',
+      decimals: 18,
+    },
+    USND: {
+      address: '0x4ecf61a6c2FaB8A047CEB3B3B263B401763e9D49',
+      decimals: 18,
+    },
   },
   [Network.OPTIMISM]: {
     DAI: {
@@ -1763,6 +1783,10 @@ export const Tokens: {
       address: `0x04C0599Ae5A44757c0af6F9eC3b93da8976c150A`,
       decimals: 18,
     },
+    BUNNI: {
+      address: '0x000000c396558ffbab5ea628f39658bdf61345b3',
+      decimals: 18,
+    },
     EURC: {
       address: `0x60a3e35cc302bfa44cb288bc5a4f316fdb1adb42`,
       decimals: 6,
@@ -1839,6 +1863,22 @@ export const Tokens: {
     },
     UNI: {
       address: '0x8f187aA05619a017077f5308904739877ce9eA21',
+      decimals: 18,
+    },
+    wstETH: {
+      address: '0xc02fE7317D4eb8753a02c35fe019786854A92001',
+      decimals: 18,
+    },
+    weETH: {
+      address: '0x7DCC39B4d1C53CB31e1aBc0e358b43987FEF80f7',
+      decimals: 18,
+    },
+    ezETH: {
+      address: '0x2416092f143378750bb29b79eD961ab195CcEea5',
+      decimals: 18,
+    },
+    rsETH: {
+      address: '0xc3eACf0612346366Db554C991D7858716db09f58',
       decimals: 18,
     },
   },
