@@ -41,6 +41,7 @@ import ERC4626ABI from '../../abi//ERC4626.json';
 import { TickMath } from './lib/TickMath';
 
 const VAULT_SHARE_PRICES_UPDATE_TTL = 1 * 60; // 1 minute
+const BUNNI_V2_GAS_COST = 400_000; // https://dashboard.tenderly.co/shared/simulation/d343cb5e-7d7c-45f8-9653-6a7f7f104eed/gas-usage
 
 export class BunniV2 extends SimpleExchange implements IDex<BunniV2Data> {
   protected eventPools: BunniV2EventPool;
@@ -221,7 +222,6 @@ export class BunniV2 extends SimpleExchange implements IDex<BunniV2Data> {
           pool.key.currency0 === NULL_ADDRESS); // WETH is src and native ETH pool
 
       try {
-        // attempt to quote the swap locally
         prices = await this.getOffChainPrices(
           zeroForOne,
           amounts,
@@ -230,9 +230,10 @@ export class BunniV2 extends SimpleExchange implements IDex<BunniV2Data> {
           blockNumber,
         );
       } catch (error) {
-        this.logger.warn(error);
+        this.logger.warn(
+          `[${this.dexKey}-${this.network}] Off-chain pricing failed for pool ${pool.id}: ${error}. Falling back to on-chain`,
+        );
 
-        // revert to fetching prices via RPC
         try {
           prices = await this.getOnChainPrices(
             zeroForOne,
@@ -242,16 +243,14 @@ export class BunniV2 extends SimpleExchange implements IDex<BunniV2Data> {
             blockNumber,
           );
         } catch (error) {
-          this.logger.error(error);
+          this.logger.error(
+            `[${this.dexKey}-${this.network}] On-chain pricing failed for pool ${pool.id}: ${error}`,
+          );
           prices = null;
         }
       }
 
       if (prices === null) {
-        return null;
-      }
-
-      if (side === SwapSide.BUY && prices[prices.length - 1] === 0n) {
         return null;
       }
 
@@ -273,7 +272,7 @@ export class BunniV2 extends SimpleExchange implements IDex<BunniV2Data> {
           ],
         },
         exchange: this.dexKey,
-        gasCost: 100_000,
+        gasCost: BUNNI_V2_GAS_COST,
         poolIdentifier: pool.id,
       };
     });
@@ -476,7 +475,6 @@ export class BunniV2 extends SimpleExchange implements IDex<BunniV2Data> {
       dexFuncHasRecipient: true,
       exchangeData,
       targetExchange: this.config.router,
-      returnAmountPos: undefined,
       transferSrcTokenBeforeSwap: isETHAddress(srcToken)
         ? undefined
         : this.config.router,
@@ -500,8 +498,6 @@ export class BunniV2 extends SimpleExchange implements IDex<BunniV2Data> {
       networkFee: '0',
     };
   }
-
-  async updatePoolState(): Promise<void> {}
 
   async getTopPoolsForToken(
     tokenAddress: Address,
