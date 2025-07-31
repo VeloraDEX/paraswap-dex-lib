@@ -20,7 +20,9 @@ export type BunniV2Data = {
     tokenIn: Address;
     tokenOut: Address;
     zeroForOne: boolean;
-    pool: PoolState;
+    pool: {
+      key: PoolKey;
+    };
   }[];
 };
 

@@ -264,10 +264,12 @@ export class BunniV2 extends SimpleExchange implements IDex<BunniV2Data> {
         data: {
           path: [
             {
-              pool,
               tokenIn: zeroForOne ? pool.key.currency0 : pool.key.currency1,
               tokenOut: zeroForOne ? pool.key.currency1 : pool.key.currency0,
               zeroForOne,
+              pool: {
+                key: pool.key,
+              },
             },
           ],
         },
@@ -498,6 +500,8 @@ export class BunniV2 extends SimpleExchange implements IDex<BunniV2Data> {
       networkFee: '0',
     };
   }
+
+  updatePoolState(): AsyncOrSync<void> {}
 
   async getTopPoolsForToken(
     tokenAddress: Address,
