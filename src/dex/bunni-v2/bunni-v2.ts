@@ -544,32 +544,22 @@ export class BunniV2 extends SimpleExchange implements IDex<BunniV2Data> {
       return [];
     }
 
-    const state = this.eventPools.getStaleState();
-
     const poolBalances = availablePoolsForToken.map(pool => {
       const rawBalance0 = parseFloat(pool.bunniToken.rawBalance0);
       const rawBalance1 = parseFloat(pool.bunniToken.rawBalance1);
 
       let reserveBalance0 = 0;
       if (pool.bunniToken.vault0) {
-        const vault =
-          state?.vaultStates[pool.bunniToken.vault0.id.toLowerCase()];
-        const pricePerVaultShare = vault
-          ? parseFloat(formatUnits(vault.sharePrice, vault.currencyDecimals))
-          : parseFloat(pool.bunniToken.vault0.pricePerVaultShare);
         reserveBalance0 =
-          parseFloat(pool.bunniToken.reserve0) * pricePerVaultShare;
+          parseFloat(pool.bunniToken.reserve0) *
+          parseFloat(pool.bunniToken.vault0.pricePerVaultShare);
       }
 
       let reserveBalance1 = 0;
       if (pool.bunniToken.vault1) {
-        const vault =
-          state?.vaultStates[pool.bunniToken.vault1.id.toLowerCase()];
-        const pricePerVaultShare = vault
-          ? parseFloat(formatUnits(vault.sharePrice, vault.currencyDecimals))
-          : parseFloat(pool.bunniToken.vault1.pricePerVaultShare);
         reserveBalance1 =
-          parseFloat(pool.bunniToken.reserve1) * pricePerVaultShare;
+          parseFloat(pool.bunniToken.reserve1) *
+          parseFloat(pool.bunniToken.vault1.pricePerVaultShare);
       }
 
       const totalBalance0 = rawBalance0 + reserveBalance0;
