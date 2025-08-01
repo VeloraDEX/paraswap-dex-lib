@@ -88,6 +88,7 @@ import { AaveV3Stata } from './aave-v3-stata/aave-v3-stata';
 import { AaveV3StataV2 } from './aave-v3-stata-v2/aave-v3-stata-v2';
 import { OSwap } from './oswap/oswap';
 import { FluidDex } from './fluid-dex/fluid-dex';
+import { FluidDexLite } from './fluid-dex-lite/fluid-dex-lite';
 import { ConcentratorArusd } from './concentrator-arusd/concentrator-arusd';
 import { FxProtocolRusd } from './fx-protocol-rusd/fx-protocol-rusd';
 import { AaveGsm } from './aave-gsm/aave-gsm';
@@ -208,6 +209,7 @@ const Dexes = [
   SkyConverter,
   Cables,
   FluidDex,
+  FluidDexLite,
   UsualMWrappedM,
   MWrappedM,
   WrappedMM,
