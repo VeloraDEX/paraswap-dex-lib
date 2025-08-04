@@ -528,6 +528,19 @@ class UniswapV3Math {
 
     if (poolState.liquidity !== newLiquidity)
       poolState.liquidity = newLiquidity;
+
+    _require(
+      poolState.slot0.sqrtPriceX96 === newSqrtPriceX96 &&
+        poolState.slot0.tick === newTick,
+      'LOGIC ERROR: calculated (currentPrice,currentTick) and (newSqrtPriceX96, newTick) from event should always be equal at the end',
+      {
+        currentPrice: state.sqrtPriceX96,
+        newSqrtPriceX96,
+        currentTick: state.tick,
+        newTick,
+      },
+      'currentPrice === newSqrtPriceX96 && currentTick === newTick',
+    );
   }
 
   _modifyPosition(
