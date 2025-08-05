@@ -910,6 +910,10 @@ export const Tokens: {
       address: '0x2d0e0814e62d80056181f5cd932274405966e4f0',
       decimals: 18,
     },
+    OS: {
+      address: '0xb1e25689d55734fd3fffc939c4c3eb52dff8a794',
+      decimals: 18,
+    },
   },
   [Network.BSC]: {
     POPS: {
@@ -2309,6 +2313,10 @@ export const Holders: {
     DAI: '0x90347b9CC81a4a28aAc74E8B134040d5ce2eaB6D',
   },
   [Network.UNICHAIN]: {},
+  [Network.SONIC]: {
+    OS: '0xb1e25689D55734FD3ffFc939c4C3Eb52DFf8A794',
+    WS: '0x039e2fB66102314Ce7b64Ce5Ce3E5183bc94aD38',
+  },
 };
 
 export const NativeTokenSymbols: { [network: number]: string } = {

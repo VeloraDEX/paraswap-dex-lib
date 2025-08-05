@@ -19,6 +19,16 @@ export const OSwapConfig: DexConfigMap<DexParams> = {
         },
       ],
     },
+    [Network.SONIC]: {
+      pools: [
+        {
+          id: 'OSwap_0x2f872623d1e1af5835b08b0e49aad2d81d649d30', // Pool identifier: `{dex_key}_{pool_address}`
+          address: '0x2f872623d1e1af5835b08b0e49aad2d81d649d30', // Address of the pool
+          token0: '0x039e2fb66102314ce7b64ce5ce3e5183bc94ad38', // WS
+          token1: '0xb1e25689d55734fd3fffc939c4c3eb52dff8a794', // OS
+        },
+      ],
+    },
   },
 };
 
