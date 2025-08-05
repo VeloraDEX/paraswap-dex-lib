@@ -1,4 +1,3 @@
-import _ from 'lodash';
 import { Interface } from '@ethersproject/abi';
 import { DeepReadonly } from 'ts-essentials';
 import { PartialEventSubscriber } from '../../composed-event-subscriber';
@@ -38,11 +37,12 @@ export class SynthereumPoolEvent<State> extends PartialEventSubscriber<
   ): DeepReadonly<SynthereumPoolState> | null {
     try {
       const parsed = this.poolInterface.parseLog(log);
-      const _state: SynthereumPoolState = _.cloneDeep(state);
+
       switch (parsed.name) {
         case 'SetFeePercentage': {
-          _state.feesPercentage = bigIntify(parsed.args.newFee.toString());
-          return _state;
+          return {
+            feesPercentage: parsed.args.newFee.toBigInt(),
+          };
         }
         default:
           return null;

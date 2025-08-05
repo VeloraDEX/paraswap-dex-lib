@@ -12,7 +12,6 @@ import type { MorphoVaultState } from './types';
 import MorphoVaultABI from '../../abi/angle-transmuter/MorphoVault.json';
 import { PartialEventSubscriber } from '../../composed-event-subscriber';
 import { Lens } from '../../lens';
-import _ from 'lodash';
 import { ethers } from 'ethers';
 
 export class MorphoVaultSubscriber<State> extends PartialEventSubscriber<
@@ -36,16 +35,15 @@ export class MorphoVaultSubscriber<State> extends PartialEventSubscriber<
   ): DeepReadonly<MorphoVaultState> | null {
     try {
       const parsed = MorphoVaultSubscriber.interface.parseLog(log);
-      const _state: MorphoVaultState = _.cloneDeep(state) as MorphoVaultState;
       switch (parsed.name) {
         case 'UpdateLastTotalAssets':
-          return this.handleUpdateLastTotalAssets(parsed, _state);
+          return this.handleUpdateLastTotalAssets(parsed, state);
         case 'AccrueInterest':
-          return this.handleAccrueFee(parsed, _state);
+          return this.handleAccrueFee(parsed, state);
         case 'Deposit':
-          return this.handleDeposit(parsed, _state);
+          return this.handleDeposit(parsed, state);
         case 'Withdraw':
-          return this.handleWithdraw(parsed, _state);
+          return this.handleWithdraw(parsed, state);
         default:
           return null;
       }
@@ -102,33 +100,40 @@ export class MorphoVaultSubscriber<State> extends PartialEventSubscriber<
     event: ethers.utils.LogDescription,
     state: MorphoVaultState,
   ): DeepReadonly<MorphoVaultState> | null {
-    state.totalAssets = bigIntify(event.args.updatedTotalAssets);
-    return state;
+    const totalAssets = bigIntify(event.args.updatedTotalAssets);
+    return {
+      ...state,
+      totalAssets,
+    };
   }
 
   handleAccrueFee(
     event: ethers.utils.LogDescription,
     state: MorphoVaultState,
   ): DeepReadonly<MorphoVaultState> | null {
-    state.totalSupply += bigIntify(event.args.feeShares);
-    return state;
+    return {
+      ...state,
+      totalSupply: state.totalSupply + bigIntify(event.args.feeShares),
+    };
   }
 
   handleDeposit(
     event: ethers.utils.LogDescription,
     state: MorphoVaultState,
   ): DeepReadonly<MorphoVaultState> | null {
-    const shares = bigIntify(event.args.shares);
-    state.totalSupply += shares;
-    return state;
+    return {
+      ...state,
+      totalSupply: state.totalSupply + bigIntify(event.args.shares),
+    };
   }
 
   handleWithdraw(
     event: ethers.utils.LogDescription,
     state: MorphoVaultState,
   ): DeepReadonly<MorphoVaultState> | null {
-    const shares = bigIntify(event.args.shares);
-    state.totalSupply -= shares;
-    return state;
+    return {
+      ...state,
+      totalSupply: state.totalSupply - bigIntify(event.args.shares),
+    };
   }
 }

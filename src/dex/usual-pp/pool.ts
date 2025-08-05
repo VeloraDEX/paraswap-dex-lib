@@ -1,4 +1,3 @@
-import _ from 'lodash';
 import { Interface } from '@ethersproject/abi';
 import { IDexHelper } from '../../dex-helper';
 import { StatefulEventSubscriber } from '../../stateful-event-subscriber';
@@ -25,13 +24,20 @@ export class UsualPool extends StatefulEventSubscriber<PoolState> {
     state: DeepReadonly<PoolState>,
     log: Readonly<Log>,
   ): AsyncOrSync<DeepReadonly<PoolState> | null> {
-    const event = this.decoder(log);
-    const _state: PoolState = _.cloneDeep(state);
-    if (event.name === 'FloorPriceUpdated') {
-      _state.price = BigInt(event.args.newFloorPrice);
-      return _state;
+    try {
+      const event = this.decoder(log);
+
+      if (event.name === 'FloorPriceUpdated') {
+        return {
+          price: event.args.newFloorPrice.toBigInt(),
+        };
+      }
+
+      return null;
+    } catch (e) {
+      this.logger.error('Failed to parse log', e);
+      return null;
     }
-    return null;
   }
 
   async generateState(

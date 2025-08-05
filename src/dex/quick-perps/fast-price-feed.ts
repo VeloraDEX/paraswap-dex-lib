@@ -56,15 +56,19 @@ export class FastPriceFeed<State> extends PartialEventSubscriber<
       const parsed = FastPriceFeed.fastPriceEventsInterface.parseLog(log);
       switch (parsed.name) {
         case 'PriceUpdate': {
-          const _state: FastPriceFeedState = _.cloneDeep(state);
-          _state.lastUpdatedAt =
-            typeof blockHeader.timestamp === 'string'
-              ? parseInt(blockHeader.timestamp)
-              : blockHeader.timestamp;
           const tokenAddress = parsed.args.token.toLowerCase();
-          if (tokenAddress in state.prices)
-            _state.prices[tokenAddress] = BigInt(parsed.args.price.toString());
-          return _state;
+          if (!(tokenAddress in state.prices)) return null;
+
+          return {
+            lastUpdatedAt:
+              typeof blockHeader.timestamp === 'string'
+                ? parseInt(blockHeader.timestamp)
+                : blockHeader.timestamp,
+            prices: {
+              ...state.prices,
+              [tokenAddress]: parsed.args.price.toBigInt(),
+            },
+          };
         }
         default:
           return null;

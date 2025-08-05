@@ -263,21 +263,34 @@ export class Vault<State> extends PartialEventSubscriber<State, VaultState> {
   ): AsyncOrSync<VaultState | null> {
     try {
       const parsed = Vault.interface.parseLog(log);
-      const _state: VaultState = _.cloneDeep(state);
+
       switch (parsed.name) {
         case 'IncreaseUsdqAmount': {
           const tokenAddress = parsed.args.token.toLowerCase();
-          const amount = BigInt(parsed.args.amount.toString());
-          if (tokenAddress in state.usdqAmounts)
-            _state.usdqAmounts[tokenAddress] += amount;
-          return _state;
+          if (!(tokenAddress in state.usdqAmounts)) return null;
+
+          const amount = parsed.args.amount.toBigInt();
+
+          return {
+            usdqAmounts: {
+              ...state.usdqAmounts,
+              [tokenAddress]: state.usdqAmounts[tokenAddress] + amount,
+            },
+          };
         }
+
         case 'DecreaseUsdqAmount': {
           const tokenAddress = parsed.args.token.toLowerCase();
-          const amount = BigInt(parsed.args.amount.toString());
-          if (tokenAddress in state.usdqAmounts)
-            _state.usdqAmounts[tokenAddress] -= amount;
-          return _state;
+          if (!(tokenAddress in state.usdqAmounts)) return null;
+
+          const amount = parsed.args.amount.toBigInt();
+
+          return {
+            usdqAmounts: {
+              ...state.usdqAmounts,
+              [tokenAddress]: state.usdqAmounts[tokenAddress] - amount,
+            },
+          };
         }
         default:
           return null;
