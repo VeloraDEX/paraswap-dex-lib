@@ -1,6 +1,6 @@
 {
   "name": "@paraswap/dex-lib",
-  "version": "4.5.12-uni-v3-math.0",
+  "version": "4.5.12-uni-v3-math.1",
   "main": "build/index.js",
   "types": "build/index.d.ts",
   "repository": "https://github.com/paraswap/paraswap-dex-lib",
