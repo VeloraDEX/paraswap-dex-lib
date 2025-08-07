@@ -150,10 +150,14 @@ export class UniswapV3EventPool extends StatefulEventSubscriber<PoolState> {
 
     const isStateCorrect = _.isEqual(newState, realState);
 
+    const logsIds = logs.map(log => `${log.transactionHash}_${log.logIndex}`);
+
     this.logger.info(
       `State for the ${this.poolAddress} on ${this.parentName} is ${
         isStateCorrect ? 'correct' : 'incorrect'
-      } for ${blockHeader.number} after ${logs.length} logs`,
+      } for ${blockHeader.number} after ${logs.length} logs: ${logsIds.join(
+        ',',
+      )}`,
     );
 
     return newState;
