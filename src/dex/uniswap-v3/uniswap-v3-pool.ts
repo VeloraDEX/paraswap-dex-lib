@@ -144,6 +144,18 @@ export class UniswapV3EventPool extends StatefulEventSubscriber<PoolState> {
     if (newState && !newState.isValid) {
       return await this.generateState(blockHeader.number);
     }
+
+    // temporary, only to track if generated state is correct
+    const realState = await this.generateState(blockHeader.number);
+
+    const isStateCorrect = _.isEqual(newState, realState);
+
+    this.logger.info(
+      `State for the ${this.poolAddress} on ${this.parentName} is ${
+        isStateCorrect ? 'correct' : 'incorrect'
+      } for ${blockHeader.number} after ${logs.length} logs`,
+    );
+
     return newState;
   }
 
