@@ -166,12 +166,12 @@ export class UniswapV3EventPool extends StatefulEventSubscriber<PoolState> {
 
     if (!isStateCorrect) {
       this.logger.info(
-        `UniV3-math: ${blockHeader.number} with ${
+        `UniV3-math: ${this.poolAddress} ${blockHeader.number} with ${
           logs.length
         } logs: Expected state: ${JSON.stringify(realState)}`,
       );
       this.logger.info(
-        `UniV3-math: ${blockHeader.number} with ${
+        `UniV3-math: ${this.poolAddress} ${blockHeader.number} with ${
           logs.length
         } logs: Actual state: ${JSON.stringify(newState)}`,
       );
