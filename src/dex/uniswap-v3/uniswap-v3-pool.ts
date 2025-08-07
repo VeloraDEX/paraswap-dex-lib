@@ -148,17 +148,34 @@ export class UniswapV3EventPool extends StatefulEventSubscriber<PoolState> {
     // temporary, only to track if generated state is correct
     const realState = await this.generateState(blockHeader.number);
 
-    const isStateCorrect = _.isEqual(newState, realState);
+    // temporary ignore balances as it doesn't affect pricing (only the limits of pricing, not the price itself)
+    const newStateCopy = { ...newState, balance0: 0, balance1: 0 };
+    const realStateCopy = { ...realState, balance0: 0, balance1: 0 };
+
+    const isStateCorrect = _.isEqual(newStateCopy, realStateCopy);
 
     const logsIds = logs.map(log => `${log.transactionHash}_${log.logIndex}`);
 
     this.logger.info(
-      `State for the ${this.poolAddress} on ${this.parentName} is ${
+      `UniV3-math: State for the ${this.poolAddress} on ${this.parentName} is ${
         isStateCorrect ? 'correct' : 'incorrect'
       } for ${blockHeader.number} after ${logs.length} logs: ${logsIds.join(
         ',',
       )}`,
     );
+
+    if (!isStateCorrect) {
+      this.logger.info(
+        `UniV3-math: ${blockHeader.number} with ${
+          logs.length
+        } logs: Expected state: ${JSON.stringify(realState)}`,
+      );
+      this.logger.info(
+        `UniV3-math: ${blockHeader.number} with ${
+          logs.length
+        } logs: Actual state: ${JSON.stringify(newState)}`,
+      );
+    }
 
     return newState;
   }
