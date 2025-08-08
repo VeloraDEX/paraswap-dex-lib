@@ -96,6 +96,98 @@ export const PancakeswapV3Config: DexConfigMap<DexParams> = {
       subgraphURL: 'Bj8g9Kso3a2fkhp8S3vBkHYq7FVPV1hVboThRtgdPwRF',
     },
   },
+  OmniExchangeV3: {
+    [Network.BASE]: {
+      deployer: '0x0270845A91984746A3677eF5931013a7c980AA78',
+      factory: '0xd6Ab0566e7E60B67c50AC73ddFf4e3DdcB829EC2',
+      quoter: '0x134D3C90A4a4C712cF0B548Fe02003C9D934bABa',
+      router: '0x34C97B800876D9CA4658561F00512fA7AbDAf315',
+      supportedFees: [10000n, 2500n, 500n, 100n],
+      stateMulticall: '0x7160f736c52e1e78e92FD4eE4D73e21A7Cf4F950',
+      uniswapMulticall: '0x091e99cb1C49331a94dD62755D168E941AbD0693',
+      chunksCount: 10,
+      initRetryFrequency: 10,
+      initHash:
+        '0xd81a5a509cbbd340e6ce51e5005484df599c630af2458f9e6d04b784729c6d59',
+      subgraphURL:
+        'https://api.goldsky.com/api/public/project_cltceeuudv1ij01x7ekxhfl46/subgraphs/omni-v3-base/prod/gn',
+    },
+    [Network.ARBITRUM]: {
+      deployer: '0x0270845A91984746A3677eF5931013a7c980AA78',
+      factory: '0xd6Ab0566e7E60B67c50AC73ddFf4e3DdcB829EC2',
+      quoter: '0x134D3C90A4a4C712cF0B548Fe02003C9D934bABa',
+      router: '0x34C97B800876D9CA4658561F00512fA7AbDAf315',
+      supportedFees: [10000n, 2500n, 500n, 100n],
+      stateMulticall: '0xaBB58098A7B5172A9b0B38a1925A522dbf0b4FC3',
+      uniswapMulticall: '0x1F98415757620B543A52E61c46B32eB19261F984',
+      chunksCount: 10,
+      initRetryFrequency: 10,
+      initHash:
+        '0xd81a5a509cbbd340e6ce51e5005484df599c630af2458f9e6d04b784729c6d59',
+      subgraphURL:
+        'https://api.goldsky.com/api/public/project_cltceeuudv1ij01x7ekxhfl46/subgraphs/omni-v3-arbitrum/prod/gn',
+    },
+    [Network.OPTIMISM]: {
+      deployer: '0x0270845A91984746A3677eF5931013a7c980AA78',
+      factory: '0xd6Ab0566e7E60B67c50AC73ddFf4e3DdcB829EC2',
+      quoter: '0x134D3C90A4a4C712cF0B548Fe02003C9D934bABa',
+      router: '0x34C97B800876D9CA4658561F00512fA7AbDAf315',
+      supportedFees: [10000n, 2500n, 500n, 100n],
+      stateMulticall: '0x4FF0dEC5f9a763Aa1E5C2a962aa6f4eDFeE4f9eA',
+      uniswapMulticall: '0x1F98415757620B543A52E61c46B32eB19261F984',
+      chunksCount: 10,
+      initRetryFrequency: 10,
+      initHash:
+        '0xd81a5a509cbbd340e6ce51e5005484df599c630af2458f9e6d04b784729c6d59',
+      subgraphURL:
+        'https://api.goldsky.com/api/public/project_cltceeuudv1ij01x7ekxhfl46/subgraphs/omni-v3-optimism/prod/gn',
+    },
+    [Network.BSC]: {
+      deployer: '0x0270845A91984746A3677eF5931013a7c980AA78',
+      factory: '0xd6Ab0566e7E60B67c50AC73ddFf4e3DdcB829EC2',
+      quoter: '0x134D3C90A4a4C712cF0B548Fe02003C9D934bABa',
+      router: '0x34C97B800876D9CA4658561F00512fA7AbDAf315',
+      supportedFees: [10000n, 2500n, 500n, 100n],
+      stateMulticall: '0x593F39A4Ba26A9c8ed2128ac95D109E8e403C485',
+      uniswapMulticall: '0x963Df249eD09c358A4819E39d9Cd5736c3087184',
+      chunksCount: 10,
+      initRetryFrequency: 10,
+      initHash:
+        '0xd81a5a509cbbd340e6ce51e5005484df599c630af2458f9e6d04b784729c6d59',
+      subgraphURL:
+        'https://api.goldsky.com/api/public/project_cltceeuudv1ij01x7ekxhfl46/subgraphs/omni-v3-bsc/prod/gn',
+    },
+    [Network.AVALANCHE]: {
+      deployer: '0x0270845A91984746A3677eF5931013a7c980AA78',
+      factory: '0xd6Ab0566e7E60B67c50AC73ddFf4e3DdcB829EC2',
+      quoter: '0x134D3C90A4a4C712cF0B548Fe02003C9D934bABa',
+      router: '0x34C97B800876D9CA4658561F00512fA7AbDAf315',
+      supportedFees: [10000n, 2500n, 500n, 100n],
+      stateMulticall: '0x30F6B9b6485ff0B67E881f5ac80D3F1c70A4B23d',
+      uniswapMulticall: '0x0139141Cd4Ee88dF3Cdb65881D411bAE271Ef0C2',
+      chunksCount: 10,
+      initRetryFrequency: 10,
+      initHash:
+        '0xd81a5a509cbbd340e6ce51e5005484df599c630af2458f9e6d04b784729c6d59',
+      subgraphURL:
+        'https://api.goldsky.com/api/public/project_cltceeuudv1ij01x7ekxhfl46/subgraphs/omni-v3-avalanche/prod/gn',
+    },
+    [Network.SONIC]: {
+      deployer: '0x0270845A91984746A3677eF5931013a7c980AA78',
+      factory: '0xd6Ab0566e7E60B67c50AC73ddFf4e3DdcB829EC2',
+      quoter: '0x134D3C90A4a4C712cF0B548Fe02003C9D934bABa',
+      router: '0x34C97B800876D9CA4658561F00512fA7AbDAf315',
+      supportedFees: [10000n, 2500n, 500n, 100n],
+      stateMulticall: '0xd9aF38beD4dC67CD8aA6b40be0FeeE6E122Eb8Bc',
+      uniswapMulticall: '0x5d6b0f5335ec95cD2aB7E52f2A0750dd86502435',
+      chunksCount: 10,
+      initRetryFrequency: 10,
+      initHash:
+        '0xd81a5a509cbbd340e6ce51e5005484df599c630af2458f9e6d04b784729c6d59',
+      subgraphURL:
+        'https://api.goldsky.com/api/public/project_cltceeuudv1ij01x7ekxhfl46/subgraphs/omni-v3-sonic/prod/gn',
+    },
+  },
 };
 
 export const Adapters: Record<number, AdapterMappings> = {

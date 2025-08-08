@@ -96,6 +96,7 @@ export class PancakeswapV3
         'PancakeswapV3',
         'DackieSwapV3',
         'SwapBasedV3',
+        'OmniExchangeV3',
       ]),
     );
 
@@ -302,20 +303,26 @@ export class PancakeswapV3
         (e.message.endsWith('Pool does not exist') ||
           e.message.endsWith('Pool is inactive'))
       ) {
-        if (e.message.endsWith('Pool is inactive')) {
-          this.logger.info(
-            `${this.dexKey}: Adding inactive pool ${pool.poolAddress} to "notExistingPoolSet": srcAddress=${srcAddress}, destAddress=${destAddress}, fee=${fee}`,
+        let code = '0x';
+        try {
+          code = await this.dexHelper.provider.getCode(
+            pool.poolAddress,
+            blockNumber,
           );
-        }
-        // no need to await we want the set to have the pool key but it's not blocking
-        void this.dexHelper.cache.zadd(
-          this.notExistingPoolSetKey,
-          [Date.now(), key],
-          'NX',
-        );
+        } catch (_) {}
 
-        // prevent more requests for this pool
-        pool = null;
+        if (code && code !== '0x') {
+          pool.initFailed = true;
+        } else {
+          void this.dexHelper.cache.zadd(
+            this.notExistingPoolSetKey,
+            [Date.now(), key],
+            'NX',
+          );
+          // prevent more requests for this pool
+
+          pool = null;
+        }
         this.logger.trace(
           `${this.dexHelper}: ${e.message}: srcAddress=${srcAddress}, destAddress=${destAddress}, fee=${fee}`,
           e,

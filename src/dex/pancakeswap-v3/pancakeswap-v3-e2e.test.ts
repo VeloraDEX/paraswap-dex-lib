@@ -456,4 +456,118 @@ describe('PancakeswapV3 E2E', () => {
       nativeTokenAmount,
     );
   });
+
+  describe('OmniExchangeV3 Base', () => {
+    const network = Network.BASE;
+    const tokenASymbol: string = 'USDC';
+    const tokenBSymbol: string = 'WETH';
+    const tokenAAmount: string = '10000000000';
+    const tokenBAmount: string = '1000000000000000000';
+    const nativeTokenAmount = '1000000000000000000';
+
+    testForNetwork(
+      network,
+      'OmniExchangeV3',
+      tokenASymbol,
+      tokenBSymbol,
+      tokenAAmount,
+      tokenBAmount,
+      nativeTokenAmount,
+    );
+  });
+
+  describe('OmniExchangeV3 Arbitrum', () => {
+    const network = Network.ARBITRUM;
+    const tokenASymbol: string = 'USDC';
+    const tokenBSymbol: string = 'WETH';
+    const tokenAAmount: string = '10000000';
+    const tokenBAmount: string = '25000000000000000';
+    const nativeTokenAmount = '25000000000000000';
+
+    testForNetwork(
+      network,
+      'OmniExchangeV3',
+      tokenASymbol,
+      tokenBSymbol,
+      tokenAAmount,
+      tokenBAmount,
+      nativeTokenAmount,
+    );
+  });
+
+  describe('OmniExchangeV3 Optimism', () => {
+    const network = Network.OPTIMISM;
+    const tokenASymbol: string = 'USDC';
+    const tokenBSymbol: string = 'WETH';
+    const tokenAAmount: string = '1000000000';
+    const tokenBAmount: string = '500000000000000000';
+    const nativeTokenAmount = '500000000000000000';
+
+    testForNetwork(
+      network,
+      'OmniExchangeV3',
+      tokenASymbol,
+      tokenBSymbol,
+      tokenAAmount,
+      tokenBAmount,
+      nativeTokenAmount,
+    );
+  });
+
+  describe('OmniExchangeV3 BSC', () => {
+    const network = Network.BSC;
+    const tokenASymbol: string = 'USDC';
+    const tokenBSymbol: string = 'WBNB';
+    const tokenAAmount: string = '1000000000000000000000';
+    const tokenBAmount: string = '5000000000000000000';
+    const nativeTokenAmount = '5000000000000000000';
+
+    testForNetwork(
+      network,
+      'OmniExchangeV3',
+      tokenASymbol,
+      tokenBSymbol,
+      tokenAAmount,
+      tokenBAmount,
+      nativeTokenAmount,
+    );
+  });
+
+  describe('OmniExchangeV3 Avalanche', () => {
+    const network = Network.AVALANCHE;
+    const tokenASymbol: string = 'USDC';
+    const tokenBSymbol: string = 'WAVAX';
+    const tokenAAmount: string = '1000000000';
+    const tokenBAmount: string = '50000000000000000000';
+    const nativeTokenAmount = '50000000000000000000';
+
+    testForNetwork(
+      network,
+      'OmniExchangeV3',
+      tokenASymbol,
+      tokenBSymbol,
+      tokenAAmount,
+      tokenBAmount,
+      nativeTokenAmount,
+    );
+  });
+
+  describe('OmniExchangeV3 Sonic', () => {
+    const network = Network.SONIC;
+    const tokenASymbol: string = 'USDCe';
+    const tokenBSymbol: string = 'WS';
+    const tokenAAmount: string = '1000000000';
+    const tokenBAmount: string = '100000000000000000000';
+    const nativeTokenAmount = '100000000000000000000';
+
+    testForNetwork(
+      network,
+      'OmniExchangeV3',
+      tokenASymbol,
+      tokenBSymbol,
+      tokenAAmount,
+      tokenBAmount,
+      nativeTokenAmount,
+    );
+  });
 });
