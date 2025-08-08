@@ -484,6 +484,62 @@ export const UniswapV2Config: DexConfigMap<DexParams> = {
       feeCode: 30,
     },
   },
+  OmniExchangeV2: {
+    [Network.BASE]: {
+      subgraphURL:
+        'https://api.goldsky.com/api/public/project_cltceeuudv1ij01x7ekxhfl46/subgraphs/omni-v2-base/prod/gn',
+      factoryAddress: '0x7d9D51267f7e9e6b46a48E0A75c0086F46777087',
+      initCode:
+        '0x6ea5d2f9a28cd0f6ba538d5423bc3a6f7bf6d8c32d7699524b144ce72d5d6ebf',
+      poolGasCost: 90 * 1000,
+      feeCode: 25,
+    },
+    [Network.SONIC]: {
+      subgraphURL:
+        'https://api.goldsky.com/api/public/project_cltceeuudv1ij01x7ekxhfl46/subgraphs/omni-v2-sonic/prod/gn',
+      factoryAddress: '0x7d9D51267f7e9e6b46a48E0A75c0086F46777087',
+      initCode:
+        '0x6ea5d2f9a28cd0f6ba538d5423bc3a6f7bf6d8c32d7699524b144ce72d5d6ebf',
+      poolGasCost: 90 * 1000,
+      feeCode: 25,
+    },
+    [Network.AVALANCHE]: {
+      subgraphURL:
+        'https://api.goldsky.com/api/public/project_cltceeuudv1ij01x7ekxhfl46/subgraphs/omni-v2-avalanche/prod/gn',
+      factoryAddress: '0x7d9D51267f7e9e6b46a48E0A75c0086F46777087',
+      initCode:
+        '0x6ea5d2f9a28cd0f6ba538d5423bc3a6f7bf6d8c32d7699524b144ce72d5d6ebf',
+      poolGasCost: 90 * 1000,
+      feeCode: 25,
+    },
+    [Network.ARBITRUM]: {
+      subgraphURL:
+        'https://api.goldsky.com/api/public/project_cltceeuudv1ij01x7ekxhfl46/subgraphs/omni-v2-arbitrum/prod/gn',
+      factoryAddress: '0x7d9D51267f7e9e6b46a48E0A75c0086F46777087',
+      initCode:
+        '0x6ea5d2f9a28cd0f6ba538d5423bc3a6f7bf6d8c32d7699524b144ce72d5d6ebf',
+      poolGasCost: 90 * 1000,
+      feeCode: 25,
+    },
+    [Network.BSC]: {
+      subgraphURL:
+        'https://api.goldsky.com/api/public/project_cltceeuudv1ij01x7ekxhfl46/subgraphs/omni-v2-bsc/prod/gn',
+      factoryAddress: '0x7d9D51267f7e9e6b46a48E0A75c0086F46777087',
+      initCode:
+        '0x6ea5d2f9a28cd0f6ba538d5423bc3a6f7bf6d8c32d7699524b144ce72d5d6ebf',
+      poolGasCost: 90 * 1000,
+      feeCode: 25,
+    },
+    [Network.OPTIMISM]: {
+      subgraphURL:
+        'https://api.goldsky.com/api/public/project_cltceeuudv1ij01x7ekxhfl46/subgraphs/omni-v2-optimism/prod/gn',
+      factoryAddress: '0x7d9D51267f7e9e6b46a48E0A75c0086F46777087',
+      initCode:
+        '0x6ea5d2f9a28cd0f6ba538d5423bc3a6f7bf6d8c32d7699524b144ce72d5d6ebf',
+      poolGasCost: 90 * 1000,
+      feeCode: 25,
+    },
+  },
   YetiSwap: {
     [Network.AVALANCHE]: {
       subgraphURL: '3eghyQrrkqHWVGhFdQhMV76yb7JUpmY7EENgKodSbH7x',
