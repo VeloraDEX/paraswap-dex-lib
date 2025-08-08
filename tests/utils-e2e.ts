@@ -179,7 +179,7 @@ export async function testE2E(
   // Specified in BPS: part of 10000
   slippage?: number,
   sleepMs?: number,
-  // could be used for networks without tenderly support (e.g. zkEVM)
+  // could be used for networks without tenderly support
   replaceTenderlyWithEstimateGas?: boolean,
   forceRoute?: AddressOrSymbol[],
 ) {

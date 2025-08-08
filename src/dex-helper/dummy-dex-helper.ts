@@ -275,7 +275,7 @@ export class DummyRequestWrapper implements IRequestWrapper {
 
     let url = `https://gateway-arbitrum.network.thegraph.com/api/${this.apiKeyTheGraph}/${type}/id/${subgraph}`;
 
-    // support for the subgraphs that are on the studio and were not migrated to decentralized network yet (base and zkEVM)
+    // support for the subgraphs that are on the studio and were not migrated to decentralized network yet
     if (subgraph.includes('studio.thegraph.com')) {
       url = subgraph;
     }

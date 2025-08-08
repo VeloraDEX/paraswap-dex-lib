@@ -378,16 +378,7 @@ export class AlgebraEventPoolV1_1 extends StatefulEventSubscriber<PoolStateV1_1>
   ): Promise<
     [bigint, bigint, DecodedStateMultiCallResultWithRelativeBitmapsV1_1]
   > {
-    try {
-      return await this.fetchPoolStateSingleStep(blockNumber);
-    } catch (e) {
-      if (e instanceof Error && e.message.includes('Pool does not exist'))
-        throw e;
-
-      if (this.dexHelper.config.data.network != Network.ZKEVM) throw e;
-
-      return this._fetchPoolStateMultiStep(blockNumber);
-    }
+    return await this.fetchPoolStateSingleStep(blockNumber);
   }
 
   private _getStateMulticall(): MultiCallParams<

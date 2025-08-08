@@ -14,6 +14,7 @@ import {
   MAX_PRICING_COMPUTATION_STEPS_ALLOWED,
   OUT_OF_RANGE_ERROR_POSTFIX,
 } from '../constants';
+import { Logger } from 'log4js';
 
 type ModifyPositionParams = {
   tickLower: bigint;
@@ -59,6 +60,7 @@ function _priceComputationCycles(
   zeroForOne: boolean,
   exactInput: boolean,
   side: SwapSide,
+  logger?: Logger,
 ): [
   // result
   PriceComputationState,
@@ -121,6 +123,15 @@ function _priceComputationCycles(
         e instanceof Error &&
         e.message.endsWith(OUT_OF_RANGE_ERROR_POSTFIX)
       ) {
+        logger?.warn(
+          `INVALID_TICK_BIT_MAP_RANGES for ${poolState.pool}, tick: ${
+            state.tick
+          }, ticks: ${Object.keys(poolState.ticks).join(
+            ',',
+          )}, tickBitmap: ${Object.keys(poolState.tickBitmap).join(',')}, ${
+            e.message
+          }`,
+        );
         state.amountSpecifiedRemaining = 0n;
         state.amountCalculated = 0n;
         break;
@@ -240,6 +251,7 @@ class UniswapV3Math {
     amounts: bigint[],
     zeroForOne: boolean,
     side: SwapSide,
+    logger?: Logger,
   ): OutputResult {
     const slot0Start = poolState.slot0;
 
@@ -331,6 +343,7 @@ class UniswapV3Math {
             zeroForOne,
             exactInput,
             side,
+            logger,
           );
         if (
           finalState.amountSpecifiedRemaining === 0n &&

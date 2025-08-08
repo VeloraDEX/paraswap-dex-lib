@@ -302,20 +302,6 @@ export const UniswapV3Config: DexConfigMap<DexParams> = {
         'https://api.studio.thegraph.com/query/66247/pharaoh-cl/version/latest',
     },
   },
-  'QuickSwapV3.1': {
-    [Network.ZKEVM]: {
-      factory: '0xD9a2AD9E927Bd7014116CC5c7328f028D4318178',
-      quoter: '0xc2f30976cebf6b7400fe1300540a342411340d29',
-      router: '0x1e7e4c855520b2106320952a570a3e5e3e618101',
-      supportedFees: SUPPORTED_FEES,
-      stateMulticall: '0x983ab0171159b7e17835cc6aec70c72b8aadb133',
-      uniswapMulticall: '0x61530d6E1c7A47BBB3e48e8b8EdF7569DcFeE121',
-      chunksCount: 5,
-      initRetryFrequency: 30,
-      initHash: `0xe34f199b19b2b4f47f68442619d555527d244f78a3297ea89325f843f87b8b54`,
-      subgraphURL: 'E9PLkFzXVX1a9YFtLLyXmLV93ihAUFCvgrnrdnTrnFeN',
-    },
-  },
   SpookySwapV3: {
     [Network.SONIC]: {
       factory: '0x3D91B700252e0E3eE7805d12e048a988Ab69C8ad',
@@ -524,10 +510,6 @@ export const Adapters: Record<number, AdapterMappings> = {
   [Network.OPTIMISM]: {
     [SwapSide.SELL]: [{ name: 'OptimismAdapter01', index: 3 }],
     [SwapSide.BUY]: [{ name: 'OptimismBuyAdapter', index: 2 }],
-  },
-  [Network.ZKEVM]: {
-    [SwapSide.SELL]: [{ name: 'PolygonZkEvmAdapter01', index: 1 }],
-    [SwapSide.BUY]: [{ name: 'PolygonZkEvmBuyAdapter', index: 1 }],
   },
   [Network.AVALANCHE]: {
     [SwapSide.SELL]: [{ name: 'AvalancheAdapter02', index: 5 }],

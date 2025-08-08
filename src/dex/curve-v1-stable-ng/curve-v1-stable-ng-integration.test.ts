@@ -236,8 +236,8 @@ describe('CurveV1StableNG integration', function () {
     });
   });
 
-  describe('Fantom', () => {
-    const network = Network.FANTOM;
+  describe('Gnosis', () => {
+    const network = Network.GNOSIS;
     const dexHelper = new DummyDexHelper(network);
 
     const tokens = Tokens[network];
@@ -256,9 +256,9 @@ describe('CurveV1StableNG integration', function () {
       }
     });
 
-    describe('scrvUSDC_e -> scrvUSDC_p', () => {
-      const srcTokenSymbol = 'scrvUSDC_e';
-      const destTokenSymbol = 'scrvUSDC_p';
+    describe('WXDAI -> USDC', () => {
+      const srcTokenSymbol = 'WXDAI';
+      const destTokenSymbol = 'USDC';
       const amountsForSell = [
         0n,
         1n * BI_POWS[tokens[srcTokenSymbol].decimals],
