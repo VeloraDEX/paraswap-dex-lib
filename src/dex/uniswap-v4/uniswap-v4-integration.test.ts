@@ -144,6 +144,83 @@ describe('UniswapV4 integration tests', () => {
         await uniswapV4.initializePricing(blockNumber);
       });
 
+      it.only('WETH -> USDC multiple back to back pricing calls', async () => {
+        console.log('BLOCK NUMBER: ', blockNumber);
+
+        const amounts = [
+          0n,
+          2n * BI_POWS[18],
+          3n * BI_POWS[18],
+          4n * BI_POWS[18],
+          5n * BI_POWS[18],
+          6n * BI_POWS[18],
+          7n * BI_POWS[18],
+          8n * BI_POWS[18],
+          9n * BI_POWS[18],
+          10n * BI_POWS[18],
+        ];
+
+        const pools = await uniswapV4.getPoolIdentifiers(
+          TokenA,
+          TokenB,
+          SwapSide.SELL,
+          blockNumber,
+        );
+        console.log(
+          `${TokenASymbol} <> ${TokenBSymbol} Pool Identifiers: `,
+          pools,
+        );
+
+        expect(pools.length).toBeGreaterThan(0);
+
+        // run pricing multiple times
+        for (let i = 0; i < 10_000; i++) {
+          await uniswapV4.getPricesVolume(
+            TokenA,
+            TokenB,
+            amounts,
+            SwapSide.SELL,
+            blockNumber,
+            pools,
+          );
+        }
+
+        const poolPrices = await uniswapV4.getPricesVolume(
+          TokenA,
+          TokenB,
+          amounts,
+          SwapSide.SELL,
+          blockNumber,
+          pools,
+        );
+
+        console.log(
+          `${TokenASymbol} <> ${TokenBSymbol} Pool Prices: `,
+          poolPrices,
+        );
+
+        expect(poolPrices).not.toBeNull();
+
+        let falseChecksCounter = 0;
+        await Promise.all(
+          poolPrices!.map(async price => {
+            const res = await checkOnChainPricing(
+              dexHelper,
+              'quoteExactInputSingle',
+              blockNumber,
+              '0x52f0e24d1c21c8a0cb1e5a5dd6198556bd9e1203',
+              price.prices,
+              price.data.path[0].pool.key,
+              price.data.path[0].zeroForOne,
+              amounts,
+            );
+            if (res === false) falseChecksCounter++;
+          }),
+        );
+
+        expect(falseChecksCounter).toBeLessThan(poolPrices!.length);
+      });
+
       it('WETH -> USDC getPoolIdentifiers and getPricesVolume SELL', async () => {
         console.log('BLOCK NUMBER: ', blockNumber);
 

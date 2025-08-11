@@ -150,6 +150,86 @@ describe('UniswapV3', () => {
     const network = Network.MAINNET;
     const dexHelper = new DummyDexHelper(network);
 
+    describe('Multiple back to back pricing calls', () => {
+      const WETH = Tokens[network]['WETH'];
+      const WBTC = Tokens[network]['WBTC'];
+
+      beforeEach(async () => {
+        blockNumber = await dexHelper.web3Provider.eth.getBlockNumber();
+        uniswapV3 = new UniswapV3(network, dexKey, dexHelper);
+
+        console.log('blocknumber: ', blockNumber);
+      });
+
+      it('WETH -> WBTC', async () => {
+        const amounts = [
+          0n,
+          20n * BI_POWS[18],
+          30n * BI_POWS[18],
+          40n * BI_POWS[18],
+          50n * BI_POWS[18],
+          60n * BI_POWS[18],
+          70n * BI_POWS[18],
+          80n * BI_POWS[18],
+          90n * BI_POWS[18],
+          1000n * BI_POWS[18],
+        ];
+
+        const poolIdentifiers = await uniswapV3.getPoolIdentifiers(
+          WETH,
+          WBTC,
+          SwapSide.SELL,
+          blockNumber,
+        );
+
+        console.log(`WETH <> WBTC Pool Identifiers: `, poolIdentifiers);
+
+        // run pricing multiple times
+        for (let i = 0; i < 10_000; i++) {
+          await uniswapV3.getPricesVolume(
+            WETH,
+            WBTC,
+            amounts,
+            SwapSide.SELL,
+            blockNumber,
+            poolIdentifiers,
+          );
+        }
+
+        let prices = await uniswapV3.getPricesVolume(
+          WETH,
+          WBTC,
+          amounts,
+          SwapSide.SELL,
+          blockNumber,
+          poolIdentifiers,
+        );
+
+        prices = prices?.filter(price => !!price.unit) ?? null;
+
+        const checkResults = await Promise.all(
+          prices!.map(async price =>
+            checkOnChainPricing(
+              dexHelper,
+              uniswapV3,
+              'quoteExactInputSingle',
+              blockNumber,
+              '0x61fFE014bA17989E743c5F6cB21bF9697530B21e',
+              price.prices,
+              WETH.address,
+              WBTC.address,
+              uniswapV3.eventPools[price.poolIdentifier!]!.feeCode,
+              amounts,
+            ),
+          ),
+        );
+
+        const hasInvalidPricing = checkResults.some(res => !res);
+
+        expect(hasInvalidPricing).toBe(false);
+      });
+    });
+
     describe('DAI -> USDC', () => {
       const TokenASymbol = 'DAI';
       const TokenA = Tokens[network][TokenASymbol];
