@@ -194,13 +194,7 @@ function _priceComputationCycles(
           };
         }
 
-        let liquidityNet = Tick.cross(
-          ticksCopy,
-          step.tickNext,
-          cache.secondsPerLiquidityCumulativeX128,
-          cache.tickCumulative,
-          cache.blockTimestamp,
-        );
+        let liquidityNet = Tick.cross(ticksCopy, step.tickNext);
         if (zeroForOne) liquidityNet = -liquidityNet;
 
         state.liquidity = LiquidityMath.addDelta(state.liquidity, liquidityNet);
@@ -244,15 +238,6 @@ class UniswapV3Math {
     const slot0Start = poolState.slot0;
 
     const isSell = side === SwapSide.SELL;
-
-    // While calculating, ticks are changing, so to not change the actual state,
-    // we use copy
-    const ticksCopy = Object.keys(poolState.ticks).reduce<
-      Record<NumberAsString, TickInfo>
-    >((memo, index) => {
-      memo[index] = { ...poolState.ticks[index] };
-      return memo;
-    }, {} as Record<NumberAsString, TickInfo>);
 
     const sqrtPriceLimitX96 = zeroForOne
       ? TickMath.MIN_SQRT_RATIO + 1n
@@ -323,7 +308,7 @@ class UniswapV3Math {
         const [finalState, { latestFullCycleState, latestFullCycleCache }] =
           _priceComputationCycles(
             poolState,
-            ticksCopy,
+            poolState.ticks,
             slot0Start,
             state,
             cache,
@@ -364,13 +349,11 @@ class UniswapV3Math {
         if (isSell) {
           outputs[i] = BigInt.asUintN(256, -(zeroForOne ? amount1 : amount0));
           tickCounts[i] = latestFullCycleCache.tickCount;
-          continue;
         } else {
           outputs[i] = zeroForOne
             ? BigInt.asUintN(256, amount0)
             : BigInt.asUintN(256, amount1);
           tickCounts[i] = latestFullCycleCache.tickCount;
-          continue;
         }
       } else {
         outputs[i] = 0n;
@@ -483,13 +466,7 @@ class UniswapV3Math {
             cache.computedLatestObservation = true;
           }
 
-          let liquidityNet = Tick.cross(
-            poolState.ticks,
-            step.tickNext,
-            cache.secondsPerLiquidityCumulativeX128,
-            cache.tickCumulative,
-            cache.blockTimestamp,
-          );
+          let liquidityNet = Tick.cross(poolState.ticks, step.tickNext);
 
           if (zeroForOne) liquidityNet = -liquidityNet;
 
