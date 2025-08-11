@@ -28,9 +28,6 @@ export type OracleObservationCandidates = {
 export type TickInfo = {
   liquidityGross: bigint;
   liquidityNet: bigint;
-  tickCumulativeOutside: bigint;
-  secondsPerLiquidityOutsideX128: bigint;
-  secondsOutside: bigint;
   initialized: boolean;
 };
 

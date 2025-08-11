@@ -39,11 +39,6 @@ export class Tick {
     const flipped = (liquidityGrossAfter == 0n) != (liquidityGrossBefore == 0n);
 
     if (liquidityGrossBefore == 0n) {
-      if (tick <= tickCurrent) {
-        info.secondsPerLiquidityOutsideX128 = secondsPerLiquidityCumulativeX128;
-        info.tickCumulativeOutside = tickCumulative;
-        info.secondsOutside = time;
-      }
       info.initialized = true;
     }
 
@@ -73,10 +68,10 @@ export class Tick {
     time: bigint,
   ): bigint {
     const info = ticks[Number(tick)];
-    info.secondsPerLiquidityOutsideX128 =
-      secondsPerLiquidityCumulativeX128 - info.secondsPerLiquidityOutsideX128;
-    info.tickCumulativeOutside = tickCumulative - info.tickCumulativeOutside;
-    info.secondsOutside = time - info.secondsOutside;
+    // info.secondsPerLiquidityOutsideX128 =
+    //   secondsPerLiquidityCumulativeX128 - info.secondsPerLiquidityOutsideX128;
+    // info.tickCumulativeOutside = tickCumulative - info.tickCumulativeOutside;
+    // info.secondsOutside = time - info.secondsOutside;
     return info.liquidityNet;
   }
 }
