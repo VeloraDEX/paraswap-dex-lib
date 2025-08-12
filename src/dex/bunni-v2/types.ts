@@ -46,6 +46,7 @@ export type Slot0 = {
 };
 
 export type MutablePoolState = {
+  totalValueLockedUSD: bigint;
   rawBalance0: bigint;
   rawBalance1: bigint;
   reserve0: bigint;

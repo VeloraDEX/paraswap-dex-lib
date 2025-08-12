@@ -176,6 +176,7 @@ export function initializePoolState(
       lastSurgeTimestamp: 0n,
     },
 
+    totalValueLockedUSD: 0n,
     rawBalance0: 0n,
     rawBalance1: 0n,
     reserve0: 0n,
