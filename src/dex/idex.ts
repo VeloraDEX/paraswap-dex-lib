@@ -143,7 +143,7 @@ export interface IDexTxBuilder<ExchangeData, DirectParam = null>
 
 export interface IDexPricing<ExchangeData> {
   readonly dexKey: string;
-  // This is true if the the DEX is simply
+  // This is true if the DEX is simply
   // wrapping/ unwrapping like weth, lending pools, etc
   // or has a pool where arbitrarily large amounts has
   // constant price.
@@ -210,7 +210,7 @@ export interface IDexPricing<ExchangeData> {
   // Build an event based pool with all the info to create inside
   // a cache key name poolKey
   addMasterPool?(poolKey: string, blockNumber: number): AsyncOrSync<boolean>;
-  // return true if the userAddress is is blacklisted from the exchange
+  // return true if the userAddress is blacklisted from the exchange
   // useful for RFQ system
   isBlacklisted?(userAddress?: Address): AsyncOrSync<boolean>;
 
