@@ -455,6 +455,24 @@ export const UniswapV2Config: DexConfigMap<DexParams> = {
       feeCode: 30,
     },
   },
+  SoulSwap: {
+    [Network.AVALANCHE]: {
+      subgraphURL:
+        'https://api.thegraph.com/subgraphs/name/soulswapfinance/avalanche-exchange',
+      factoryAddress: '0x5BB2a9984de4a69c05c996F7EF09597Ac8c9D63a',
+      initCode:
+        '0xab9f67104ee4239d49c6b434dc5d6d76f43412862be0f00a0607199ad505abc6',
+      feeCode: 30,
+    },
+    [Network.FANTOM]: {
+      subgraphURL:
+        'https://api.thegraph.com/subgraphs/name/soulswapfinance/fantom-exchange',
+      factoryAddress: '0x1120e150dA9def6Fe930f4fEDeD18ef57c0CA7eF',
+      initCode:
+        '0xf3dcc3c6c6e34d3981dd429ac942301b9ebdd05de1be17f646b55476c44dc951',
+      feeCode: 30,
+    },
+  },
   SpookySwap: {
     [Network.SONIC]: {
       subgraphURL: '', // deployed on 0xgraph
