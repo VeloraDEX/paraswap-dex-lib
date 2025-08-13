@@ -38,8 +38,16 @@ export const Tokens: {
       address: '0x3b3fb9c57858ef816833dc91565efcd85d96f634',
       decimals: 18,
     },
+    'PT-eUSDe-14AUG2025': {
+      address: '0x14bdc3a3ae09f5518b923b69489cbcafb238e617',
+      decimals: 18,
+    },
     'PT-sUSDe-25SEP2025': {
       address: '0x9f56094c450763769ba0ea9fe2876070c0fd5f77',
+      decimals: 18,
+    },
+    'PT-USDe-31JUL2025': {
+      address: '0x917459337CaAC939D41d7493B3999f571D20D667',
       decimals: 18,
     },
     AA_wstETH: {
@@ -96,6 +104,10 @@ export const Tokens: {
     },
     USDE: {
       address: '0x4c9edd5852cd905f086c759e8383e09bff1e68b3',
+      decimals: 18,
+    },
+    eUSDe: {
+      address: '0x90d2af7d622ca3141efa4d8f1f24d86e5974cc8f',
       decimals: 18,
     },
     EKUBO: {
