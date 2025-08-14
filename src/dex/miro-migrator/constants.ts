@@ -1,0 +1,1 @@
+export const MIRO_MIGRATION_GAS_COST = 35_000;
