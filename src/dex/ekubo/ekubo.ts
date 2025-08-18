@@ -16,7 +16,7 @@ import {
 } from '../../types';
 import { getBigIntPow, getDexKeysWithNetwork } from '../../utils';
 import { SimpleExchange } from '../simple-exchange';
-import { EkuboConfig } from './config';
+import { EKUBO_CONFIG } from './config';
 import { BasePool, BasePoolState } from './pools/base';
 import {
   BasicQuoteData,
@@ -26,7 +26,6 @@ import {
 } from './types';
 import {
   convertParaSwapToEkubo,
-  hexStringTokenPair,
   NATIVE_TOKEN_ADDRESS,
   convertAndSortTokens,
   contractsFromDexParams,
@@ -37,14 +36,18 @@ import { hexlify } from 'ethers/lib/utils';
 import { AsyncOrSync, DeepReadonly } from 'ts-essentials';
 import RouterABI from '../../abi/ekubo/router.json';
 import { FullRangePool, FullRangePoolState } from './pools/full-range';
-import { EkuboPool, IEkuboPool } from './pools/iface';
+import { EkuboPool, IEkuboPool } from './pools/pool';
 import { MIN_I256 } from './pools/math/constants';
-import { MAX_SQRT_RATIO_FLOAT, MIN_SQRT_RATIO_FLOAT } from './pools/math/price';
+import {
+  MAX_SQRT_RATIO_FLOAT,
+  MIN_SQRT_RATIO_FLOAT,
+} from './pools/math/sqrt-ratio';
 import { isPriceIncreasing } from './pools/math/swap';
 import { FULL_RANGE_TICK_SPACING } from './pools/math/tick';
 import { OraclePool } from './pools/oracle';
 import { TwammPool, TwammPoolState } from './pools/twamm';
 import { PoolConfig, PoolKey } from './pools/utils';
+import { MevResistPool } from './pools/mev-resist';
 
 const FALLBACK_POOL_PARAMETERS: VanillaPoolParameters[] = [
   {
@@ -124,7 +127,7 @@ export class Ekubo extends SimpleExchange implements IDex<EkuboData> {
   public readonly isFeeOnTransferSupported = false;
 
   public static dexKeysWithNetwork: { key: string; networks: Network[] }[] =
-    getDexKeysWithNetwork(EkuboConfig);
+    getDexKeysWithNetwork(EKUBO_CONFIG);
 
   private poolKeys: PoolKey[] | null = [];
   private readonly pools: Map<string, IEkuboPool> = new Map();
@@ -153,7 +156,7 @@ export class Ekubo extends SimpleExchange implements IDex<EkuboData> {
     super(dexHelper, dexKey);
 
     this.logger = dexHelper.getLogger(dexKey);
-    this.config = EkuboConfig[dexKey][network];
+    this.config = EKUBO_CONFIG[dexKey][network];
 
     this.contracts = contractsFromDexParams(this.config, dexHelper.provider);
     this.routerIface = new Interface(RouterABI);
@@ -163,6 +166,7 @@ export class Ekubo extends SimpleExchange implements IDex<EkuboData> {
       0n,
       BigInt(this.config.oracle),
       BigInt(this.config.twamm),
+      BigInt(this.config.mevResist),
     ];
   }
 
@@ -272,9 +276,9 @@ export class Ekubo extends SimpleExchange implements IDex<EkuboData> {
             blockNumber,
           );
 
-          if (isExactOut && quote.consumedAmount !== inputAmount) {
+          if (quote.consumedAmount !== inputAmount) {
             this.logger.debug(
-              `Pool ${poolId} doesn't have enough liquidity to support exact-out swap of ${amount} ${
+              `Pool ${poolId} doesn't have enough liquidity to support swap of ${amount} ${
                 amountToken.symbol ?? amountToken.address
               }`,
             );
@@ -593,6 +597,14 @@ export class Ekubo extends SimpleExchange implements IDex<EkuboData> {
                 pool = constructAndInitialize(
                   OraclePool,
                   FullRangePoolState.fromQuoter(data),
+                  poolKey,
+                );
+                break;
+              }
+              case BigInt(this.config.mevResist): {
+                pool = constructAndInitialize(
+                  MevResistPool,
+                  BasePoolState.fromQuoter(data),
                   poolKey,
                 );
                 break;

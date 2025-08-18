@@ -1,5 +1,6 @@
 import {
   approximateNumberOfTickSpacingsCrossed,
+  approximateSqrtRatioToTick,
   MAX_SQRT_RATIO,
   MAX_TICK,
   MIN_SQRT_RATIO,
@@ -35,38 +36,68 @@ describe(toSqrtRatio, () => {
 });
 
 describe(approximateNumberOfTickSpacingsCrossed, () => {
-  test('same price', () => {
-    expect(
-      approximateNumberOfTickSpacingsCrossed(1n << 128n, 1n << 128n, 1),
-    ).toEqual(0);
-  });
-  test('price doubling 1 tick spacing', () => {
-    expect(
-      approximateNumberOfTickSpacingsCrossed(1n << 128n, 1n << 129n, 1),
-    ).toMatchInlineSnapshot(`5415`);
-  });
-  test('price doubling 1000 tick spacing', () => {
-    expect(
-      approximateNumberOfTickSpacingsCrossed(1n << 128n, 1n << 129n, 1000),
-    ).toMatchInlineSnapshot(`5`);
-  });
-  test('max to min', () => {
-    expect(
-      approximateNumberOfTickSpacingsCrossed(MAX_SQRT_RATIO, MIN_SQRT_RATIO, 1),
-    ).toMatchInlineSnapshot(`693146`);
-  });
-  test('min to max', () => {
-    expect(
-      approximateNumberOfTickSpacingsCrossed(MIN_SQRT_RATIO, MAX_SQRT_RATIO, 1),
-    ).toMatchInlineSnapshot(`693146`);
-  });
-  test('min to max 1k tick spacing', () => {
+  test('doubling', () => {
     expect(
       approximateNumberOfTickSpacingsCrossed(
         MIN_SQRT_RATIO,
-        MAX_SQRT_RATIO,
-        1000,
+        MIN_SQRT_RATIO * 2n,
+        0,
       ),
-    ).toMatchInlineSnapshot(`693`);
+    ).toEqual(0);
+    // 2x sqrt ratio increase ~= 4x price increase
+    expect(
+      approximateNumberOfTickSpacingsCrossed(1n << 128n, 1n << 129n, 1),
+    ).toEqual(1386295);
+    expect(
+      approximateNumberOfTickSpacingsCrossed(
+        MIN_SQRT_RATIO,
+        MIN_SQRT_RATIO * 2n,
+        1,
+      ),
+    ).toEqual(1386295);
+    expect(
+      approximateNumberOfTickSpacingsCrossed(
+        MAX_SQRT_RATIO,
+        MAX_SQRT_RATIO / 2n,
+        1,
+      ),
+    ).toEqual(1386295);
+  });
+
+  test('doubling big tick spacing', () => {
+    // 2x sqrt ratio increase ~= 4x price increase
+    expect(
+      approximateNumberOfTickSpacingsCrossed(1n << 128n, 1n << 129n, 5),
+    ).toEqual(277259);
+    expect(
+      approximateNumberOfTickSpacingsCrossed(
+        MIN_SQRT_RATIO,
+        MIN_SQRT_RATIO * 2n,
+        3,
+      ),
+    ).toEqual(462098);
+    expect(
+      approximateNumberOfTickSpacingsCrossed(
+        MAX_SQRT_RATIO,
+        MAX_SQRT_RATIO / 2n,
+        200,
+      ),
+    ).toEqual(6931);
+  });
+});
+
+describe(approximateSqrtRatioToTick, () => {
+  test('examples', () => {
+    expect(approximateSqrtRatioToTick(toSqrtRatio(0))).toEqual(0);
+
+    expect(approximateSqrtRatioToTick(toSqrtRatio(1000000))).toEqual(1000000);
+
+    expect(approximateSqrtRatioToTick(toSqrtRatio(10000000))).toEqual(10000000);
+
+    expect(approximateSqrtRatioToTick(toSqrtRatio(-1000000))).toEqual(-1000000);
+
+    expect(approximateSqrtRatioToTick(toSqrtRatio(-10000000))).toEqual(
+      -10000000,
+    );
   });
 });
