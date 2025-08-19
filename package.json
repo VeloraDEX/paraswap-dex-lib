@@ -81,5 +81,6 @@
     "web3-utils": "1.6.0",
     "ws": "^8.18.0"
   },
-  "sideEffects": false
+  "sideEffects": false,
+  "packageManager": "yarn@1.22.22+sha1.ac34549e6aa8e7ead463a7407e1c7390f61a6610"
 }
