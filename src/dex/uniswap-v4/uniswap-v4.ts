@@ -246,7 +246,7 @@ export class UniswapV4 extends SimpleExchange implements IDex<UniswapV4Data> {
             },
           ],
         },
-        poolAddresses: [this.poolManagerAddress],
+        poolAddresses: [poolId],
         exchange: this.dexKey,
         gasCost: 100_000,
         poolIdentifier: poolId,

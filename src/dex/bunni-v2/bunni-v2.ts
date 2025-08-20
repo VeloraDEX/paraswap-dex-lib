@@ -288,6 +288,7 @@ export class BunniV2 extends SimpleExchange implements IDex<BunniV2Data> {
             },
           ],
         },
+        poolAddresses: [pool.id],
         exchange: this.dexKey,
         gasCost: BUNNI_V2_GAS_COST,
         poolIdentifier: pool.id,

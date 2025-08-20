@@ -298,6 +298,7 @@ export class Ekubo extends SimpleExchange implements IDex<EkuboData> {
             isToken1: amountTokenAddress === token1,
             skipAhead: skipAheadMap,
           },
+          poolAddresses: [poolId],
           poolIdentifier: poolId,
           exchange: this.dexKey,
           gasCost: otherQuotes.map(quote => quote.gasConsumed),
@@ -651,6 +652,8 @@ export class Ekubo extends SimpleExchange implements IDex<EkuboData> {
     const res = await this.dexHelper.httpRequest.get(
       `${this.config.apiUrl}/v1/poolKeys`,
     );
+
+    // https://eth-mainnet-api.ekubo.org/v1/poolKeys
 
     const { error, value } = allPoolsSchema.validate(res, {
       allowUnknown: true,
