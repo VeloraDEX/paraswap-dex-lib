@@ -37,17 +37,12 @@ describe('AavePtToUsdc', () => {
     let aavePtToUsdc: AavePtToUsdc;
     let blockNumber = 0;
     const ptSusdeToken: Token = {
-      address: '0x3b3fb9c57858ef816833dc91565efcd85d96f634',
+      address: '0x9f56094c450763769ba0ea9fe2876070c0fd5f77',
       decimals: 18,
-      symbol: 'PT-sUSDe-31JUL2025',
-    };
-    const ptEusdeToken: Token = {
-      address: '0x14bdc3a3ae09f5518b923b69489cbcafb238e617',
-      decimals: 18,
-      symbol: 'PT-eUSDe-14AUG2025',
+      symbol: 'PT-sUSDe-25SEP2025',
     };
     const ptUsdeToken: Token = {
-      address: '0x917459337CaAC939D41d7493B3999f571D20D667',
+      address: '0xbc6736d346a5ebc0debc997397912cd9b8fae10a',
       decimals: 18,
       symbol: 'PT-USDe-31JUL2025',
     };
@@ -61,11 +56,7 @@ describe('AavePtToUsdc', () => {
       decimals: 18,
       symbol: 'sUSDe',
     };
-    const eUsdeToken: Token = {
-      address: '0x90d2af7d622ca3141efa4d8f1f24d86e5974cc8f',
-      decimals: 18,
-      symbol: 'eUSDe',
-    };
+
     const usdeToken: Token = {
       address: '0x4c9edd5852cd905f086c759e8383e09bff1e68b3',
       decimals: 18,
@@ -74,7 +65,8 @@ describe('AavePtToUsdc', () => {
 
     beforeAll(async () => {
       const network = Network.MAINNET;
-      const rpcUrl = 'https://rpc.ankr.com/eth';
+      const rpcUrl =
+        process.env.HTTP_PROVIDER_1 || 'https://eth.public-rpc.com';
       const dexHelper = new DummyDexHelper(network, rpcUrl);
       (dexHelper.config as any).data = {
         ...AavePtToUsdcConfig.AavePtToUsdc[network],
@@ -154,58 +146,7 @@ describe('AavePtToUsdc', () => {
       JEST_TIMEOUT,
     );
 
-    // Test PT-eUSDe-14AUG2025
-    it(
-      'PT-eUSDe-14AUG2025 getPoolIdentifiers and getPricesVolume SELL PT -> USDC',
-      async () => {
-        const pools = await aavePtToUsdc.getPoolIdentifiers(
-          ptEusdeToken,
-          usdcToken,
-          SwapSide.SELL,
-          blockNumber,
-        );
-        const poolPrices = await aavePtToUsdc.getPricesVolume(
-          ptEusdeToken,
-          usdcToken,
-          amounts,
-          SwapSide.SELL,
-          blockNumber,
-          pools,
-        );
-        console.log(
-          `${ptEusdeToken.symbol} <> ${usdcToken.symbol} Pool Prices: `,
-          poolPrices,
-        );
-        checkPricesAreValid(poolPrices, amounts);
-      },
-      JEST_TIMEOUT,
-    );
-
-    it(
-      'PT-eUSDe-14AUG2025 getPoolIdentifiers and getPricesVolume SELL PT -> underlying asset',
-      async () => {
-        const pools = await aavePtToUsdc.getPoolIdentifiers(
-          ptEusdeToken,
-          eUsdeToken,
-          SwapSide.SELL,
-          blockNumber,
-        );
-        const poolPrices = await aavePtToUsdc.getPricesVolume(
-          ptEusdeToken,
-          eUsdeToken,
-          amounts,
-          SwapSide.SELL,
-          blockNumber,
-          pools,
-        );
-        console.log(
-          `${ptEusdeToken.symbol} <> ${eUsdeToken.symbol} Pool Prices: `,
-          poolPrices,
-        );
-        checkPricesAreValid(poolPrices, amounts);
-      },
-      JEST_TIMEOUT,
-    );
+    // Note: PT-eUSDe-14AUG2025 token removed from config
 
     // Test PT-USDe-31JUL2025
     it(

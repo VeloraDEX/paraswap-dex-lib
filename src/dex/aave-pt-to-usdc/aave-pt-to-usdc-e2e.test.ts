@@ -59,7 +59,7 @@ describe('AavePtToUsdc E2E', () => {
   describe('Mainnet', () => {
     const network = Network.MAINNET;
 
-    const tokenASymbol: string = 'PT-sUSDe-31JUL2025';
+    const tokenASymbol: string = 'PT-sUSDe-25SEP2025';
     const tokenBSymbol: string = 'USDC';
 
     // after two hops 1 PT-sUSDe ≈ ~0.98 USDC (example)

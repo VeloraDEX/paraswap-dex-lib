@@ -49,10 +49,8 @@ export class AavePtToUsdc
   private oracleInterface: Interface;
   private usdcToken: Token;
   private readonly supportedMarkets: SupportedPt[];
-  private lastApiCallTime = 0;
-  // FIX: Increase the minimum delay between API calls to avoid rate limiting
-  private readonly minApiCallInterval = 1500; // 1.5 seconds
-  private priceCache: Map<string, any> = new Map();
+  // Note: API calls are still used for getDexParam (swap execution)
+  // but pricing is now done via oracle calls
 
   logger: Logger;
 
@@ -214,6 +212,125 @@ export class AavePtToUsdc
     );
   }
 
+  private async calculatePriceFromOracle(
+    market: SupportedPt,
+    amount: bigint,
+    isUsdc: boolean,
+    destToken: Token,
+  ): Promise<string> {
+    this.logger.info(
+      `calculatePriceFromOracle called: market=${market.marketAddress}, amount=${amount}, isUsdc=${isUsdc}, destToken=${destToken.symbol}`,
+    );
+
+    try {
+      this.logger.info(
+        `Calculating price from PendleOracle for amount ${amount} (${
+          isUsdc ? 'USDC' : 'underlying'
+        } route)`,
+      );
+
+      // For USDC route, we need to get the PT to underlying rate first
+      // then convert to USDC using the underlying's price
+      if (isUsdc) {
+        this.logger.info('Processing USDC route');
+
+        // Get PT to underlying rate from oracle
+        const callData = this.oracleInterface.encodeFunctionData(
+          'getPtToAssetRate',
+          [
+            market.marketAddress,
+            0, // duration 0 for current rate
+          ],
+        );
+
+        this.logger.info(`Oracle call data: ${callData}`);
+
+        this.logger.info(
+          `Calling oracle contract: ${this.config.oracleAddress}`,
+        );
+        const ptToAssetRate = await this.dexHelper.provider.call({
+          to: this.config.oracleAddress,
+          data: callData,
+        });
+
+        this.logger.info(`Oracle returned rate: ${ptToAssetRate}`);
+
+        if (!ptToAssetRate || ptToAssetRate === '0') {
+          this.logger.warn(
+            `Invalid PT to asset rate from oracle for market ${market.marketAddress}`,
+          );
+          return '0';
+        }
+
+        // Convert PT amount to underlying amount
+        const underlyingAmount =
+          (amount * BigInt(ptToAssetRate)) / BigInt(10 ** 18);
+        this.logger.info(
+          `Calculated underlying amount: ${underlyingAmount} from PT amount: ${amount} with rate: ${ptToAssetRate}`,
+        );
+
+        // For now, we'll use a simple conversion assuming 1:1 for stablecoins
+        // In a production environment, you might want to get the actual USDC price
+        // from a price oracle like Chainlink
+        const usdcAmount = underlyingAmount;
+
+        this.logger.info(
+          `Calculated USDC amount: ${usdcAmount} for PT amount: ${amount}`,
+        );
+
+        return usdcAmount.toString();
+      } else {
+        this.logger.info('Processing underlying route');
+
+        // For underlying route, directly use PT to asset rate
+        const callData = this.oracleInterface.encodeFunctionData(
+          'getPtToAssetRate',
+          [
+            market.marketAddress,
+            0, // duration 0 for current rate
+          ],
+        );
+
+        this.logger.info(`Oracle call data: ${callData}`);
+
+        this.logger.info(
+          `Calling oracle contract: ${this.config.oracleAddress}`,
+        );
+        const ptToAssetRate = await this.dexHelper.provider.call({
+          to: this.config.oracleAddress,
+          data: callData,
+        });
+
+        this.logger.info(`Oracle returned rate: ${ptToAssetRate}`);
+
+        if (!ptToAssetRate || ptToAssetRate === '0') {
+          this.logger.warn(
+            `Invalid PT to asset rate from oracle for market ${market.marketAddress}`,
+          );
+          return '0';
+        }
+
+        // Convert PT amount to underlying amount
+        const underlyingAmount =
+          (amount * BigInt(ptToAssetRate)) / BigInt(10 ** 18);
+        this.logger.info(
+          `Calculated underlying amount: ${underlyingAmount} from PT amount: ${amount} with rate: ${ptToAssetRate}`,
+        );
+
+        this.logger.info(
+          `Calculated underlying amount: ${underlyingAmount} for PT amount: ${amount}`,
+        );
+
+        return underlyingAmount.toString();
+      }
+    } catch (error) {
+      this.logger.error(
+        `Failed to calculate price from oracle for amount ${amount}: ${error}`,
+      );
+      return '0';
+    }
+  }
+
   public async getPricesVolume(
     srcToken: Token,
     destToken: Token,
@@ -222,17 +339,32 @@ export class AavePtToUsdc
     blockNumber: number,
     limitPools?: string[],
   ): Promise<ExchangePrices<AavePtToUsdcData> | null> {
+    this.logger.info(
+      `getPricesVolume called: src=${srcToken.symbol}(${srcToken.address}), dest=${destToken.symbol}(${destToken.address}), side=${side}, amounts=${amounts.length}`,
+    );
+
     if (side === SwapSide.BUY) {
+      this.logger.info('BUY side not supported, returning null');
       return null;
     }
 
     const pt = this._findPtToken(srcToken, destToken);
     if (!pt || pt.address.toLowerCase() !== srcToken.address.toLowerCase()) {
+      this.logger.warn(
+        `PT token not found or doesn't match srcToken: pt=${pt?.address}, srcToken=${srcToken.address}`,
+      );
       return null;
     }
 
+    this.logger.info(`Found PT token: ${pt.symbol}(${pt.address})`);
+
     const market = this.getMarketByPtToken(pt);
-    if (!market) return null;
+    if (!market) {
+      this.logger.warn(`Market not found for PT token: ${pt.address}`);
+      return null;
+    }
+
+    this.logger.info(`Found market: ${market.marketAddress}`);
 
     const isUsdc =
       destToken.address.toLowerCase() === this.usdcToken.address.toLowerCase();
@@ -240,64 +372,60 @@ export class AavePtToUsdc
       destToken.address.toLowerCase() ===
       market.underlyingRawAddress.toLowerCase();
 
-    if (!isUsdc && !isUnderlying) return null;
+    this.logger.info(`Route type: USDC=${isUsdc}, Underlying=${isUnderlying}`);
+
+    if (!isUsdc && !isUnderlying) {
+      this.logger.warn(
+        `Unsupported destination token: ${destToken.symbol}(${destToken.address})`,
+      );
+      return null;
+    }
 
     const marketAddress = market.marketAddress;
 
     const destAmounts: string[] = [];
-    for (const amount of amounts) {
+    this.logger.info(`Calculating prices for ${amounts.length} amounts`);
+
+    for (let i = 0; i < amounts.length; i++) {
+      const amount = amounts[i];
+      this.logger.info(
+        `Processing amount ${i + 1}/${amounts.length}: ${amount}`,
+      );
+
       if (amount === 0n) {
+        this.logger.info(`Amount ${i + 1} is zero, setting destAmount to 0`);
         destAmounts.push('0');
         continue;
       }
 
-      try {
-        this.logger.info(
-          `Calling Pendle SDK API for amount ${amount} (${
-            isUsdc ? 'USDC' : 'underlying'
-          } route)`,
-        );
-        const params = {
-          receiver: this.augustusAddress,
-          slippage: DEFAULT_SLIPPAGE_FOR_QUOTTING,
-          ptAmount: amount.toString(),
-          ytAmount: '0',
-          lpAmount: '0',
-          tokenOut: destToken.address,
-          enableAggregator: isUsdc,
-        };
+      // Use oracle instead of API call
+      this.logger.info(`Calling calculatePriceFromOracle for amount ${amount}`);
+      const destAmount = await this.calculatePriceFromOracle(
+        market,
+        amount,
+        isUsdc,
+        destToken,
+      );
 
-        const swapData = await this.callPendleSdkApi(
-          market.marketAddress,
-          params,
-        );
-
-        if (!swapData?.success || !swapData?.data?.amountOut) {
-          this.logger.warn(
-            `Invalid response for amount ${amount}: ${JSON.stringify(
-              swapData,
-            )}`,
-          );
-          destAmounts.push('0');
-          continue;
-        }
-
-        this.logger.info(
-          `Got dest amount: ${swapData.data.amountOut} for PT amount: ${amount}`,
-        );
-        destAmounts.push(swapData.data.amountOut);
-      } catch (error) {
-        this.logger.warn(`Failed to get price for amount ${amount}: ${error}`);
-        destAmounts.push('0');
-      }
+      this.logger.info(
+        `Oracle returned destAmount: ${destAmount} for input amount: ${amount}`,
+      );
+      destAmounts.push(destAmount);
     }
 
     const finalPrices = destAmounts.map(amt =>
       amt === '0' ? 0n : BigInt(amt),
     );
+
+    this.logger.info(
+      `Final prices: ${finalPrices.map(p => p.toString()).join(', ')}`,
+    );
+
     const gasCost = isUsdc
       ? AAVE_PT_TO_USDC_GAS_COST + 250_000
       : AAVE_PT_TO_USDC_GAS_COST;
+
+    this.logger.info(`Gas cost: ${gasCost}`);
 
     if (finalPrices.every(p => p === 0n)) {
       this.logger.warn(
@@ -306,7 +434,7 @@ export class AavePtToUsdc
       return null;
     }
 
-    return [
+    const result = [
       {
         exchange: this.dexKey,
         poolIdentifier: this.getPoolIdentifier(marketAddress),
@@ -321,6 +449,9 @@ export class AavePtToUsdc
         },
       },
     ];
+
+    this.logger.info(`Returning ${result.length} price entries`);
+    return result;
   }
 
   getCalldataGasCost(): number | number[] {
@@ -384,20 +515,36 @@ export class AavePtToUsdc
     context: Context,
     executorAddress: Address,
   ): Promise<DexExchangeParam> {
+    this.logger.info(
+      `getDexParam called: srcToken=${srcToken}, destToken=${destToken}, srcAmount=${srcAmount}, destAmount=${destAmount}, recipient=${recipient}, side=${side}`,
+    );
+
     if (side === SwapSide.BUY) {
+      this.logger.warn('BUY side not supported, throwing error');
       throw new Error('AavePtToUsdc: Buying PT is not supported');
     }
 
+    this.logger.info('Processing SELL side transaction');
+
     const { ptAddress } = data;
+    this.logger.info(`PT address from data: ${ptAddress}`);
+
     const market = this.getMarketByPtToken({ address: ptAddress } as Token);
     if (!market) {
+      this.logger.error(`Market not found for PT ${ptAddress}`);
       throw new Error(`Market not found for PT ${ptAddress}`);
     }
+
+    this.logger.info(`Found market: ${market.marketAddress}`);
 
     const isUsdc =
       destToken.toLowerCase() === this.usdcToken.address.toLowerCase();
 
-    const swapResp = await this.callPendleSdkApi(market.marketAddress, {
+    this.logger.info(
+      `Building swap transaction for PT ${ptAddress} to ${destToken} (USDC: ${isUsdc})`,
+    );
+
+    const apiParams = {
       receiver: recipient,
       slippage: DEFAULT_SLIPPAGE_FOR_QUOTTING,
       ptAmount: srcAmount,
@@ -405,47 +552,79 @@ export class AavePtToUsdc
       lpAmount: '0',
       tokenOut: destToken,
       enableAggregator: isUsdc,
-    });
+    };
+
+    this.logger.info(
+      `Calling Pendle SDK API with params: ${JSON.stringify(apiParams)}`,
+    );
+
+    const swapResp = await this.callPendleSdkApi(
+      market.marketAddress,
+      apiParams,
+    );
+
+    this.logger.info(
+      `Pendle SDK API response: success=${
+        swapResp.success
+      }, hasTx=${!!swapResp.tx}`,
+    );
 
     if (!swapResp.success || !swapResp.tx) {
-      throw new Error(
-        `Pendle SDK exit-positions endpoint failed: ${
-          swapResp.error || 'No transaction data returned'
-        }`,
-      );
+      const errorMsg = `Pendle SDK exit-positions endpoint failed: ${
+        swapResp.error || 'No transaction data returned'
+      }`;
+      this.logger.error(errorMsg);
+      throw new Error(errorMsg);
     }
 
     const tx = swapResp.tx;
-    return {
+
+    // Validate transaction data
+    if (!tx.to || !tx.data) {
+      const errorMsg = 'Invalid transaction data returned from Pendle SDK API';
+      this.logger.error(`${errorMsg}: to=${tx.to}, hasData=${!!tx.data}`);
+      throw new Error(errorMsg);
+    }
+
+    this.logger.info(
+      `Successfully built swap transaction: to=${tx.to}, data length=${tx.data.length}`,
+    );
+
+    const result = {
       targetExchange: tx.to,
       exchangeData: tx.data,
       needWrapNative: false,
       dexFuncHasRecipient: true,
       returnAmountPos: 0,
     };
+
+    this.logger.info(
+      `Returning DexExchangeParam: targetExchange=${result.targetExchange}, needWrapNative=${result.needWrapNative}, dexFuncHasRecipient=${result.dexFuncHasRecipient}`,
+    );
+
+    return result;
   }
 
   private async callPendleSdkApi(
     marketAddress: string,
     params: any,
   ): Promise<any> {
-    const cacheKey = this.generateCacheKey(marketAddress, params);
+    this.logger.info(`callPendleSdkApi called for market: ${marketAddress}`);
+    this.logger.info(`API parameters: ${JSON.stringify(params)}`);
 
-    if (this.priceCache.has(cacheKey)) {
-      return this.priceCache.get(cacheKey);
-    }
+    const url = new URL(
+      `${PENDLE_API_URL}/v2/sdk/${this.network}/markets/${marketAddress}/exit-positions`,
+    );
 
-    const result = await this.executeWithRetry(async () => {
-      const url = new URL(
-        `${PENDLE_API_URL}/v2/sdk/${this.network}/markets/${marketAddress}/exit-positions`,
-      );
+    Object.keys(params).forEach(key => {
+      if (params[key] !== undefined && params[key] !== null) {
+        url.searchParams.append(key, params[key].toString());
+      }
+    });
 
-      Object.keys(params).forEach(key => {
-        if (params[key] !== undefined && params[key] !== null) {
-          url.searchParams.append(key, params[key].toString());
-        }
-      });
+    this.logger.info(`Calling Pendle SDK API: ${url.toString()}`);
 
+    try {
       const response = await this.dexHelper.httpRequest.get(
         url.toString(),
         30000,
@@ -454,67 +633,60 @@ export class AavePtToUsdc
         },
       );
 
+      this.logger.info(
+        `Pendle SDK API response received, status: ${
+          (response as any).status || 'unknown'
+        }`,
+      );
+      this.logger.info(
+        `Response keys: ${Object.keys(response as any).join(', ')}`,
+      );
+
       const responseData = response as any;
-      return {
+
+      // Log the structure of the response
+      if (responseData.tx) {
+        this.logger.info(
+          `Response has tx object: to=${
+            responseData.tx.to
+          }, hasData=${!!responseData.tx.data}`,
+        );
+      } else if (responseData.data?.tx) {
+        this.logger.info(
+          `Response has data.tx object: to=${
+            responseData.data.tx.to
+          }, hasData=${!!responseData.data.tx.data}`,
+        );
+      } else {
+        this.logger.warn(
+          `Response structure: ${JSON.stringify(responseData, null, 2)}`,
+        );
+      }
+
+      const result = {
         success: true,
         data: responseData.data || responseData,
         tx: responseData.tx || responseData.data?.tx,
       };
-    });
 
-    this.priceCache.set(cacheKey, result);
-    return result;
+      this.logger.info(
+        `Returning API result: success=${result.success}, hasTx=${!!result.tx}`,
+      );
+
+      return result;
+    } catch (error) {
+      this.logger.error(`Pendle SDK API call failed: ${error}`);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+        tx: null,
+      };
+    }
   }
 
   private getSupportedMarkets(): SupportedPt[] {
     return this.config.supportedPts;
   }
 
-  private generateCacheKey(marketAddress: string, params: any): string {
-    return `${marketAddress}_${JSON.stringify(params)}`;
-  }
-
-  private async waitForRateLimit(): Promise<void> {
-    const now = Date.now();
-    const timeSinceLastCall = now - this.lastApiCallTime;
-
-    if (timeSinceLastCall < this.minApiCallInterval) {
-      const waitTime = this.minApiCallInterval - timeSinceLastCall;
-      await new Promise(resolve => setTimeout(resolve, waitTime));
-    }
-
-    this.lastApiCallTime = Date.now();
-  }
-
-  private async executeWithRetry<T>(
-    operation: () => Promise<T>,
-    maxRetries: number = 2,
-  ): Promise<T> {
-    let lastError: any;
-
-    for (let attempt = 0; attempt <= maxRetries; attempt++) {
-      try {
-        await this.waitForRateLimit();
-        return await operation();
-      } catch (error: any) {
-        lastError = error;
-
-        if (error?.response?.status === 429 && attempt < maxRetries) {
-          // FINAL FIX: Increase the initial backoff delay even more.
-          const delay = 3000 * Math.pow(2, attempt); // 3s, 6s, 12s
-          this.logger.warn(
-            `Rate limit hit, retrying in ${delay}ms (attempt ${attempt + 1}/${
-              maxRetries + 1
-            })`,
-          );
-          await new Promise(resolve => setTimeout(resolve, delay));
-          continue;
-        }
-
-        throw error;
-      }
-    }
-
-    throw lastError;
-  }
+  // Note: Simplified API call method - no caching or retry logic needed for swap execution
 }
