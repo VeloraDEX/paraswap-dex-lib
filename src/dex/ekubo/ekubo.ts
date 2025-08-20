@@ -653,8 +653,6 @@ export class Ekubo extends SimpleExchange implements IDex<EkuboData> {
       `${this.config.apiUrl}/v1/poolKeys`,
     );
 
-    // https://eth-mainnet-api.ekubo.org/v1/poolKeys
-
     const { error, value } = allPoolsSchema.validate(res, {
       allowUnknown: true,
       presence: 'required',
