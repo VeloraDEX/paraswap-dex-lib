@@ -2,7 +2,7 @@ import { amount0Delta, amount1Delta } from './delta';
 import { MAX_SQRT_RATIO, MIN_SQRT_RATIO } from './tick';
 
 describe(amount0Delta, () => {
-  test('price_down', () => {
+  test('price down', () => {
     expect(
       amount0Delta(
         339942424496442021441932674757011200255n,
@@ -13,7 +13,7 @@ describe(amount0Delta, () => {
     ).toMatchInlineSnapshot(`1000n`);
   });
 
-  test('price_down_reverse', () => {
+  test('price down reverse', () => {
     expect(
       amount0Delta(
         0x100000000000000000000000000000000n,
@@ -47,7 +47,7 @@ describe(amount0Delta, () => {
 });
 
 describe(amount1Delta, () => {
-  test('price_down', () => {
+  test('price down', () => {
     expect(
       amount1Delta(
         339942424496442021441932674757011200255n,
@@ -57,7 +57,7 @@ describe(amount1Delta, () => {
       ),
     ).toMatchInlineSnapshot(`999n`);
   });
-  test('price_down_reverse', () => {
+  test('price down reverse', () => {
     expect(
       amount1Delta(
         0x100000000000000000000000000000000n,
@@ -67,7 +67,7 @@ describe(amount1Delta, () => {
       ),
     ).toMatchInlineSnapshot(`999n`);
   });
-  test('price_up', () => {
+  test('price up', () => {
     expect(
       amount1Delta(
         340622989910849312776150758189957120n + (1n << 128n),
@@ -77,7 +77,7 @@ describe(amount1Delta, () => {
       ),
     ).toMatchInlineSnapshot(`1001n`);
   });
-  test('price_up_reverse', () => {
+  test('price up reverse', () => {
     expect(
       amount1Delta(
         0x100000000000000000000000000000000n,
@@ -87,7 +87,7 @@ describe(amount1Delta, () => {
       ),
     ).toMatchInlineSnapshot(`1000n`);
   });
-  test('price_example_down', () => {
+  test('price example down', () => {
     expect(
       amount1Delta(
         0x100000000000000000000000000000000n,
@@ -97,7 +97,7 @@ describe(amount1Delta, () => {
       ),
     ).toMatchInlineSnapshot(`90909090909090909n`);
   });
-  test('price_example_up', () => {
+  test('price example up', () => {
     expect(
       amount1Delta(
         0x100000000000000000000000000000000n,

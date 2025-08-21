@@ -46,6 +46,7 @@ export type DexParams = {
   core: string;
   oracle: string;
   twamm: string;
+  mevResist: string;
   dataFetcher: string;
   twammDataFetcher: string;
   router: string;
