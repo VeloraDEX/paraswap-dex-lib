@@ -113,6 +113,7 @@ import { AaveV3PtRollOver } from './aave-v3-pt-roll-over/aave-v3-pt-roll-over';
 import { RingV2 } from './uniswap-v2/ring-v2';
 import { UsdcTransmuter } from './usdc-transmuter/usdc-transmuter';
 import { BunniV2 } from './bunni-v2/bunni-v2';
+import { BlackholeCL } from './algebra-integral/forks/blackhole-cl';
 
 const LegacyDexes = [
   CurveV2,
@@ -219,6 +220,7 @@ const Dexes = [
   RingV2,
   UsdcTransmuter,
   BunniV2,
+  BlackholeCL,
 ];
 
 export type LegacyDexConstructor = new (dexHelper: IDexHelper) => IDexTxBuilder<
