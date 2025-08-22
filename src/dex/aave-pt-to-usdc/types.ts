@@ -31,10 +31,19 @@ export interface SupportedPt {
   exitMarketAddress: string; // V2 market address (for exit-position API)
   underlyingAssetAddress: string;
   underlyingRawAddress: string; // raw ERC-20
+  // Production pricing configuration
+  isStablecoin?: boolean; // Whether the underlying is a stablecoin (1:1 with USD)
 }
 
 export interface DexParams {
   pendleRouterAddress: string;
   oracleAddress: string;
   supportedPts: SupportedPt[];
+  // USDC token configuration
+  usdcToken: {
+    address: string;
+    decimals: number;
+    name: string;
+    symbol: string;
+  };
 }

@@ -50,10 +50,6 @@ export const Tokens: {
       address: '0x917459337CaAC939D41d7493B3999f571D20D667',
       decimals: 18,
     },
-    'PT-sUSDe-25SEP2025': {
-      address: '0x9f56094c450763769ba0ea9fe2876070c0fd5f77',
-      decimals: 18,
-    },
     'PT-USDe-25SEP2025': {
       address: '0xbc6736d346a5ebc0debc997397912cd9b8fae10a',
       decimals: 18,

@@ -29,13 +29,6 @@ import {
 } from './constants';
 import { DexExchangeParam } from '../../types';
 
-const MAINNET_USDC = {
-  address: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
-  decimals: 6,
-  name: 'USD Coin',
-  symbol: 'USDC',
-};
-
 export class AavePtToUsdc
   extends SimpleExchange
   implements IDex<AavePtToUsdcData>
@@ -49,8 +42,6 @@ export class AavePtToUsdc
   private oracleInterface: Interface;
   private usdcToken: Token;
   private readonly supportedMarkets: SupportedPt[];
-  // Note: API calls are still used for getDexParam (swap execution)
-  // but pricing is now done via oracle calls
 
   logger: Logger;
 
@@ -69,7 +60,7 @@ export class AavePtToUsdc
     if (this.network !== Network.MAINNET) {
       throw new Error('AavePtToUsdc is only supported on Mainnet');
     }
-    this.usdcToken = MAINNET_USDC;
+    this.usdcToken = this.config.usdcToken;
     this.supportedMarkets = this.getSupportedMarkets();
   }
 
@@ -106,11 +97,13 @@ export class AavePtToUsdc
 
   public isPairSupported(tokenA: Token, tokenB: Token): boolean {
     const ptToken = this._findPtToken(tokenA, tokenB);
+
     if (!ptToken) {
       return false;
     }
 
     const market = this.getMarketByPtToken(ptToken);
+
     if (!market) {
       return false;
     }
@@ -129,37 +122,14 @@ export class AavePtToUsdc
 
   private _findPtToken(srcToken: Token, destToken: Token): Token | undefined {
     const supportedMarkets = this.getSupportedMarkets();
-    this.logger.info(
-      `supportedMarkets inside _findPtToken: ${JSON.stringify(
-        supportedMarkets,
-        null,
-        2,
-      )}`,
-    );
-    this.logger.info(
-      `Checking srcToken: ${srcToken.symbol || 'undefined'} (${
-        srcToken.address
-      })`,
-    );
-    this.logger.info(
-      `Checking destToken: ${destToken.symbol || 'undefined'} (${
-        destToken.address
-      })`,
-    );
 
     const result = [srcToken, destToken].find(t => {
       const found = supportedMarkets.some(
         m => m.pt.address.toLowerCase() === t.address.toLowerCase(),
       );
-      this.logger.info(
-        `Checking token ${t.address.toLowerCase()} against supported markets: ${found}`,
-      );
       return found;
     });
 
-    this.logger.info(
-      `_findPtToken final result: ${result?.address || 'undefined'}`,
-    );
     return result;
   }
 
@@ -173,13 +143,7 @@ export class AavePtToUsdc
     side: SwapSide,
     blockNumber: number,
   ): Promise<string[]> {
-    this.logger.info(
-      `getPoolIdentifiers called with src: ${
-        srcToken.symbol || 'undefined'
-      }, dest: ${destToken.symbol || 'undefined'}`,
-    );
     const ptToken = this._findPtToken(srcToken, destToken);
-    this.logger.info(`_findPtToken result: ${ptToken?.address || 'undefined'}`);
 
     if (!ptToken) {
       this.logger.warn(
@@ -194,7 +158,6 @@ export class AavePtToUsdc
       (m: SupportedPt) =>
         m.pt.address.toLowerCase() === ptToken.address.toLowerCase(),
     );
-    this.logger.info(`found market: ${market?.marketAddress}`);
 
     if (!market) {
       this.logger.warn(
@@ -269,9 +232,7 @@ export class AavePtToUsdc
           `Calculated underlying amount: ${underlyingAmount} from PT amount: ${amount} with rate: ${ptToAssetRate}`,
         );
 
-        // For now, we'll use a simple conversion assuming 1:1 for stablecoins
-        // In a production environment, you might want to get the actual USDC price
-        // from a price oracle like Chainlink
+        // For USDC route, use 1:1 conversion since underlying assets are close to USD
         const usdcAmount = underlyingAmount;
 
         this.logger.info(
@@ -339,16 +300,13 @@ export class AavePtToUsdc
     blockNumber: number,
     limitPools?: string[],
   ): Promise<ExchangePrices<AavePtToUsdcData> | null> {
-    this.logger.info(
-      `getPricesVolume called: src=${srcToken.symbol}(${srcToken.address}), dest=${destToken.symbol}(${destToken.address}), side=${side}, amounts=${amounts.length}`,
-    );
-
     if (side === SwapSide.BUY) {
       this.logger.info('BUY side not supported, returning null');
       return null;
     }
 
     const pt = this._findPtToken(srcToken, destToken);
+
     if (!pt || pt.address.toLowerCase() !== srcToken.address.toLowerCase()) {
       this.logger.warn(
         `PT token not found or doesn't match srcToken: pt=${pt?.address}, srcToken=${srcToken.address}`,
@@ -356,23 +314,18 @@ export class AavePtToUsdc
       return null;
     }
 
-    this.logger.info(`Found PT token: ${pt.symbol}(${pt.address})`);
-
     const market = this.getMarketByPtToken(pt);
+
     if (!market) {
       this.logger.warn(`Market not found for PT token: ${pt.address}`);
       return null;
     }
-
-    this.logger.info(`Found market: ${market.marketAddress}`);
 
     const isUsdc =
       destToken.address.toLowerCase() === this.usdcToken.address.toLowerCase();
     const isUnderlying =
       destToken.address.toLowerCase() ===
       market.underlyingRawAddress.toLowerCase();
-
-    this.logger.info(`Route type: USDC=${isUsdc}, Underlying=${isUnderlying}`);
 
     if (!isUsdc && !isUnderlying) {
       this.logger.warn(
@@ -384,22 +337,15 @@ export class AavePtToUsdc
     const marketAddress = market.marketAddress;
 
     const destAmounts: string[] = [];
-    this.logger.info(`Calculating prices for ${amounts.length} amounts`);
 
     for (let i = 0; i < amounts.length; i++) {
       const amount = amounts[i];
-      this.logger.info(
-        `Processing amount ${i + 1}/${amounts.length}: ${amount}`,
-      );
 
       if (amount === 0n) {
-        this.logger.info(`Amount ${i + 1} is zero, setting destAmount to 0`);
         destAmounts.push('0');
         continue;
       }
 
-      // Use oracle instead of API call
-      this.logger.info(`Calling calculatePriceFromOracle for amount ${amount}`);
       const destAmount = await this.calculatePriceFromOracle(
         market,
         amount,
@@ -407,9 +353,6 @@ export class AavePtToUsdc
         destToken,
       );
 
-      this.logger.info(
-        `Oracle returned destAmount: ${destAmount} for input amount: ${amount}`,
-      );
       destAmounts.push(destAmount);
     }
 
@@ -417,15 +360,9 @@ export class AavePtToUsdc
       amt === '0' ? 0n : BigInt(amt),
     );
 
-    this.logger.info(
-      `Final prices: ${finalPrices.map(p => p.toString()).join(', ')}`,
-    );
-
     const gasCost = isUsdc
       ? AAVE_PT_TO_USDC_GAS_COST + 250_000
       : AAVE_PT_TO_USDC_GAS_COST;
-
-    this.logger.info(`Gas cost: ${gasCost}`);
 
     if (finalPrices.every(p => p === 0n)) {
       this.logger.warn(
@@ -450,7 +387,6 @@ export class AavePtToUsdc
       },
     ];
 
-    this.logger.info(`Returning ${result.length} price entries`);
     return result;
   }
 
@@ -515,19 +451,12 @@ export class AavePtToUsdc
     context: Context,
     executorAddress: Address,
   ): Promise<DexExchangeParam> {
-    this.logger.info(
-      `getDexParam called: srcToken=${srcToken}, destToken=${destToken}, srcAmount=${srcAmount}, destAmount=${destAmount}, recipient=${recipient}, side=${side}`,
-    );
-
     if (side === SwapSide.BUY) {
       this.logger.warn('BUY side not supported, throwing error');
       throw new Error('AavePtToUsdc: Buying PT is not supported');
     }
 
-    this.logger.info('Processing SELL side transaction');
-
     const { ptAddress } = data;
-    this.logger.info(`PT address from data: ${ptAddress}`);
 
     const market = this.getMarketByPtToken({ address: ptAddress } as Token);
     if (!market) {
@@ -535,14 +464,8 @@ export class AavePtToUsdc
       throw new Error(`Market not found for PT ${ptAddress}`);
     }
 
-    this.logger.info(`Found market: ${market.marketAddress}`);
-
     const isUsdc =
       destToken.toLowerCase() === this.usdcToken.address.toLowerCase();
-
-    this.logger.info(
-      `Building swap transaction for PT ${ptAddress} to ${destToken} (USDC: ${isUsdc})`,
-    );
 
     const apiParams = {
       receiver: recipient,
@@ -554,19 +477,9 @@ export class AavePtToUsdc
       enableAggregator: isUsdc,
     };
 
-    this.logger.info(
-      `Calling Pendle SDK API with params: ${JSON.stringify(apiParams)}`,
-    );
-
     const swapResp = await this.callPendleSdkApi(
       market.marketAddress,
       apiParams,
-    );
-
-    this.logger.info(
-      `Pendle SDK API response: success=${
-        swapResp.success
-      }, hasTx=${!!swapResp.tx}`,
     );
 
     if (!swapResp.success || !swapResp.tx) {
@@ -586,10 +499,6 @@ export class AavePtToUsdc
       throw new Error(errorMsg);
     }
 
-    this.logger.info(
-      `Successfully built swap transaction: to=${tx.to}, data length=${tx.data.length}`,
-    );
-
     const result = {
       targetExchange: tx.to,
       exchangeData: tx.data,
@@ -598,10 +507,6 @@ export class AavePtToUsdc
       returnAmountPos: 0,
     };
 
-    this.logger.info(
-      `Returning DexExchangeParam: targetExchange=${result.targetExchange}, needWrapNative=${result.needWrapNative}, dexFuncHasRecipient=${result.dexFuncHasRecipient}`,
-    );
-
     return result;
   }
 
@@ -609,9 +514,6 @@ export class AavePtToUsdc
     marketAddress: string,
     params: any,
   ): Promise<any> {
-    this.logger.info(`callPendleSdkApi called for market: ${marketAddress}`);
-    this.logger.info(`API parameters: ${JSON.stringify(params)}`);
-
     const url = new URL(
       `${PENDLE_API_URL}/v2/sdk/${this.network}/markets/${marketAddress}/exit-positions`,
     );
@@ -622,8 +524,6 @@ export class AavePtToUsdc
       }
     });
 
-    this.logger.info(`Calling Pendle SDK API: ${url.toString()}`);
-
     try {
       const response = await this.dexHelper.httpRequest.get(
         url.toString(),
@@ -633,45 +533,13 @@ export class AavePtToUsdc
         },
       );
 
-      this.logger.info(
-        `Pendle SDK API response received, status: ${
-          (response as any).status || 'unknown'
-        }`,
-      );
-      this.logger.info(
-        `Response keys: ${Object.keys(response as any).join(', ')}`,
-      );
-
       const responseData = response as any;
-
-      // Log the structure of the response
-      if (responseData.tx) {
-        this.logger.info(
-          `Response has tx object: to=${
-            responseData.tx.to
-          }, hasData=${!!responseData.tx.data}`,
-        );
-      } else if (responseData.data?.tx) {
-        this.logger.info(
-          `Response has data.tx object: to=${
-            responseData.data.tx.to
-          }, hasData=${!!responseData.data.tx.data}`,
-        );
-      } else {
-        this.logger.warn(
-          `Response structure: ${JSON.stringify(responseData, null, 2)}`,
-        );
-      }
 
       const result = {
         success: true,
         data: responseData.data || responseData,
         tx: responseData.tx || responseData.data?.tx,
       };
-
-      this.logger.info(
-        `Returning API result: success=${result.success}, hasTx=${!!result.tx}`,
-      );
 
       return result;
     } catch (error) {
@@ -687,6 +555,4 @@ export class AavePtToUsdc
   private getSupportedMarkets(): SupportedPt[] {
     return this.config.supportedPts;
   }
-
-  // Note: Simplified API call method - no caching or retry logic needed for swap execution
 }

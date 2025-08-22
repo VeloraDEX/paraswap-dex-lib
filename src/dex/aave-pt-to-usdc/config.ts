@@ -4,6 +4,14 @@ import { Network } from '../../constants';
 
 // Aave V3 PT to USDC
 
+// Mainnet USDC token configuration
+export const MAINNET_USDC = {
+  address: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
+  decimals: 6,
+  name: 'USD Coin',
+  symbol: 'USDC',
+};
+
 // Pendle V4 Router https://etherscan.io/address/0x888888888889758f76e7103c6cbf23abbf58f946#code
 const PENDLE_ROUTER_ADDRESS = '0x888888888889758f76e7103c6cbf23abbf58f946';
 // Pendle Oracle https://etherscan.io/address/0x9a9Fa8338dd5E5B2188006f1Cd2Ef26d921650C2
@@ -18,6 +26,7 @@ export const AavePtToUsdcConfig: DexConfigMap<DexParams> = {
     [Network.MAINNET]: {
       pendleRouterAddress: PENDLE_ROUTER_ADDRESS,
       oracleAddress: ORACLE_ADDRESS,
+      usdcToken: MAINNET_USDC,
       supportedPts: [
         {
           pt: {
@@ -30,6 +39,7 @@ export const AavePtToUsdcConfig: DexConfigMap<DexParams> = {
           exitMarketAddress: '0xa36b60a14a1a5247912584768c6e53e1a269a9f7', // V4 market address (for exit-position API)
           underlyingAssetAddress: '0xc01cde799245a25e6eabc550b36a47f6f83cc0f1', // SY-sUSDe
           underlyingRawAddress: '0x9D39A5DE30e57443BfF2A8307A4256c8797A3497', // raw sUSDe
+          isStablecoin: false, // sUSDe is not a stablecoin, it's a yield-bearing token
         },
         {
           pt: {
@@ -42,6 +52,7 @@ export const AavePtToUsdcConfig: DexConfigMap<DexParams> = {
           exitMarketAddress: '0x9df192d13d61609d1852461c4850595e1f56e714', // V4 market address (for exit-position API)
           underlyingAssetAddress: '0xf3dbde762e5b67fad09d88da3dfd38a83f753ffe', // SY-USDe
           underlyingRawAddress: '0x4c9edd5852cd905f086c759e8383e09bff1e68b3', // raw USDe
+          isStablecoin: true, // USDe is a stablecoin pegged to USD
         },
       ],
     },
