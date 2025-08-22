@@ -167,7 +167,10 @@ export class AlgebraIntegralFactory extends StatefulEventSubscriber<FactoryState
     );
 
     if (res.errors && res.errors.length) {
-      if (res.errors[0].message.includes('missing block')) {
+      if (
+        res.errors[0].message.includes('missing block') ||
+        res.errors[0].message.includes('not yet available')
+      ) {
         this.logger.info(
           `${this.parentName}: subgraph fallback to the latest block...`,
         );
