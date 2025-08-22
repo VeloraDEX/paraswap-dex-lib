@@ -113,6 +113,7 @@ import { AaveV3PtRollOver } from './aave-v3-pt-roll-over/aave-v3-pt-roll-over';
 import { RingV2 } from './uniswap-v2/ring-v2';
 import { UsdcTransmuter } from './usdc-transmuter/usdc-transmuter';
 import { BlackholeCL } from './algebra-integral/forks/blackhole-cl';
+import { Blackhole } from './solidly/forks-override/blackhole';
 import { BunniV2 } from './bunni-v2/bunni-v2';
 
 const LegacyDexes = [
@@ -220,6 +221,7 @@ const Dexes = [
   RingV2,
   UsdcTransmuter,
   BlackholeCL,
+  Blackhole,
   BunniV2,
 ];
 

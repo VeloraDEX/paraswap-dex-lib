@@ -761,6 +761,27 @@ describe('Solidly E2E', () => {
         nativeTokenAmount,
       );
     });
+
+    describe('Blackhole', () => {
+      const dexKey = 'Blackhole';
+
+      const tokenASymbol: string = 'BTCb';
+      const tokenBSymbol: string = 'WAVAX';
+
+      const tokenAAmount: string = '100000000';
+      const tokenBAmount: string = '100000000000000000';
+      const nativeTokenAmount = '100000000000000000';
+
+      testForNetwork(
+        network,
+        dexKey,
+        tokenASymbol,
+        tokenBSymbol,
+        tokenAAmount,
+        tokenBAmount,
+        nativeTokenAmount,
+      );
+    });
   });
 
   describe('Arbitrum', () => {
