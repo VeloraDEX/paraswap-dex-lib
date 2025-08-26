@@ -96,6 +96,7 @@ import { StkGHO } from './stkgho/stkgho';
 import { BalancerV3 } from './balancer-v3/balancer-v3';
 import { balancerV3Merge } from './balancer-v3/optimizer';
 import { SkyConverter } from './sky-converter/sky-converter';
+import { Yieldnest } from './yieldnest/yieldnest';
 import { Cables } from './cables/cables';
 import { Stader } from './stader/stader';
 import { UsualBond } from './usual/usual-bond';
@@ -206,6 +207,7 @@ const Dexes = [
   UsualBond,
   StkGHO,
   SkyConverter,
+  Yieldnest,
   Cables,
   FluidDex,
   FluidDexLite,
