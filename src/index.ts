@@ -36,3 +36,14 @@ export { IDex } from './dex/idex';
 export { ConfigHelper } from './config';
 
 export { SlippageCheckError } from './dex/generic-rfq/types';
+export { generateConfig, ConfigHelper } from './config';
+
+export { MultiWrapper } from './lib/multi-wrapper';
+export { PromiseScheduler } from './lib/promise-scheduler';
+export { LimitOrderExchange } from './dex/limit-order-exchange';
+// export const multiABIV2 = require('./abi/multi-v2.json');
+export { default as multiABIV2 } from './abi/multi-v2.json';
+export { default as Web3 } from 'web3';
+export { GMX } from './dex/gmx/gmx';
+export { GMXConfig } from './dex/gmx/config';
+export { ILimitOrderProvider } from './dex-helper/ilimit-order-provider';
