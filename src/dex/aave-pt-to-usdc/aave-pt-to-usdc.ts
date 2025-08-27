@@ -23,7 +23,7 @@ import { AavePtToUsdcConfig } from './config';
 import { Interface } from '@ethersproject/abi';
 import PENDLE_ORACLE_ABI from '../../abi/PendleOracle.json';
 import {
-  AAVE_PT_TO_USDC_GAS_COST,
+  AAVE_PT_TO_UNDERLYING_GAS_COST,
   DEFAULT_SLIPPAGE_FOR_QUOTTING,
   PENDLE_API_URL,
 } from './constants';
@@ -40,7 +40,6 @@ export class AavePtToUsdc
   private config: DexParams;
   private marketsCache: Map<string, PendleSDKMarket> = new Map();
   private oracleInterface: Interface;
-  private usdcToken: Token;
   private readonly supportedMarkets: SupportedPt[];
 
   logger: Logger;
@@ -60,7 +59,7 @@ export class AavePtToUsdc
     if (this.network !== Network.MAINNET) {
       throw new Error('AavePtToUsdc is only supported on Mainnet');
     }
-    this.usdcToken = this.config.usdcToken;
+    // No USDC token needed for PT to underlying conversion
     this.supportedMarkets = this.getSupportedMarkets();
   }
 
@@ -115,8 +114,7 @@ export class AavePtToUsdc
 
     return (
       otherToken.address.toLowerCase() ===
-        market.underlyingRawAddress.toLowerCase() ||
-      otherToken.address.toLowerCase() === this.usdcToken.address.toLowerCase()
+      market.underlyingRawAddress.toLowerCase()
     );
   }
 
@@ -178,112 +176,50 @@ export class AavePtToUsdc
   private async calculatePriceFromOracle(
     market: SupportedPt,
     amount: bigint,
-    isUsdc: boolean,
-    destToken: Token,
   ): Promise<string> {
     this.logger.info(
-      `calculatePriceFromOracle called: market=${market.marketAddress}, amount=${amount}, isUsdc=${isUsdc}, destToken=${destToken.symbol}`,
+      `calculatePriceFromOracle called: market=${market.marketAddress}, amount=${amount}`,
     );
 
     try {
       this.logger.info(
-        `Calculating price from PendleOracle for amount ${amount} (${
-          isUsdc ? 'USDC' : 'underlying'
-        } route)`,
+        `Calculating price from PendleOracle for amount ${amount}`,
       );
 
-      // For USDC route, we need to get the PT to underlying rate first
-      // then convert to USDC using the underlying's price
-      if (isUsdc) {
-        this.logger.info('Processing USDC route');
+      // Get PT to underlying rate from oracle
+      const callData = this.oracleInterface.encodeFunctionData(
+        'getPtToAssetRate',
+        [
+          market.marketAddress,
+          0, // duration 0 for current rate
+        ],
+      );
 
-        // Get PT to underlying rate from oracle
-        const callData = this.oracleInterface.encodeFunctionData(
-          'getPtToAssetRate',
-          [
-            market.marketAddress,
-            0, // duration 0 for current rate
-          ],
+      this.logger.info(`Oracle call data: ${callData}`);
+      this.logger.info(`Calling oracle contract: ${this.config.oracleAddress}`);
+
+      const ptToAssetRate = await this.dexHelper.provider.call({
+        to: this.config.oracleAddress,
+        data: callData,
+      });
+
+      this.logger.info(`Oracle returned rate: ${ptToAssetRate}`);
+
+      if (!ptToAssetRate || ptToAssetRate === '0') {
+        this.logger.warn(
+          `Invalid PT to asset rate from oracle for market ${market.marketAddress}`,
         );
-
-        this.logger.info(`Oracle call data: ${callData}`);
-
-        this.logger.info(
-          `Calling oracle contract: ${this.config.oracleAddress}`,
-        );
-        const ptToAssetRate = await this.dexHelper.provider.call({
-          to: this.config.oracleAddress,
-          data: callData,
-        });
-
-        this.logger.info(`Oracle returned rate: ${ptToAssetRate}`);
-
-        if (!ptToAssetRate || ptToAssetRate === '0') {
-          this.logger.warn(
-            `Invalid PT to asset rate from oracle for market ${market.marketAddress}`,
-          );
-          return '0';
-        }
-
-        // Convert PT amount to underlying amount
-        const underlyingAmount =
-          (amount * BigInt(ptToAssetRate)) / BigInt(10 ** 18);
-        this.logger.info(
-          `Calculated underlying amount: ${underlyingAmount} from PT amount: ${amount} with rate: ${ptToAssetRate}`,
-        );
-
-        // For USDC route, use 1:1 conversion since underlying assets are close to USD
-        const usdcAmount = underlyingAmount;
-
-        this.logger.info(
-          `Calculated USDC amount: ${usdcAmount} for PT amount: ${amount}`,
-        );
-
-        return usdcAmount.toString();
-      } else {
-        this.logger.info('Processing underlying route');
-
-        // For underlying route, directly use PT to asset rate
-        const callData = this.oracleInterface.encodeFunctionData(
-          'getPtToAssetRate',
-          [
-            market.marketAddress,
-            0, // duration 0 for current rate
-          ],
-        );
-
-        this.logger.info(`Oracle call data: ${callData}`);
-
-        this.logger.info(
-          `Calling oracle contract: ${this.config.oracleAddress}`,
-        );
-        const ptToAssetRate = await this.dexHelper.provider.call({
-          to: this.config.oracleAddress,
-          data: callData,
-        });
-
-        this.logger.info(`Oracle returned rate: ${ptToAssetRate}`);
-
-        if (!ptToAssetRate || ptToAssetRate === '0') {
-          this.logger.warn(
-            `Invalid PT to asset rate from oracle for market ${market.marketAddress}`,
-          );
-          return '0';
-        }
-
-        // Convert PT amount to underlying amount
-        const underlyingAmount =
-          (amount * BigInt(ptToAssetRate)) / BigInt(10 ** 18);
-        this.logger.info(
-          `Calculated underlying amount: ${underlyingAmount} from PT amount: ${amount} with rate: ${ptToAssetRate}`,
-        );
-
-        this.logger.info(
-          `Calculated underlying amount: ${underlyingAmount} for PT amount: ${amount}`,
-        );
-
-        return underlyingAmount.toString();
+        return '0';
       }
+
+      // Convert PT amount to underlying amount
+      const underlyingAmount =
+        (amount * BigInt(ptToAssetRate)) / BigInt(10 ** 18);
+      this.logger.info(
+        `Calculated underlying amount: ${underlyingAmount} for PT amount: ${amount}`,
+      );
+
+      return underlyingAmount.toString();
     } catch (error) {
       this.logger.error(
         `Failed to calculate price from oracle for amount ${amount}: ${error}`,
@@ -321,13 +257,11 @@ export class AavePtToUsdc
       return null;
     }
 
-    const isUsdc =
-      destToken.address.toLowerCase() === this.usdcToken.address.toLowerCase();
     const isUnderlying =
       destToken.address.toLowerCase() ===
       market.underlyingRawAddress.toLowerCase();
 
-    if (!isUsdc && !isUnderlying) {
+    if (!isUnderlying) {
       this.logger.warn(
         `Unsupported destination token: ${destToken.symbol}(${destToken.address})`,
       );
@@ -346,12 +280,7 @@ export class AavePtToUsdc
         continue;
       }
 
-      const destAmount = await this.calculatePriceFromOracle(
-        market,
-        amount,
-        isUsdc,
-        destToken,
-      );
+      const destAmount = await this.calculatePriceFromOracle(market, amount);
 
       destAmounts.push(destAmount);
     }
@@ -360,9 +289,7 @@ export class AavePtToUsdc
       amt === '0' ? 0n : BigInt(amt),
     );
 
-    const gasCost = isUsdc
-      ? AAVE_PT_TO_USDC_GAS_COST + 250_000
-      : AAVE_PT_TO_USDC_GAS_COST;
+    const gasCost = AAVE_PT_TO_UNDERLYING_GAS_COST;
 
     if (finalPrices.every(p => p === 0n)) {
       this.logger.warn(
@@ -422,8 +349,8 @@ export class AavePtToUsdc
           address: market.address,
           connectorTokens: [
             {
-              address: this.usdcToken.address,
-              decimals: this.usdcToken.decimals,
+              address: market.underlyingAssetAddress,
+              decimals: 18,
               liquidityUSD: 10_000_000,
             },
           ],
@@ -464,9 +391,6 @@ export class AavePtToUsdc
       throw new Error(`Market not found for PT ${ptAddress}`);
     }
 
-    const isUsdc =
-      destToken.toLowerCase() === this.usdcToken.address.toLowerCase();
-
     const apiParams = {
       receiver: recipient,
       slippage: DEFAULT_SLIPPAGE_FOR_QUOTTING,
@@ -474,7 +398,7 @@ export class AavePtToUsdc
       ytAmount: '0',
       lpAmount: '0',
       tokenOut: destToken,
-      enableAggregator: isUsdc,
+      enableAggregator: false,
     };
 
     const swapResp = await this.callPendleSdkApi(
@@ -554,5 +478,43 @@ export class AavePtToUsdc
 
   private getSupportedMarkets(): SupportedPt[] {
     return this.config.supportedPts;
+  }
+
+  private async getPtToAssetRate(
+    ptTokenAddress: Address,
+    amount: bigint,
+  ): Promise<string | null> {
+    try {
+      // Get PT to underlying rate from PendleOracle
+      const callData = this.oracleInterface.encodeFunctionData(
+        'getPtToAssetRate',
+        [
+          ptTokenAddress,
+          0, // duration 0 for current rate
+        ],
+      );
+
+      this.logger.info(`Oracle call data: ${callData}`);
+      this.logger.info(`Calling oracle contract: ${this.config.oracleAddress}`);
+
+      const ptToAssetRate = await this.dexHelper.provider.call({
+        to: this.config.oracleAddress,
+        data: callData,
+      });
+
+      this.logger.info(`Oracle returned rate: ${ptToAssetRate}`);
+
+      if (!ptToAssetRate || ptToAssetRate === '0') {
+        this.logger.warn(
+          `Invalid PT to asset rate from oracle for PT token ${ptTokenAddress}`,
+        );
+        return null;
+      }
+
+      return ptToAssetRate;
+    } catch (error) {
+      this.logger.error(`Error getting PT to asset rate: ${error}`);
+      return null;
+    }
   }
 }

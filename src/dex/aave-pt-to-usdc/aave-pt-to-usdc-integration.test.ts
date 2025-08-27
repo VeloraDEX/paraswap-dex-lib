@@ -44,19 +44,13 @@ describe('AavePtToUsdc', () => {
     const ptUsdeToken: Token = {
       address: '0xbc6736d346a5ebc0debc997397912cd9b8fae10a',
       decimals: 18,
-      symbol: 'PT-USDe-31JUL2025',
-    };
-    const usdcToken: Token = {
-      address: '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
-      decimals: 6,
-      symbol: 'USDC',
+      symbol: 'PT-USDe-25SEP2025',
     };
     const sUsdeToken: Token = {
       address: '0x9D39A5DE30e57443BfF2A8307A4256c8797A3497',
       decimals: 18,
       symbol: 'sUSDe',
     };
-
     const usdeToken: Token = {
       address: '0x4c9edd5852cd905f086c759e8383e09bff1e68b3',
       decimals: 18,
@@ -82,33 +76,7 @@ describe('AavePtToUsdc', () => {
     });
 
     it(
-      'getPoolIdentifiers and getPricesVolume SELL PT -> USDC',
-      async () => {
-        const pools = await aavePtToUsdc.getPoolIdentifiers(
-          ptSusdeToken,
-          usdcToken,
-          SwapSide.SELL,
-          blockNumber,
-        );
-        const poolPrices = await aavePtToUsdc.getPricesVolume(
-          ptSusdeToken,
-          usdcToken,
-          amounts,
-          SwapSide.SELL,
-          blockNumber,
-          pools,
-        );
-        console.log(
-          `${ptSusdeToken.symbol} <> ${usdcToken.symbol} Pool Prices: `,
-          poolPrices,
-        );
-        checkPricesAreValid(poolPrices, amounts);
-      },
-      JEST_TIMEOUT,
-    );
-
-    it(
-      'getPoolIdentifiers and getPricesVolume SELL PT -> underlying asset',
+      'getPoolIdentifiers and getPricesVolume SELL PT -> underlying asset (sUSDe)',
       async () => {
         const pools = await aavePtToUsdc.getPoolIdentifiers(
           ptSusdeToken,
@@ -146,37 +114,9 @@ describe('AavePtToUsdc', () => {
       JEST_TIMEOUT,
     );
 
-    // Note: PT-eUSDe-14AUG2025 token removed from config
-
-    // Test PT-USDe-31JUL2025
+    // Test PT-USDe-25SEP2025
     it(
-      'PT-USDe-31JUL2025 getPoolIdentifiers and getPricesVolume SELL PT -> USDC',
-      async () => {
-        const pools = await aavePtToUsdc.getPoolIdentifiers(
-          ptUsdeToken,
-          usdcToken,
-          SwapSide.SELL,
-          blockNumber,
-        );
-        const poolPrices = await aavePtToUsdc.getPricesVolume(
-          ptUsdeToken,
-          usdcToken,
-          amounts,
-          SwapSide.SELL,
-          blockNumber,
-          pools,
-        );
-        console.log(
-          `${ptUsdeToken.symbol} <> ${usdcToken.symbol} Pool Prices: `,
-          poolPrices,
-        );
-        checkPricesAreValid(poolPrices, amounts);
-      },
-      JEST_TIMEOUT,
-    );
-
-    it(
-      'PT-USDe-31JUL2025 getPoolIdentifiers and getPricesVolume SELL PT -> underlying asset',
+      'PT-USDe-25SEP2025 getPoolIdentifiers and getPricesVolume SELL PT -> underlying asset (USDe)',
       async () => {
         const pools = await aavePtToUsdc.getPoolIdentifiers(
           ptUsdeToken,

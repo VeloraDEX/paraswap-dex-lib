@@ -25,7 +25,6 @@ function testForNetwork(
 
   const sideToContractMethods = new Map([
     [SwapSide.SELL, [ContractMethod.swapExactAmountIn]],
-    [SwapSide.BUY, [ContractMethod.swapExactAmountOut]],
   ]);
 
   describe(`${network}`, () => {
@@ -59,12 +58,12 @@ describe('AavePtToUsdc E2E', () => {
   describe('Mainnet', () => {
     const network = Network.MAINNET;
 
-    const tokenASymbol: string = 'PT-sUSDe-25SEP2025';
-    const tokenBSymbol: string = 'USDC';
+    const tokenASymbol: string = 'PT-USDe-25SEP2025';
+    const tokenBSymbol: string = 'USDE';
 
-    // after two hops 1 PT-sUSDe ≈ ~0.98 USDC (example)
+    // PT to underlying conversion: 1 PT-USDe ≈ ~0.99 USDe (example)
     const tokenAAmount: string = '1000000000000000000'; // 1 PT
-    const tokenBAmount: string = '980000'; // ≈ 0.98 USDC
+    const tokenBAmount: string = '990000000000000000'; // ≈ 0.99 USDe
 
     testForNetwork(
       network,
