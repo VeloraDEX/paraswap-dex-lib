@@ -601,6 +601,7 @@ export class Cables extends SimpleExchange implements IDex<any> {
           exchange: this.dexKey,
           gasCost: CABLES_GAS_COST,
           poolAddresses: [this.mainnetRFQAddress],
+          poolIdentifiers: pools,
           data: {},
         },
       ];

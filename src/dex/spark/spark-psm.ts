@@ -273,6 +273,7 @@ export class SparkPsm extends Spark {
         exchange: this.dexKey,
         data: { exchange: `${this.sdaiAddress}` },
         poolAddresses: [`${this.sdaiAddress}`],
+        poolIdentifiers: [this.getPoolIdentifier()],
       },
     ];
   }

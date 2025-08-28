@@ -62,6 +62,10 @@ export class Weth
     return this.adapters[side] || null;
   }
 
+  private getPoolIdentifier(address: Address): string {
+    return `${this.network}_${address}`;
+  }
+
   async getPoolIdentifiers(
     srcToken: Token,
     destToken: Token,
@@ -69,12 +73,12 @@ export class Weth
     blockNumber: number,
   ): Promise<string[]> {
     if (isETHAddress(srcToken.address) && this.isWETH(destToken.address)) {
-      return [`${this.network}_${destToken.address}`];
+      return [this.getPoolIdentifier(destToken.address)];
     } else if (
       this.isWETH(srcToken.address) &&
       isETHAddress(destToken.address)
     ) {
-      return [`${this.network}_${srcToken.address}`];
+      return [this.getPoolIdentifier(srcToken.address)];
     } else {
       return [];
     }
@@ -103,6 +107,11 @@ export class Weth
         gasCost,
         exchange: this.dexKey,
         poolAddresses: [this.address],
+        poolIdentifiers: [
+          isETHAddress(srcToken.address)
+            ? this.getPoolIdentifier(destToken.address)
+            : this.getPoolIdentifier(srcToken.address),
+        ],
         data: null,
       },
     ];

@@ -167,6 +167,7 @@ export class AaveV3 extends SimpleExchange implements IDex<Data, Param> {
           fromAToken,
         },
         poolAddresses: [fromAToken ? srcToken.address : destToken.address],
+        poolIdentifiers: [this._getPoolIdentifier(srcToken, destToken)],
       },
     ];
   }

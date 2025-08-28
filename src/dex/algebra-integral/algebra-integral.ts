@@ -1,5 +1,3 @@
-import { defaultAbiCoder } from '@ethersproject/abi';
-import { AbiItem } from 'web3-utils';
 import { pack } from '@ethersproject/solidity';
 import _ from 'lodash';
 import {
@@ -22,11 +20,9 @@ import {
 } from '../../constants';
 import * as CALLDATA_GAS_COST from '../../calldata-gas-cost';
 import { Interface } from 'ethers/lib/utils';
-import { Contract } from 'web3-eth-contract';
 import { BalanceRequest, getBalances } from '../../lib/tokens/balancer-fetcher';
 import SwapRouter from '../../abi/algebra-integral/SwapRouter.abi.json';
 import AlgebraQuoterABI from '../../abi/algebra-integral/Quoter.abi.json';
-import UniswapV3MultiABI from '../../abi/uniswap-v3/UniswapMulti.abi.json';
 import {
   _require,
   getBigIntPow,
@@ -51,10 +47,12 @@ import {
 } from '../../lib/tokens/types';
 import { extractReturnAmountPosition } from '../../executor/utils';
 import { AlgebraIntegralFactory } from './algebra-integral-factory';
-
-const ALGEBRA_QUOTE_GASLIMIT = 2_000_000;
-const ALGEBRA_GAS_COST = 180_000;
-const ALGEBRA_EFFICIENCY_FACTOR = 3;
+import {
+  ALGEBRA_GAS_COST,
+  ALGEBRA_QUOTE_GASLIMIT,
+  ALGEBRA_EFFICIENCY_FACTOR,
+} from './constants';
+import { uint256ToBigInt } from '../../lib/decoders';
 
 export class AlgebraIntegral
   extends SimpleExchange
@@ -71,8 +69,6 @@ export class AlgebraIntegral
 
   logger: Logger;
 
-  private uniswapMulti: Contract;
-
   constructor(
     readonly network: Network,
     readonly dexKey: string,
@@ -83,10 +79,6 @@ export class AlgebraIntegral
   ) {
     super(dexHelper, dexKey);
     this.logger = dexHelper.getLogger(dexKey);
-    this.uniswapMulti = new this.dexHelper.web3Provider.eth.Contract(
-      UniswapV3MultiABI as AbiItem[],
-      this.config.uniswapMulticall,
-    );
 
     this.factory = new AlgebraIntegralFactory(
       dexKey,
@@ -164,18 +156,16 @@ export class AlgebraIntegral
     if (pools.length === 0) {
       return null;
     }
+
     this.logger.warn(`fallback to rpc for ${pools.length} pool(s)`);
+
+    const isSELL = side === SwapSide.SELL;
 
     const requests = pools.map<BalanceRequest>(pool => ({
       owner: pool.poolAddress,
-      asset: side === SwapSide.SELL ? from.address : to.address,
+      asset: isSELL ? from.address : to.address,
       assetType: AssetType.ERC20,
-      ids: [
-        {
-          id: DEFAULT_ID_ERC20,
-          spenders: [],
-        },
-      ],
+      ids: [{ id: DEFAULT_ID_ERC20, spenders: [] }],
     }));
 
     const balances = await getBalances(this.dexHelper.multiWrapper, requests);
@@ -185,9 +175,7 @@ export class AlgebraIntegral
     const _isDestTokenTransferFeeToBeExchanged =
       isDestTokenTransferFeeToBeExchanged(transferFees);
 
-    const unitVolume = getBigIntPow(
-      (side === SwapSide.SELL ? from : to).decimals,
-    );
+    const unitVolume = getBigIntPow((isSELL ? from : to).decimals);
 
     const chunks = amounts.length - 1;
     const _width = Math.floor(chunks / this.config.chunksCount);
@@ -221,46 +209,25 @@ export class AlgebraIntegral
         .map(amount => ({
           target: this.config.quoter,
           gasLimit: ALGEBRA_QUOTE_GASLIMIT,
-          callData:
-            side === SwapSide.SELL
-              ? this.quoterIface.encodeFunctionData('quoteExactInputSingle', [
-                  from.address,
-                  to.address,
-                  pool.deployer,
-                  amount.toString(),
-                  0,
-                ])
-              : this.quoterIface.encodeFunctionData('quoteExactOutputSingle', [
-                  from.address,
-                  to.address,
-                  pool.deployer,
-                  amount.toString(),
-                  0,
-                ]),
+          callData: this.quoterIface.encodeFunctionData(
+            isSELL ? 'quoteExactInputSingle' : 'quoteExactOutputSingle',
+            [from.address, to.address, pool.deployer, amount.toString(), 0],
+          ),
+          decodeFunction: uint256ToBigInt,
         }));
     });
 
-    const data = await this.uniswapMulti.methods.multicall(calldata).call();
-
-    let totalGasCost = 0;
-    let totalSuccessFullSwaps = 0;
-    const decode = (j: number): bigint => {
-      const { success, gasUsed, returnData } = data.returnData[j];
-
-      if (!success) {
-        return 0n;
-      }
-      const decoded = defaultAbiCoder.decode(['uint256'], returnData);
-      totalGasCost += +gasUsed;
-      totalSuccessFullSwaps++;
-
-      return BigInt(decoded[0].toString());
-    };
+    const data = await this.dexHelper.multiWrapper.tryAggregate(
+      false,
+      calldata,
+    );
 
     let i = 0;
     const result = pools.map((pool, poolIndex) => {
       const amountsForPool = amountsWithFeePerPool[poolIndex];
-      const _rates = amountsForPool.map(a => (a === 0n ? 0n : decode(i++)));
+      const _rates = amountsForPool.map(a =>
+        a === 0n ? 0n : (data[i++].returnData as bigint),
+      );
 
       const _ratesWithFee = _isDestTokenTransferFeeToBeExchanged
         ? applyTransferFee(
@@ -301,6 +268,7 @@ export class AlgebraIntegral
         poolAddresses: [pool.poolAddress],
       };
     });
+
     return result;
   }
 

@@ -180,6 +180,7 @@ export class AngleTransmuter
         exchange: this.dexKey,
         data: { exchange: this.params[fiat]!.transmuter },
         poolAddresses: [this.params[fiat]!.transmuter],
+        poolIdentifiers: [pool],
       },
     ];
   }

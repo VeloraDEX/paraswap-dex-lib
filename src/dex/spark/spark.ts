@@ -91,15 +91,21 @@ export class Spark
     await this.eventPool.initialize(blockNumber);
   }
 
+  getPoolIdentifier(): string {
+    return `${this.dexKey}_${this.sdaiAddress}`;
+  }
+
   async getPoolIdentifiers(
     srcToken: Token,
     destToken: Token,
     side: SwapSide,
     blockNumber: number,
   ): Promise<string[]> {
-    return this.isAppropriatePair(srcToken, destToken)
-      ? [`${this.dexKey}_${this.sdaiAddress}`]
-      : [];
+    if (!this.isAppropriatePair(srcToken, destToken)) {
+      return [];
+    }
+
+    return [this.getPoolIdentifier()];
   }
 
   async getPricesVolume(
@@ -141,6 +147,7 @@ export class Spark
         exchange: this.dexKey,
         data: { exchange: `${this.sdaiAddress}` },
         poolAddresses: [`${this.sdaiAddress}`],
+        poolIdentifiers: [this.getPoolIdentifier()],
       },
     ];
   }
