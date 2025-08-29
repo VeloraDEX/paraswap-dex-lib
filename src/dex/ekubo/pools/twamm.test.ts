@@ -1,24 +1,33 @@
 import { DeepReadonly } from 'ts-essentials';
-import { Quote } from './iface';
+import { Quote } from './pool';
 import { MAX_SQRT_RATIO, MIN_SQRT_RATIO, toSqrtRatio } from './math/tick';
-import { quote, TwammPoolState } from './twamm';
+import { TwammPool, TwammPoolState } from './twamm';
 import { PoolConfig, PoolKey } from './utils';
+import { TWO_POW_128 } from './math/constants';
+import { BigNumber } from 'ethers';
+import { fixedSqrtRatioToFloat } from './math/sqrt-ratio';
 
-describe('TWAMM pool', () => {
-  function quoteTwamm(
+describe(TwammPool.prototype.quoteTwamm, () => {
+  function quote(
     amount: bigint,
     isToken1: boolean,
     state: DeepReadonly<TwammPoolState.Object>,
     timestamp: number,
   ): Quote {
-    return quote.bind({
-      key: new PoolKey(1n, 2n, new PoolConfig(0, 0n, 3n)),
-    })(amount, isToken1, state, timestamp);
+    return TwammPool.prototype.quoteTwamm.call(
+      {
+        key: new PoolKey(1n, 2n, new PoolConfig(3n, 0n, 0)),
+      },
+      amount,
+      isToken1,
+      state,
+      timestamp,
+    );
   }
 
-  test('zero_sale_rates_quote_token0', () => {
+  test('zero sale rates quote token0', () => {
     expect(
-      quoteTwamm(
+      quote(
         1000n,
         false,
         {
@@ -36,9 +45,9 @@ describe('TWAMM pool', () => {
     ).toEqual(999n);
   });
 
-  test('zero_sale_rates_quote_token1', () => {
+  test('zero sale rates quote token1', () => {
     expect(
-      quoteTwamm(
+      quote(
         1000n,
         true,
         {
@@ -56,9 +65,9 @@ describe('TWAMM pool', () => {
     ).toEqual(990n);
   });
 
-  test('non_zero_sale_rate_token0_quote_token1', () => {
+  test('non zero sale rate token0 quote token1', () => {
     expect(
-      quoteTwamm(
+      quote(
         1000n,
         true,
         {
@@ -76,9 +85,9 @@ describe('TWAMM pool', () => {
     ).toEqual(999n);
   });
 
-  test('non_zero_sale_rate_token1_quote_token0', () => {
+  test('non zero sale rate token1 quote token0', () => {
     expect(
-      quoteTwamm(
+      quote(
         1000n,
         false,
         {
@@ -96,9 +105,9 @@ describe('TWAMM pool', () => {
     ).toEqual(998n);
   });
 
-  test('non_zero_sale_rate_token1_max_price_quote_token1', () => {
+  test('non zero sale rate token1 max price quote token1', () => {
     expect(
-      quoteTwamm(
+      quote(
         1000n,
         true,
         {
@@ -116,9 +125,9 @@ describe('TWAMM pool', () => {
     ).toEqual(0n);
   });
 
-  test('zero_sale_rate_token0_at_max_price_deltas_move_price_down_quote_token1', () => {
+  test('zero sale rate token0 at max price deltas move price down quote token1', () => {
     expect(
-      quoteTwamm(
+      quote(
         1000n,
         true,
         {
@@ -142,9 +151,9 @@ describe('TWAMM pool', () => {
     ).toEqual(2555n);
   });
 
-  test('zero_sale_rate_token1_close_at_min_price_deltas_move_price_up_quote_token1', () => {
+  test('zero sale rate token1 close at min price deltas move price up quote token1', () => {
     expect(
-      quoteTwamm(
+      quote(
         1000n,
         true,
         {
@@ -168,9 +177,9 @@ describe('TWAMM pool', () => {
     ).toEqual(390n);
   });
 
-  test('zero_sale_rate_token0_at_max_price_deltas_move_price_down_quote_token0', () => {
+  test('zero sale rate token0 at max price deltas move price down quote token0', () => {
     expect(
-      quoteTwamm(
+      quote(
         1000n,
         false,
         {
@@ -194,9 +203,9 @@ describe('TWAMM pool', () => {
     ).toEqual(390n);
   });
 
-  test('zero_sale_rate_token1_at_min_price_deltas_move_price_up_quote_token0', () => {
+  test('zero sale rate token1 at min price deltas move price up quote token0', () => {
     expect(
-      quoteTwamm(
+      quote(
         1000n,
         false,
         {
@@ -220,9 +229,9 @@ describe('TWAMM pool', () => {
     ).toEqual(2555n);
   });
 
-  test('one_e18_sale_rates_no_sale_rate_deltas_quote_token1', () => {
+  test('one e18 sale rates no sale rate deltas quote token1', () => {
     expect(
-      quoteTwamm(
+      quote(
         1000n,
         true,
         {
@@ -240,9 +249,9 @@ describe('TWAMM pool', () => {
     ).toEqual(990n);
   });
 
-  test('one_e18_sale_rates_no_sale_rate_deltas_quote_token0', () => {
+  test('one e18 sale rates no sale rate deltas quote token0', () => {
     expect(
-      quoteTwamm(
+      quote(
         1000n,
         false,
         {
@@ -260,9 +269,9 @@ describe('TWAMM pool', () => {
     ).toEqual(989n);
   });
 
-  test('token0_sale_rate_greater_than_token1_sale_rate_no_sale_rate_deltas_quote_token1', () => {
+  test('token0 sale rate greater than token1 sale rate no sale rate deltas quote token1', () => {
     expect(
-      quoteTwamm(
+      quote(
         1000n,
         true,
         {
@@ -280,9 +289,9 @@ describe('TWAMM pool', () => {
     ).toEqual(717n);
   });
 
-  test('token1_sale_rate_greater_than_token0_sale_rate_no_sale_rate_deltas_quote_token1', () => {
+  test('token1 sale rate greater than token0 sale rate no sale rate deltas quote token1', () => {
     expect(
-      quoteTwamm(
+      quote(
         1000n,
         true,
         {
@@ -300,9 +309,9 @@ describe('TWAMM pool', () => {
     ).toEqual(984n);
   });
 
-  test('token0_sale_rate_greater_than_token1_sale_rate_no_sale_rate_deltas_quote_token0', () => {
+  test('token0 sale rate greater than token1 sale rate no sale rate deltas quote token0', () => {
     expect(
-      quoteTwamm(
+      quote(
         1000n,
         false,
         {
@@ -320,9 +329,9 @@ describe('TWAMM pool', () => {
     ).toEqual(983n);
   });
 
-  test('token1_sale_rate_greater_than_token0_sale_rate_no_sale_rate_deltas_quote_token0', () => {
+  test('token1 sale rate greater than token0 sale rate no sale rate deltas quote token0', () => {
     expect(
-      quoteTwamm(
+      quote(
         1000n,
         false,
         {
@@ -340,9 +349,9 @@ describe('TWAMM pool', () => {
     ).toEqual(994n);
   });
 
-  test('sale_rate_deltas_goes_to_zero_halfway_through_execution_quote_token0', () => {
+  test('sale rate deltas goes to zero halfway through execution quote token0', () => {
     expect(
-      quoteTwamm(
+      quote(
         1000n,
         false,
         {
@@ -366,9 +375,9 @@ describe('TWAMM pool', () => {
     ).toEqual(989n);
   });
 
-  test('sale_rate_deltas_doubles_halfway_through_execution_quote_token0', () => {
+  test('sale rate deltas doubles halfway through execution quote token0', () => {
     expect(
-      quoteTwamm(
+      quote(
         1000n,
         false,
         {
@@ -392,9 +401,9 @@ describe('TWAMM pool', () => {
     ).toEqual(989n);
   });
 
-  test('compare_to_contract_output', () => {
+  test('compare to contract output', () => {
     expect(
-      quoteTwamm(
+      quote(
         10_000n * 10n ** 18n,
         false,
         {
@@ -410,5 +419,188 @@ describe('TWAMM pool', () => {
         2_040,
       ).calculatedAmount,
     ).toEqual(19993991114278789946056n);
+  });
+});
+
+function poolState(): TwammPoolState.Object {
+  return {
+    fullRangePoolState: {
+      liquidity: 1n,
+      sqrtRatio: TWO_POW_128,
+    },
+    lastExecutionTime: 0,
+    token0SaleRate: 1n,
+    token1SaleRate: 1n,
+    virtualOrderDeltas: [
+      {
+        time: 2,
+        saleRateDelta0: -1n,
+        saleRateDelta1: 1n,
+      },
+      {
+        time: 3,
+        saleRateDelta0: 2n,
+        saleRateDelta1: -2n,
+      },
+    ],
+  };
+}
+
+describe(TwammPoolState.fromQuoter, () => {
+  test('example', () => {
+    const expected = poolState();
+
+    expect(
+      TwammPoolState.fromQuoter({
+        liquidity: BigNumber.from(expected.fullRangePoolState.liquidity),
+        lastVirtualOrderExecutionTime: BigNumber.from(
+          expected.lastExecutionTime,
+        ),
+        saleRateDeltas: expected.virtualOrderDeltas.map(delta => ({
+          time: BigNumber.from(delta.time),
+          saleRateDelta0: BigNumber.from(delta.saleRateDelta0),
+          saleRateDelta1: BigNumber.from(delta.saleRateDelta1),
+        })),
+        saleRateToken0: BigNumber.from(expected.token0SaleRate),
+        saleRateToken1: BigNumber.from(expected.token1SaleRate),
+        sqrtRatio: BigNumber.from(
+          fixedSqrtRatioToFloat(expected.fullRangePoolState.sqrtRatio),
+        ),
+      }),
+    ).toStrictEqual(expected);
+  });
+});
+
+describe(TwammPoolState.fromSwappedEvent, () => {
+  test('example', () => {
+    const state = poolState();
+
+    const [liquidityAfter, sqrtRatioAfter] = [
+      state.fullRangePoolState.liquidity + 1n,
+      state.fullRangePoolState.sqrtRatio + 1n,
+    ];
+
+    const stateAfterSwap = TwammPoolState.fromSwappedEvent(state, {
+      poolId: 0n, // Not used here
+      liquidityAfter,
+      sqrtRatioAfter,
+      tickAfter: 0,
+    });
+
+    const expected = structuredClone(state);
+    expected.fullRangePoolState.liquidity = liquidityAfter;
+    expected.fullRangePoolState.sqrtRatio = sqrtRatioAfter;
+
+    expect(stateAfterSwap).toStrictEqual(expected);
+  });
+});
+
+describe(TwammPoolState.fromPositionUpdatedEvent, () => {
+  test('zero liquidity delta', () => {
+    expect(TwammPoolState.fromPositionUpdatedEvent(poolState(), 0n)).toBe(null);
+  });
+
+  test('non-zero liquidity delta', () => {
+    const state = poolState();
+
+    const expected = structuredClone(state);
+    expected.fullRangePoolState.liquidity += 1n;
+
+    expect(TwammPoolState.fromPositionUpdatedEvent(state, 1n)).toStrictEqual(
+      expected,
+    );
+  });
+});
+
+describe(TwammPoolState.fromVirtualOrdersExecutedEvent, () => {
+  test('no old delta removal', () => {
+    const state = poolState();
+    const timestamp = 1;
+
+    const expected = structuredClone(state);
+    expected.lastExecutionTime = timestamp;
+
+    expect(
+      TwammPoolState.fromVirtualOrdersExecutedEvent(
+        state,
+        {
+          poolId: 0n, // Not used here
+          token0SaleRate: state.token0SaleRate,
+          token1SaleRate: state.token1SaleRate,
+        },
+        timestamp,
+      ),
+    ).toStrictEqual(expected);
+  });
+
+  test('old delta removal', () => {
+    const state = poolState();
+
+    const timestamp = 3;
+    const [newToken0SaleRate, newToken1SaleRate] = [2n, 0n];
+
+    const expected = structuredClone(state);
+    expected.lastExecutionTime = timestamp;
+    expected.token0SaleRate = newToken0SaleRate;
+    expected.token1SaleRate = newToken1SaleRate;
+    expected.virtualOrderDeltas = [];
+
+    expect(
+      TwammPoolState.fromVirtualOrdersExecutedEvent(
+        state,
+        {
+          poolId: 0n, // Not used here
+          token0SaleRate: newToken0SaleRate,
+          token1SaleRate: newToken1SaleRate,
+        },
+        timestamp,
+      ),
+    ).toStrictEqual(expected);
+  });
+});
+
+describe(TwammPoolState.fromOrderUpdatedEvent, () => {
+  test('already started & new time', () => {
+    const state = poolState();
+
+    const endTime = 100;
+    const srd = 1n;
+
+    const expected = structuredClone(state);
+    expected.token1SaleRate += srd;
+    expected.virtualOrderDeltas.push({
+      time: endTime,
+      saleRateDelta0: 0n,
+      saleRateDelta1: -srd,
+    });
+
+    expect(
+      TwammPoolState.fromOrderUpdatedEvent(
+        state,
+        [state.lastExecutionTime, endTime],
+        srd,
+        true,
+      ),
+    ).toStrictEqual(expected);
+  });
+
+  test('not started & existing times', () => {
+    const state = poolState();
+
+    const [startTime, endTime] = [2, 3];
+    const srd = 1n;
+
+    const expected = structuredClone(state);
+    expected.virtualOrderDeltas[0].saleRateDelta1 += srd;
+    expected.virtualOrderDeltas[1].saleRateDelta1 -= srd;
+
+    expect(
+      TwammPoolState.fromOrderUpdatedEvent(
+        state,
+        [startTime, endTime],
+        srd,
+        true,
+      ),
+    ).toStrictEqual(expected);
   });
 });

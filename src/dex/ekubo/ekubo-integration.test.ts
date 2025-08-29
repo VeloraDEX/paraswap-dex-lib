@@ -2,6 +2,8 @@
 import dotenv from 'dotenv';
 dotenv.config();
 
+import util from 'node:util';
+
 import { Interface, Result } from '@ethersproject/abi';
 import { Tokens } from '../../../tests/constants-e2e';
 import {
@@ -16,6 +18,7 @@ import { Ekubo } from './ekubo';
 import { isPriceIncreasing } from './pools/math/swap';
 import { MAX_SQRT_RATIO, MIN_SQRT_RATIO } from './pools/math/tick';
 import { EkuboData } from './types';
+import { DEX_KEY } from './config';
 
 function getReaderCalldata(
   quoterAddress: string,
@@ -142,102 +145,97 @@ async function testPricingOnNetwork(
   );
 }
 
-describe('Ekubo', function () {
-  const dexKey = 'Ekubo';
-  let blockNumber: number;
-  let ekubo: Ekubo;
+let blockNumber: number;
+let ekubo: Ekubo;
 
-  describe('Mainnet', () => {
-    const network = Network.MAINNET;
-    const dexHelper = new DummyDexHelper(network);
+describe('Mainnet', () => {
+  const network = Network.MAINNET;
+  const dexHelper = new DummyDexHelper(network);
 
-    const tokens = Tokens[network];
+  const tokens = Tokens[network];
 
-    const srcTokenSymbol = 'USDC';
-    const destTokenSymbol = 'USDT';
+  const srcTokenSymbol = 'USDC';
+  const destTokenSymbol = 'USDT';
 
-    const amountsForSell = [
-      0n,
-      1n * BI_POWS[tokens[srcTokenSymbol].decimals],
-      2n * BI_POWS[tokens[srcTokenSymbol].decimals],
-      3n * BI_POWS[tokens[srcTokenSymbol].decimals],
-      4n * BI_POWS[tokens[srcTokenSymbol].decimals],
-      5n * BI_POWS[tokens[srcTokenSymbol].decimals],
-      6n * BI_POWS[tokens[srcTokenSymbol].decimals],
-      7n * BI_POWS[tokens[srcTokenSymbol].decimals],
-      8n * BI_POWS[tokens[srcTokenSymbol].decimals],
-      9n * BI_POWS[tokens[srcTokenSymbol].decimals],
-      10n * BI_POWS[tokens[srcTokenSymbol].decimals],
-    ];
+  const amountsForSell = [
+    0n,
+    1n * BI_POWS[tokens[srcTokenSymbol].decimals],
+    2n * BI_POWS[tokens[srcTokenSymbol].decimals],
+    3n * BI_POWS[tokens[srcTokenSymbol].decimals],
+    4n * BI_POWS[tokens[srcTokenSymbol].decimals],
+    5n * BI_POWS[tokens[srcTokenSymbol].decimals],
+    6n * BI_POWS[tokens[srcTokenSymbol].decimals],
+    7n * BI_POWS[tokens[srcTokenSymbol].decimals],
+    8n * BI_POWS[tokens[srcTokenSymbol].decimals],
+    9n * BI_POWS[tokens[srcTokenSymbol].decimals],
+    10n * BI_POWS[tokens[srcTokenSymbol].decimals],
+  ];
 
-    const amountsForBuy = [
-      0n,
-      1n * BI_POWS[tokens[destTokenSymbol].decimals],
-      2n * BI_POWS[tokens[destTokenSymbol].decimals],
-      3n * BI_POWS[tokens[destTokenSymbol].decimals],
-      4n * BI_POWS[tokens[destTokenSymbol].decimals],
-      5n * BI_POWS[tokens[destTokenSymbol].decimals],
-      6n * BI_POWS[tokens[destTokenSymbol].decimals],
-      7n * BI_POWS[tokens[destTokenSymbol].decimals],
-      8n * BI_POWS[tokens[destTokenSymbol].decimals],
-      9n * BI_POWS[tokens[destTokenSymbol].decimals],
-      10n * BI_POWS[tokens[destTokenSymbol].decimals],
-    ];
+  const amountsForBuy = [
+    0n,
+    1n * BI_POWS[tokens[destTokenSymbol].decimals],
+    2n * BI_POWS[tokens[destTokenSymbol].decimals],
+    3n * BI_POWS[tokens[destTokenSymbol].decimals],
+    4n * BI_POWS[tokens[destTokenSymbol].decimals],
+    5n * BI_POWS[tokens[destTokenSymbol].decimals],
+    6n * BI_POWS[tokens[destTokenSymbol].decimals],
+    7n * BI_POWS[tokens[destTokenSymbol].decimals],
+    8n * BI_POWS[tokens[destTokenSymbol].decimals],
+    9n * BI_POWS[tokens[destTokenSymbol].decimals],
+    10n * BI_POWS[tokens[destTokenSymbol].decimals],
+  ];
 
-    beforeAll(async () => {
-      blockNumber = await dexHelper.web3Provider.eth.getBlockNumber();
-      ekubo = new Ekubo(network, dexKey, dexHelper);
-      if (ekubo.initializePricing) {
-        await ekubo.initializePricing(blockNumber);
-      }
-    });
+  beforeAll(async () => {
+    blockNumber = await dexHelper.web3Provider.eth.getBlockNumber();
+    ekubo = new Ekubo(network, DEX_KEY, dexHelper);
+    if (ekubo.initializePricing) {
+      await ekubo.initializePricing(blockNumber);
+    }
+  });
 
-    it('getPoolIdentifiers and getPricesVolume SELL', async function () {
-      await testPricingOnNetwork(
-        ekubo,
-        network,
-        dexKey,
-        blockNumber,
-        srcTokenSymbol,
-        destTokenSymbol,
-        SwapSide.SELL,
-        amountsForSell,
-      );
-    });
+  it('getPoolIdentifiers and getPricesVolume SELL', async function () {
+    await testPricingOnNetwork(
+      ekubo,
+      network,
+      DEX_KEY,
+      blockNumber,
+      srcTokenSymbol,
+      destTokenSymbol,
+      SwapSide.SELL,
+      amountsForSell,
+    );
+  });
 
-    it('getPoolIdentifiers and getPricesVolume BUY', async function () {
-      await testPricingOnNetwork(
-        ekubo,
-        network,
-        dexKey,
-        blockNumber,
-        srcTokenSymbol,
-        destTokenSymbol,
-        SwapSide.BUY,
-        amountsForBuy,
-      );
-    });
+  it('getPoolIdentifiers and getPricesVolume BUY', async function () {
+    await testPricingOnNetwork(
+      ekubo,
+      network,
+      DEX_KEY,
+      blockNumber,
+      srcTokenSymbol,
+      destTokenSymbol,
+      SwapSide.BUY,
+      amountsForBuy,
+    );
+  });
 
-    it('getTopPoolsForToken', async function () {
-      // We have to check without calling initializePricing, because
-      // pool-tracker is not calling that function
-      const newEkubo = new Ekubo(network, dexKey, dexHelper);
-      if (newEkubo.updatePoolState) {
-        await newEkubo.updatePoolState();
-      }
-      const poolLiquidity = await newEkubo.getTopPoolsForToken(
-        tokens[srcTokenSymbol].address,
-        10,
-      );
-      console.log(`${srcTokenSymbol} Top Pools:`, poolLiquidity);
+  it('getTopPoolsForToken', async function () {
+    const ekubo = new Ekubo(network, DEX_KEY, dexHelper);
+    await ekubo.updatePoolState();
 
-      if (!newEkubo.hasConstantPriceLargeAmounts) {
-        checkPoolsLiquidity(
-          poolLiquidity,
-          Tokens[network][srcTokenSymbol].address,
-          dexKey,
-        );
-      }
-    });
+    const poolLiquidity = await ekubo.getTopPoolsForToken(
+      tokens[srcTokenSymbol].address,
+      10,
+    );
+    console.log(
+      `${srcTokenSymbol} Top Pools:`,
+      util.inspect(poolLiquidity, { depth: null }),
+    );
+
+    checkPoolsLiquidity(
+      poolLiquidity,
+      Tokens[network][srcTokenSymbol].address,
+      DEX_KEY,
+    );
   });
 });
