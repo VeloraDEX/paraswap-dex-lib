@@ -1217,6 +1217,76 @@ describe('UniswapV2 E2E BSC', () => {
     );
   });
 
+  describe('OmniExchangeV2', () => {
+    const dexKey = 'OmniExchangeV2';
+    const network = Network.BSC;
+    const tokens = Tokens[network];
+    const holders = Holders[network];
+    const provider = new StaticJsonRpcProvider(
+      generateConfig(network).privateHttpProvider,
+      network,
+    );
+
+    const sideToContractMethods = new Map<SwapSide, ContractMethod[]>([
+      [
+        SwapSide.SELL,
+        [
+          ContractMethod.simpleSwap,
+          ContractMethod.multiSwap,
+          ContractMethod.megaSwap,
+        ],
+      ],
+    ]);
+
+    const pairs: { name: string; sellAmount: string }[][] = [
+      [
+        { name: 'BNB', sellAmount: '50000000000000000' },
+        { name: 'USDC', sellAmount: '10000000000000000000' },
+      ],
+      [
+        { name: 'BNB', sellAmount: '50000000000000000' },
+        { name: 'USDT', sellAmount: '10000000000000000000' },
+      ],
+    ];
+
+    sideToContractMethods.forEach((contractMethods, side) =>
+      describe(`${side}`, () => {
+        contractMethods.forEach((contractMethod: ContractMethod) => {
+          pairs.forEach(pair => {
+            describe(`${contractMethod}`, () => {
+              it(`${pair[0].name} -> ${pair[1].name}`, async () => {
+                await testE2E(
+                  tokens[pair[0].name],
+                  tokens[pair[1].name],
+                  holders[pair[0].name],
+                  pair[0].sellAmount,
+                  side,
+                  dexKey,
+                  contractMethod,
+                  network,
+                  provider,
+                );
+              });
+              it(`${pair[1].name} -> ${pair[0].name}`, async () => {
+                await testE2E(
+                  tokens[pair[1].name],
+                  tokens[pair[0].name],
+                  holders[pair[1].name],
+                  pair[1].sellAmount,
+                  side,
+                  dexKey,
+                  contractMethod,
+                  network,
+                  provider,
+                );
+              });
+            });
+          });
+        });
+      }),
+    );
+  });
+
   describe(`Swapsicle`, () => {
     const dexKey = 'Swapsicle';
 
