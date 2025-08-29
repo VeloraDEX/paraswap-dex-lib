@@ -162,3 +162,44 @@ describe('WUSDM', function () {
     });
   });
 });
+
+describe('sUSDe', function () {
+  const dexKey = 'sUSDe';
+  const network = Network.MAINNET;
+  const sUSDeSymbol = 'SUSDE';
+  const USDeSymbol = 'USDE';
+
+  let dexHelper: DummyDexHelper;
+  let sUSDe: ERC4626;
+
+  const sUSDeToken = Tokens[network][sUSDeSymbol];
+  const USDeToken = Tokens[network][USDeSymbol];
+
+  beforeAll(async () => {
+    dexHelper = new DummyDexHelper(network);
+    sUSDe = new ERC4626(network, dexKey, dexHelper);
+    await sUSDe.updatePoolState();
+    await sUSDe.updatePoolState();
+    await sUSDe.updatePoolState();
+  });
+
+  it('USDe getTopPoolsForToken', async function () {
+    const poolLiquidity = await sUSDe.getTopPoolsForToken(
+      USDeToken.address,
+      10,
+    );
+    console.log(`${USDeToken} Top Pools:`, poolLiquidity);
+
+    checkPoolsLiquidity(poolLiquidity, USDeToken.address, dexKey);
+  });
+
+  it('sUSDe getTopPoolsForToken', async function () {
+    const poolLiquidity = await sUSDe.getTopPoolsForToken(
+      sUSDeToken.address,
+      10,
+    );
+    console.log(`${sUSDeSymbol} Top Pools:`, poolLiquidity);
+
+    checkPoolsLiquidity(poolLiquidity, sUSDeToken.address, dexKey);
+  });
+});

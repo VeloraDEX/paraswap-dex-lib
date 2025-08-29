@@ -1,10 +1,9 @@
 [
   {
     "inputs": [
-      { "internalType": "bytes32", "name": "ilk_", "type": "bytes32" },
-      { "internalType": "address", "name": "gem_", "type": "address" },
+      { "internalType": "address", "name": "gemJoin_", "type": "address" },
       { "internalType": "address", "name": "daiJoin_", "type": "address" },
-      { "internalType": "address", "name": "pocket_", "type": "address" }
+      { "internalType": "address", "name": "vow_", "type": "address" }
     ],
     "stateMutability": "nonpayable",
     "type": "constructor"
@@ -39,21 +38,8 @@
     "inputs": [
       {
         "indexed": false,
-        "internalType": "uint256",
-        "name": "wad",
-        "type": "uint256"
-      }
-    ],
-    "name": "Chug",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      {
-        "indexed": true,
         "internalType": "address",
-        "name": "usr",
+        "name": "user",
         "type": "address"
       }
     ],
@@ -65,38 +51,6 @@
     "inputs": [
       {
         "indexed": true,
-        "internalType": "address",
-        "name": "usr",
-        "type": "address"
-      }
-    ],
-    "name": "Diss",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      {
-        "indexed": true,
-        "internalType": "bytes32",
-        "name": "what",
-        "type": "bytes32"
-      },
-      {
-        "indexed": false,
-        "internalType": "address",
-        "name": "data",
-        "type": "address"
-      }
-    ],
-    "name": "File",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      {
-        "indexed": true,
         "internalType": "bytes32",
         "name": "what",
         "type": "bytes32"
@@ -116,34 +70,8 @@
     "inputs": [
       {
         "indexed": false,
-        "internalType": "uint256",
-        "name": "wad",
-        "type": "uint256"
-      }
-    ],
-    "name": "Fill",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      {
-        "indexed": true,
         "internalType": "address",
-        "name": "usr",
-        "type": "address"
-      }
-    ],
-    "name": "Kiss",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      {
-        "indexed": true,
-        "internalType": "address",
-        "name": "usr",
+        "name": "user",
         "type": "address"
       }
     ],
@@ -176,86 +104,20 @@
     "type": "event"
   },
   {
-    "anonymous": false,
-    "inputs": [
-      {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "wad",
-        "type": "uint256"
-      }
-    ],
-    "name": "Trim",
-    "type": "event"
-  },
-  {
-    "inputs": [],
-    "name": "HALTED",
-    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [{ "internalType": "address", "name": "", "type": "address" }],
-    "name": "bud",
-    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "buf",
-    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
     "inputs": [
       { "internalType": "address", "name": "usr", "type": "address" },
       { "internalType": "uint256", "name": "gemAmt", "type": "uint256" }
     ],
     "name": "buyGem",
-    "outputs": [
-      { "internalType": "uint256", "name": "daiInWad", "type": "uint256" }
-    ],
+    "outputs": [],
     "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      { "internalType": "address", "name": "usr", "type": "address" },
-      { "internalType": "uint256", "name": "gemAmt", "type": "uint256" }
-    ],
-    "name": "buyGemNoFee",
-    "outputs": [
-      { "internalType": "uint256", "name": "daiInWad", "type": "uint256" }
-    ],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "chug",
-    "outputs": [
-      { "internalType": "uint256", "name": "wad", "type": "uint256" }
-    ],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "cut",
-    "outputs": [
-      { "internalType": "uint256", "name": "wad", "type": "uint256" }
-    ],
-    "stateMutability": "view",
     "type": "function"
   },
   {
     "inputs": [],
     "name": "dai",
     "outputs": [
-      { "internalType": "contract GemLike", "name": "", "type": "address" }
+      { "internalType": "contract DaiAbstract", "name": "", "type": "address" }
     ],
     "stateMutability": "view",
     "type": "function"
@@ -264,28 +126,18 @@
     "inputs": [],
     "name": "daiJoin",
     "outputs": [
-      { "internalType": "contract DaiJoinLike", "name": "", "type": "address" }
+      {
+        "internalType": "contract DaiJoinAbstract",
+        "name": "",
+        "type": "address"
+      }
     ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "dec",
-    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
     "stateMutability": "view",
     "type": "function"
   },
   {
     "inputs": [{ "internalType": "address", "name": "usr", "type": "address" }],
     "name": "deny",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [{ "internalType": "address", "name": "usr", "type": "address" }],
-    "name": "diss",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
@@ -301,47 +153,23 @@
     "type": "function"
   },
   {
-    "inputs": [
-      { "internalType": "bytes32", "name": "what", "type": "bytes32" },
-      { "internalType": "address", "name": "data", "type": "address" }
-    ],
-    "name": "file",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "fill",
-    "outputs": [
-      { "internalType": "uint256", "name": "wad", "type": "uint256" }
-    ],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "gem",
-    "outputs": [
-      { "internalType": "contract GemLike", "name": "", "type": "address" }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
     "inputs": [],
     "name": "gemJoin",
-    "outputs": [{ "internalType": "address", "name": "", "type": "address" }],
+    "outputs": [
+      {
+        "internalType": "contract AuthGemJoinAbstract",
+        "name": "",
+        "type": "address"
+      }
+    ],
     "stateMutability": "view",
     "type": "function"
   },
   {
-    "inputs": [],
-    "name": "gush",
-    "outputs": [
-      { "internalType": "uint256", "name": "wad", "type": "uint256" }
-    ],
-    "stateMutability": "view",
+    "inputs": [{ "internalType": "address", "name": "usr", "type": "address" }],
+    "name": "hope",
+    "outputs": [],
+    "stateMutability": "nonpayable",
     "type": "function"
   },
   {
@@ -353,23 +181,9 @@
   },
   {
     "inputs": [{ "internalType": "address", "name": "usr", "type": "address" }],
-    "name": "kiss",
+    "name": "nope",
     "outputs": [],
     "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "live",
-    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "pocket",
-    "outputs": [{ "internalType": "address", "name": "", "type": "address" }],
-    "stateMutability": "view",
     "type": "function"
   },
   {
@@ -380,48 +194,18 @@
     "type": "function"
   },
   {
-    "inputs": [],
-    "name": "rush",
-    "outputs": [
-      { "internalType": "uint256", "name": "wad", "type": "uint256" }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
     "inputs": [
       { "internalType": "address", "name": "usr", "type": "address" },
       { "internalType": "uint256", "name": "gemAmt", "type": "uint256" }
     ],
     "name": "sellGem",
-    "outputs": [
-      { "internalType": "uint256", "name": "daiOutWad", "type": "uint256" }
-    ],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      { "internalType": "address", "name": "usr", "type": "address" },
-      { "internalType": "uint256", "name": "gemAmt", "type": "uint256" }
-    ],
-    "name": "sellGemNoFee",
-    "outputs": [
-      { "internalType": "uint256", "name": "daiOutWad", "type": "uint256" }
-    ],
+    "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
   },
   {
     "inputs": [],
     "name": "tin",
-    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "to18ConversionFactor",
     "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
     "stateMutability": "view",
     "type": "function"
@@ -435,18 +219,9 @@
   },
   {
     "inputs": [],
-    "name": "trim",
-    "outputs": [
-      { "internalType": "uint256", "name": "wad", "type": "uint256" }
-    ],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [],
     "name": "vat",
     "outputs": [
-      { "internalType": "contract VatLike", "name": "", "type": "address" }
+      { "internalType": "contract VatAbstract", "name": "", "type": "address" }
     ],
     "stateMutability": "view",
     "type": "function"

@@ -33,6 +33,9 @@ export function curveV1Merge(or: UnoptimizedRate): UnoptimizedRate {
         lastExchange.swapExchanges[0].poolAddresses!.push(
           s.swapExchanges[0].poolAddresses![0],
         );
+        lastExchange.swapExchanges[0].poolIdentifiers!.push(
+          s.swapExchanges[0].poolIdentifiers![0],
+        );
         lastExchange.swapExchanges[0].data.gasUSD = (
           parseFloat(lastExchange.swapExchanges[0].data.gasUSD) +
           parseFloat(s.swapExchanges[0].data.gasUSD)

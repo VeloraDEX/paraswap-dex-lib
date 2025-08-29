@@ -236,7 +236,7 @@ export class Synthetix extends SimpleExchange implements IDex<SynthetixData> {
             destKey: this.onchainConfigValues.addressToKey[_destAddress],
             exchangeType: isOptimism ? 1 : 0,
           },
-          poolIdentifier: currentIdentifier,
+          poolIdentifiers: [currentIdentifier],
           exchange: this.dexKey,
           gasCost: isSUSDInRoute
             ? SYNTHETIX_GAS_COST_WITH_SUSD

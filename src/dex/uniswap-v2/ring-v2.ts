@@ -285,7 +285,7 @@ export class RingV2 extends UniswapV2 {
             ],
           },
           exchange: this.dexKey,
-          poolIdentifier,
+          poolIdentifiers: [poolIdentifier],
           gasCost: this.poolGasCost,
           poolAddresses: [pairParam.exchange],
         },

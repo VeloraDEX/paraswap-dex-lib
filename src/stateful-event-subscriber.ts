@@ -96,7 +96,6 @@ export abstract class StatefulEventSubscriber<State>
     if (options && options.state) {
       this.setState(options.state, blockNumber, 'initialize_1');
     } else if (options && options.forceRegenerate) {
-      // ZkEVM forces to always regenerate state when it is old
       this.logger.debug(
         `${this.parentName}: ${this.name}: forced to regenerate state`,
       );
@@ -176,6 +175,8 @@ export abstract class StatefulEventSubscriber<State>
         options.initCallback(this.state);
       }
     }
+
+    this.addressesSubscribed = this.addressesSubscribed.filter(a => !!a);
 
     // always subscribeToLogs
     this.dexHelper.blockManager.subscribeToLogs(

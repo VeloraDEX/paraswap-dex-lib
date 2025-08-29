@@ -214,6 +214,11 @@ describe('AaveGsm', function () {
       // We have to check without calling initializePricing, because
       // pool-tracker is not calling that function
       const newAaveGsm = new AaveGsm(network, dexKey, dexHelper);
+
+      if (newAaveGsm.updatePoolState) {
+        await newAaveGsm.updatePoolState();
+      }
+
       const poolLiquidity = await newAaveGsm.getTopPoolsForToken(
         tokens[srcTokenSymbol].address,
         10,
@@ -307,6 +312,11 @@ describe('AaveGsm', function () {
       // We have to check without calling initializePricing, because
       // pool-tracker is not calling that function
       const newAaveGsm = new AaveGsm(network, dexKey, dexHelper);
+
+      if (newAaveGsm.updatePoolState) {
+        await newAaveGsm.updatePoolState();
+      }
+
       const poolLiquidity = await newAaveGsm.getTopPoolsForToken(
         tokens[srcTokenSymbol].address,
         10,
@@ -401,6 +411,11 @@ describe('AaveGsm', function () {
       // We have to check without calling initializePricing, because
       // pool-tracker is not calling that function
       const newAaveGsm = new AaveGsm(network, dexKey, dexHelper);
+
+      if (newAaveGsm.updatePoolState) {
+        await newAaveGsm.updatePoolState();
+      }
+
       const poolLiquidity = await newAaveGsm.getTopPoolsForToken(
         tokens[srcTokenSymbol].address,
         10,
@@ -495,11 +510,19 @@ describe('AaveGsm', function () {
       // We have to check without calling initializePricing, because
       // pool-tracker is not calling that function
       const newAaveGsm = new AaveGsm(network, dexKey, dexHelper);
+
+      if (newAaveGsm.updatePoolState) {
+        await newAaveGsm.updatePoolState();
+      }
+
       const poolLiquidity = await newAaveGsm.getTopPoolsForToken(
         tokens[srcTokenSymbol].address,
         10,
       );
-      console.log(`${srcTokenSymbol} Top Pools:`, poolLiquidity);
+      console.log(
+        `${srcTokenSymbol} Top Pools:`,
+        JSON.stringify(poolLiquidity, null, 2),
+      );
 
       if (!newAaveGsm.hasConstantPriceLargeAmounts) {
         checkPoolsLiquidity(

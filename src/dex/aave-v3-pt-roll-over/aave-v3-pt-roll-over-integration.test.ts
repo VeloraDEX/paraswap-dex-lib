@@ -2,18 +2,13 @@
 import dotenv from 'dotenv';
 dotenv.config();
 
-import { getDexKeysWithNetwork } from '../../utils';
-import {
-  checkPoolPrices,
-  checkPoolsLiquidity,
-  checkConstantPoolPrices,
-} from '../../../tests/utils';
+import { checkPoolPrices, checkPoolsLiquidity } from '../../../tests/utils';
 import { Tokens } from '../../../tests/constants-e2e';
 import { Token } from '../../types';
 import { IDexHelper } from '../../dex-helper/idex-helper';
 import { AaveV3PtRollOverData } from './types';
 
-import { Interface, Result } from '@ethersproject/abi';
+import { Interface } from '@ethersproject/abi';
 import { DummyDexHelper } from '../../dex-helper/dummy-dex-helper';
 import { Network, SwapSide } from '../../constants';
 import { BI_POWS } from '../../bigint-constants';
@@ -41,7 +36,7 @@ const checkOnChainPricing = async (
       // Source market PT to asset rate
       {
         target: oracleAddress,
-        callData: oracleInterface.encodeFunctionData('getPtToAssetRate', [
+        callData: oracleInterface.encodeFunctionData(functionName, [
           data.srcMarketAddress,
           1800, // 30 minutes duration
         ]),
@@ -49,7 +44,7 @@ const checkOnChainPricing = async (
       // Destination market PT to asset rate
       {
         target: oracleAddress,
-        callData: oracleInterface.encodeFunctionData('getPtToAssetRate', [
+        callData: oracleInterface.encodeFunctionData(functionName, [
           data.destMarketAddress,
           1800, // 30 minutes duration
         ]),
@@ -62,11 +57,11 @@ const checkOnChainPricing = async (
 
     // Decode the rates
     const [srcRate] = oracleInterface.decodeFunctionResult(
-      'getPtToAssetRate',
+      functionName,
       result.returnData[0],
     );
     const [destRate] = oracleInterface.decodeFunctionResult(
-      'getPtToAssetRate',
+      functionName,
       result.returnData[1],
     );
 
@@ -82,10 +77,9 @@ const checkOnChainPricing = async (
       if (amount === 0n) {
         expectedPrices.push(0n);
       } else {
+        // Calculate the actual output amount for this input amount
         const outputAmount = (amount * exchangeRate) / BigInt(1e18);
-        // Removed the slippage adjustment (was previously 0.1%)
-        const effectivePrice = (outputAmount * BigInt(1e18)) / amount;
-        expectedPrices.push(effectivePrice);
+        expectedPrices.push(outputAmount);
       }
     }
 
@@ -187,8 +181,8 @@ describe('AaveV3Pendle', function () {
 
     const tokens = Tokens[network];
 
-    const srcTokenSymbol = 'PT-sUSDe-29MAY2025';
-    const destTokenSymbol = 'PT-sUSDe-31JUL2025';
+    const srcTokenSymbol = 'PT-sUSDe-31JUL2025';
+    const destTokenSymbol = 'PT-sUSDe-25SEP2025';
 
     const amountsForSell = [
       0n,
@@ -236,23 +230,22 @@ describe('AaveV3Pendle', function () {
         destTokenSymbol,
         SwapSide.SELL,
         amountsForSell,
-        'getPricesVolume',
+        'getPtToAssetRate',
       );
     });
 
     it('getPoolIdentifiers and getPricesVolume BUY', async function () {
-      // PT rollover only supports SELL side (rolling from expiring PT to new PT)
-      // BUY side is not applicable for this use case
-      const pools = await aaveV3PtRollOver.getPoolIdentifiers(
-        tokens[srcTokenSymbol],
-        tokens[destTokenSymbol],
-        SwapSide.BUY,
+      await testPricingOnNetwork(
+        aaveV3PtRollOver,
+        network,
+        dexKey,
         blockNumber,
+        srcTokenSymbol,
+        destTokenSymbol,
+        SwapSide.BUY,
+        amountsForBuy,
+        'getPtToAssetRate',
       );
-
-      // Should return empty array for BUY side
-      expect(pools.length).toBe(0);
-      console.log('BUY side correctly returns empty pools (expected behavior)');
     });
 
     it('getTopPoolsForToken', async function () {

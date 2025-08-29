@@ -11,7 +11,7 @@ import { Spark } from '../spark';
 import { SDaiConfig } from '../config';
 import { getOnChainState } from '../utils';
 import { Interface } from '@ethersproject/abi';
-import PotAbi from '../../../abi/maker-psm/pot.json';
+import PotAbi from '../../../abi/lite-psm/pot.json';
 
 const network = Network.MAINNET;
 const dexKey = 'Spark';

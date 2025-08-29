@@ -1,0 +1,262 @@
+[
+  {
+    "type": "function",
+    "name": "readFromStorage",
+    "inputs": [
+      {
+        "name": "slot_",
+        "type": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "result_",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "swapSingle",
+    "inputs": [
+      {
+        "name": "dexKey_",
+        "type": "tuple",
+        "components": [
+          { "name": "token0", "type": "address" },
+          { "name": "token1", "type": "address" },
+          { "name": "salt", "type": "bytes32" }
+        ]
+      },
+      { "name": "swap0To1_", "type": "bool" },
+      { "name": "amountSpecified_", "type": "int256" },
+      { "name": "amountLimit_", "type": "uint256" },
+      { "name": "to_", "type": "address" },
+      { "name": "isCallback_", "type": "bool" },
+      { "name": "callbackData_", "type": "bytes" },
+      { "name": "extraData_", "type": "bytes" }
+    ],
+    "outputs": [{ "name": "amountUnspecified_", "type": "uint256" }],
+    "stateMutability": "payable"
+  },
+  {
+    "type": "event",
+    "name": "LogSwap",
+    "inputs": [
+      {
+        "name": "swapData",
+        "type": "uint256",
+        "indexed": false
+      },
+      {
+        "name": "dexVariables",
+        "type": "uint256",
+        "indexed": false
+      }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "LogInitialize",
+    "inputs": [
+      {
+        "name": "dexKey",
+        "type": "tuple",
+        "components": [
+          { "name": "token0", "type": "address" },
+          { "name": "token1", "type": "address" },
+          { "name": "salt", "type": "bytes32" }
+        ],
+        "indexed": false
+      },
+      { "name": "dexId", "type": "bytes8", "indexed": false },
+      { "name": "dexVariables", "type": "uint256", "indexed": false },
+      { "name": "centerPriceShift", "type": "uint256", "indexed": false }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "LogUpdateFeeAndRevenueCut",
+    "inputs": [
+      {
+        "name": "dexKey",
+        "type": "tuple",
+        "components": [
+          { "name": "token0", "type": "address" },
+          { "name": "token1", "type": "address" },
+          { "name": "salt", "type": "bytes32" }
+        ],
+        "indexed": false
+      },
+      { "name": "dexId", "type": "bytes8", "indexed": false },
+      { "name": "dexVariables", "type": "uint256", "indexed": false },
+      { "name": "fee", "type": "uint256", "indexed": false },
+      { "name": "revenueCut", "type": "uint256", "indexed": false }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "LogUpdateRebalancingStatus",
+    "inputs": [
+      {
+        "name": "dexKey",
+        "type": "tuple",
+        "components": [
+          { "name": "token0", "type": "address" },
+          { "name": "token1", "type": "address" },
+          { "name": "salt", "type": "bytes32" }
+        ],
+        "indexed": false
+      },
+      { "name": "dexId", "type": "bytes8", "indexed": false },
+      { "name": "dexVariables", "type": "uint256", "indexed": false },
+      { "name": "rebalancingStatus", "type": "bool", "indexed": false }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "LogUpdateRangePercents",
+    "inputs": [
+      {
+        "name": "dexKey",
+        "type": "tuple",
+        "components": [
+          { "name": "token0", "type": "address" },
+          { "name": "token1", "type": "address" },
+          { "name": "salt", "type": "bytes32" }
+        ],
+        "indexed": false
+      },
+      { "name": "dexId", "type": "bytes8", "indexed": false },
+      { "name": "dexVariables", "type": "uint256", "indexed": false },
+      { "name": "rangeShift", "type": "uint256", "indexed": false },
+      { "name": "upperPercent", "type": "uint256", "indexed": false },
+      { "name": "lowerPercent", "type": "uint256", "indexed": false },
+      { "name": "shiftTime", "type": "uint256", "indexed": false }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "LogUpdateShiftTime",
+    "inputs": [
+      {
+        "name": "dexKey",
+        "type": "tuple",
+        "components": [
+          { "name": "token0", "type": "address" },
+          { "name": "token1", "type": "address" },
+          { "name": "salt", "type": "bytes32" }
+        ],
+        "indexed": false
+      },
+      { "name": "dexId", "type": "bytes8", "indexed": false },
+      { "name": "centerPriceShift", "type": "uint256", "indexed": false },
+      { "name": "shiftTime", "type": "uint256", "indexed": false }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "LogUpdateCenterPriceLimits",
+    "inputs": [
+      {
+        "name": "dexKey",
+        "type": "tuple",
+        "components": [
+          { "name": "token0", "type": "address" },
+          { "name": "token1", "type": "address" },
+          { "name": "salt", "type": "bytes32" }
+        ],
+        "indexed": false
+      },
+      { "name": "dexId", "type": "bytes8", "indexed": false },
+      { "name": "centerPriceShift", "type": "uint256", "indexed": false },
+      { "name": "maxCenterPrice", "type": "uint256", "indexed": false },
+      { "name": "minCenterPrice", "type": "uint256", "indexed": false }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "LogUpdateThresholdPercent",
+    "inputs": [
+      {
+        "name": "dexKey",
+        "type": "tuple",
+        "components": [
+          { "name": "token0", "type": "address" },
+          { "name": "token1", "type": "address" },
+          { "name": "salt", "type": "bytes32" }
+        ],
+        "indexed": false
+      },
+      { "name": "dexId", "type": "bytes8", "indexed": false },
+      { "name": "dexVariables", "type": "uint256", "indexed": false },
+      { "name": "thresholdShift", "type": "uint256", "indexed": false },
+      { "name": "upperThresholdPercent", "type": "uint256", "indexed": false },
+      { "name": "lowerThresholdPercent", "type": "uint256", "indexed": false },
+      { "name": "shiftTime", "type": "uint256", "indexed": false }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "LogUpdateCenterPriceAddress",
+    "inputs": [
+      {
+        "name": "dexKey",
+        "type": "tuple",
+        "components": [
+          { "name": "token0", "type": "address" },
+          { "name": "token1", "type": "address" },
+          { "name": "salt", "type": "bytes32" }
+        ],
+        "indexed": false
+      },
+      { "name": "dexId", "type": "bytes8", "indexed": false },
+      { "name": "dexVariables", "type": "uint256", "indexed": false },
+      { "name": "centerPriceShift", "type": "uint256", "indexed": false },
+      { "name": "centerPriceContract", "type": "uint256", "indexed": false },
+      { "name": "percent", "type": "uint256", "indexed": false },
+      { "name": "time", "type": "uint256", "indexed": false }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "LogDeposit",
+    "inputs": [
+      {
+        "name": "dexKey",
+        "type": "tuple",
+        "components": [
+          { "name": "token0", "type": "address" },
+          { "name": "token1", "type": "address" },
+          { "name": "salt", "type": "bytes32" }
+        ],
+        "indexed": false
+      },
+      { "name": "dexId", "type": "bytes8", "indexed": false },
+      { "name": "dexVariables", "type": "uint256", "indexed": false },
+      { "name": "token0Amount", "type": "uint256", "indexed": false },
+      { "name": "token1Amount", "type": "uint256", "indexed": false }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "LogWithdraw",
+    "inputs": [
+      {
+        "name": "dexKey",
+        "type": "tuple",
+        "components": [
+          { "name": "token0", "type": "address" },
+          { "name": "token1", "type": "address" },
+          { "name": "salt", "type": "bytes32" }
+        ],
+        "indexed": false
+      },
+      { "name": "dexId", "type": "bytes8", "indexed": false },
+      { "name": "dexVariables", "type": "uint256", "indexed": false },
+      { "name": "token0Amount", "type": "uint256", "indexed": false },
+      { "name": "token1Amount", "type": "uint256", "indexed": false }
+    ]
+  }
+]
