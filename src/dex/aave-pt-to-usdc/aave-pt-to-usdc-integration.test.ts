@@ -2,143 +2,214 @@
 import dotenv from 'dotenv';
 dotenv.config();
 
-import { checkPoolsLiquidity } from '../../../tests/utils';
-import { GIFTER_ADDRESS } from '../../../tests/constants-e2e';
-import { Token, ExchangePrices } from '../../types';
-import { AavePtToUsdcData } from './types';
-import { DummyDexHelper } from '../../dex-helper/dummy-dex-helper';
+import { Interface } from '@ethersproject/abi';
+import { DummyDexHelper } from '../../dex-helper/index';
 import { Network, SwapSide } from '../../constants';
+import { BI_POWS } from '../../bigint-constants';
 import { AavePtToUsdc } from './aave-pt-to-usdc';
+import {
+  checkPoolPrices,
+  checkPoolsLiquidity,
+  checkConstantPoolPrices,
+} from '../../../tests/utils';
+import { Tokens } from '../../../tests/constants-e2e';
+import PENDLE_ORACLE_ABI from '../../abi/PendleOracle.json';
 import { AavePtToUsdcConfig } from './config';
 
-const dexKey = 'AavePtToUsdc';
-
-// A simple price check utility
-const checkPricesAreValid = (
-  poolPrices: ExchangePrices<AavePtToUsdcData> | null,
+async function checkOnChainPricing(
+  aavePtToUsdc: AavePtToUsdc,
+  network: Network,
+  dexKey: string,
+  blockNumber: number,
+  prices: bigint[],
   amounts: bigint[],
-) => {
+  side: SwapSide,
+  marketAddress: string,
+) {
+  const oracle = AavePtToUsdcConfig[dexKey][network].oracleAddress;
+  const oracleIface = new Interface(PENDLE_ORACLE_ABI);
+  const callData = oracleIface.encodeFunctionData('getPtToAssetRate', [
+    marketAddress,
+    0,
+  ]);
+
+  const { returnData } = await aavePtToUsdc.dexHelper.multiContract.methods
+    .aggregate([
+      {
+        target: oracle,
+        callData,
+      },
+    ])
+    .call({}, blockNumber);
+
+  const decoded = oracleIface.decodeFunctionResult(
+    'getPtToAssetRate',
+    returnData[0],
+  );
+
+  const rate = BigInt(decoded[0].toString());
+
+  const expected = [0n].concat(
+    amounts
+      .slice(1)
+      .map(a =>
+        side === SwapSide.SELL
+          ? (a * rate) / 10n ** 18n
+          : (a * 10n ** 18n + (rate - 1n)) / rate,
+      ),
+  );
+
+  expect(prices).toEqual(expected);
+}
+
+async function testPricingOnNetwork(
+  aavePtToUsdc: AavePtToUsdc,
+  network: Network,
+  dexKey: string,
+  blockNumber: number,
+  srcTokenSymbol: string,
+  destTokenSymbol: string,
+  side: SwapSide,
+  amounts: bigint[],
+) {
+  const networkTokens = Tokens[network];
+
+  const pools = await aavePtToUsdc.getPoolIdentifiers(
+    networkTokens[srcTokenSymbol],
+    networkTokens[destTokenSymbol],
+    side,
+    blockNumber,
+  );
+  console.log(
+    `${srcTokenSymbol} <> ${destTokenSymbol} Pool Identifiers: `,
+    pools,
+  );
+
+  expect(pools.length).toBeGreaterThan(0);
+
+  const poolPrices = await aavePtToUsdc.getPricesVolume(
+    networkTokens[srcTokenSymbol],
+    networkTokens[destTokenSymbol],
+    amounts,
+    side,
+    blockNumber,
+    pools,
+  );
+  console.log(
+    `${srcTokenSymbol} <> ${destTokenSymbol} Pool Prices: `,
+    poolPrices,
+  );
+
   expect(poolPrices).not.toBeNull();
-  expect(poolPrices!.length).toBeGreaterThan(0);
-  const prices = poolPrices![0].prices;
-  expect(prices.length).toBe(amounts.length);
-  if (prices.length > 1) {
-    expect(prices[1]).toBeGreaterThan(0n);
+  if (aavePtToUsdc.hasConstantPriceLargeAmounts) {
+    checkConstantPoolPrices(poolPrices!, amounts, dexKey);
+  } else {
+    checkPoolPrices(poolPrices!, amounts, side, dexKey);
   }
-};
 
-const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+  await checkOnChainPricing(
+    aavePtToUsdc,
+    network,
+    dexKey,
+    blockNumber,
+    poolPrices![0].prices,
+    amounts,
+    side,
+    poolPrices![0].data.marketAddress,
+  );
+}
 
-const amounts = [0n, 10n * 10n ** 18n];
-const JEST_TIMEOUT = 90000; // 90 seconds, to be safe with delays
+describe('AavePtToUsdc', function () {
+  const dexKey = 'AavePtToUsdc';
+  let blockNumber: number;
+  let aavePtToUsdc: AavePtToUsdc;
 
-describe('AavePtToUsdc', () => {
   describe('Mainnet', () => {
-    let aavePtToUsdc: AavePtToUsdc;
-    let blockNumber = 0;
-    const ptSusdeToken: Token = {
-      address: '0x9f56094c450763769ba0ea9fe2876070c0fd5f77',
-      decimals: 18,
-      symbol: 'PT-sUSDe-25SEP2025',
-    };
-    const ptUsdeToken: Token = {
-      address: '0xbc6736d346a5ebc0debc997397912cd9b8fae10a',
-      decimals: 18,
-      symbol: 'PT-USDe-25SEP2025',
-    };
-    const sUsdeToken: Token = {
-      address: '0x9D39A5DE30e57443BfF2A8307A4256c8797A3497',
-      decimals: 18,
-      symbol: 'sUSDe',
-    };
-    const usdeToken: Token = {
-      address: '0x4c9edd5852cd905f086c759e8383e09bff1e68b3',
-      decimals: 18,
-      symbol: 'USDe',
-    };
+    const network = Network.MAINNET;
+    const dexHelper = new DummyDexHelper(network);
+
+    const tokens = Tokens[network];
+
+    const srcTokenSymbol = 'PT-USDe-25SEP2025';
+    const destTokenSymbol = 'USDE';
+
+    const amountsForSell = [
+      0n,
+      1n * BI_POWS[tokens[srcTokenSymbol].decimals],
+      2n * BI_POWS[tokens[srcTokenSymbol].decimals],
+      3n * BI_POWS[tokens[srcTokenSymbol].decimals],
+      4n * BI_POWS[tokens[srcTokenSymbol].decimals],
+      5n * BI_POWS[tokens[srcTokenSymbol].decimals],
+      6n * BI_POWS[tokens[srcTokenSymbol].decimals],
+      7n * BI_POWS[tokens[srcTokenSymbol].decimals],
+      8n * BI_POWS[tokens[srcTokenSymbol].decimals],
+      9n * BI_POWS[tokens[srcTokenSymbol].decimals],
+      10n * BI_POWS[tokens[srcTokenSymbol].decimals],
+    ];
+
+    const amountsForBuy = [
+      0n,
+      1n * BI_POWS[tokens[destTokenSymbol].decimals],
+      2n * BI_POWS[tokens[destTokenSymbol].decimals],
+      3n * BI_POWS[tokens[destTokenSymbol].decimals],
+      4n * BI_POWS[tokens[destTokenSymbol].decimals],
+      5n * BI_POWS[tokens[destTokenSymbol].decimals],
+      6n * BI_POWS[tokens[destTokenSymbol].decimals],
+      7n * BI_POWS[tokens[destTokenSymbol].decimals],
+      8n * BI_POWS[tokens[destTokenSymbol].decimals],
+      9n * BI_POWS[tokens[destTokenSymbol].decimals],
+      10n * BI_POWS[tokens[destTokenSymbol].decimals],
+    ];
 
     beforeAll(async () => {
-      const network = Network.MAINNET;
-      const rpcUrl =
-        process.env.HTTP_PROVIDER_1 || 'https://eth.public-rpc.com';
-      const dexHelper = new DummyDexHelper(network, rpcUrl);
-      (dexHelper.config as any).data = {
-        ...AavePtToUsdcConfig.AavePtToUsdc[network],
-        network,
-        augustusAddress: GIFTER_ADDRESS,
-      };
+      blockNumber = await dexHelper.web3Provider.eth.getBlockNumber();
       aavePtToUsdc = new AavePtToUsdc(network, dexKey, dexHelper);
-      await aavePtToUsdc.initializePricing(blockNumber);
     });
 
-    beforeEach(async () => {
-      await sleep(8000); // Wait 8 seconds before each test
+    it('getPoolIdentifiers and getPricesVolume SELL', async function () {
+      await testPricingOnNetwork(
+        aavePtToUsdc,
+        network,
+        dexKey,
+        blockNumber,
+        srcTokenSymbol,
+        destTokenSymbol,
+        SwapSide.SELL,
+        amountsForSell,
+      );
     });
 
-    it(
-      'getPoolIdentifiers and getPricesVolume SELL PT -> underlying asset (sUSDe)',
-      async () => {
-        const pools = await aavePtToUsdc.getPoolIdentifiers(
-          ptSusdeToken,
-          sUsdeToken,
-          SwapSide.SELL,
-          blockNumber,
-        );
-        const poolPrices = await aavePtToUsdc.getPricesVolume(
-          ptSusdeToken,
-          sUsdeToken,
-          amounts,
-          SwapSide.SELL,
-          blockNumber,
-          pools,
-        );
-        console.log(
-          `${ptSusdeToken.symbol} <> ${sUsdeToken.symbol} Pool Prices: `,
-          poolPrices,
-        );
-        checkPricesAreValid(poolPrices, amounts);
-      },
-      JEST_TIMEOUT,
-    );
+    it('getPoolIdentifiers and getPricesVolume BUY', async function () {
+      await testPricingOnNetwork(
+        aavePtToUsdc,
+        network,
+        dexKey,
+        blockNumber,
+        srcTokenSymbol,
+        destTokenSymbol,
+        SwapSide.BUY,
+        amountsForBuy,
+      );
+    });
 
-    it(
-      'getTopPoolsForToken',
-      async () => {
-        const poolLiquidity = await aavePtToUsdc.getTopPoolsForToken(
-          ptSusdeToken.address,
-          1,
-        );
-        console.log(`${ptSusdeToken.symbol} Top Pools:`, poolLiquidity);
-        checkPoolsLiquidity(poolLiquidity, ptSusdeToken.address, dexKey);
-      },
-      JEST_TIMEOUT,
-    );
+    it('getTopPoolsForToken', async function () {
+      // We have to check without calling initializePricing, because
+      // pool-tracker is not calling that function
+      const newAavePtToUsdc = new AavePtToUsdc(network, dexKey, dexHelper);
 
-    // Test PT-USDe-25SEP2025
-    it(
-      'PT-USDe-25SEP2025 getPoolIdentifiers and getPricesVolume SELL PT -> underlying asset (USDe)',
-      async () => {
-        const pools = await aavePtToUsdc.getPoolIdentifiers(
-          ptUsdeToken,
-          usdeToken,
-          SwapSide.SELL,
-          blockNumber,
+      const poolLiquidity = await newAavePtToUsdc.getTopPoolsForToken(
+        tokens[srcTokenSymbol].address,
+        10,
+      );
+      console.log(`${srcTokenSymbol} Top Pools:`, poolLiquidity);
+
+      if (!newAavePtToUsdc.hasConstantPriceLargeAmounts) {
+        checkPoolsLiquidity(
+          poolLiquidity,
+          Tokens[network][srcTokenSymbol].address,
+          dexKey,
         );
-        const poolPrices = await aavePtToUsdc.getPricesVolume(
-          ptUsdeToken,
-          usdeToken,
-          amounts,
-          SwapSide.SELL,
-          blockNumber,
-          pools,
-        );
-        console.log(
-          `${ptUsdeToken.symbol} <> ${usdeToken.symbol} Pool Prices: `,
-          poolPrices,
-        );
-        checkPricesAreValid(poolPrices, amounts);
-      },
-      JEST_TIMEOUT,
-    );
+      }
+    });
   });
 });
