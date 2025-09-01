@@ -31,7 +31,7 @@ import {
 } from './encoder';
 import { UniswapV4PoolManager } from './uniswap-v4-pool-manager';
 import { DeepReadonly } from 'ts-essentials';
-import { PoolState } from '../uniswap-v4/types';
+import { PoolState } from './types';
 import { uniswapV4PoolMath } from './contract-math/uniswap-v4-pool-math';
 import { SwapSide } from '@paraswap/core';
 import { queryAvailablePoolsForToken } from './subgraph';
@@ -102,11 +102,7 @@ export class UniswapV4 extends SimpleExchange implements IDex<UniswapV4Data> {
       blockNumber,
     );
 
-    if (!pool) {
-      return false;
-    }
-
-    return true;
+    return Boolean(pool);
   }
 
   async getPoolIdentifiers(
@@ -138,7 +134,6 @@ export class UniswapV4 extends SimpleExchange implements IDex<UniswapV4Data> {
     amounts: bigint[],
     zeroForOne: boolean,
     side: SwapSide,
-    reqId: number,
   ): bigint[] | null {
     try {
       const outputsResult = uniswapV4PoolMath.queryOutputs(
@@ -147,8 +142,6 @@ export class UniswapV4 extends SimpleExchange implements IDex<UniswapV4Data> {
         amounts,
         zeroForOne,
         side,
-        this.logger,
-        reqId,
       );
 
       if (
@@ -177,9 +170,6 @@ export class UniswapV4 extends SimpleExchange implements IDex<UniswapV4Data> {
     blockNumber: number,
     limitPools?: string[],
   ): Promise<ExchangePrices<UniswapV4Data> | null> {
-    const reqId = Math.floor(Math.random() * 10000);
-    // const getPricesVolumeStart = Date.now();
-
     const pools: Pool[] = await this.poolManager.getAvailablePoolsForPair(
       from.address.toLowerCase(),
       to.address.toLowerCase(),
@@ -218,23 +208,7 @@ export class UniswapV4 extends SimpleExchange implements IDex<UniswapV4Data> {
 
       let prices: bigint[] | null;
       if (poolState !== null && poolState.isValid) {
-        // const getOutputsStart = Date.now();
-        prices = this._getOutputs(
-          pool,
-          poolState,
-          amounts,
-          zeroForOne,
-          side,
-          reqId,
-        );
-
-        // this.logger.info(
-        //   `_getOutputs_${pool.id}_${reqId}: ${
-        //     Date.now() - getOutputsStart
-        //   } ms (src: ${from.address}, dest: ${
-        //     to.address
-        //   }, amounts: ${JSON.stringify(amounts)})`,
-        // );
+        prices = this._getOutputs(pool, poolState, amounts, zeroForOne, side);
       } else {
         this.logger.warn(
           `${this.dexKey}-${this.network}: pool ${poolId} state was not found...falling back to rpc`,
@@ -275,22 +249,73 @@ export class UniswapV4 extends SimpleExchange implements IDex<UniswapV4Data> {
         poolAddresses: [this.poolManagerAddress],
         exchange: this.dexKey,
         gasCost: 100_000,
-        poolIdentifier: poolId,
+        poolIdentifiers: [poolId],
       };
     });
 
     const prices = await Promise.all(pricesPromises);
-    // this.logger.info(
-    //   `getPricesVolume_${from.address}_${to.address}_${reqId}: ${
-    //     Date.now() - getPricesVolumeStart
-    //   } ms`,
-    // );
     return prices.filter(res => res !== null);
   }
 
   // Returns estimated gas cost of calldata for this DEX in multiSwap
   getCalldataGasCost(poolPrices: PoolPrices<UniswapV4Data>): number | number[] {
-    return CALLDATA_GAS_COST.DEX_NO_PAYLOAD;
+    if (poolPrices.data.path.length === 1) {
+      return (
+        CALLDATA_GAS_COST.DEX_OVERHEAD +
+        // poolKey -> currency0
+        CALLDATA_GAS_COST.ADDRESS +
+        // poolKey -> currency1
+        CALLDATA_GAS_COST.ADDRESS +
+        // poolKey -> fee
+        CALLDATA_GAS_COST.wordNonZeroBytes(3) +
+        // poolKey -> tickSpacing
+        CALLDATA_GAS_COST.wordNonZeroBytes(3) +
+        //poolKey -> hooks
+        CALLDATA_GAS_COST.ADDRESS +
+        // zeroForOne
+        CALLDATA_GAS_COST.BOOL +
+        // amountIn
+        CALLDATA_GAS_COST.AMOUNT +
+        // amountOutMinimum
+        CALLDATA_GAS_COST.AMOUNT +
+        // hookData
+        CALLDATA_GAS_COST.ZERO_BYTE
+      );
+    } else {
+      return (
+        CALLDATA_GAS_COST.DEX_OVERHEAD +
+        // currency
+        CALLDATA_GAS_COST.ADDRESS +
+        // amount
+        CALLDATA_GAS_COST.AMOUNT +
+        // minAmount
+        CALLDATA_GAS_COST.AMOUNT +
+        //
+        poolPrices.data.path.reduce(step => {
+          return (
+            CALLDATA_GAS_COST.DEX_OVERHEAD +
+            // poolKey -> currency0
+            CALLDATA_GAS_COST.ADDRESS +
+            // poolKey -> currency1
+            CALLDATA_GAS_COST.ADDRESS +
+            // poolKey -> fee
+            CALLDATA_GAS_COST.wordNonZeroBytes(3) +
+            // poolKey -> tickSpacing
+            CALLDATA_GAS_COST.wordNonZeroBytes(3) +
+            //poolKey -> hooks
+            CALLDATA_GAS_COST.ADDRESS +
+            // zeroForOne
+            CALLDATA_GAS_COST.BOOL +
+            // amountIn
+            CALLDATA_GAS_COST.AMOUNT +
+            // amountOutMinimum
+            CALLDATA_GAS_COST.AMOUNT +
+            // hookData
+            CALLDATA_GAS_COST.ZERO_BYTE
+          );
+        }, 0)
+      );
+    }
   }
 
   getAdapters(side: SwapSide): { name: string; index: number }[] | null {

@@ -9,7 +9,7 @@ import {
   DexExchangeParam,
   NumberAsString,
 } from '../../types';
-import { SwapSide, Network } from '../../constants';
+import { SwapSide, Network, UNLIMITED_USD_LIQUIDITY } from '../../constants';
 import * as CALLDATA_GAS_COST from '../../calldata-gas-cost';
 import { IDex } from '../idex';
 import { IDexHelper } from '../../dex-helper/idex-helper';
@@ -134,7 +134,7 @@ export class UsualPP extends SimpleExchange implements IDex<UsualPPData> {
         poolAddresses: [this.config.USD0.address],
         exchange: this.dexKey,
         gasCost: 70000,
-        poolIdentifier: this.dexKey,
+        poolIdentifiers: [`${this.dexKey}_${this.config.USD0.address}`],
       },
     ];
   }
@@ -174,7 +174,7 @@ export class UsualPP extends SimpleExchange implements IDex<UsualPPData> {
         exchange: this.dexKey,
         address: this.config.USD0PP.address,
         connectorTokens: [isUsd0PP ? this.config.USD0 : this.config.USD0PP],
-        liquidityUSD: 1000000000, // Just returning a big number so this DEX will be preferred
+        liquidityUSD: UNLIMITED_USD_LIQUIDITY,
       },
     ];
   }

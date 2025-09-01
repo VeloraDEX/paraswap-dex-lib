@@ -9,7 +9,12 @@ import {
   NumberAsString,
   DexExchangeParam,
 } from '../../types';
-import { SwapSide, Network, NO_USD_LIQUIDITY } from '../../constants';
+import {
+  SwapSide,
+  Network,
+  NO_USD_LIQUIDITY,
+  UNLIMITED_USD_LIQUIDITY,
+} from '../../constants';
 import * as CALLDATA_GAS_COST from '../../calldata-gas-cost';
 import { getDexKeysWithNetwork } from '../../utils';
 import { IDex } from '../../dex/idex';
@@ -220,12 +225,12 @@ export class SkyConverter
               decimals: 18,
               address: this.newToken,
               liquidityUSD: this.config.newToOldFunctionName
-                ? 1000000000
+                ? UNLIMITED_USD_LIQUIDITY
                 : NO_USD_LIQUIDITY,
             },
           ],
           liquidityUSD: this.config.oldToNewFunctionName
-            ? 1000000000
+            ? UNLIMITED_USD_LIQUIDITY
             : NO_USD_LIQUIDITY,
         },
       ];
@@ -241,12 +246,12 @@ export class SkyConverter
               decimals: 18,
               address: this.oldToken,
               liquidityUSD: this.config.oldToNewFunctionName
-                ? 1000000000
+                ? UNLIMITED_USD_LIQUIDITY
                 : NO_USD_LIQUIDITY,
             },
           ],
           liquidityUSD: this.config.newToOldFunctionName
-            ? 1000000000
+            ? UNLIMITED_USD_LIQUIDITY
             : NO_USD_LIQUIDITY,
         },
       ];

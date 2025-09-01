@@ -13,6 +13,7 @@ import {
   Network,
   NULL_ADDRESS,
   NO_USD_LIQUIDITY,
+  UNLIMITED_USD_LIQUIDITY,
 } from '../../constants';
 import * as CALLDATA_GAS_COST from '../../calldata-gas-cost';
 import { getDexKeysWithNetwork } from '../../utils';
@@ -323,7 +324,7 @@ export class AaveV3PtRollOver
         poolAddresses: [srcMarket.address],
         exchange: this.dexKey,
         gasCost: AAVE_V3_PT_ROLL_OVER_GAS_COST,
-        poolIdentifier: this.getPoolIdentifier(srcToken, destToken),
+        poolIdentifiers: [this.getPoolIdentifier(srcToken, destToken)],
       },
     ];
   }
@@ -379,10 +380,12 @@ export class AaveV3PtRollOver
             {
               address: cachedMarket.ptAddress,
               decimals: cachedMarket.ptDecimals,
-              liquidityUSD: isOldPT ? NO_USD_LIQUIDITY : 1000000000,
+              liquidityUSD: isOldPT
+                ? NO_USD_LIQUIDITY
+                : UNLIMITED_USD_LIQUIDITY,
             },
           ],
-          liquidityUSD: isOldPT ? 1000000000 : NO_USD_LIQUIDITY,
+          liquidityUSD: isOldPT ? UNLIMITED_USD_LIQUIDITY : NO_USD_LIQUIDITY,
         });
       }
     }

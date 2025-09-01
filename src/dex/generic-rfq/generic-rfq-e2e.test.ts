@@ -1,14 +1,15 @@
 import dotenv from 'dotenv';
 dotenv.config();
 
-import { Network, ContractMethod, SwapSide } from '../../constants';
-import { generateConfig } from '../../config';
-import { newTestE2E, getEnv } from '../../../tests/utils-e2e';
 import {
-  GENERIC_ADDR1,
-  GENERIC_ADDR2,
-  Tokens,
-} from '../../../tests/constants-e2e';
+  Network,
+  ContractMethod,
+  SwapSide,
+  NULL_ADDRESS,
+} from '../../constants';
+import { generateConfig } from '../../config';
+import { testE2E, getEnv } from '../../../tests/utils-e2e';
+import { Tokens } from '../../../tests/constants-e2e';
 import { RFQConfig } from './types';
 import { testConfig } from './e2e-test-config';
 
@@ -74,8 +75,6 @@ const buildConfigForGenericRFQ = (): RFQConfig => {
   };
 };
 
-const SKIP_TENDERLY =
-  (process.env.GENERIC_RFQ_SKIP_TENDERLY ?? 'true') === 'true';
 const dexKey = 'YOUR_NAME';
 
 describe(`GenericRFQ ${dexKey} E2E`, () => {
@@ -96,20 +95,22 @@ describe(`GenericRFQ ${dexKey} E2E`, () => {
             : ContractMethod.swapOnAugustusRFQTryBatchFill;
         describe(`${contractMethod}`, () => {
           it(`${testCase.swapSide} ${testCase.srcToken} -> ${testCase.destToken}`, async () => {
-            await newTestE2E({
-              config,
+            await testE2E(
               srcToken,
               destToken,
-              senderAddress: GENERIC_ADDR1,
-              thirdPartyAddress: GENERIC_ADDR2,
-              _amount: testCase.amount,
-              swapSide: testCase.swapSide as SwapSide,
-              dexKeys: [dexKey],
+              NULL_ADDRESS,
+              testCase.amount,
+              testCase.swapSide as SwapSide,
+              [dexKey],
               contractMethod,
               network,
-              sleepMs: 5000,
-              skipTenderly: SKIP_TENDERLY,
-            });
+              undefined,
+              undefined,
+              undefined,
+              undefined,
+              undefined,
+              5000, // sleep for 5 seconds
+            );
           });
         });
       }

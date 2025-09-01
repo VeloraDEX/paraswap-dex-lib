@@ -293,11 +293,9 @@ export class AlgebraIntegral
             },
           ],
         },
-        poolIdentifier: this.getPoolIdentifier(
-          pool.token0,
-          pool.token1,
-          pool.deployer,
-        ),
+        poolIdentifiers: [
+          this.getPoolIdentifier(pool.token0, pool.token1, pool.deployer),
+        ],
         exchange: this.dexKey,
         gasCost: ALGEBRA_GAS_COST,
         poolAddresses: [pool.poolAddress],

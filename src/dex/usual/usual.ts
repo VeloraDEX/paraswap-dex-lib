@@ -112,7 +112,7 @@ export class Usual extends SimpleExchange implements IDex<UsualBondData> {
         poolAddresses: [this.config.toToken.address],
         exchange: this.dexKey,
         gasCost: 70000,
-        poolIdentifier: this.dexKey,
+        poolIdentifiers: [`${this.dexKey}_${this.config.toToken.address}`],
       },
     ];
   }

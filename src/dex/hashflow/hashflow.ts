@@ -509,11 +509,9 @@ export class Hashflow extends SimpleExchange implements IDex<HashflowData> {
           },
           prices,
           unit: unitPrice,
-          poolIdentifier: this.getPoolIdentifier(
-            _srcToken.address,
-            _destToken.address,
-            mm,
-          ),
+          poolIdentifiers: [
+            this.getPoolIdentifier(_srcToken.address, _destToken.address, mm),
+          ],
           poolAddresses: [this.routerAddress],
         } as PoolPrices<HashflowData>;
       });

@@ -605,79 +605,7 @@ describe('CurveV1Factory', function () {
       }
     });
   });
-  describe('Fantom', () => {
-    const network = Network.FANTOM;
-    const dexHelper = new DummyDexHelper(network);
 
-    const tokens = Tokens[network];
-
-    const srcTokenSymbol = 'TOR';
-    const destTokenSymbol = 'USDC';
-
-    const amountsForSell = [
-      0n,
-      1n * BI_POWS[tokens[srcTokenSymbol].decimals],
-      2n * BI_POWS[tokens[srcTokenSymbol].decimals],
-      3n * BI_POWS[tokens[srcTokenSymbol].decimals],
-      4n * BI_POWS[tokens[srcTokenSymbol].decimals],
-      5n * BI_POWS[tokens[srcTokenSymbol].decimals],
-      6n * BI_POWS[tokens[srcTokenSymbol].decimals],
-      7n * BI_POWS[tokens[srcTokenSymbol].decimals],
-      8n * BI_POWS[tokens[srcTokenSymbol].decimals],
-      9n * BI_POWS[tokens[srcTokenSymbol].decimals],
-      10n * BI_POWS[tokens[srcTokenSymbol].decimals],
-    ];
-
-    beforeAll(async () => {
-      blockNumber = await dexHelper.web3Provider.eth.getBlockNumber();
-      // @ts-expect-error for testing there is dummy blocknumber, but it is not
-      // part of the interface
-      dexHelper.blockManager._blockNumber = blockNumber;
-      curveV1Factory = new CurveV1Factory(network, dexKey, dexHelper);
-      if (curveV1Factory.initializePricing) {
-        await curveV1Factory.initializePricing(blockNumber);
-      }
-    });
-
-    afterAll(() => {
-      if (curveV1Factory) curveV1Factory.releaseResources();
-    });
-
-    it('getPoolIdentifiers and getPricesVolume SELL', async function () {
-      await testPricingOnNetwork(
-        curveV1Factory,
-        network,
-        dexKey,
-        blockNumber,
-        srcTokenSymbol,
-        destTokenSymbol,
-        SwapSide.SELL,
-        amountsForSell,
-      );
-    });
-
-    it('getTopPoolsForToken', async function () {
-      // We have to check without calling initializePricing, because
-      // pool-tracker is not calling that function
-      const newCurveV1Factory = new CurveV1Factory(network, dexKey, dexHelper);
-      if (newCurveV1Factory.updatePoolState) {
-        await newCurveV1Factory.updatePoolState();
-      }
-      const poolLiquidity = await newCurveV1Factory.getTopPoolsForToken(
-        tokens[srcTokenSymbol].address,
-        10,
-      );
-      console.log(`${srcTokenSymbol} Top Pools:`, poolLiquidity);
-
-      if (!newCurveV1Factory.hasConstantPriceLargeAmounts) {
-        checkPoolsLiquidity(
-          poolLiquidity,
-          Tokens[network][srcTokenSymbol].address,
-          dexKey,
-        );
-      }
-    });
-  });
   describe('Arbitrum', () => {
     const network = Network.ARBITRUM;
     const dexHelper = new DummyDexHelper(network);

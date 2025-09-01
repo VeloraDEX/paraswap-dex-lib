@@ -429,7 +429,7 @@ export class SwaapV2 extends SimpleExchange implements IDex<SwaapV2Data> {
           data: {},
           prices,
           unit: unitPrice === undefined ? 0n : unitPrice,
-          poolIdentifier: requestedPoolIdentifier,
+          poolIdentifiers: [requestedPoolIdentifier],
         } as PoolPrices<SwaapV2Data>;
       });
 

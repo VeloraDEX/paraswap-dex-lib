@@ -2,44 +2,36 @@
 import dotenv from 'dotenv';
 dotenv.config();
 
+import { testEventSubscriber } from '../../../tests/utils-events';
 import { Network } from '../../constants';
 import { DummyDexHelper } from '../../dex-helper/index';
-import { testEventSubscriber } from '../../../tests/utils-events';
-import {
-  findNearestInitializedTickIndex,
-  PoolConfig,
-  PoolKey,
-  PoolState,
-} from './pools/pool-utils';
 import { EkuboConfig } from './config';
-import { Contract } from 'ethers';
-import CoreABI from '../../abi/ekubo/core.json';
-import DataFetcherABI from '../../abi/ekubo/data-fetcher.json';
-import { Interface } from '@ethersproject/abi';
-import { BasePool } from './pools/base-pool';
-import { OraclePool } from './pools/oracle-pool';
+import {
+  BasePool,
+  BasePoolState,
+  findNearestInitializedTickIndex,
+} from './pools/base';
+import { EkuboPool } from './pools/iface';
+import { OraclePool } from './pools/oracle';
+import { TwammPool } from './pools/twamm';
+import { PoolConfig, PoolKey } from './pools/utils';
+import { contractsFromDexParams } from './utils';
 
 jest.setTimeout(50 * 1000);
 
-async function fetchPoolState(
-  pool: BasePool,
-  blockNumber: number,
-): Promise<PoolState.Object> {
-  return pool.generateState(blockNumber) as Promise<PoolState.Object>;
+type EventMappings = Record<string, [EkuboPool<unknown>[], number][]>;
+
+// Rather incomplete but only used for tests
+function isBasePoolState(value: unknown): value is BasePoolState.Object {
+  return typeof value === 'object' && value !== null && 'sortedTicks' in value;
 }
 
-type EventMappings = Record<
-  string,
-  [
-    {
-      pool: typeof BasePool;
-      key: PoolKey;
-    }[],
-    number,
-  ][]
->;
+function stateCompare(actual: unknown, expected: unknown) {
+  if (!isBasePoolState(actual) || !isBasePoolState(expected)) {
+    expect(actual).toStrictEqual(expected);
+    return;
+  }
 
-function stateCompare(actual: PoolState.Object, expected: PoolState.Object) {
   const [lowCheckedTickActual, highCheckedTickActual] =
     actual.checkedTicksBounds;
   const [lowCheckedTickExpected, highCheckedTickExpected] =
@@ -128,15 +120,9 @@ const dexKey = 'Ekubo';
 
 describe('Ekubo Mainnet', function () {
   const network = Network.MAINNET;
-  const config = EkuboConfig[dexKey][network];
   const dexHelper = new DummyDexHelper(network);
-  const core = new Contract(config.core, CoreABI, dexHelper.provider);
-  const coreIface = new Interface(CoreABI);
-  const dataFetcher = new Contract(
-    config.dataFetcher,
-    DataFetcherABI,
-    dexHelper.provider,
-  );
+  const config = EkuboConfig[dexKey][network];
+  const contracts = contractsFromDexParams(config, dexHelper.provider);
   const logger = dexHelper.getLogger(dexKey);
 
   const baseEthUsdcPoolKey = new PoolKey(
@@ -151,25 +137,49 @@ describe('Ekubo Mainnet', function () {
     new PoolConfig(0, 0n, BigInt(config.oracle)),
   );
 
+  const twammEthUsdcPoolKey = new PoolKey(
+    0n,
+    0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48n,
+    new PoolConfig(0, 9223372036854775n, BigInt(config.twamm)),
+  );
+
+  const commonArgs = [dexKey, dexHelper, logger, contracts] as const;
+
+  function newPool<S>(
+    constructor: {
+      new (...args: [...typeof commonArgs, PoolKey]): EkuboPool<S>;
+    },
+    poolKey: PoolKey,
+  ): EkuboPool<unknown> {
+    return new constructor(...commonArgs, poolKey) as EkuboPool<unknown>;
+  }
+
   const eventsToTest: EventMappings = {
     Swapped: [
       [
-        [
-          {
-            pool: BasePool,
-            key: baseEthUsdcPoolKey,
-          },
-        ],
+        [newPool(BasePool, baseEthUsdcPoolKey)],
         22048500, // https://etherscan.io/tx/0xc401cc3007a2c0efd705c4c0dee5690ce8592858476b32cda8a4b000ceda0f24
       ],
       [
-        [
-          {
-            pool: OraclePool,
-            key: oracleUsdcPoolKey,
-          },
-        ],
+        [newPool(OraclePool, oracleUsdcPoolKey)],
         22063200, // https://etherscan.io/tx/0xe689fb49b9627504d014a9b4663a6f0ec38ebfdc5642e261bb4bcd229d58206d
+      ],
+      // Here we implicitly also test the VirtualOrdersExecuted event
+      [
+        [newPool(TwammPool, twammEthUsdcPoolKey)],
+        22281995, // https://etherscan.io/tx/0xc3ad7616eb5c9aeef51a49e2ce9c945778387f3110f9f66916f38db4d551ac05
+      ],
+    ],
+    OrderUpdated: [
+      [
+        [newPool(TwammPool, twammEthUsdcPoolKey)],
+        22232621, // https://etherscan.io/tx/0x99479c8426fb328ec3245c625fb7edfbb4bb4dd2a2fbfcd027fc513962cca193
+      ],
+    ],
+    VirtualOrdersExecuted: [
+      [
+        [newPool(TwammPool, twammEthUsdcPoolKey)],
+        22995949, // https://etherscan.io/tx/0xbc9390f6712296bceed6efa909e61f943fbf897412d3cd8d491120706fadcde1
       ],
     ],
   };
@@ -178,23 +188,12 @@ describe('Ekubo Mainnet', function () {
     describe(eventName, () => {
       for (const [pools, blockNumber] of eventDetails) {
         describe(blockNumber, () => {
-          for (const { pool: constructor, key } of pools) {
-            it(`State of ${key.string_id}`, async function () {
-              const pool = new constructor(
-                dexKey,
-                network,
-                dexHelper,
-                logger,
-                coreIface,
-                dataFetcher,
-                key,
-                core,
-              );
-
+          for (const pool of pools) {
+            it(`State of ${pool.key.string_id}`, async function () {
               await testEventSubscriber(
                 pool,
                 pool.addressesSubscribed,
-                (blockNumber: number) => fetchPoolState(pool, blockNumber),
+                async (blockNumber: number) => pool.generateState(blockNumber),
                 blockNumber,
                 `${dexKey}_${pool.key.string_id}`,
                 dexHelper.provider,

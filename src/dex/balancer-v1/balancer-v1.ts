@@ -269,7 +269,7 @@ export class BalancerV1
         poolAddresses: [p.poolInfo.id],
         exchange: this.dexKey,
         gasCost: BALANCER_SWAP_GAS_COST,
-        poolIdentifier: `${this.dexKey}_${p.poolInfo.id}`,
+        poolIdentifiers: [`${this.dexKey}_${p.poolInfo.id}`],
       };
     });
   }

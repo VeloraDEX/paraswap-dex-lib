@@ -8,8 +8,6 @@ import { DummyDexHelper } from '../../dex-helper/index';
 import { testEventSubscriber } from '../../../tests/utils-events';
 import { SparkSDaiPoolState } from './types';
 
-import PotAbi from '../../abi/maker-psm/pot.json';
-import { Interface } from '@ethersproject/abi';
 import _ from 'lodash';
 import { sUSDSPsmConfig } from './spark-psm';
 

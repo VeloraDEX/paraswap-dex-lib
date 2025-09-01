@@ -535,7 +535,7 @@ export class Dexalot extends SimpleExchange implements IDex<DexalotData> {
           prices,
           unit: BigInt(outDecimals),
           data: {},
-          poolIdentifier: poolIdentifier,
+          poolIdentifiers: [poolIdentifier],
           exchange: this.dexKey,
           gasCost: DEXALOT_GAS_COST,
           poolAddresses: [this.mainnetRFQAddress],

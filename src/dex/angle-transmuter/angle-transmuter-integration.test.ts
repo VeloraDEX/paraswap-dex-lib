@@ -13,12 +13,11 @@ import {
   checkConstantPoolPrices,
 } from '../../../tests/utils';
 import { Tokens } from '../../../tests/constants-e2e';
-import { Address } from '../../types';
-import { SmartTokenParams } from '../../../tests/smart-tokens';
+import { Address, Token } from '../../types';
 import { TransmuterSubscriber } from './transmuter';
 import { AngleTransmuterConfig } from './config';
 
-export type Collateral = { [stablecoin: string]: SmartTokenParams[] };
+export type Collateral = { [stablecoin: string]: Token[] };
 
 /*
   README
@@ -187,7 +186,7 @@ describe('AngleTransmuter', () => {
 
   const networks = [Network.MAINNET, Network.ARBITRUM, Network.BASE];
   // const networks = [Network.MAINNET];
-  const stablesPerNetwork: { [network: number]: SmartTokenParams[] } = {
+  const stablesPerNetwork: { [network: number]: Token[] } = {
     [Network.MAINNET]: [
       Tokens[Network.MAINNET].EURA,
       Tokens[Network.MAINNET].USDA,
@@ -196,7 +195,7 @@ describe('AngleTransmuter', () => {
     [Network.BASE]: [Tokens[Network.BASE].USDA],
   };
   const collateralsPerNetwork: {
-    [network: number]: { [stable: string]: SmartTokenParams[] };
+    [network: number]: { [stable: string]: Token[] };
   } = {
     [Network.MAINNET]: {
       USDA: [

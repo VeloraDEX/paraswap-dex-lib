@@ -537,11 +537,9 @@ export class PancakeswapV3
             },
           ],
         },
-        poolIdentifier: this.getPoolIdentifier(
-          pool.token0,
-          pool.token1,
-          pool.feeCode,
-        ),
+        poolIdentifiers: [
+          this.getPoolIdentifier(pool.token0, pool.token1, pool.feeCode),
+        ],
         exchange: this.dexKey,
         gasCost: prices.map(p => (p === 0n ? 0 : PANCAKESWAPV3_QUOTE_GASLIMIT)),
         poolAddresses: [pool.poolAddress],
@@ -659,7 +657,7 @@ export class PancakeswapV3
         _destToken,
         amounts,
         side,
-        this.network === Network.ZKEVM ? [] : poolsToUse.poolWithoutState,
+        poolsToUse.poolWithoutState,
       );
 
       const states = poolsToUse.poolWithState.map(
@@ -740,11 +738,9 @@ export class PancakeswapV3
                 },
               ],
             },
-            poolIdentifier: this.getPoolIdentifier(
-              pool.token0,
-              pool.token1,
-              pool.feeCode,
-            ),
+            poolIdentifiers: [
+              this.getPoolIdentifier(pool.token0, pool.token1, pool.feeCode),
+            ],
             exchange: this.dexKey,
             gasCost: gasCost,
             poolAddresses: [pool.poolAddress],

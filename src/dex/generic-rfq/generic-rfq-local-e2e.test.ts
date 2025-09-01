@@ -2,10 +2,15 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 import { ethers } from 'ethers';
-import { Network, ContractMethod, SwapSide, MAX_UINT } from '../../constants';
+import {
+  Network,
+  ContractMethod,
+  SwapSide,
+  NULL_ADDRESS,
+} from '../../constants';
 import { generateConfig } from '../../config';
-import { newTestE2E } from '../../../tests/utils-e2e';
-import { GENERIC_ADDR1, Tokens } from '../../../tests/constants-e2e';
+import { testE2E } from '../../../tests/utils-e2e';
+import { Tokens } from '../../../tests/constants-e2e';
 import { startTestServer } from './example-api.test';
 
 const PK_KEY = process.env.TEST_PK_KEY;
@@ -38,63 +43,55 @@ describe('GenericRFQ E2E Mainnet', () => {
 
     describe('Simpleswap', () => {
       it('SELL WETH -> DAI', async () => {
-        await newTestE2E({
-          config,
+        await testE2E(
           srcToken,
           destToken,
-          senderAddress: GENERIC_ADDR1,
-          thirdPartyAddress: testAccount.address,
-          _amount: '1000000000000000000',
-          swapSide: SwapSide.SELL,
-          dexKeys: dexKey,
-          contractMethod: ContractMethod.simpleSwap,
-          network: network,
-        });
+          NULL_ADDRESS,
+          '1000000000000000000',
+          SwapSide.SELL,
+          dexKey,
+          ContractMethod.simpleSwap,
+          network,
+        );
       });
 
       it('SELL DAI -> WETH', async () => {
-        await newTestE2E({
-          config,
+        await testE2E(
           destToken,
           srcToken,
-          senderAddress: GENERIC_ADDR1,
-          thirdPartyAddress: testAccount.address,
-          _amount: '1000000000000000000',
-          swapSide: SwapSide.SELL,
-          dexKeys: dexKey,
-          contractMethod: ContractMethod.simpleSwap,
-          network: network,
-        });
+          NULL_ADDRESS,
+          '1000000000000000000',
+          SwapSide.SELL,
+          dexKey,
+          ContractMethod.simpleSwap,
+          network,
+        );
       });
 
       it('BUY WETH -> DAI', async () => {
-        await newTestE2E({
-          config,
+        await testE2E(
           srcToken,
           destToken,
-          senderAddress: GENERIC_ADDR1,
-          thirdPartyAddress: testAccount.address,
-          _amount: '1000000000000000000',
-          swapSide: SwapSide.BUY,
-          dexKeys: dexKey,
-          contractMethod: ContractMethod.simpleBuy,
-          network: network,
-        });
+          NULL_ADDRESS,
+          '1000000000000000000',
+          SwapSide.BUY,
+          dexKey,
+          ContractMethod.simpleBuy,
+          network,
+        );
       });
 
       it('BUY DAI -> WETH', async () => {
-        await newTestE2E({
-          config,
+        await testE2E(
           destToken,
           srcToken,
-          senderAddress: GENERIC_ADDR1,
-          thirdPartyAddress: testAccount.address,
-          _amount: '1000000000000000000',
-          swapSide: SwapSide.BUY,
-          dexKeys: dexKey,
-          contractMethod: ContractMethod.simpleBuy,
-          network: network,
-        });
+          NULL_ADDRESS,
+          '1000000000000000000',
+          SwapSide.BUY,
+          dexKey,
+          ContractMethod.simpleBuy,
+          network,
+        );
       });
     });
   });

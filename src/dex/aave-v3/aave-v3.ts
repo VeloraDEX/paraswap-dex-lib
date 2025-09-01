@@ -15,6 +15,7 @@ import {
   Network,
   NULL_ADDRESS,
   ETHER_ADDRESS,
+  UNLIMITED_USD_LIQUIDITY,
 } from '../../constants';
 import * as CALLDATA_GAS_COST from '../../calldata-gas-cost';
 import { getDexKeysWithNetwork, isETHAddress, getBigIntPow } from '../../utils';
@@ -335,12 +336,14 @@ export class AaveV3 extends SimpleExchange implements IDex<Data, Param> {
     );
   }
 
+  async updatePoolState(): Promise<void> {
+    await this.initializeTokens();
+  }
+
   async getTopPoolsForToken(
     tokenAddress: Address,
     limit: number,
   ): Promise<PoolLiquidity[]> {
-    // only for aToken <=> underlying token
-    await this.initializeTokens();
     const address = tokenAddress.toLowerCase();
 
     const token = TokensByAddress[this.network][this.dexKey][address];
@@ -363,7 +366,7 @@ export class AaveV3 extends SimpleExchange implements IDex<Data, Param> {
                 decimals: token.decimals,
               },
         ],
-        liquidityUSD: 10 ** 9,
+        liquidityUSD: UNLIMITED_USD_LIQUIDITY,
       },
     ];
   }

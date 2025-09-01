@@ -24,6 +24,7 @@ export function balancerV1Merge(or: UnoptimizedRate): UnoptimizedRate {
       destAmount: '0',
       percent: 0,
       poolAddresses: [],
+      poolIdentifiers: [],
       data: {
         swaps: new Array<BalancerSwap>(),
         gasUSD: '0',
@@ -52,6 +53,7 @@ export function balancerV1Merge(or: UnoptimizedRate): UnoptimizedRate {
           maxPrice: MAX_UINT,
         });
         newBalancer.poolAddresses!.push(s.poolAddresses![0]);
+        newBalancer.poolIdentifiers!.push(s.poolIdentifiers![0]);
       } else {
         optimizedSwap.push(_s);
       }

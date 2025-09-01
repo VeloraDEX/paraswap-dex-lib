@@ -13,6 +13,7 @@ import { GyroECLPImmutableString } from './gyroECLPPool';
 import { ReClammApiName } from './reClammPool';
 interface PoolToken {
   address: string;
+  index: number;
   weight: string | null;
   canUseBufferForSwaps: boolean | null;
   underlyingToken: {
@@ -72,6 +73,7 @@ function createQuery(
         version
         poolTokens {
           address
+          index
           weight
           canUseBufferForSwaps
           underlyingToken {
@@ -127,16 +129,21 @@ function toImmutablePoolStateMap(
             ? 'RECLAMM_V2'
             : pool.type;
 
+        // Sort pool tokens by index in ascending order
+        const sortedPoolTokens = [...pool.poolTokens].sort(
+          (a, b) => a.index - b.index,
+        );
+
         const immutablePoolState: CommonImmutablePoolState = {
           poolAddress: pool.id,
           version: pool.version,
-          tokens: pool.poolTokens.map(t => t.address),
-          tokensUnderlying: pool.poolTokens.map(t =>
+          tokens: sortedPoolTokens.map(t => t.address),
+          tokensUnderlying: sortedPoolTokens.map(t =>
             t.underlyingToken && t.canUseBufferForSwaps
               ? t.underlyingToken.address
               : null,
           ),
-          weights: pool.poolTokens.map(t => scaleOrDefault(t.weight, 18, 0n)),
+          weights: sortedPoolTokens.map(t => scaleOrDefault(t.weight, 18, 0n)),
           poolType: poolType,
           hookAddress: getHookAddress(pool.hook, poolType),
           hookType: getHookType(pool.hook, poolType, hooksConfigMap),
