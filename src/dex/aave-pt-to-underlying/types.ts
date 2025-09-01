@@ -1,6 +1,6 @@
 import { Address } from '../../types';
 
-export type AavePtToUsdcData = {
+export type AavePtToUnderlyingData = {
   marketAddress: Address;
 };
 

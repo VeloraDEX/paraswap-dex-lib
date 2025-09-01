@@ -108,7 +108,7 @@ import { UniswapV4 } from './uniswap-v4/uniswap-v4';
 import { PancakeSwapV2 } from './uniswap-v2/pancake-swap-v2';
 import { uniswapV4Merge } from './uniswap-v4/optimizer';
 import { AaveV3PtRollOver } from './aave-v3-pt-roll-over/aave-v3-pt-roll-over';
-import { AavePtToUsdc } from './aave-pt-to-usdc/aave-pt-to-usdc';
+import { AavePtToUnderlying } from './aave-pt-to-underlying/aave-pt-to-underlying';
 import { RingV2 } from './uniswap-v2/ring-v2';
 import { UsdcTransmuter } from './usdc-transmuter/usdc-transmuter';
 import { BunniV2 } from './bunni-v2/bunni-v2';
@@ -196,7 +196,7 @@ const Dexes = [
   AaveV3Stata,
   AaveV3StataV2,
   AaveV3PtRollOver,
-  AavePtToUsdc,
+  AavePtToUnderlying,
   OSwap,
   ConcentratorArusd,
   FxProtocolRusd,

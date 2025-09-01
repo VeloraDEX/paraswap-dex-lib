@@ -17,17 +17,17 @@ import * as CALLDATA_GAS_COST from '../../calldata-gas-cost';
 import { getBigIntPow, getDexKeysWithNetwork } from '../../utils';
 import { Context, IDex } from '../../dex/idex';
 import { IDexHelper } from '../../dex-helper/idex-helper';
-import { AavePtToUsdcData, DexParams, SupportedPt } from './types';
+import { AavePtToUnderlyingData, DexParams, SupportedPt } from './types';
 import { SimpleExchange } from '../simple-exchange';
-import { AavePtToUsdcConfig } from './config';
+import { AavePtToUnderlyingConfig } from './config';
 import { Interface } from '@ethersproject/abi';
 import PENDLE_ORACLE_ABI from '../../abi/PendleOracle.json';
 import { AAVE_PT_TO_UNDERLYING_GAS_COST, PENDLE_API_URL } from './constants';
 import { DexExchangeParam } from '../../types';
 
-export class AavePtToUsdc
+export class AavePtToUnderlying
   extends SimpleExchange
-  implements IDex<AavePtToUsdcData>
+  implements IDex<AavePtToUnderlyingData>
 {
   readonly hasConstantPriceLargeAmounts = false;
   readonly needWrapNative = false;
@@ -40,7 +40,7 @@ export class AavePtToUsdc
   logger: Logger;
 
   public static dexKeysWithNetwork: { key: string; networks: Network[] }[] =
-    getDexKeysWithNetwork(AavePtToUsdcConfig);
+    getDexKeysWithNetwork(AavePtToUnderlyingConfig);
 
   constructor(
     readonly network: Network,
@@ -48,7 +48,7 @@ export class AavePtToUsdc
     readonly dexHelper: IDexHelper,
   ) {
     super(dexHelper, dexKey);
-    this.config = AavePtToUsdcConfig[dexKey][network];
+    this.config = AavePtToUnderlyingConfig[dexKey][network];
     this.logger = dexHelper.getLogger(dexKey);
     this.oracleInterface = new Interface(PENDLE_ORACLE_ABI);
     this.supportedMarkets = this.config.supportedPts;
@@ -133,7 +133,7 @@ export class AavePtToUsdc
     side: SwapSide,
     blockNumber: number,
     limitPools?: string[],
-  ): Promise<ExchangePrices<AavePtToUsdcData> | null> {
+  ): Promise<ExchangePrices<AavePtToUnderlyingData> | null> {
     const market = this.getMarketByPtToken(srcToken.address);
 
     if (!market) {
@@ -189,7 +189,7 @@ export class AavePtToUsdc
     destToken: string,
     srcAmount: string,
     destAmount: string,
-    data: AavePtToUsdcData,
+    data: AavePtToUnderlyingData,
     side: SwapSide,
   ): AdapterExchangeParam {
     const payload = '0x';
@@ -232,7 +232,7 @@ export class AavePtToUsdc
     srcAmount: NumberAsString,
     destAmount: NumberAsString,
     recipient: Address,
-    data: AavePtToUsdcData,
+    data: AavePtToUnderlyingData,
     side: SwapSide,
     context: Context,
     executorAddress: Address,

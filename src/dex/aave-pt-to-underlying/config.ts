@@ -12,8 +12,8 @@ const ORACLE_ADDRESS = '0x9a9Fa8338dd5E5B2188006f1Cd2Ef26d921650C2';
 // sUSDe: https://etherscan.io/address/0x9d39a5de30e57443bff2a8307a4256c8797a3497
 // USDe: https://etherscan.io/address/0x4c9edd5852cd905f086c759e8383e09bff1e68b3
 
-export const AavePtToUsdcConfig: DexConfigMap<DexParams> = {
-  AavePtToUsdc: {
+export const AavePtToUnderlyingConfig: DexConfigMap<DexParams> = {
+  AavePtToUnderlying: {
     [Network.MAINNET]: {
       pendleRouterAddress: PENDLE_ROUTER_ADDRESS,
       oracleAddress: ORACLE_ADDRESS,

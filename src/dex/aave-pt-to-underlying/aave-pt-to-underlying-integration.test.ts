@@ -6,7 +6,7 @@ import { Interface } from '@ethersproject/abi';
 import { DummyDexHelper } from '../../dex-helper/index';
 import { Network, SwapSide } from '../../constants';
 import { BI_POWS } from '../../bigint-constants';
-import { AavePtToUsdc } from './aave-pt-to-usdc';
+import { AavePtToUnderlying } from './aave-pt-to-underlying';
 import {
   checkPoolPrices,
   checkPoolsLiquidity,
@@ -14,10 +14,10 @@ import {
 } from '../../../tests/utils';
 import { Tokens } from '../../../tests/constants-e2e';
 import PENDLE_ORACLE_ABI from '../../abi/PendleOracle.json';
-import { AavePtToUsdcConfig } from './config';
+import { AavePtToUnderlyingConfig } from './config';
 
 async function checkOnChainPricing(
-  aavePtToUsdc: AavePtToUsdc,
+  aavePtToUnderlying: AavePtToUnderlying,
   network: Network,
   dexKey: string,
   blockNumber: number,
@@ -26,21 +26,22 @@ async function checkOnChainPricing(
   side: SwapSide,
   marketAddress: string,
 ) {
-  const oracle = AavePtToUsdcConfig[dexKey][network].oracleAddress;
+  const oracle = AavePtToUnderlyingConfig[dexKey][network].oracleAddress;
   const oracleIface = new Interface(PENDLE_ORACLE_ABI);
   const callData = oracleIface.encodeFunctionData('getPtToAssetRate', [
     marketAddress,
     0,
   ]);
 
-  const { returnData } = await aavePtToUsdc.dexHelper.multiContract.methods
-    .aggregate([
-      {
-        target: oracle,
-        callData,
-      },
-    ])
-    .call({}, blockNumber);
+  const { returnData } =
+    await aavePtToUnderlying.dexHelper.multiContract.methods
+      .aggregate([
+        {
+          target: oracle,
+          callData,
+        },
+      ])
+      .call({}, blockNumber);
 
   const decoded = oracleIface.decodeFunctionResult(
     'getPtToAssetRate',
@@ -63,7 +64,7 @@ async function checkOnChainPricing(
 }
 
 async function testPricingOnNetwork(
-  aavePtToUsdc: AavePtToUsdc,
+  aavePtToUnderlying: AavePtToUnderlying,
   network: Network,
   dexKey: string,
   blockNumber: number,
@@ -74,7 +75,7 @@ async function testPricingOnNetwork(
 ) {
   const networkTokens = Tokens[network];
 
-  const pools = await aavePtToUsdc.getPoolIdentifiers(
+  const pools = await aavePtToUnderlying.getPoolIdentifiers(
     networkTokens[srcTokenSymbol],
     networkTokens[destTokenSymbol],
     side,
@@ -87,7 +88,7 @@ async function testPricingOnNetwork(
 
   expect(pools.length).toBeGreaterThan(0);
 
-  const poolPrices = await aavePtToUsdc.getPricesVolume(
+  const poolPrices = await aavePtToUnderlying.getPricesVolume(
     networkTokens[srcTokenSymbol],
     networkTokens[destTokenSymbol],
     amounts,
@@ -101,14 +102,14 @@ async function testPricingOnNetwork(
   );
 
   expect(poolPrices).not.toBeNull();
-  if (aavePtToUsdc.hasConstantPriceLargeAmounts) {
+  if (aavePtToUnderlying.hasConstantPriceLargeAmounts) {
     checkConstantPoolPrices(poolPrices!, amounts, dexKey);
   } else {
     checkPoolPrices(poolPrices!, amounts, side, dexKey);
   }
 
   await checkOnChainPricing(
-    aavePtToUsdc,
+    aavePtToUnderlying,
     network,
     dexKey,
     blockNumber,
@@ -119,10 +120,10 @@ async function testPricingOnNetwork(
   );
 }
 
-describe('AavePtToUsdc', function () {
-  const dexKey = 'AavePtToUsdc';
+describe('AavePtToUnderlying', function () {
+  const dexKey = 'AavePtToUnderlying';
   let blockNumber: number;
-  let aavePtToUsdc: AavePtToUsdc;
+  let aavePtToUnderlying: AavePtToUnderlying;
 
   describe('Mainnet', () => {
     const network = Network.MAINNET;
@@ -163,12 +164,12 @@ describe('AavePtToUsdc', function () {
 
     beforeAll(async () => {
       blockNumber = await dexHelper.web3Provider.eth.getBlockNumber();
-      aavePtToUsdc = new AavePtToUsdc(network, dexKey, dexHelper);
+      aavePtToUnderlying = new AavePtToUnderlying(network, dexKey, dexHelper);
     });
 
     it('getPoolIdentifiers and getPricesVolume SELL', async function () {
       await testPricingOnNetwork(
-        aavePtToUsdc,
+        aavePtToUnderlying,
         network,
         dexKey,
         blockNumber,
@@ -181,7 +182,7 @@ describe('AavePtToUsdc', function () {
 
     it('getPoolIdentifiers and getPricesVolume BUY', async function () {
       await testPricingOnNetwork(
-        aavePtToUsdc,
+        aavePtToUnderlying,
         network,
         dexKey,
         blockNumber,
@@ -195,15 +196,19 @@ describe('AavePtToUsdc', function () {
     it('getTopPoolsForToken', async function () {
       // We have to check without calling initializePricing, because
       // pool-tracker is not calling that function
-      const newAavePtToUsdc = new AavePtToUsdc(network, dexKey, dexHelper);
+      const newAavePtToUnderlying = new AavePtToUnderlying(
+        network,
+        dexKey,
+        dexHelper,
+      );
 
-      const poolLiquidity = await newAavePtToUsdc.getTopPoolsForToken(
+      const poolLiquidity = await newAavePtToUnderlying.getTopPoolsForToken(
         tokens[srcTokenSymbol].address,
         10,
       );
       console.log(`${srcTokenSymbol} Top Pools:`, poolLiquidity);
 
-      if (!newAavePtToUsdc.hasConstantPriceLargeAmounts) {
+      if (!newAavePtToUnderlying.hasConstantPriceLargeAmounts) {
         checkPoolsLiquidity(
           poolLiquidity,
           Tokens[network][srcTokenSymbol].address,

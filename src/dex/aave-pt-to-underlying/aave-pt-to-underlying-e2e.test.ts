@@ -53,8 +53,8 @@ function testForNetwork(
   });
 }
 
-describe('AavePtToUsdc E2E', () => {
-  const dexKey = 'AavePtToUsdc';
+describe('AavePtToUnderlying E2E', () => {
+  const dexKey = 'AavePtToUnderlying';
 
   describe('Mainnet', () => {
     const network = Network.MAINNET;
