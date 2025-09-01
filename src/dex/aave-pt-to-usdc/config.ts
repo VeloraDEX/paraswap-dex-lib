@@ -2,16 +2,6 @@ import { DexParams } from './types';
 import { DexConfigMap } from '../../types';
 import { Network } from '../../constants';
 
-// Aave V3 PT to USDC
-
-// Mainnet USDC token configuration
-export const MAINNET_USDC = {
-  address: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
-  decimals: 6,
-  name: 'USD Coin',
-  symbol: 'USDC',
-};
-
 // Pendle V4 Router https://etherscan.io/address/0x888888888889758f76e7103c6cbf23abbf58f946#code
 const PENDLE_ROUTER_ADDRESS = '0x888888888889758f76e7103c6cbf23abbf58f946';
 // Pendle Oracle https://etherscan.io/address/0x9a9Fa8338dd5E5B2188006f1Cd2Ef26d921650C2
