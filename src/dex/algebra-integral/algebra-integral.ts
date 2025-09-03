@@ -20,7 +20,6 @@ import {
 } from '../../constants';
 import * as CALLDATA_GAS_COST from '../../calldata-gas-cost';
 import { Interface } from 'ethers/lib/utils';
-import { BalanceRequest, getBalances } from '../../lib/tokens/balancer-fetcher';
 import SwapRouter from '../../abi/algebra-integral/SwapRouter.abi.json';
 import AlgebraQuoterABI from '../../abi/algebra-integral/Quoter.abi.json';
 import {
@@ -40,11 +39,6 @@ import {
 } from '../simple-exchange';
 import { applyTransferFee } from '../../lib/token-transfer-fee';
 import { AlgebraIntegralConfig } from './config';
-import {
-  AssetType,
-  DEFAULT_ID_ERC20,
-  DEFAULT_ID_ERC20_AS_STRING,
-} from '../../lib/tokens/types';
 import { extractReturnAmountPosition } from '../../executor/utils';
 import { AlgebraIntegralFactory } from './algebra-integral-factory';
 import {
@@ -140,6 +134,24 @@ export class AlgebraIntegral
     );
   }
 
+  getMultiCallData(
+    from: string,
+    to: string,
+    deployer: string,
+    amount: bigint,
+    isSELL = true,
+  ) {
+    return {
+      target: this.config.quoter,
+      gasLimit: ALGEBRA_QUOTE_GASLIMIT,
+      callData: this.quoterIface.encodeFunctionData(
+        isSELL ? 'quoteExactInputSingle' : 'quoteExactOutputSingle',
+        [from, to, deployer, amount.toString(), 0],
+      ),
+      decodeFunction: uint256ToBigInt,
+    };
+  }
+
   async getPricingFromRpc(
     from: Token,
     to: Token,
@@ -161,19 +173,13 @@ export class AlgebraIntegral
 
     const isSELL = side === SwapSide.SELL;
 
-    const requests = pools.map<BalanceRequest>(pool => ({
-      owner: pool.poolAddress,
-      asset: isSELL ? from.address : to.address,
-      assetType: AssetType.ERC20,
-      ids: [{ id: DEFAULT_ID_ERC20, spenders: [] }],
+    const balanceCalldata = pools.map(pool => ({
+      target: isSELL ? from.address : to.address,
+      callData: this.erc20Interface.encodeFunctionData('balanceOf', [
+        pool.poolAddress,
+      ]),
+      decodeFunction: uint256ToBigInt,
     }));
-
-    const balances = await getBalances(this.dexHelper.multiWrapper, requests);
-
-    const _isSrcTokenTransferFeeToBeExchanged =
-      isSrcTokenTransferFeeToBeExchanged(transferFees);
-    const _isDestTokenTransferFeeToBeExchanged =
-      isDestTokenTransferFeeToBeExchanged(transferFees);
 
     const unitVolume = getBigIntPow((isSELL ? from : to).decimals);
 
@@ -185,10 +191,36 @@ export class AlgebraIntegral
       ),
     );
 
-    const availableAmountsPerPool = pools.map((pool, index) => {
-      const balance = balances[index].amounts[DEFAULT_ID_ERC20_AS_STRING];
-      return chunkedAmounts.map(amount => (balance >= amount ? amount : 0n));
-    });
+    const pricesCalldata = pools.flatMap(pool =>
+      chunkedAmounts.map(amount =>
+        this.getMultiCallData(
+          from.address,
+          to.address,
+          pool.deployer,
+          amount,
+          isSELL,
+        ),
+      ),
+    );
+
+    const results = await this.dexHelper.multiWrapper.tryAggregate(false, [
+      ...balanceCalldata,
+      ...pricesCalldata,
+    ]);
+
+    const balancesResults = results.slice(0, balanceCalldata.length);
+    const priceResults = results.slice(balanceCalldata.length);
+
+    const _isSrcTokenTransferFeeToBeExchanged =
+      isSrcTokenTransferFeeToBeExchanged(transferFees);
+    const _isDestTokenTransferFeeToBeExchanged =
+      isDestTokenTransferFeeToBeExchanged(transferFees);
+
+    const availableAmountsPerPool = balancesResults.map(balance =>
+      chunkedAmounts.map(amount =>
+        balance.returnData >= amount ? amount : 0n,
+      ),
+    );
 
     const amountsWithFeePerPool = availableAmountsPerPool.map(poolAmounts =>
       _isSrcTokenTransferFeeToBeExchanged
@@ -201,32 +233,11 @@ export class AlgebraIntegral
         : poolAmounts,
     );
 
-    const calldata = pools.flatMap((pool, poolIndex) => {
-      const amountsForPool = amountsWithFeePerPool[poolIndex];
-
-      return amountsForPool
-        .filter(amount => amount !== 0n)
-        .map(amount => ({
-          target: this.config.quoter,
-          gasLimit: ALGEBRA_QUOTE_GASLIMIT,
-          callData: this.quoterIface.encodeFunctionData(
-            isSELL ? 'quoteExactInputSingle' : 'quoteExactOutputSingle',
-            [from.address, to.address, pool.deployer, amount.toString(), 0],
-          ),
-          decodeFunction: uint256ToBigInt,
-        }));
-    });
-
-    const data = await this.dexHelper.multiWrapper.tryAggregate(
-      false,
-      calldata,
-    );
-
     let i = 0;
     const result = pools.map((pool, poolIndex) => {
       const amountsForPool = amountsWithFeePerPool[poolIndex];
       const _rates = amountsForPool.map(a =>
-        a === 0n ? 0n : (data[i++].returnData as bigint),
+        a === 0n ? 0n : (priceResults[i++].returnData as bigint),
       );
 
       const _ratesWithFee = _isDestTokenTransferFeeToBeExchanged
@@ -260,11 +271,9 @@ export class AlgebraIntegral
             },
           ],
         },
-        poolIdentifier: this.getPoolIdentifier(
-          pool.token0,
-          pool.token1,
-          pool.deployer,
-        ),
+        poolIdentifiers: [
+          this.getPoolIdentifier(pool.token0, pool.token1, pool.deployer),
+        ],
         exchange: this.dexKey,
         gasCost: ALGEBRA_GAS_COST,
         poolAddresses: [pool.poolAddress],
