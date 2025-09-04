@@ -23,6 +23,8 @@ import { Usual } from './usual';
 import { UsualBond } from './usual-bond';
 import { WrappedMM } from './wrapped-m-m';
 import { MWrappedM } from './m-wrapped-m';
+import { UsdcUsualUSDC } from './usdc-usual-usdc';
+import { UsualUSDCUsd0 } from './usual-usdc-usd0';
 
 async function testPricingOnNetwork(
   usual: Usual,
@@ -516,6 +518,180 @@ describe('M<>WrappedM', function () {
       const mWrappedM = new MWrappedM(network, dexKey, dexHelper);
 
       const poolLiquidity = await mWrappedM.getTopPoolsForToken(
+        tokenA.address,
+        10,
+      );
+      console.log(
+        `${tokenA.symbol} Top Pools:`,
+        JSON.stringify(poolLiquidity, null, 2),
+      );
+
+      checkPoolsLiquidity(poolLiquidity, tokenA.address, dexKey);
+    });
+  });
+});
+
+describe('USDC<>UsualUSDC', function () {
+  const dexKey = 'UsdcUsualUSDC';
+  let blockNumber: number;
+  let usdcUusdc: UsdcUsualUSDC;
+
+  describe('Mainnet', () => {
+    const network = Network.MAINNET;
+    const dexHelper = new DummyDexHelper(network);
+
+    const amountsForSell = [
+      0n,
+      1n * BI_POWS[18],
+      2n * BI_POWS[18],
+      3n * BI_POWS[18],
+      4n * BI_POWS[18],
+      5n * BI_POWS[18],
+      6n * BI_POWS[18],
+      7n * BI_POWS[18],
+      8n * BI_POWS[18],
+      9n * BI_POWS[18],
+      10n * BI_POWS[18],
+    ];
+
+    beforeAll(async () => {
+      blockNumber = await dexHelper.web3Provider.eth.getBlockNumber();
+      usdcUusdc = new UsdcUsualUSDC(network, dexKey, dexHelper);
+      if (usdcUusdc.initializePricing) {
+        await usdcUusdc.initializePricing(blockNumber);
+      }
+    });
+
+    it('getPoolIdentifiers and getPricesVolume SELL', async function () {
+      await testPricingOnNetwork(
+        usdcUusdc,
+        network,
+        dexKey,
+        blockNumber,
+        'WrappedM',
+        'UsualM',
+        SwapSide.SELL,
+        amountsForSell,
+        '',
+      );
+    });
+
+    it.only('getTopPoolsForToken: WrappedM', async function () {
+      const tokenA = Tokens[network]['USDC'];
+      const tokenB = Tokens[network]['UsualUSDC'];
+      const dexHelper = new DummyDexHelper(network);
+      const usdcUusdc = new UsdcUsualUSDC(network, dexKey, dexHelper);
+
+      const poolLiquidityA = await usdcUusdc.getTopPoolsForToken(
+        tokenA.address,
+        10,
+      );
+
+      const poolLiquidityB = await usdcUusdc.getTopPoolsForToken(
+        tokenB.address,
+        10,
+      );
+      console.log(
+        `${tokenA.symbol} Top Pools:`,
+        JSON.stringify(poolLiquidityA, null, 2),
+      );
+
+      // swap is available only from USDC to Usual USDC
+      expect(poolLiquidityA[0].liquidityUSD).toBe(UNLIMITED_USD_LIQUIDITY);
+      expect(poolLiquidityB[0].liquidityUSD).toBe(NO_USD_LIQUIDITY);
+
+      checkPoolsLiquidity(poolLiquidityA, tokenA.address, dexKey);
+    });
+
+    it('getTopPoolsForToken: UsualUSDC', async function () {
+      const tokenA = Tokens[network]['UsualUSDC'];
+      const dexHelper = new DummyDexHelper(network);
+      const usdcUusdc = new UsdcUsualUSDC(network, dexKey, dexHelper);
+
+      const poolLiquidity = await usdcUusdc.getTopPoolsForToken(
+        tokenA.address,
+        10,
+      );
+      console.log(
+        `${tokenA.symbol} Top Pools:`,
+        JSON.stringify(poolLiquidity, null, 2),
+      );
+
+      checkPoolsLiquidity(poolLiquidity, tokenA.address, dexKey);
+    });
+  });
+});
+
+describe('UsualUSDC<>USD0', function () {
+  const dexKey = 'UsualUSDCUsd0';
+  let blockNumber: number;
+  let uusdcUsd0: UsualUSDCUsd0;
+
+  describe('Mainnet', () => {
+    const network = Network.MAINNET;
+    const dexHelper = new DummyDexHelper(network);
+
+    // Don't forget to update relevant tokens in constant-e2e.ts
+
+    const amountsForSell = [
+      0n,
+      1n * BI_POWS[18],
+      2n * BI_POWS[18],
+      3n * BI_POWS[18],
+      4n * BI_POWS[18],
+      5n * BI_POWS[18],
+      6n * BI_POWS[18],
+      7n * BI_POWS[18],
+      8n * BI_POWS[18],
+      9n * BI_POWS[18],
+      10n * BI_POWS[18],
+    ];
+
+    beforeAll(async () => {
+      blockNumber = await dexHelper.web3Provider.eth.getBlockNumber();
+      uusdcUsd0 = new UsualUSDCUsd0(network, dexKey, dexHelper);
+      if (uusdcUsd0.initializePricing) {
+        await uusdcUsd0.initializePricing(blockNumber);
+      }
+    });
+
+    it('getPoolIdentifiers and getPricesVolume SELL', async function () {
+      await testPricingOnNetwork(
+        uusdcUsd0,
+        network,
+        dexKey,
+        blockNumber,
+        'UsualUSDC',
+        'USD0',
+        SwapSide.SELL,
+        amountsForSell,
+        '',
+      );
+    });
+
+    it('getTopPoolsForToken: UsualUSDC', async function () {
+      const tokenA = Tokens[network]['UsualUSDC'];
+      const dexHelper = new DummyDexHelper(network);
+      const uusdcUsd0 = new UsualUSDCUsd0(network, dexKey, dexHelper);
+
+      const poolLiquidity = await uusdcUsd0.getTopPoolsForToken(
+        tokenA.address,
+        10,
+      );
+      console.log(
+        `${tokenA.symbol} Top Pools:`,
+        JSON.stringify(poolLiquidity, null, 2),
+      );
+
+      checkPoolsLiquidity(poolLiquidity, tokenA.address, dexKey);
+    });
+
+    it('getTopPoolsForToken: USD0', async function () {
+      const tokenA = Tokens[network]['USD0'];
+      const dexHelper = new DummyDexHelper(network);
+      const usualMUsd0 = new UsualUSDCUsd0(network, dexKey, dexHelper);
+
+      const poolLiquidity = await usualMUsd0.getTopPoolsForToken(
         tokenA.address,
         10,
       );
