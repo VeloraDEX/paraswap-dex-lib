@@ -111,6 +111,7 @@ import { AaveV3PtRollOver } from './aave-v3-pt-roll-over/aave-v3-pt-roll-over';
 import { RingV2 } from './uniswap-v2/ring-v2';
 import { UsdcTransmuter } from './usdc-transmuter/usdc-transmuter';
 import { BunniV2 } from './bunni-v2/bunni-v2';
+import { Eth0MintZap } from './usual/eth0-zapper';
 
 const LegacyDexes = [
   CurveV2,
@@ -210,6 +211,7 @@ const Dexes = [
   WrappedMM,
   UsualMUsd0,
   UsualPP,
+  Eth0MintZap,
   Ekubo,
   AaveV3PtRollOver,
   RingV2,
