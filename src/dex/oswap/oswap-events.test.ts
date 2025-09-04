@@ -88,3 +88,55 @@ describe('Oswap EventPool Mainnet', function () {
     },
   );
 });
+
+describe('Oswap EventPool Sonic', function () {
+  const dexKey = 'OSwap';
+  const network = Network.SONIC;
+  const dexHelper = new DummyDexHelper(network);
+  const logger = dexHelper.getLogger(dexKey);
+  const pool: OSwapPool = OSwapConfig[dexKey][network].pools[0];
+
+  let eventPool: OSwapEventPool;
+
+  // poolAddress -> EventMappings
+  const eventsToTest: Record<Address, EventMappings> = {
+    [pool.address]: {
+      TraderateChanged: [22395781, 22395431, 22389403, 22389364, 22389179],
+      Transfer: [22415989, 22409802],
+      RedeemRequested: [22317636, 22280283, 22277504, 22255426, 22250671],
+      RedeemClaimed: [22317698, 22302249, 22255494, 22250723, 22217971],
+    },
+  };
+
+  beforeEach(async () => {
+    eventPool = new OSwapEventPool(dexKey, pool, network, dexHelper, logger);
+  });
+
+  Object.entries(eventsToTest).forEach(
+    ([poolAddress, events]: [string, EventMappings]) => {
+      describe(`Events for ${poolAddress}`, () => {
+        Object.entries(events).forEach(
+          ([eventName, blockNumbers]: [string, number[]]) => {
+            describe(`${eventName}`, () => {
+              blockNumbers.forEach((blockNumber: number) => {
+                it(`State after ${blockNumber}`, async function () {
+                  await testEventSubscriber(
+                    eventPool,
+                    eventPool.addressesSubscribed,
+                    (_blockNumber: number) =>
+                      eventPool.generateState(_blockNumber),
+                    blockNumber,
+                    `${dexKey}_${poolAddress}`,
+                    dexHelper.provider,
+                    (state1: OSwapPoolState, state2: OSwapPoolState) =>
+                      stateCompare(state1, state2),
+                  );
+                });
+              });
+            });
+          },
+        );
+      });
+    },
+  );
+});
