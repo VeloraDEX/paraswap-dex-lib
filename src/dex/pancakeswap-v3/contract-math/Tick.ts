@@ -60,9 +60,18 @@ export class Tick {
     delete state.ticks[Number(tick)];
   }
 
-  static cross(ticks: Record<NumberAsString, TickInfo>, tick: bigint): bigint {
+  static cross(
+    ticks: Record<NumberAsString, TickInfo>,
+    tick: bigint,
+    secondsPerLiquidityCumulativeX128: bigint,
+    tickCumulative: bigint,
+    time: bigint,
+  ): bigint {
     const info = ticks[Number(tick)];
-
+    // info.secondsPerLiquidityOutsideX128 =
+    //   secondsPerLiquidityCumulativeX128 - info.secondsPerLiquidityOutsideX128;
+    // info.tickCumulativeOutside = tickCumulative - info.tickCumulativeOutside;
+    // info.secondsOutside = time - info.secondsOutside;
     return info.liquidityNet;
   }
 }

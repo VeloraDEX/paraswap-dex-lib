@@ -1,3 +1,4 @@
+import _ from 'lodash';
 import {
   OutputResult,
   PoolState,
@@ -19,6 +20,8 @@ import {
   MAX_PRICING_COMPUTATION_STEPS_ALLOWED,
   OUT_OF_RANGE_ERROR_POSTFIX,
 } from '../constants';
+import { FullMath } from './FullMath';
+import { FixedPoint128 } from './FixedPoint128';
 
 type ModifyPositionParams = {
   tickLower: bigint;
@@ -203,7 +206,13 @@ function _priceComputationCycles(
           };
         }
 
-        let liquidityNet = Tick.cross(ticksCopy, step.tickNext);
+        let liquidityNet = Tick.cross(
+          ticksCopy,
+          step.tickNext,
+          cache.secondsPerLiquidityCumulativeX128,
+          cache.tickCumulative,
+          cache.blockTimestamp,
+        );
         if (zeroForOne) liquidityNet = -liquidityNet;
 
         state.liquidity = LiquidityMath.addDelta(state.liquidity, liquidityNet);
@@ -247,6 +256,15 @@ class PancakeswapV3Math {
     const slot0Start = poolState.slot0;
 
     const isSell = side === SwapSide.SELL;
+
+    // While calculating, ticks are changing, so to not change the actual state,
+    // we use copy
+    const ticksCopy = Object.keys(poolState.ticks).reduce<
+      Record<NumberAsString, TickInfo>
+    >((memo, index) => {
+      memo[index] = { ...poolState.ticks[index] };
+      return memo;
+    }, {} as Record<NumberAsString, TickInfo>);
 
     const sqrtPriceLimitX96 = zeroForOne
       ? TickMath.MIN_SQRT_RATIO + 1n
@@ -317,7 +335,7 @@ class PancakeswapV3Math {
         const [finalState, { latestFullCycleState, latestFullCycleCache }] =
           _priceComputationCycles(
             poolState,
-            poolState.ticks,
+            ticksCopy,
             slot0Start,
             state,
             cache,
@@ -357,11 +375,13 @@ class PancakeswapV3Math {
         if (isSell) {
           outputs[i] = BigInt.asUintN(256, -(zeroForOne ? amount1 : amount0));
           tickCounts[i] = latestFullCycleCache.tickCount;
+          continue;
         } else {
           outputs[i] = zeroForOne
             ? BigInt.asUintN(256, amount0)
             : BigInt.asUintN(256, amount1);
           tickCounts[i] = latestFullCycleCache.tickCount;
+          continue;
         }
       } else {
         outputs[i] = 0n;
@@ -481,7 +501,13 @@ class PancakeswapV3Math {
             cache.computedLatestObservation = true;
           }
 
-          let liquidityNet = Tick.cross(poolState.ticks, step.tickNext);
+          let liquidityNet = Tick.cross(
+            poolState.ticks,
+            step.tickNext,
+            cache.secondsPerLiquidityCumulativeX128,
+            cache.tickCumulative,
+            cache.blockTimestamp,
+          );
 
           if (zeroForOne) liquidityNet = -liquidityNet;
 
