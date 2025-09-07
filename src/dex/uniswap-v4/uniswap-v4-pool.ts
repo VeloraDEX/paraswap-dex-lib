@@ -7,6 +7,7 @@ import {
   FeeGrowthGlobals,
   PoolPairsInfo,
   PoolState,
+  PositionState,
   Slot0,
   SubgraphTick,
   TickInfo,
@@ -17,10 +18,11 @@ import { BytesLike, Interface } from 'ethers/lib/utils';
 import UniswapV4StateViewABI from '../../abi/uniswap-v4/state-view.abi.json';
 import UniswapV4PoolManagerABI from '../../abi/uniswap-v4/pool-manager.abi.json';
 import { BlockHeader } from 'web3-eth';
-import { DeepReadonly } from 'ts-essentials';
+import { AsyncOrSync, DeepReadonly } from 'ts-essentials';
 import _ from 'lodash';
 import { catchParseLogError } from '../../utils';
 import { uniswapV4PoolMath } from './contract-math/uniswap-v4-pool-math';
+import { Position } from './contract-math/Position';
 import {
   TICK_BITMAP_BUFFER,
   TICK_BITMAP_BUFFER_BY_CHAIN,
@@ -41,7 +43,7 @@ export class UniswapV4Pool extends StatefulEventSubscriber<PoolState> {
       pool: PoolState,
       log: Log,
       blockHeader: Readonly<BlockHeader>,
-    ) => PoolState;
+    ) => AsyncOrSync<PoolState>;
   } = {};
 
   logDecoder: (log: Log) => any;
@@ -94,6 +96,38 @@ export class UniswapV4Pool extends StatefulEventSubscriber<PoolState> {
     return {
       poolId: this.poolId,
     };
+  }
+
+  protected _getPositionInfoCallData(
+    poolId: string,
+    owner: string,
+    tickLower: number,
+    tickUpper: number,
+    salt: string,
+  ): MultiCallParams<PositionState> {
+    const callData = {
+      target: this.config.stateView,
+      callData: this.stateViewIface.encodeFunctionData(
+        'getPositionInfo(bytes32, address, int24, int24, bytes32)',
+        [poolId, owner, tickLower, tickUpper, salt],
+      ),
+      decodeFunction: (result: MultiResult<BytesLike> | BytesLike) => {
+        const [, toDecode] = extractSuccessAndValue(result);
+
+        const decoded = this.stateViewIface.decodeFunctionResult(
+          'getPositionInfo(bytes32, address, int24, int24, bytes32)',
+          toDecode,
+        );
+
+        return {
+          liquidity: BigInt(decoded[0]),
+          feeGrowthInside0LastX128: BigInt(decoded[1]),
+          feeGrowthInside1LastX128: BigInt(decoded[2]),
+        };
+      },
+    };
+
+    return callData;
   }
 
   protected _getStateRequestCallDataPerPool(
@@ -176,6 +210,8 @@ export class UniswapV4Pool extends StatefulEventSubscriber<PoolState> {
           return {
             liquidityGross: BigInt(decoded[0]),
             liquidityNet: BigInt(decoded[1]),
+            feeGrowthOutside0X128: BigInt(decoded[2]),
+            feeGrowthOutside1X128: BigInt(decoded[3]),
           };
         },
       });
@@ -284,15 +320,27 @@ export class UniswapV4Pool extends StatefulEventSubscriber<PoolState> {
           returnData: TickInfo;
         };
 
-        const { liquidityNet, liquidityGross } = curResults.returnData;
+        const {
+          liquidityNet,
+          liquidityGross,
+          feeGrowthOutside0X128,
+          feeGrowthOutside1X128,
+        } = curResults.returnData;
 
         if (
           // skips ticks with 0n values to optimize state size
-          !(liquidityNet === 0n && liquidityGross === 0n)
+          !(
+            liquidityNet === 0n &&
+            liquidityGross === 0n &&
+            feeGrowthOutside0X128 === 0n &&
+            feeGrowthOutside1X128 === 0n
+          )
         ) {
           memo[tick.tickIdx] = {
             liquidityNet,
             liquidityGross,
+            feeGrowthOutside0X128,
+            feeGrowthOutside1X128,
           };
         }
 
@@ -351,6 +399,7 @@ export class UniswapV4Pool extends StatefulEventSubscriber<PoolState> {
       tickSpacing: parseInt(this.tickSpacing),
       ticks: ticksResults,
       tickBitmap: tickBitMapResults,
+      positions: {},
       isValid: true,
     };
   }
@@ -442,7 +491,13 @@ export class UniswapV4Pool extends StatefulEventSubscriber<PoolState> {
         const _state = _.cloneDeep(state) as PoolState;
 
         try {
-          return this.handlers[event.name](event, _state, log, blockHeader);
+          const newState = await this.handlers[event.name](
+            event,
+            _state,
+            log,
+            blockHeader,
+          );
+          return newState;
         } catch (e) {
           this.logger.error(
             `${this.parentName}: PoolManager ${this.config.poolManager} (pool id ${this.poolId}), ` +
@@ -509,19 +564,53 @@ export class UniswapV4Pool extends StatefulEventSubscriber<PoolState> {
     return poolState;
   }
 
-  handleModifyLiquidityEvent(event: any, poolState: PoolState, _: Log) {
+  async handleModifyLiquidityEvent(event: any, poolState: PoolState, log: Log) {
+    const id = event.args.id.toLowerCase();
     uniswapV4PoolMath.checkPoolInitialized(poolState);
 
+    const owner = event.args.sender.toLowerCase();
     const tickLower = BigInt(event.args.tickLower);
     const tickUpper = BigInt(event.args.tickUpper);
     const liquidityDelta = BigInt(event.args.liquidityDelta);
+    const salt = event.args.salt.toLowerCase();
+
+    const positionsInfoCallData = this._getPositionInfoCallData(
+      id,
+      owner,
+      parseInt(event.args.tickLower),
+      parseInt(event.args.tickUpper),
+      salt,
+    );
+
+    const results =
+      await this.dexHelper.multiWrapper.tryAggregate<PositionState>(
+        false,
+        [positionsInfoCallData],
+        log.blockNumber,
+        this.dexHelper.multiWrapper.defaultBatchSize,
+        false,
+      );
+
+    if (!poolState.positions) {
+      poolState.positions = {};
+    }
+
+    poolState.positions[
+      Position.calculatePositionKey(owner, tickLower, tickUpper, salt)
+    ] = results[0].returnData as PositionState;
 
     uniswapV4PoolMath.modifyLiquidity(poolState, {
       liquidityDelta,
       tickUpper,
       tickLower,
       tickSpacing: BigInt(poolState.tickSpacing),
+      salt,
+      owner,
     });
+
+    delete poolState.positions[
+      Position.calculatePositionKey(owner, tickLower, tickUpper, salt)
+    ];
 
     return poolState;
   }

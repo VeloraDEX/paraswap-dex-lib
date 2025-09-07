@@ -10,6 +10,7 @@ import { _require, int256, uint32 } from '../../../utils';
 import { SwapMath } from '../../uniswap-v3/contract-math/SwapMath';
 import { Constants } from './Constants';
 import { BI_MAX_INT } from '../../../bigint-constants';
+import _ from 'lodash';
 import {
   PriceComputationCache,
   PriceComputationState,
@@ -188,7 +189,13 @@ function _priceComputationCycles(
           };
         }
 
-        let liquidityNet = Tick.cross(ticksCopy, step.tickNext);
+        let liquidityNet = Tick.cross(
+          ticksCopy,
+          step.tickNext,
+          cache.secondsPerLiquidityCumulativeX128,
+          cache.tickCumulative,
+          cache.blockTimestamp,
+        );
         if (zeroForOne) liquidityNet = -liquidityNet;
 
         state.liquidity = LiquidityMath.addDelta(state.liquidity, liquidityNet);
@@ -232,6 +239,10 @@ class AlgebraMathClass {
     const slot0Start = poolState.globalState;
 
     const isSell = side === SwapSide.SELL;
+
+    // While calculating, ticks are changing, so to not change the actual state,
+    // we use copy
+    const ticksCopy = _.cloneDeep(poolState.ticks);
 
     const sqrtPriceLimitX96 = zeroForOne
       ? TickMath.MIN_SQRT_RATIO + 1n
@@ -303,7 +314,7 @@ class AlgebraMathClass {
           _priceComputationCycles(
             networkId,
             poolState,
-            poolState.ticks,
+            ticksCopy,
             state,
             cache,
             sqrtPriceLimitX96,
@@ -342,11 +353,13 @@ class AlgebraMathClass {
         if (isSell) {
           outputs[i] = BigInt.asUintN(256, -(zeroForOne ? amount1 : amount0));
           tickCounts[i] = latestFullCycleCache.tickCount;
+          continue;
         } else {
           outputs[i] = zeroForOne
             ? BigInt.asUintN(256, amount0)
             : BigInt.asUintN(256, amount1);
           tickCounts[i] = latestFullCycleCache.tickCount;
+          continue;
         }
       } else {
         outputs[i] = 0n;
@@ -487,10 +500,15 @@ class AlgebraMathClass {
         cache.price,
       );
       if (globalLiquidityDelta != 0n) {
+        let liquidityBefore = liquidity;
+
         // skip oracle logic
 
         // same as UniswapV3Pool line 361 ->  liquidity = LiquidityMath.addDelta(liquidityBefore, params.liquidityDelta);
-        state.liquidity = LiquidityMath.addDelta(liquidity, liquidityDelta);
+        state.liquidity = LiquidityMath.addDelta(
+          liquidityBefore,
+          liquidityDelta,
+        );
       }
     }
   }
