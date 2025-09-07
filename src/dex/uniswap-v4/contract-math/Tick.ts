@@ -30,7 +30,12 @@ export class Tick {
     delete poolState.ticks[Number(tick)];
   }
 
-  static cross(ticks: Record<NumberAsString, TickInfo>, _tick: bigint): bigint {
+  static cross(
+    ticks: Record<NumberAsString, TickInfo>,
+    _tick: bigint,
+    feeGrowthGlobal0X128: bigint,
+    feeGrowthGlobal1X128: bigint,
+  ): bigint {
     const tick = Number(_tick);
     let info = ticks[tick];
 
@@ -38,11 +43,19 @@ export class Tick {
       ticks[tick] = {
         liquidityGross: 0n,
         liquidityNet: 0n,
+        feeGrowthOutside0X128: 0n,
+        feeGrowthOutside1X128: 0n,
       };
       info = ticks[tick];
     }
 
-    return info.liquidityNet;
+    info.feeGrowthOutside0X128 =
+      feeGrowthGlobal0X128 - info.feeGrowthOutside0X128;
+    info.feeGrowthOutside1X128 =
+      feeGrowthGlobal1X128 - info.feeGrowthOutside1X128;
+
+    const liquidityNet = info.liquidityNet;
+    return liquidityNet;
   }
 
   static update(
@@ -57,6 +70,8 @@ export class Tick {
       poolState.ticks[Number(tick)] = {
         liquidityGross: 0n,
         liquidityNet: 0n,
+        feeGrowthOutside0X128: 0n,
+        feeGrowthOutside1X128: 0n,
       };
       info = poolState.ticks[Number(tick)];
     }
@@ -71,6 +86,13 @@ export class Tick {
 
     const flipped =
       (liquidityGrossAfter === 0n) !== (liquidityGrossBefore === 0n);
+
+    if (liquidityGrossBefore === 0n) {
+      if (tick <= poolState.slot0.tick) {
+        info.feeGrowthOutside0X128 = poolState.feeGrowthGlobal0X128;
+        info.feeGrowthOutside1X128 = poolState.feeGrowthGlobal1X128;
+      }
+    }
 
     const liquidityNet = upper
       ? liquidityNetBefore - liquidityDelta

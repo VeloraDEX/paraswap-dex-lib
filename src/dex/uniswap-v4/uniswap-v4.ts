@@ -31,7 +31,7 @@ import {
 } from './encoder';
 import { UniswapV4PoolManager } from './uniswap-v4-pool-manager';
 import { DeepReadonly } from 'ts-essentials';
-import { PoolState } from './types';
+import { PoolState } from '../uniswap-v4/types';
 import { uniswapV4PoolMath } from './contract-math/uniswap-v4-pool-math';
 import { SwapSide } from '@paraswap/core';
 import { queryAvailablePoolsForToken } from './subgraph';
@@ -102,7 +102,11 @@ export class UniswapV4 extends SimpleExchange implements IDex<UniswapV4Data> {
       blockNumber,
     );
 
-    return Boolean(pool);
+    if (!pool) {
+      return false;
+    }
+
+    return true;
   }
 
   async getPoolIdentifiers(
@@ -134,6 +138,7 @@ export class UniswapV4 extends SimpleExchange implements IDex<UniswapV4Data> {
     amounts: bigint[],
     zeroForOne: boolean,
     side: SwapSide,
+    reqId: number,
   ): bigint[] | null {
     try {
       const outputsResult = uniswapV4PoolMath.queryOutputs(
@@ -142,6 +147,8 @@ export class UniswapV4 extends SimpleExchange implements IDex<UniswapV4Data> {
         amounts,
         zeroForOne,
         side,
+        this.logger,
+        reqId,
       );
 
       if (
@@ -170,6 +177,9 @@ export class UniswapV4 extends SimpleExchange implements IDex<UniswapV4Data> {
     blockNumber: number,
     limitPools?: string[],
   ): Promise<ExchangePrices<UniswapV4Data> | null> {
+    const reqId = Math.floor(Math.random() * 10000);
+    // const getPricesVolumeStart = Date.now();
+
     const pools: Pool[] = await this.poolManager.getAvailablePoolsForPair(
       from.address.toLowerCase(),
       to.address.toLowerCase(),
@@ -208,7 +218,23 @@ export class UniswapV4 extends SimpleExchange implements IDex<UniswapV4Data> {
 
       let prices: bigint[] | null;
       if (poolState !== null && poolState.isValid) {
-        prices = this._getOutputs(pool, poolState, amounts, zeroForOne, side);
+        // const getOutputsStart = Date.now();
+        prices = this._getOutputs(
+          pool,
+          poolState,
+          amounts,
+          zeroForOne,
+          side,
+          reqId,
+        );
+
+        // this.logger.info(
+        //   `_getOutputs_${pool.id}_${reqId}: ${
+        //     Date.now() - getOutputsStart
+        //   } ms (src: ${from.address}, dest: ${
+        //     to.address
+        //   }, amounts: ${JSON.stringify(amounts)})`,
+        // );
       } else {
         this.logger.warn(
           `${this.dexKey}-${this.network}: pool ${poolId} state was not found...falling back to rpc`,
