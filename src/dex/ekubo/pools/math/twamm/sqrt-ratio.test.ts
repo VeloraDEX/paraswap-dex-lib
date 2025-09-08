@@ -7,7 +7,7 @@ describe(calculateNextSqrtRatio, () => {
 
   const TEST_CASES = [
     {
-      description: 'zero_liquidity_price_eq_sale_ratio',
+      description: 'zero liquidity price eq sale ratio',
       sqrt_ratio: 0n,
       liquidity: 0n,
       token0_sale_rate: TOKEN_SALE_RATE,
@@ -17,7 +17,7 @@ describe(calculateNextSqrtRatio, () => {
       expected: 340282366920938463463374607431768211456n,
     },
     {
-      description: 'large_exponent_price_sqrt_ratio',
+      description: 'large exponent price sqrt ratio',
       sqrt_ratio: 1n << 128n,
       liquidity: 1n,
       token0_sale_rate: TOKEN_SALE_RATE,
@@ -27,7 +27,7 @@ describe(calculateNextSqrtRatio, () => {
       expected: 15141609448466370575828005229206655991808n,
     },
     {
-      description: 'low_liquidity_same_sale_ratio',
+      description: 'low liquidity same sale ratio',
       sqrt_ratio: 2n << 128n,
       liquidity: 1n,
       token0_sale_rate: TOKEN_SALE_RATE,
@@ -37,7 +37,7 @@ describe(calculateNextSqrtRatio, () => {
       expected: 340282366920938463463374607431768211456n,
     },
     {
-      description: 'low_liquidity_token0_gt_token1',
+      description: 'low liquidity token0 gt token1',
       sqrt_ratio: 1n << 128n,
       liquidity: 1n,
       token0_sale_rate: 2n * TOKEN_SALE_RATE,
@@ -47,7 +47,7 @@ describe(calculateNextSqrtRatio, () => {
       expected: 240615969168004511545033772477625056927n,
     },
     {
-      description: 'low_liquidity_token1_gt_token0',
+      description: 'low liquidity token1 gt token0',
       sqrt_ratio: 1n << 128n,
       liquidity: 1n,
       token0_sale_rate: TOKEN_SALE_RATE,
@@ -57,7 +57,7 @@ describe(calculateNextSqrtRatio, () => {
       expected: 481231938336009023090067544951314448384n,
     },
     {
-      description: 'high_liquidity_same_sale_rate',
+      description: 'high liquidity same sale rate',
       sqrt_ratio: 2n << 128n,
       liquidity: 1_000_000n * ONE_E18,
       token0_sale_rate: TOKEN_SALE_RATE,
@@ -67,7 +67,7 @@ describe(calculateNextSqrtRatio, () => {
       expected: 680563712996817890757827685335626524191n,
     },
     {
-      description: 'high_liquidity_token0_gt_token1',
+      description: 'high liquidity token0 gt token1',
       sqrt_ratio: 1n << 128n,
       liquidity: 1_000_000n * ONE_E18,
       token0_sale_rate: 2n * TOKEN_SALE_RATE,
@@ -77,7 +77,7 @@ describe(calculateNextSqrtRatio, () => {
       expected: 340282026639252118183347287047607050305n,
     },
     {
-      description: 'high_liquidity_token1_gt_token0',
+      description: 'high liquidity token1 gt token0',
       sqrt_ratio: 1n << 128n,
       liquidity: 1_000_000n * ONE_E18,
       token0_sale_rate: TOKEN_SALE_RATE,
@@ -87,7 +87,7 @@ describe(calculateNextSqrtRatio, () => {
       expected: 340282707202965090089453576058304747105n,
     },
     {
-      description: 'round_in_direction_of_price',
+      description: 'round in direction of price',
       sqrt_ratio: 481231811499356508086519009265716982182n,
       liquidity: 70_710_696_755_630_728_101_718_334n,
       token0_sale_rate: 10_526_880_627_450_980_392_156_862_745n,
@@ -112,6 +112,4 @@ describe(calculateNextSqrtRatio, () => {
       ).toEqual(testCase.expected);
     });
   }
-
-  test('zero_liquidity_price_eq_sale_ratio', () => {});
 });

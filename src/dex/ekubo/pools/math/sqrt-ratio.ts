@@ -13,6 +13,8 @@ import { MAX_SQRT_RATIO, MIN_SQRT_RATIO } from './tick';
 const BIT_MASK = 0xc00000000000000000000000n;
 const NOT_BIT_MASK = 0x3fffffffffffffffffffffffn;
 
+export const ONE_FLOAT_SQRT_RATIO = (0b10n << 94n) | (0b1n << 62n);
+
 export function floatSqrtRatioToFixed(sqrtRatioFloat: bigint): bigint {
   return sqrtRatioFloat === 0n
     ? TWO_POW_128 // Default value for the case that the passed value comes from an uninitialized pool

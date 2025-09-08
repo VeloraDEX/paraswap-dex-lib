@@ -35,7 +35,7 @@ describe(computeFee, () => {
 });
 
 describe(computeStep, () => {
-  test('zero_amount_token0', () => {
+  test('zero amount token0', () => {
     expect(
       computeStep({
         sqrtRatio: 0x100000000000000000000000000000000n,
@@ -54,7 +54,7 @@ describe(computeStep, () => {
 }
 `);
   });
-  test('zero_amount_token1', () => {
+  test('zero amount token1', () => {
     expect(
       computeStep({
         sqrtRatio: 0x100000000000000000000000000000000n,
@@ -73,7 +73,7 @@ describe(computeStep, () => {
 }
 `);
   });
-  test('swap_ratio_equal_limit_token1', () => {
+  test('swap ratio equal limit token1', () => {
     expect(
       computeStep({
         sqrtRatio: 0x100000000000000000000000000000000n,
