@@ -107,6 +107,7 @@ import { Ekubo } from './ekubo/ekubo';
 import { UniswapV4 } from './uniswap-v4/uniswap-v4';
 import { PancakeSwapV2 } from './uniswap-v2/pancake-swap-v2';
 import { uniswapV4Merge } from './uniswap-v4/optimizer';
+import { MiroMigrator } from './miro-migrator/miro-migrator';
 import { AaveV3PtRollOver } from './aave-v3-pt-roll-over/aave-v3-pt-roll-over';
 import { RingV2 } from './uniswap-v2/ring-v2';
 import { UsdcTransmuter } from './usdc-transmuter/usdc-transmuter';
@@ -213,6 +214,7 @@ const Dexes = [
   UsualMUsd0,
   UsualPP,
   Ekubo,
+  MiroMigrator,
   AaveV3PtRollOver,
   RingV2,
   UsdcTransmuter,

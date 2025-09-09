@@ -1,0 +1,523 @@
+[
+  {
+    "inputs": [
+      {
+        "components": [
+          { "internalType": "address", "name": "vlr", "type": "address" },
+          { "internalType": "address", "name": "weth", "type": "address" },
+          {
+            "internalType": "address",
+            "name": "bridgeStaking",
+            "type": "address"
+          },
+          {
+            "internalType": "uint256",
+            "name": "destChainId",
+            "type": "uint256"
+          }
+        ],
+        "internalType": "struct IMiroMigrator.BridgeConfig[]",
+        "name": "_bridgeConfigs",
+        "type": "tuple[]"
+      },
+      { "internalType": "address", "name": "sePSP1", "type": "address" },
+      { "internalType": "address", "name": "sePSP2", "type": "address" },
+      { "internalType": "address", "name": "seVLR", "type": "address" },
+      {
+        "internalType": "contract IAcrossSpokePool",
+        "name": "spokePool",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "nonpayable",
+    "type": "constructor"
+  },
+  { "inputs": [], "name": "EnforcedPause", "type": "error" },
+  { "inputs": [], "name": "ExpectedPause", "type": "error" },
+  { "inputs": [], "name": "InsufficientMsgValue", "type": "error" },
+  { "inputs": [], "name": "InvalidDestinationChainId", "type": "error" },
+  {
+    "inputs": [
+      { "internalType": "address", "name": "owner", "type": "address" }
+    ],
+    "name": "OwnableInvalidOwner",
+    "type": "error"
+  },
+  {
+    "inputs": [
+      { "internalType": "address", "name": "account", "type": "address" }
+    ],
+    "name": "OwnableUnauthorizedAccount",
+    "type": "error"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "user",
+        "type": "address"
+      },
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "amount",
+        "type": "uint256"
+      }
+    ],
+    "name": "Migrated",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "previousOwner",
+        "type": "address"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "newOwner",
+        "type": "address"
+      }
+    ],
+    "name": "OwnershipTransferred",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "address",
+        "name": "account",
+        "type": "address"
+      }
+    ],
+    "name": "Paused",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "user",
+        "type": "address"
+      },
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "vlrAmount",
+        "type": "uint256"
+      },
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "wethAmount",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "destChainId",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "bytes",
+        "name": "message",
+        "type": "bytes"
+      }
+    ],
+    "name": "StakeBridgingInitiated",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "address",
+        "name": "account",
+        "type": "address"
+      }
+    ],
+    "name": "Unpaused",
+    "type": "event"
+  },
+  {
+    "inputs": [],
+    "name": "PSP",
+    "outputs": [{ "internalType": "address", "name": "", "type": "address" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "SE_PSP1",
+    "outputs": [{ "internalType": "address", "name": "", "type": "address" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "SE_PSP2",
+    "outputs": [{ "internalType": "address", "name": "", "type": "address" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "SE_VLR",
+    "outputs": [{ "internalType": "address", "name": "", "type": "address" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "SPOKE_POOL",
+    "outputs": [
+      {
+        "internalType": "contract IAcrossSpokePool",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "VLR",
+    "outputs": [{ "internalType": "address", "name": "", "type": "address" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "WETH",
+    "outputs": [{ "internalType": "address", "name": "", "type": "address" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "uint256", "name": "chainId", "type": "uint256" }
+    ],
+    "name": "bridgeConfigs",
+    "outputs": [
+      { "internalType": "address", "name": "vlr", "type": "address" },
+      { "internalType": "address", "name": "weth", "type": "address" },
+      { "internalType": "address", "name": "bridgeStaking", "type": "address" },
+      { "internalType": "uint256", "name": "destChainId", "type": "uint256" }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "uint256", "name": "vlrAmount", "type": "uint256" },
+      { "internalType": "uint256", "name": "wethAmount", "type": "uint256" },
+      { "internalType": "uint256", "name": "destChainId", "type": "uint256" },
+      {
+        "internalType": "uint256",
+        "name": "minDestBptAmount",
+        "type": "uint256"
+      },
+      { "internalType": "address", "name": "beneficiary", "type": "address" },
+      {
+        "components": [
+          {
+            "internalType": "uint256",
+            "name": "relayerFee",
+            "type": "uint256"
+          },
+          {
+            "internalType": "address",
+            "name": "exclusiveRelayer",
+            "type": "address"
+          },
+          {
+            "internalType": "uint32",
+            "name": "quoteTimestamp",
+            "type": "uint32"
+          },
+          {
+            "internalType": "uint32",
+            "name": "fillDeadline",
+            "type": "uint32"
+          },
+          {
+            "internalType": "uint32",
+            "name": "exclusivityDeadline",
+            "type": "uint32"
+          }
+        ],
+        "internalType": "struct IMiroMigrator.BridgeData",
+        "name": "vlrBridgeData",
+        "type": "tuple"
+      },
+      {
+        "components": [
+          {
+            "internalType": "uint256",
+            "name": "relayerFee",
+            "type": "uint256"
+          },
+          {
+            "internalType": "address",
+            "name": "exclusiveRelayer",
+            "type": "address"
+          },
+          {
+            "internalType": "uint32",
+            "name": "quoteTimestamp",
+            "type": "uint32"
+          },
+          {
+            "internalType": "uint32",
+            "name": "fillDeadline",
+            "type": "uint32"
+          },
+          {
+            "internalType": "uint32",
+            "name": "exclusivityDeadline",
+            "type": "uint32"
+          }
+        ],
+        "internalType": "struct IMiroMigrator.BridgeData",
+        "name": "wethBridgeData",
+        "type": "tuple"
+      },
+      { "internalType": "bytes", "name": "permitData", "type": "bytes" }
+    ],
+    "name": "bridgeVLRAndStake",
+    "outputs": [],
+    "stateMutability": "payable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "uint256", "name": "pspAmount", "type": "uint256" },
+      { "internalType": "uint256", "name": "wethAmount", "type": "uint256" },
+      { "internalType": "uint256", "name": "minBptOut", "type": "uint256" },
+      { "internalType": "bytes", "name": "permitData", "type": "bytes" }
+    ],
+    "name": "migratePSPtoSeVLR",
+    "outputs": [],
+    "stateMutability": "payable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "uint256", "name": "pspAmount", "type": "uint256" },
+      { "internalType": "bytes", "name": "permitData", "type": "bytes" }
+    ],
+    "name": "migratePSPtoVLR",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "uint256", "name": "sePSP1Amount", "type": "uint256" },
+      { "internalType": "uint256", "name": "wethAmount", "type": "uint256" },
+      { "internalType": "uint256", "name": "minBptOut", "type": "uint256" },
+      { "internalType": "bytes", "name": "permitData", "type": "bytes" }
+    ],
+    "name": "migrateSePSP1toSeVLR",
+    "outputs": [],
+    "stateMutability": "payable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "uint256", "name": "sePSP1Amount", "type": "uint256" },
+      { "internalType": "bytes", "name": "permitData", "type": "bytes" }
+    ],
+    "name": "migrateSePSP1toVLR",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "uint256", "name": "sePSP2Amount", "type": "uint256" },
+      { "internalType": "uint256", "name": "minPspAmount", "type": "uint256" },
+      { "internalType": "uint256", "name": "minWethAmount", "type": "uint256" },
+      { "internalType": "uint256", "name": "minBptOut", "type": "uint256" },
+      { "internalType": "bytes", "name": "permitData", "type": "bytes" }
+    ],
+    "name": "migrateSePSP2toSeVLR",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "uint256", "name": "sePSP2Amount", "type": "uint256" },
+      { "internalType": "uint256", "name": "minPspAmount", "type": "uint256" },
+      { "internalType": "uint256", "name": "minWethAmount", "type": "uint256" },
+      { "internalType": "uint256", "name": "destChainId", "type": "uint256" },
+      {
+        "internalType": "uint256",
+        "name": "minDestBptAmount",
+        "type": "uint256"
+      },
+      { "internalType": "address", "name": "beneficiary", "type": "address" },
+      {
+        "components": [
+          {
+            "internalType": "uint256",
+            "name": "relayerFee",
+            "type": "uint256"
+          },
+          {
+            "internalType": "address",
+            "name": "exclusiveRelayer",
+            "type": "address"
+          },
+          {
+            "internalType": "uint32",
+            "name": "quoteTimestamp",
+            "type": "uint32"
+          },
+          {
+            "internalType": "uint32",
+            "name": "fillDeadline",
+            "type": "uint32"
+          },
+          {
+            "internalType": "uint32",
+            "name": "exclusivityDeadline",
+            "type": "uint32"
+          }
+        ],
+        "internalType": "struct IMiroMigrator.BridgeData",
+        "name": "vlrBridgeData",
+        "type": "tuple"
+      },
+      {
+        "components": [
+          {
+            "internalType": "uint256",
+            "name": "relayerFee",
+            "type": "uint256"
+          },
+          {
+            "internalType": "address",
+            "name": "exclusiveRelayer",
+            "type": "address"
+          },
+          {
+            "internalType": "uint32",
+            "name": "quoteTimestamp",
+            "type": "uint32"
+          },
+          {
+            "internalType": "uint32",
+            "name": "fillDeadline",
+            "type": "uint32"
+          },
+          {
+            "internalType": "uint32",
+            "name": "exclusivityDeadline",
+            "type": "uint32"
+          }
+        ],
+        "internalType": "struct IMiroMigrator.BridgeData",
+        "name": "wethBridgeData",
+        "type": "tuple"
+      },
+      { "internalType": "bytes", "name": "permitData", "type": "bytes" }
+    ],
+    "name": "migrateSePSP2toSeVLRAndBridge",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "owner",
+    "outputs": [{ "internalType": "address", "name": "", "type": "address" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "pause",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "paused",
+    "outputs": [{ "internalType": "bool", "name": "", "type": "bool" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [{ "internalType": "address", "name": "to", "type": "address" }],
+    "name": "reClaimVLR",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "renounceOwnership",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "components": [
+          { "internalType": "address", "name": "vlr", "type": "address" },
+          { "internalType": "address", "name": "weth", "type": "address" },
+          {
+            "internalType": "address",
+            "name": "bridgeStaking",
+            "type": "address"
+          },
+          {
+            "internalType": "uint256",
+            "name": "destChainId",
+            "type": "uint256"
+          }
+        ],
+        "internalType": "struct IMiroMigrator.BridgeConfig[]",
+        "name": "_bridgeConfigs",
+        "type": "tuple[]"
+      }
+    ],
+    "name": "setBridgeConfigs",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "address", "name": "newOwner", "type": "address" }
+    ],
+    "name": "transferOwnership",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "unpause",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  }
+]
