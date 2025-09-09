@@ -18,6 +18,7 @@ import {
   DexExchangeParam,
   NumberAsString,
   DexConfigMap,
+  SimpleExchangeParam,
 } from '../../types';
 import { getBigIntPow, getDexKeysWithNetwork } from '../../utils';
 import { DexParams, UniswapV2Data } from './types';
@@ -346,5 +347,45 @@ export class RingV2 extends UniswapV2 {
         1,
       ),
     };
+  }
+
+  async getSimpleParam(
+    src: Address,
+    dest: Address,
+    srcAmount: NumberAsString,
+    destAmount: NumberAsString,
+    data: UniswapV2Data,
+    side: SwapSide,
+  ): Promise<SimpleExchangeParam> {
+    let args: any[];
+    let functionName: RingV2Functions;
+
+    let ttl = 1200;
+    const deadline = `0x${(
+      Math.floor(new Date().getTime() / 1000) + ttl
+    ).toString(16)}`;
+
+    if (side === SwapSide.SELL) {
+      functionName = RingV2Functions.swapExactTokensForTokens;
+      args = [srcAmount, destAmount, data.path, data.router, deadline];
+    } else {
+      functionName = RingV2Functions.swapTokensForExactTokens;
+      args = [destAmount, srcAmount, data.path, data.router, deadline];
+    }
+
+    const exchangeData = this.exchangeRouterInterface.encodeFunctionData(
+      functionName,
+      args,
+    );
+
+    return this.buildSimpleParamWithoutWETHConversion(
+      src,
+      srcAmount,
+      dest,
+      destAmount,
+      exchangeData,
+      data.router,
+      data.router,
+    );
   }
 }
