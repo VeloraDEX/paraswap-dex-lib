@@ -586,6 +586,11 @@ export const Tokens: {
       decimals: 6,
       symbol: 'wM',
     },
+    UsualUSDC: {
+      address: '0xb672B3976bAa3952bFb2eCE8eeFB784f8daB1424',
+      decimals: 6,
+      symbol: 'UsualUSDC',
+    },
     UsualM: {
       address: '0x4cbc25559dbbd1272ec5b64c7b5f48a2405e6470',
       decimals: 6,
