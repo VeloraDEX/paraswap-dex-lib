@@ -1,21 +1,15 @@
-import _ from 'lodash';
 import { DeepReadonly, DeepWritable } from 'ts-essentials';
 import { IDexHelper } from '../../../dex-helper/idex-helper';
 import { Logger } from '../../../types';
 import { BasicQuoteData, EkuboContracts } from '../types';
-import {
-  EkuboPool,
-  NamedEventHandlers,
-  PoolKeyed,
-  Quote,
-  QuoteFn,
-} from './iface';
-import { floatSqrtRatioToFixed } from './math/price';
+import { EkuboPool, NamedEventHandlers, PoolKeyed, Quote } from './pool';
+import { floatSqrtRatioToFixed } from './math/sqrt-ratio';
 import { computeStep, isPriceIncreasing } from './math/swap';
 import { MAX_SQRT_RATIO, MIN_SQRT_RATIO } from './math/tick';
 import { parseSwappedEvent, PoolKey, SwappedEvent } from './utils';
+import { amount0Delta, amount1Delta } from './math/delta';
 
-const GAS_COST_OF_ONE_FULL_RANGE_SWAP = 20_000;
+const GAS_COST_OF_ONE_FULL_RANGE_SWAP = 20_700;
 
 export class FullRangePool extends EkuboPool<FullRangePoolState.Object> {
   private readonly dataFetcher;
@@ -26,7 +20,6 @@ export class FullRangePool extends EkuboPool<FullRangePoolState.Object> {
     logger: Logger,
     contracts: EkuboContracts,
     key: PoolKey,
-    quoteFn?: QuoteFn<FullRangePoolState.Object>,
   ) {
     const {
       contract: { address },
@@ -42,7 +35,7 @@ export class FullRangePool extends EkuboPool<FullRangePoolState.Object> {
       {
         [address]: new NamedEventHandlers(iface, {
           PositionUpdated: (args, oldState) => {
-            if (key.num_id !== BigInt(args.poolId)) {
+            if (key.numId !== BigInt(args.poolId)) {
               return null;
             }
 
@@ -57,14 +50,13 @@ export class FullRangePool extends EkuboPool<FullRangePoolState.Object> {
         [address]: data => {
           const ev = parseSwappedEvent(data);
 
-          if (key.num_id !== ev.poolId) {
+          if (key.numId !== ev.poolId) {
             return null;
           }
 
           return FullRangePoolState.fromSwappedEvent(ev);
         },
       },
-      quoteFn ?? quote,
     );
 
     this.dataFetcher = dataFetcher;
@@ -77,6 +69,54 @@ export class FullRangePool extends EkuboPool<FullRangePoolState.Object> {
       blockTag: blockNumber,
     });
     return FullRangePoolState.fromQuoter(data[0]);
+  }
+
+  protected override _quote(
+    amount: bigint,
+    isToken1: boolean,
+    state: DeepReadonly<FullRangePoolState.Object>,
+    sqrtRatioLimit?: bigint,
+  ): Quote {
+    return this.quoteFullRange(amount, isToken1, state, sqrtRatioLimit);
+  }
+
+  public quoteFullRange(
+    this: PoolKeyed,
+    amount: bigint,
+    isToken1: boolean,
+    state: DeepReadonly<FullRangePoolState.Object>,
+    sqrtRatioLimit?: bigint,
+  ): Quote<FullRangePoolState.Object> {
+    const isIncreasing = isPriceIncreasing(amount, isToken1);
+
+    let sqrtRatio = state.sqrtRatio;
+    const liquidity = state.liquidity;
+
+    sqrtRatioLimit ??= isIncreasing ? MAX_SQRT_RATIO : MIN_SQRT_RATIO;
+
+    const step = computeStep({
+      fee: this.key.config.fee,
+      sqrtRatio,
+      liquidity,
+      isToken1,
+      sqrtRatioLimit,
+      amount,
+    });
+
+    return {
+      consumedAmount: step.consumedAmount,
+      calculatedAmount: step.calculatedAmount,
+      gasConsumed: GAS_COST_OF_ONE_FULL_RANGE_SWAP,
+      skipAhead: 0,
+      stateAfter: {
+        sqrtRatio: step.sqrtRatioNext,
+        liquidity,
+      },
+    };
+  }
+
+  protected _computeTvl(state: FullRangePoolState.Object): [bigint, bigint] {
+    return FullRangePoolState.computeTvl(state);
   }
 }
 
@@ -105,7 +145,9 @@ export namespace FullRangePoolState {
       return null;
     }
 
-    const clonedState = _.cloneDeep(oldState) as DeepWritable<typeof oldState>;
+    const clonedState = structuredClone(oldState) as DeepWritable<
+      typeof oldState
+    >;
 
     clonedState.liquidity += liquidityDelta;
 
@@ -118,39 +160,13 @@ export namespace FullRangePoolState {
       sqrtRatio: ev.sqrtRatioAfter,
     };
   }
-}
 
-export function quote(
-  this: PoolKeyed,
-  amount: bigint,
-  isToken1: boolean,
-  state: DeepReadonly<FullRangePoolState.Object>,
-  sqrtRatioLimit?: bigint,
-): Quote & { stateAfter: typeof state } {
-  const isIncreasing = isPriceIncreasing(amount, isToken1);
+  export function computeTvl(state: Object): [bigint, bigint] {
+    const { sqrtRatio, liquidity } = state;
 
-  let sqrtRatio = state.sqrtRatio;
-  const liquidity = state.liquidity;
-
-  sqrtRatioLimit ??= isIncreasing ? MAX_SQRT_RATIO : MIN_SQRT_RATIO;
-
-  const step = computeStep({
-    fee: this.key.config.fee,
-    sqrtRatio,
-    liquidity,
-    isToken1,
-    sqrtRatioLimit,
-    amount,
-  });
-
-  return {
-    consumedAmount: step.consumedAmount,
-    calculatedAmount: step.calculatedAmount,
-    gasConsumed: GAS_COST_OF_ONE_FULL_RANGE_SWAP,
-    skipAhead: 0,
-    stateAfter: {
-      sqrtRatio: step.sqrtRatioNext,
-      liquidity,
-    },
-  };
+    return [
+      amount0Delta(sqrtRatio, MAX_SQRT_RATIO, liquidity, false),
+      amount1Delta(MIN_SQRT_RATIO, sqrtRatio, liquidity, false),
+    ];
+  }
 }
