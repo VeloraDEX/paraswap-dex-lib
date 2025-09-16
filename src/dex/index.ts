@@ -114,6 +114,7 @@ import { UsdcTransmuter } from './usdc-transmuter/usdc-transmuter';
 import { Blackhole } from './solidly/forks-override/blackhole';
 import { BlackholeCL } from './algebra-integral/forks/blackhole-cl';
 import { BunniV2 } from './bunni-v2/bunni-v2';
+import { Cap } from './cap/cap';
 
 const LegacyDexes = [
   CurveV2,
@@ -221,6 +222,7 @@ const Dexes = [
   Blackhole,
   BlackholeCL,
   BunniV2,
+  Cap,
 ];
 
 export type LegacyDexConstructor = new (dexHelper: IDexHelper) => IDexTxBuilder<
