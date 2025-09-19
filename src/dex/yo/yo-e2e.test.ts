@@ -1,0 +1,91 @@
+/* eslint-disable no-console */
+import dotenv from 'dotenv';
+dotenv.config();
+
+import { testE2E } from '../../../tests/utils-e2e';
+import { Network, ContractMethod, SwapSide } from '../../constants';
+import { StaticJsonRpcProvider } from '@ethersproject/providers';
+import { generateConfig } from '../../config';
+import { YoConfig } from './config';
+import { BI_POWS } from '../../bigint-constants';
+import { Token } from '../../types';
+
+function testForNetwork(
+  network: Network,
+  dexKey: string,
+  tokenA: Token,
+  tokenB: Token,
+  tokenAAmount: string,
+  tokenBAmount: string,
+  skipTokenAToTokenB = false,
+) {
+  const provider = new StaticJsonRpcProvider(
+    generateConfig(network).privateHttpProvider,
+    network,
+  );
+
+  const sideToContractMethods = new Map([
+    [SwapSide.SELL, [ContractMethod.swapExactAmountIn]],
+    [SwapSide.BUY, [ContractMethod.swapExactAmountOut]],
+  ]);
+
+  describe(`${network}`, () => {
+    sideToContractMethods.forEach((contractMethods, side) =>
+      describe(`${side}: ${dexKey}`, () => {
+        contractMethods.forEach((contractMethod: ContractMethod) => {
+          describe(`${contractMethod}`, () => {
+            if (!skipTokenAToTokenB) {
+              it(`${tokenA.address} -> ${tokenB.address}`, async () => {
+                await testE2E(
+                  tokenA,
+                  tokenB,
+                  '',
+                  side === SwapSide.SELL ? tokenAAmount : tokenBAmount,
+                  side,
+                  dexKey,
+                  contractMethod,
+                  network,
+                  provider,
+                );
+              });
+            }
+            it(`${tokenB.address} -> ${tokenA.address}`, async () => {
+              await testE2E(
+                tokenB,
+                tokenA,
+                '',
+                side === SwapSide.SELL ? tokenBAmount : tokenAAmount,
+                side,
+                dexKey,
+                contractMethod,
+                network,
+                provider,
+              );
+            });
+          });
+        });
+      }),
+    );
+  });
+}
+
+const config = YoConfig;
+
+for (const dexKey of Object.keys(YoConfig)) {
+  for (const net of Object.keys(YoConfig[dexKey])) {
+    const network = Number(net) as Network;
+    const { vault, asset, decimals } = config[dexKey][network];
+    const tokenA = { address: vault, decimals };
+    const tokenB = { address: asset, decimals };
+
+    testForNetwork(
+      network,
+      dexKey,
+      tokenA,
+      tokenB,
+      BI_POWS[tokenA.decimals].toString(),
+      BI_POWS[tokenB.decimals].toString(),
+      false, // Yo doesn't have cooldown restrictions
+    );
+  }
+}
