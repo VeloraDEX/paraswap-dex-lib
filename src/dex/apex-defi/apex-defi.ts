@@ -560,10 +560,10 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
 
     // Validate state
     if (
-      !reserve0 ||
-      !reserve1 ||
-      baseSwapRate === undefined ||
-      tradingFee === undefined
+      reserve0 == null ||
+      reserve1 == null ||
+      baseSwapRate == null ||
+      tradingFee == null
     ) {
       this.logger.warn('Invalid pool state for pricing calculation');
       return 0n;
@@ -610,11 +610,12 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
       return 0n;
     }
 
+    // Validate state
     if (
-      !reserve0 ||
-      !reserve1 ||
-      baseSwapRate === undefined ||
-      tradingFee === undefined
+      reserve0 == null ||
+      reserve1 == null ||
+      baseSwapRate == null ||
+      tradingFee == null
     ) {
       this.logger.warn('Invalid pool state for pricing calculation');
       return 0n;
