@@ -528,16 +528,15 @@ export class UniswapV3
       return null;
     }
 
-    const [tokenA, tokenB, feeStr] = identifier.split('_');
+    const [tokenA, tokenB, feeStr, tickSpacing] = identifier.split('_');
 
     const fee = BigInt(feeStr);
 
-    const pool = await this.getPool(
+    const pool = this.getPoolInstance(
       tokenA.toLowerCase(),
       tokenB.toLowerCase(),
       fee,
-      blockNumber,
-      undefined, // tickSpacing
+      tickSpacing ? BigInt(tickSpacing) : undefined,
     );
 
     if (!pool) {
