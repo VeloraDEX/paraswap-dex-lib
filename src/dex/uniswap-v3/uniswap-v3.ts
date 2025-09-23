@@ -515,7 +515,9 @@ export class UniswapV3
   async generateStateByPoolId(
     poolId: string,
     blockNumber: number,
-  ): Promise<DeepReadonly<PoolState> | null> {
+  ): Promise<DeepReadonly<PoolState | {}> | null> {
+    if (poolId.includes('factory')) return {};
+
     const [dexKey, identifier] = poolId.split(':', 2);
 
     if (!identifier) {
