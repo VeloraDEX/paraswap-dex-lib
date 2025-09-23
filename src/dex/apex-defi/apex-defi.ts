@@ -381,7 +381,7 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
             swapType: isERC314Pair ? 'direct' : 'router',
           },
           exchange: this.dexKey,
-          poolIdentifier,
+          poolIdentifiers: [poolIdentifier],
           gasCost: ApexDefiConfig[this.dexKey][this.network].poolGasCost,
           poolAddresses: [pool.poolAddress],
         },
@@ -501,7 +501,7 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
           swapType: 'router',
         },
         exchange: this.dexKey,
-        poolIdentifier: virtualPoolIdentifier,
+        poolIdentifiers: [virtualPoolIdentifier],
         gasCost: ApexDefiConfig[this.dexKey][this.network].poolGasCost * 2,
         poolAddresses: [srcPool.poolAddress, destPool.poolAddress],
       },
@@ -1551,9 +1551,9 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
           isWrap,
         },
         exchange: this.dexKey,
-        poolIdentifier: `${
-          this.dexKey
-        }_wrapper_${srcToken.address.toLowerCase()}`,
+        poolIdentifiers: [
+          `${this.dexKey}_wrapper_${srcToken.address.toLowerCase()}`,
+        ],
         gasCost: 100000,
         poolAddresses: [wrapperAddress],
       },
