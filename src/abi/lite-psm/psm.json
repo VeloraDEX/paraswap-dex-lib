@@ -199,7 +199,9 @@
       { "internalType": "uint256", "name": "gemAmt", "type": "uint256" }
     ],
     "name": "sellGem",
-    "outputs": [],
+    "outputs": [
+      { "internalType": "uint256", "name": "daiOutWad", "type": "uint256" }
+    ],
     "stateMutability": "nonpayable",
     "type": "function"
   },

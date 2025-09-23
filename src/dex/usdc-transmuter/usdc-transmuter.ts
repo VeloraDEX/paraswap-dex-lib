@@ -77,6 +77,10 @@ export class UsdcTransmuter
     return null;
   }
 
+  private getPoolIdentifier(srcToken: Token, destToken: Token): string {
+    return `${this.dexKey}_${srcToken.address}_${destToken.address}`;
+  }
+
   async getPoolIdentifiers(
     srcToken: Token,
     destToken: Token,
@@ -84,7 +88,7 @@ export class UsdcTransmuter
     blockNumber: number,
   ): Promise<string[]> {
     if (this.isAppropriatePair(srcToken, destToken)) {
-      return [`${this.dexKey}_${srcToken.address}_${destToken.address}`];
+      return [this.getPoolIdentifier(srcToken, destToken)];
     }
 
     return [];
@@ -110,6 +114,7 @@ export class UsdcTransmuter
         exchange: this.dexKey,
         gasCost: USDC_TRANSMUTER_GAS_COST,
         poolAddresses: [this.config.usdcTransmuterAddress],
+        poolIdentifiers: [this.getPoolIdentifier(srcToken, destToken)],
       },
     ];
   }

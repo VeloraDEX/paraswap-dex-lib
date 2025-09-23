@@ -274,6 +274,7 @@ export class AaveV3Stata
           exchange: stataToken.address,
         },
         poolAddresses: [stataAddressLower],
+        poolIdentifiers: [this._getPoolIdentifier(srcToken, destToken)],
       },
     ];
   }

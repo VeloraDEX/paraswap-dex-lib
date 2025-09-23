@@ -179,6 +179,7 @@ export class ERC4626
           },
         },
         poolAddresses: [this.vault],
+        poolIdentifiers: [`${this.dexKey}_${this.vault}`],
         exchange: this.dexKey,
       },
     ];

@@ -215,8 +215,16 @@ export const Tokens: {
       address: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2',
       decimals: 18,
     },
+    VLR: {
+      address: '0x4e107a0000DB66f0E9Fd2039288Bf811dD1f9c74',
+      decimals: 18,
+    },
     PSP: {
       address: '0xcafe001067cdef266afb7eb5a286dcfd277f3de5',
+      decimals: 18,
+    },
+    sePSP1: {
+      address: '0x716fBC68E0c761684D9280484243FF094CC5FfAB',
       decimals: 18,
     },
     SETH: {
@@ -585,6 +593,11 @@ export const Tokens: {
       address: '0x437cc33344a0B27A429f795ff6B469C72698B291',
       decimals: 6,
       symbol: 'wM',
+    },
+    UsualUSDC: {
+      address: '0xb672B3976bAa3952bFb2eCE8eeFB784f8daB1424',
+      decimals: 6,
+      symbol: 'UsualUSDC',
     },
     UsualM: {
       address: '0x4cbc25559dbbd1272ec5b64c7b5f48a2405e6470',
@@ -1556,6 +1569,18 @@ export const Tokens: {
     aaveUSDT: {
       address: '0x6ab707aca953edaefbc4fd23ba73294241490620',
       decimals: 6,
+    },
+    VLR: {
+      address: '0x4e107a0000DB66f0E9Fd2039288Bf811dD1f9c74',
+      decimals: 18,
+    },
+    PSP: {
+      address: '0xd3594E879B358F430E20F82bea61e83562d49D48',
+      decimals: 18,
+    },
+    sePSP1: {
+      address: '0x8C934b7dBc782568d14ceaBbEAeDF37cB6348615',
+      decimals: 18,
     },
     waOptWETH: {
       address: '0x464b808c2c7e04b07e860fdf7a91870620246148',

@@ -97,6 +97,8 @@ import { SkyConverter } from './sky-converter/sky-converter';
 import { Cables } from './cables/cables';
 import { Stader } from './stader/stader';
 import { UsualBond } from './usual/usual-bond';
+import { UsdcUsualUSDC } from './usual/usdc-usual-usdc';
+import { UsualUSDCUsd0 } from './usual/usual-usdc-usd0';
 import { UsualMWrappedM } from './usual/usual-m-wrapped-m';
 import { UsualMUsd0 } from './usual/usual-m-usd0';
 import { MWrappedM } from './usual/m-wrapped-m';
@@ -107,9 +109,12 @@ import { Ekubo } from './ekubo/ekubo';
 import { UniswapV4 } from './uniswap-v4/uniswap-v4';
 import { PancakeSwapV2 } from './uniswap-v2/pancake-swap-v2';
 import { uniswapV4Merge } from './uniswap-v4/optimizer';
+import { MiroMigrator } from './miro-migrator/miro-migrator';
 import { AaveV3PtRollOver } from './aave-v3-pt-roll-over/aave-v3-pt-roll-over';
 import { RingV2 } from './uniswap-v2/ring-v2';
 import { UsdcTransmuter } from './usdc-transmuter/usdc-transmuter';
+import { Blackhole } from './solidly/forks-override/blackhole';
+import { BlackholeCL } from './algebra-integral/forks/blackhole-cl';
 import { ApexDefi } from './apex-defi/apex-defi';
 import { BunniV2 } from './bunni-v2/bunni-v2';
 
@@ -206,15 +211,20 @@ const Dexes = [
   Cables,
   FluidDex,
   FluidDexLite,
+  UsdcUsualUSDC,
+  UsualUSDCUsd0,
   UsualMWrappedM,
   MWrappedM,
   WrappedMM,
   UsualMUsd0,
   UsualPP,
   Ekubo,
+  MiroMigrator,
   AaveV3PtRollOver,
   RingV2,
   UsdcTransmuter,
+  Blackhole,
+  BlackholeCL,
   ApexDefi,
   BunniV2,
 ];

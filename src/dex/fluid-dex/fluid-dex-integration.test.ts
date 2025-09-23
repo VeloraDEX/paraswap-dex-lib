@@ -351,5 +351,21 @@ describe('FluidDex', function () {
         );
       });
     });
+
+    describe('getTopPoolsForToken', () => {
+      it('USDC', async () => {
+        const poolTrackerDexInstance = new FluidDex(network, dexKey, dexHelper);
+        if (poolTrackerDexInstance.updatePoolState) {
+          await poolTrackerDexInstance.updatePoolState();
+        }
+        const usdcAddress = Tokens[network]['USDC'].address;
+        const poolLiquidity = await poolTrackerDexInstance.getTopPoolsForToken(
+          usdcAddress,
+          10,
+        );
+
+        console.log(`USDC Top Pools:`, JSON.stringify(poolLiquidity, null, 2));
+      });
+    });
   });
 });

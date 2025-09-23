@@ -20,7 +20,6 @@ export type DexParams = {
   quoter: Address;
   router: Address;
   subgraphURL: string;
-  uniswapMulticall: Address;
   chunksCount: number;
 };
 

@@ -51,4 +51,26 @@ describe('Usual Gas Estimation', () => {
       });
     });
   });
+
+  describe('UsualUSDCUsd0', () => {
+    const dexKey = 'UsualUSDCUsd0';
+
+    describe('swapExactAmountIn', () => {
+      const UsualUSDC = Tokens[network]['UsualUSDC'];
+      const USD0 = Tokens[network]['USD0'];
+      const amount = 100000n;
+
+      it('swap', async () => {
+        await testGasEstimation(
+          network,
+          UsualUSDC,
+          USD0,
+          amount,
+          SwapSide.SELL,
+          dexKey,
+          ContractMethodV6.swapExactAmountIn,
+        );
+      });
+    });
+  });
 });
