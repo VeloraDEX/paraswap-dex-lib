@@ -24,4 +24,4 @@ export const MAX_PRICING_COMPUTATION_STEPS_ALLOWED = 64;
 
 export const UNISWAPV4_EFFICIENCY_FACTOR = 3;
 
-export const POOL_MIN_TVL_USD = 50;
+export const POOL_MIN_TVL_USD = 10_000;

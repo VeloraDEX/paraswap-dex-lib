@@ -202,7 +202,7 @@ export class Wombat extends SimpleExchange implements IDex<WombatData> {
         exchange: this.dexKey,
         /** @todo specify gas cost */
         gasCost: 260 * 1000,
-        poolIdentifier: this.getPoolIdentifier(poolAddress),
+        poolIdentifiers: [this.getPoolIdentifier(poolAddress)],
       });
     }
 

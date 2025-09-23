@@ -1,6 +1,6 @@
 import { DexParams } from './types';
-import { DexConfigMap, AdapterMappings } from '../../types';
-import { Network, SwapSide } from '../../constants';
+import { DexConfigMap } from '../../types';
+import { Network } from '../../constants';
 
 export const ConcentratorArusdConfig: DexConfigMap<DexParams> = {
   ConcentratorArusd: {

@@ -200,7 +200,7 @@ export class JarvisV6
         poolAddresses: [poolAddress],
         exchange: this.dexKey,
         gasCost: 475 * 1000, //between 450-500k gas
-        poolIdentifier,
+        poolIdentifiers: [poolIdentifier],
       },
     ];
   }

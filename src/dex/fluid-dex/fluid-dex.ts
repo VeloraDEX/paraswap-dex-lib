@@ -274,7 +274,7 @@ export class FluidDex extends SimpleExchange implements IDex<FluidDexData> {
               poolId: pool.id,
             },
             exchange: this.dexKey,
-            poolIdentifier: pool.id,
+            poolIdentifiers: [pool.id],
             gasCost: FLUID_DEX_GAS_COST,
             poolAddresses: [pool.address],
           };

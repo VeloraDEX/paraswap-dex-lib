@@ -309,10 +309,10 @@
     "@babel/helper-validator-identifier" "^7.22.20"
     to-fast-properties "^2.0.0"
 
-"@balancer-labs/balancer-maths@^0.0.35":
-  version "0.0.35"
-  resolved "https://registry.yarnpkg.com/@balancer-labs/balancer-maths/-/balancer-maths-0.0.35.tgz#024b361ab8a47bca628521183d0020ec1dcaf867"
-  integrity sha512-2ItB/cIaqOu77OSWoWuqe2fe7PLtBK6e3dH2G9dVr3ZIECl85UXuSoHHxTUc/ZM0pMNUVRbIVXXsFAbBIlBiSQ==
+"@balancer-labs/balancer-maths@^0.0.36":
+  version "0.0.36"
+  resolved "https://registry.yarnpkg.com/@balancer-labs/balancer-maths/-/balancer-maths-0.0.36.tgz#54fb663cb632b3dd62f721b6cd9a22e71af2a8ab"
+  integrity sha512-biNukz3DMkVQ3DkfT2h5fG++6IbpsAlkfLnp8+f1b9GDCD4RypQ+JBbTUyQT2LJ8gEASFNcNdB60KUYxK5N71A==
 
 "@balancer-labs/sor@4.1.3":
   version "4.1.3"
@@ -1213,10 +1213,10 @@
   resolved "https://registry.yarnpkg.com/@paraswap/core/-/core-2.2.0.tgz#848175c7729f1064e715019269b1c193a23a5be8"
   integrity sha512-aENl5zjS0y4ag7PLEq/hHgaAH4XpN5M4Zc7Igt/03D+W6t6tgScG9on2gXKkEUErcgnZ79qnvzKhaU6QgzoBAQ==
 
-"@paraswap/core@2.4.0":
-  version "2.4.0"
-  resolved "https://registry.yarnpkg.com/@paraswap/core/-/core-2.4.0.tgz#82dac1f2eb5622b90eec352031f0711037bd8eff"
-  integrity sha512-msv0Etc5f7H2UDnDd23wKzNnx64fj1iwt8IlBORTFIpxJ1+fa+TqNO7lhtohfRiVmU3dnnAMcjEi4D+WHSWpvw==
+"@paraswap/core@2.4.1":
+  version "2.4.1"
+  resolved "https://registry.yarnpkg.com/@paraswap/core/-/core-2.4.1.tgz#c118762ca0526075ab75a862c73f719fc2843f39"
+  integrity sha512-mb0GCuLqQcrGZBzILC8N4WetnIqWEG6DxA2KZuk4X5HJZ9zeW9FQTCXMzZhGAJSx2ZiBMdHbV6RevmXI7IlJbQ==
 
 "@paraswap/sdk@6.9.1":
   version "6.9.1"

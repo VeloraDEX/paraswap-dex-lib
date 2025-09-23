@@ -16,9 +16,8 @@ const NETWORKS = [
   Network.BASE,
   Network.POLYGON,
   Network.OPTIMISM,
-  Network.FANTOM,
+  Network.SONIC,
   Network.ARBITRUM,
-  Network.ZKEVM,
   Network.GNOSIS,
   Network.UNICHAIN,
 ];
@@ -55,9 +54,10 @@ describe('Wrapped Native E2E v6', () => {
       const wrappedHolder = holders[wrappedTokenSymbol];
 
       [
-        ContractMethod.simpleSwap,
-        ContractMethod.multiSwap,
-        ContractMethod.megaSwap,
+        // ContractMethod.simpleSwap,
+        // ContractMethod.multiSwap,
+        // ContractMethod.megaSwap,
+        ContractMethod.swapExactAmountIn,
       ].forEach(contractMethod => {
         describe(`${contractMethod}`, () => {
           it(`SELL ${nativeTokenSymbol} -> ${wrappedTokenSymbol}`, async () => {

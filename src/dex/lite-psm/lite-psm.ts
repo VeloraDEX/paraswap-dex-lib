@@ -12,7 +12,7 @@ import {
   ExchangeTxInfo,
   PreprocessTransactionOptions,
 } from '../../types';
-import { SwapSide, Network, NULL_ADDRESS } from '../../constants';
+import { SwapSide, Network } from '../../constants';
 import * as CALLDATA_GAS_COST from '../../calldata-gas-cost';
 import {
   getDexKeysWithNetwork,
@@ -41,7 +41,7 @@ import {
   ParaSwapVersion,
 } from '@paraswap/core';
 import { BigNumber } from 'ethers';
-import { LitePsmEventPool, getOnChainState } from './lite-psm-event-pool';
+import { LitePsmEventPool } from './lite-psm-event-pool';
 import { extractReturnAmountPosition } from '../../executor/utils';
 
 const daiPsmInterface = new Interface(DaiPsmABI);
@@ -96,19 +96,21 @@ export class LitePsm
   }
 
   async initializePricing(blockNumber: number) {
-    const poolStates = await getOnChainState(
-      this.dexHelper.multiContract,
-      this.poolConfigs,
-      this.vatAddress,
-      blockNumber,
-      LitePsmConfig[this.dexKey][this.network].dai.address,
-    );
+    await this.initializeEventPools(blockNumber);
+  }
+
+  private async initializeEventPools(
+    blockNumber: number,
+    subscribe = true,
+  ): Promise<void> {
     await Promise.all(
-      this.poolConfigs.map(async (p, i) => {
-        const eventPool = this.eventPools[p.gem.address.toLowerCase()];
-        await eventPool.initialize(blockNumber, {
-          state: poolStates[i],
-        });
+      Object.values(this.eventPools).map(async eventPool => {
+        if (subscribe) {
+          await eventPool.initialize(blockNumber);
+        } else {
+          const state = await eventPool.generateState(blockNumber);
+          eventPool.setState(state, blockNumber);
+        }
       }),
     );
   }
@@ -253,7 +255,7 @@ export class LitePsm
         poolAddresses: [psm],
         exchange: this.dexKey,
         gasCost: 50000,
-        poolIdentifier,
+        poolIdentifiers: [poolIdentifier],
       },
     ];
   }
@@ -490,51 +492,59 @@ export class LitePsm
     return { params: payload, encoder, networkFee: '0' };
   }
 
+  async updatePoolState(): Promise<void> {
+    const blockNumber = await this.dexHelper.web3Provider.eth.getBlockNumber();
+
+    await this.initializeEventPools(blockNumber, false);
+  }
+
   // Returns list of top pools based on liquidity. Max
   // limit number pools should be returned.
   async getTopPoolsForToken(
     tokenAddress: Address,
     limit: number,
   ): Promise<PoolLiquidity[]> {
-    const _tokenAddress = tokenAddress.toLowerCase();
+    const token = tokenAddress.toLowerCase();
+
+    const isDAI = this.dai.address.toLowerCase() === token;
+    const isUSDS = this.usds.address.toLowerCase() === token;
+    const isDAIorUSDS = isDAI || isUSDS;
+
     // Liquidity depends on the swapping side hence we simply use the min
     // Its always in terms of stable coin hence liquidityUSD = liquidity
     const minLiq = (poolState: PoolState, decimals: number) => {
       const buyLimit = poolState.gemBalance * getBigIntPow(18 - decimals);
       const sellLimit = poolState.daiBalance;
-      return (
-        2 *
-        parseInt(
-          (
-            (buyLimit > sellLimit ? sellLimit : buyLimit) / BI_POWS[18]
-          ).toString(),
-        )
-      );
+
+      const minLimit = buyLimit < sellLimit ? buyLimit : sellLimit;
+
+      const liquidity = Number(minLimit) / Number(BI_POWS[18]);
+      return liquidity > 0 ? 2 * liquidity : 0;
     };
 
-    const isDaiOrUsds =
-      _tokenAddress === this.dai.address || _tokenAddress === this.usds.address;
-
-    const validPoolConfigs = isDaiOrUsds
+    const validPoolConfigs: PoolConfig[] = isDAIorUSDS
       ? this.poolConfigs
-      : this.eventPools[_tokenAddress]
-      ? [this.eventPools[_tokenAddress].poolConfig]
+      : this.eventPools[token]
+      ? [this.eventPools[token].poolConfig]
       : [];
+
     if (!validPoolConfigs.length) return [];
 
-    const poolStates = await getOnChainState(
-      this.dexHelper.multiContract,
-      validPoolConfigs,
-      this.vatAddress,
-      'latest',
-      LitePsmConfig[this.dexKey][this.network].dai.address,
-    );
+    const pools = validPoolConfigs.map(config => {
+      const eventPoolKey = config.gem.address.toLowerCase();
+      const eventPool = this.eventPools[eventPoolKey];
+      const state = eventPool?.getStaleState();
 
-    return validPoolConfigs.map((p, i) => ({
-      exchange: this.dexKey,
-      address: p.psmAddress,
-      liquidityUSD: minLiq(poolStates[i], p.gem.decimals),
-      connectorTokens: isDaiOrUsds ? [p.gem] : [this.dai, this.usds],
-    }));
+      if (!state) return null;
+
+      return {
+        exchange: this.dexKey,
+        address: config.psmAddress,
+        liquidityUSD: minLiq(state, config.gem.decimals),
+        connectorTokens: isDAIorUSDS ? [config.gem] : [this.dai, this.usds],
+      };
+    });
+
+    return pools.filter(p => !!p).slice(0, limit);
   }
 }

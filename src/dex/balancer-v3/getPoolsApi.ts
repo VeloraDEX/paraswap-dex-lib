@@ -13,6 +13,7 @@ import { GyroECLPImmutableString } from './gyroECLPPool';
 import { ReClammApiName } from './reClammPool';
 interface PoolToken {
   address: string;
+  index: number;
   weight: string | null;
   canUseBufferForSwaps: boolean | null;
   underlyingToken: {
@@ -23,6 +24,7 @@ interface PoolToken {
 type Pool = {
   id: string;
   type: string;
+  version: number;
   poolTokens: PoolToken[];
   hook: {
     address: string;
@@ -68,8 +70,10 @@ function createQuery(
       ) {
         id
         type
+        version
         poolTokens {
           address
+          index
           weight
           canUseBufferForSwaps
           underlyingToken {
@@ -111,19 +115,38 @@ function toImmutablePoolStateMap(
           pool.type === ReClammApiName || // In reClamm the pool is also its own hook. We don't track hook state as its not needed for pricing
           pool.hook.address.toLowerCase() in hooksConfigMap,
       )
+      // Filter out ReClamm pools that don't have version 1 or 2
+      .filter(
+        pool =>
+          pool.type !== ReClammApiName ||
+          pool.version === 1 ||
+          pool.version === 2,
+      )
       .reduce((map, pool) => {
+        // Set poolType to RECLAMM_V2 for version 2 ReClamm pools
+        const poolType =
+          pool.type === ReClammApiName && pool.version === 2
+            ? 'RECLAMM_V2'
+            : pool.type;
+
+        // Sort pool tokens by index in ascending order
+        const sortedPoolTokens = [...pool.poolTokens].sort(
+          (a, b) => a.index - b.index,
+        );
+
         const immutablePoolState: CommonImmutablePoolState = {
           poolAddress: pool.id,
-          tokens: pool.poolTokens.map(t => t.address),
-          tokensUnderlying: pool.poolTokens.map(t =>
+          version: pool.version,
+          tokens: sortedPoolTokens.map(t => t.address),
+          tokensUnderlying: sortedPoolTokens.map(t =>
             t.underlyingToken && t.canUseBufferForSwaps
               ? t.underlyingToken.address
               : null,
           ),
-          weights: pool.poolTokens.map(t => scaleOrDefault(t.weight, 18, 0n)),
-          poolType: pool.type,
-          hookAddress: getHookAddress(pool.hook, pool.type),
-          hookType: getHookType(pool.hook, pool.type, hooksConfigMap),
+          weights: sortedPoolTokens.map(t => scaleOrDefault(t.weight, 18, 0n)),
+          poolType: poolType,
+          hookAddress: getHookAddress(pool.hook, poolType),
+          hookType: getHookType(pool.hook, poolType, hooksConfigMap),
           supportsUnbalancedLiquidity: true, // can default to true as only required for add/remove maths which we don't use
           // GyroECLP
           // Parameters to configure the E-CLP pool, with 18 decimals
@@ -165,7 +188,7 @@ function getHookType(
   hooksConfigMap: HooksConfigMap,
 ) {
   if (!hook) return undefined;
-  else if (poolType === ReClammApiName)
+  else if (poolType === ReClammApiName || poolType === 'RECLAMM_V2')
     return undefined; // The hook is not used for pricing so we just treat as non-existent
   else return hooksConfigMap[hook.address.toLowerCase()].type;
 }
@@ -177,7 +200,7 @@ function getHookAddress(
   poolType: string,
 ) {
   if (!hook) return undefined;
-  else if (poolType === ReClammApiName)
+  else if (poolType === ReClammApiName || poolType === 'RECLAMM_V2')
     return undefined; // The hook is not used for pricing so we just treat as non-existent
   else return hook.address.toLowerCase();
 }

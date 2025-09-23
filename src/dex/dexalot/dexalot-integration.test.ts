@@ -428,4 +428,126 @@ describe('Dexalot', function () {
       }
     });
   });
+
+  describe('BSC', () => {
+    const network = Network.BSC;
+    const dexHelper = new DummyDexHelper(network);
+
+    const tokens = Tokens[network];
+
+    const tokenASymbol = 'USDT';
+    const tokenBSymbol = 'USDC';
+
+    const tokenAScaling = BI_POWS[tokens[tokenASymbol].decimals - 3];
+    const amountsForTokenA = [
+      0n,
+      1n * tokenAScaling,
+      2n * tokenAScaling,
+      3n * tokenAScaling,
+      4n * tokenAScaling,
+      5n * tokenAScaling,
+      6n * tokenAScaling,
+      7n * tokenAScaling,
+      8n * tokenAScaling,
+      9n * tokenAScaling,
+      10n * tokenAScaling,
+    ];
+
+    const amountsForTokenB = [
+      0n,
+      1n * BI_POWS[tokens[tokenBSymbol].decimals],
+      2n * BI_POWS[tokens[tokenBSymbol].decimals],
+      3n * BI_POWS[tokens[tokenBSymbol].decimals],
+      4n * BI_POWS[tokens[tokenBSymbol].decimals],
+      5n * BI_POWS[tokens[tokenBSymbol].decimals],
+      6n * BI_POWS[tokens[tokenBSymbol].decimals],
+      7n * BI_POWS[tokens[tokenBSymbol].decimals],
+      8n * BI_POWS[tokens[tokenBSymbol].decimals],
+      9n * BI_POWS[tokens[tokenBSymbol].decimals],
+      10n * BI_POWS[tokens[tokenBSymbol].decimals],
+    ];
+
+    beforeEach(async () => {
+      blockNumber = await dexHelper.web3Provider.eth.getBlockNumber();
+      dexalot = new Dexalot(network, dexKey, dexHelper);
+      await dexalot.initializePricing(blockNumber);
+      await sleep(5000);
+    });
+
+    afterEach(async () => {
+      dexalot.releaseResources();
+      await sleep(5000);
+    });
+
+    it(`getPoolIdentifiers and getPricesVolume SELL ${tokenASymbol} ${tokenBSymbol}`, async function () {
+      await testPricingOnNetwork(
+        dexalot,
+        network,
+        dexKey,
+        blockNumber,
+        tokenASymbol,
+        tokenBSymbol,
+        SwapSide.SELL,
+        amountsForTokenA,
+      );
+    });
+
+    it(`getPoolIdentifiers and getPricesVolume BUY ${tokenASymbol} ${tokenBSymbol}`, async function () {
+      await testPricingOnNetwork(
+        dexalot,
+        network,
+        dexKey,
+        blockNumber,
+        tokenASymbol,
+        tokenBSymbol,
+        SwapSide.BUY,
+        amountsForTokenB,
+      );
+    });
+
+    it(`getPoolIdentifiers and getPricesVolume SELL ${tokenBSymbol} ${tokenASymbol}`, async function () {
+      await testPricingOnNetwork(
+        dexalot,
+        network,
+        dexKey,
+        blockNumber,
+        tokenBSymbol,
+        tokenASymbol,
+        SwapSide.SELL,
+        amountsForTokenB,
+      );
+    });
+
+    it(`getPoolIdentifiers and getPricesVolume BUY ${tokenBSymbol} ${tokenASymbol}`, async function () {
+      await testPricingOnNetwork(
+        dexalot,
+        network,
+        dexKey,
+        blockNumber,
+        tokenBSymbol,
+        tokenASymbol,
+        SwapSide.BUY,
+        amountsForTokenA,
+      );
+    });
+
+    it('getTopPoolsForToken', async function () {
+      // We have to check without calling initializePricing, because
+      // pool-tracker is not calling that function
+      const dexalot = new Dexalot(network, dexKey, dexHelper);
+      const poolLiquidity = await dexalot.getTopPoolsForToken(
+        tokens[tokenASymbol].address,
+        10,
+      );
+      console.log(`${tokenASymbol} Top Pools:`, poolLiquidity);
+
+      if (!dexalot.hasConstantPriceLargeAmounts) {
+        checkPoolsLiquidity(
+          poolLiquidity,
+          Tokens[network][tokenASymbol].address,
+          dexKey,
+        );
+      }
+    });
+  });
 });

@@ -9,7 +9,7 @@ import {
   DexExchangeParam,
   PoolLiquidity,
 } from '../../types';
-import { SwapSide, Network } from '../../constants';
+import { SwapSide, Network, UNLIMITED_USD_LIQUIDITY } from '../../constants';
 import * as CALLDATA_GAS_COST from '../../calldata-gas-cost';
 import { getDexKeysWithNetwork } from '../../utils';
 import { IDex } from '../idex';
@@ -258,24 +258,21 @@ export class FxProtocolRusd
   ): Promise<PoolLiquidity[]> {
     if (!this.is_rUSD(tokenAddress) && !this.is_weETH(tokenAddress)) return [];
 
+    const isWeETH = this.is_weETH(tokenAddress);
+
     return [
       {
         exchange: this.dexKey,
         address: this.config.rUSDAddress,
-        connectorTokens: this.is_weETH(tokenAddress)
-          ? [
-              {
-                decimals: 18,
-                address: this.config.rUSDAddress,
-              },
-            ]
-          : [
-              {
-                decimals: 18,
-                address: this.config.weETHAddress,
-              },
-            ],
-        liquidityUSD: 1000000000, // Just returning a big number so this DEX will be preferred
+        connectorTokens: [
+          {
+            decimals: 18,
+            address: isWeETH
+              ? this.config.rUSDAddress
+              : this.config.weETHAddress,
+          },
+        ],
+        liquidityUSD: UNLIMITED_USD_LIQUIDITY,
       },
     ];
   }
