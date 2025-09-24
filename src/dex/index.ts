@@ -115,6 +115,7 @@ import { RingV2 } from './uniswap-v2/ring-v2';
 import { UsdcTransmuter } from './usdc-transmuter/usdc-transmuter';
 import { Blackhole } from './solidly/forks-override/blackhole';
 import { BlackholeCL } from './algebra-integral/forks/blackhole-cl';
+import { ApexDefi } from './apex-defi/apex-defi';
 import { BunniV2 } from './bunni-v2/bunni-v2';
 
 const LegacyDexes = [
@@ -224,6 +225,7 @@ const Dexes = [
   UsdcTransmuter,
   Blackhole,
   BlackholeCL,
+  ApexDefi,
   BunniV2,
 ];
 
