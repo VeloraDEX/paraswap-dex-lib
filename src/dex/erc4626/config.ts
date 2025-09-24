@@ -45,4 +45,10 @@ export const ERC4626Config: DexConfigMap<ERC4626Params> = {
       cooldownEnabled: true,
     },
   },
+  stcUSD: {
+    [Network.MAINNET]: {
+      vault: '0x88887bE419578051FF9F4eb6C858A951921D8888', // stcUSD
+      asset: '0xcCcc62962d17b8914c62D74FfB843d73B2a3cccC', // cUSD
+    },
+  },
 };
