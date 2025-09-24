@@ -1451,9 +1451,9 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
     if (fromDecimals === toDecimals) return amount;
 
     if (fromDecimals > toDecimals) {
-      return amount / BigInt(10 ** (fromDecimals - toDecimals));
+      return amount / 10n ** BigInt(fromDecimals - toDecimals);
     } else {
-      return amount * BigInt(10 ** (toDecimals - fromDecimals));
+      return amount * 10n ** BigInt(toDecimals - fromDecimals);
     }
   }
 
@@ -1465,9 +1465,9 @@ export class ApexDefi extends SimpleExchange implements IDex<ApexDefiData> {
     if (fromDecimals === toDecimals) return amount;
 
     if (fromDecimals > toDecimals) {
-      return amount / BigInt(10 ** (fromDecimals - toDecimals));
+      return amount / 10n ** BigInt(fromDecimals - toDecimals);
     } else {
-      return amount * BigInt(10 ** (toDecimals - fromDecimals));
+      return amount * 10n ** BigInt(toDecimals - fromDecimals);
     }
   }
 
