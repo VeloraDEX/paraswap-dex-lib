@@ -513,22 +513,12 @@ export class UniswapV3
   }
 
   async generateStateByPoolId(
-    poolId: string,
+    poolIdentifier: string,
     blockNumber: number,
   ): Promise<DeepReadonly<PoolState | {}> | null> {
-    if (poolId.includes('factory')) return {};
+    if (poolIdentifier.includes('factory')) return {};
 
-    const [dexKey, identifier] = poolId.split(':', 2);
-
-    if (!identifier) {
-      return null;
-    }
-
-    if (dexKey.toLowerCase() !== this.dexKey.toLowerCase()) {
-      return null;
-    }
-
-    const [tokenA, tokenB, feeStr, tickSpacing] = identifier.split('_');
+    const [tokenA, tokenB, feeStr, tickSpacing] = poolIdentifier.split('_');
 
     const fee = BigInt(feeStr);
 
