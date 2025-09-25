@@ -17,7 +17,12 @@ import * as CALLDATA_GAS_COST from '../../calldata-gas-cost';
 import { getBigIntPow, getDexKeysWithNetwork } from '../../utils';
 import { Context, IDex } from '../../dex/idex';
 import { IDexHelper } from '../../dex-helper/idex-helper';
-import { AavePtToUnderlyingData, DexParams, SupportedPt } from './types';
+import {
+  AavePtToUnderlyingData,
+  DexParams,
+  Market,
+  SupportedPt,
+} from './types';
 import { SimpleExchange } from '../simple-exchange';
 import { AavePtToUnderlyingConfig } from './config';
 import { Interface } from '@ethersproject/abi';
@@ -35,7 +40,7 @@ export class AavePtToUnderlying
 
   private config: DexParams;
   private oracleInterface: Interface;
-  private readonly supportedMarkets: SupportedPt[];
+  private markets: Map<string, SupportedPt> = new Map();
 
   logger: Logger;
 
@@ -51,7 +56,10 @@ export class AavePtToUnderlying
     this.config = AavePtToUnderlyingConfig[dexKey][network];
     this.logger = dexHelper.getLogger(dexKey);
     this.oracleInterface = new Interface(PENDLE_ORACLE_ABI);
-    this.supportedMarkets = this.config.supportedPts;
+  }
+
+  async initializePricing(blockNumber: number): Promise<void> {
+    await this.fetchActiveMarkets();
   }
 
   getAdapters(): { name: string; index: number }[] | null {
@@ -68,7 +76,9 @@ export class AavePtToUnderlying
     side: SwapSide,
     blockNumber: number,
   ): Promise<string[]> {
-    const market = this.getMarketByPtToken(srcToken.address);
+    const market = await this.getMarketByPtToken(
+      srcToken.address.toLowerCase(),
+    );
 
     if (!market) {
       return [];
@@ -76,8 +86,7 @@ export class AavePtToUnderlying
 
     // Only support PT -> underlying swaps
     if (
-      destToken.address.toLowerCase() !==
-      market.underlyingRawAddress.toLowerCase()
+      destToken.address.toLowerCase() !== market.underlyingAddress.toLowerCase()
     ) {
       return [];
     }
@@ -85,10 +94,77 @@ export class AavePtToUnderlying
     return [this.getPoolIdentifier(market.marketAddress)];
   }
 
-  private getMarketByPtToken(ptToken: Address): SupportedPt | undefined {
-    return this.supportedMarkets.find(
-      m => m.pt.address.toLowerCase() === ptToken.toLowerCase(),
-    );
+  private async fetchActiveMarkets(): Promise<void> {
+    try {
+      const { markets } = await this.dexHelper.httpRequest.get<{
+        markets: Market[];
+      }>(`${PENDLE_API_URL}/v1/${this.network}/markets/active`);
+
+      if (!markets) {
+        this.logger.error('No results from Pendle markets API');
+        return;
+      }
+
+      this.markets.clear();
+
+      for (const market of markets) {
+        const supportedMarket = this.config.underlyingAddresses[market.name];
+
+        if (!supportedMarket) {
+          continue;
+        }
+
+        // received in the format "chainId-address"
+        const underlyingAddress = market.underlyingAsset
+          .toLowerCase()
+          .split('-')[1];
+
+        const ptAddress = market.pt.toLowerCase().split('-')[1];
+
+        if (underlyingAddress !== supportedMarket.toLowerCase()) {
+          continue;
+        }
+
+        const marketData: SupportedPt = {
+          ptAddress: ptAddress,
+          ptDecimals: 18,
+          expiry: new Date(market.expiry).getTime(),
+          marketAddress: market.address,
+          underlyingAddress: supportedMarket, // Use the original cased address from config
+        };
+
+        this.markets.set(ptAddress, marketData);
+      }
+
+      this.logger.info(`Loaded ${this.markets.size} PT markets`);
+    } catch (error) {
+      this.logger.error(`Failed to load markets from API: ${error}`);
+    }
+  }
+
+  private async getMarketByPtToken(
+    ptToken: Address,
+  ): Promise<SupportedPt | undefined> {
+    if (this.markets.size === 0) {
+      await this.fetchActiveMarkets();
+      return this.markets.get(ptToken);
+    }
+
+    const cachedMarket = this.markets.get(ptToken);
+
+    if (!cachedMarket) {
+      await this.fetchActiveMarkets();
+      return this.markets.get(ptToken);
+    }
+
+    const now = Date.now();
+    const isExpired = cachedMarket.expiry < now;
+    if (isExpired) {
+      await this.fetchActiveMarkets();
+      return this.markets.get(ptToken);
+    }
+
+    return cachedMarket;
   }
 
   private async getOracleRate(market: SupportedPt): Promise<bigint> {
@@ -134,16 +210,18 @@ export class AavePtToUnderlying
     blockNumber: number,
     limitPools?: string[],
   ): Promise<ExchangePrices<AavePtToUnderlyingData> | null> {
-    const market = this.getMarketByPtToken(srcToken.address);
+    const market = await this.getMarketByPtToken(
+      srcToken.address.toLowerCase(),
+    );
 
     if (!market) {
       return null;
     }
 
-    const { underlyingRawAddress, marketAddress } = market;
+    const { underlyingAddress, marketAddress } = market;
 
     const isUnderlying =
-      destToken.address.toLowerCase() === underlyingRawAddress.toLowerCase();
+      destToken.address.toLowerCase() === underlyingAddress.toLowerCase();
 
     if (!isUnderlying) {
       return null;
@@ -204,7 +282,7 @@ export class AavePtToUnderlying
     tokenAddress: Address,
     limit: number,
   ): Promise<PoolLiquidity[]> {
-    const market = this.getMarketByPtToken(tokenAddress);
+    const market = await this.getMarketByPtToken(tokenAddress.toLowerCase());
 
     if (market) {
       return [
@@ -213,7 +291,7 @@ export class AavePtToUnderlying
           address: market.marketAddress,
           connectorTokens: [
             {
-              address: market.underlyingAssetAddress,
+              address: market.underlyingAddress,
               decimals: 18,
               liquidityUSD: NO_USD_LIQUIDITY,
             },

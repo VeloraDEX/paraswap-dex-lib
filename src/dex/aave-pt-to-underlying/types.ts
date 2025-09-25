@@ -4,23 +4,24 @@ export type AavePtToUnderlyingData = {
   marketAddress: Address;
 };
 
-export interface PendleToken {
-  address: string;
-  decimals: number;
-  name: string;
-  expiry: number;
-}
-
 export interface SupportedPt {
-  pt: PendleToken;
-  marketAddress: string; // V4 market address (for router)
-  exitMarketAddress: string; // V2 market address (for exit-position API)
-  underlyingAssetAddress: string;
-  underlyingRawAddress: string; // raw ERC-20
+  ptAddress: string;
+  ptDecimals: number;
+  expiry: number; // Unix timestamp in seconds
+  marketAddress: string;
+  underlyingAddress: string;
 }
 
 export interface DexParams {
   pendleRouterAddress: string;
   oracleAddress: string;
-  supportedPts: SupportedPt[];
+  underlyingAddresses: Record<string, Address>;
+}
+
+export interface Market {
+  name: string;
+  address: string;
+  expiry: string; // ISO date string
+  pt: Address;
+  underlyingAsset: Address;
 }

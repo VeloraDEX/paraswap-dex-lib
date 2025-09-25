@@ -59,8 +59,8 @@ describe('AavePtToUnderlying E2E', () => {
   describe('Mainnet', () => {
     const network = Network.MAINNET;
 
-    const tokenASymbol: string = 'PT-USDe-25SEP2025';
-    const tokenBSymbol: string = 'USDE';
+    const tokenASymbol: string = 'PT-sUSDe-27NOV2025';
+    const tokenBSymbol: string = 'SUSDE';
 
     const tokenAAmount: string = '1000000000000000000';
     const tokenBAmount: string = '1000000000000000000';
