@@ -25,6 +25,7 @@ export const SkyConverterConfig: DexConfigMap<DexParams> = {
       oldToNewFunctionName: 'mkrToSky',
       newTokenRateMultiplier: 24_000n, // constant, never to be updated
       converterIface: new Interface(MkrSkyConverterABI),
+      converterFee: true,
     },
   },
 };

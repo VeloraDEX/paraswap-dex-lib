@@ -23,6 +23,7 @@ import { SkyConverterData } from './types';
 import { SimpleExchange } from '../simple-exchange';
 import { SkyConverterConfig } from './config';
 import { BI_POWS } from '../../bigint-constants';
+import { SkyConverterEventPool } from './sky-converter-pool';
 
 export class SkyConverter
   extends SimpleExchange
@@ -38,6 +39,7 @@ export class SkyConverter
 
   oldToken: Address;
   newToken: Address;
+  private readonly eventPool?: SkyConverterEventPool;
 
   constructor(
     readonly network: Network,
@@ -50,9 +52,24 @@ export class SkyConverter
 
     this.oldToken = this.config.oldTokenAddress.toLowerCase();
     this.newToken = this.config.newTokenAddress.toLowerCase();
+
+    if (this.config.converterFee) {
+      this.eventPool = new SkyConverterEventPool(
+        this.dexKey,
+        this.network,
+        this.dexHelper,
+        this.logger,
+        this.config.converterAddress,
+        this.config.converterIface,
+      );
+    }
   }
 
-  async initializePricing(blockNumber: number) {}
+  async initializePricing(blockNumber: number) {
+    if (this.eventPool) {
+      await this.eventPool.initialize(blockNumber);
+    }
+  }
 
   getAdapters(side: SwapSide): { name: string; index: number }[] | null {
     return null;
@@ -83,12 +100,26 @@ export class SkyConverter
     return [];
   }
 
-  oldAmountToNewAmount(amount: bigint) {
-    return amount * this.config.newTokenRateMultiplier;
+  oldAmountToNewAmount(amount: bigint, fee: bigint) {
+    if (fee <= 0n) {
+      return amount * this.config.newTokenRateMultiplier;
+    }
+
+    return (
+      (amount * this.config.newTokenRateMultiplier * (BI_POWS[18] - fee)) /
+      BI_POWS[18]
+    );
   }
 
-  newAmountToOldAmount(amount: bigint) {
-    return amount / this.config.newTokenRateMultiplier;
+  newAmountToOldAmount(amount: bigint, fee: bigint) {
+    if (fee <= 0n) {
+      return amount / this.config.newTokenRateMultiplier;
+    }
+
+    return (
+      (amount * BI_POWS[18]) /
+      (this.config.newTokenRateMultiplier * (BI_POWS[18] - fee))
+    );
   }
 
   async getPricesVolume(
@@ -118,19 +149,25 @@ export class SkyConverter
       return null;
     }
 
-    let mappingFunction: Function;
+    let fee = 0n;
+    if (this.eventPool) {
+      const state = await this.eventPool.getOrGenerateState(blockNumber);
+      fee = state.fee;
+    }
+
+    let mappingFunction: (amount: bigint) => bigint;
 
     if (side === SwapSide.SELL) {
       if (isOldToNew) {
-        mappingFunction = this.oldAmountToNewAmount.bind(this);
+        mappingFunction = amount => this.oldAmountToNewAmount(amount, fee);
       } else {
-        mappingFunction = this.newAmountToOldAmount.bind(this);
+        mappingFunction = amount => this.newAmountToOldAmount(amount, fee);
       }
     } else {
       if (isOldToNew) {
-        mappingFunction = this.newAmountToOldAmount.bind(this);
+        mappingFunction = amount => this.newAmountToOldAmount(amount, fee);
       } else {
-        mappingFunction = this.oldAmountToNewAmount.bind(this);
+        mappingFunction = amount => this.oldAmountToNewAmount(amount, fee);
       }
     }
 
