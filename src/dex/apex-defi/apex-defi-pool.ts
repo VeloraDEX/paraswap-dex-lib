@@ -183,16 +183,16 @@ export class ApexDefiEventPool extends StatefulEventSubscriber<ApexDefiPoolState
 
       if (state.isLegacy) {
         // V1 token - calculate total fee and factory fee separately
-        const totalFee = (inputAmount * BigInt(state.baseSwapRate)) / 10000n; // 30
+        // const totalFee = (inputAmount * BigInt(state.baseSwapRate)) / 10000n; // 30
         factoryFees = (inputAmount * BigInt(state.protocolFee)) / 10000n; // 25
-        const lpFees = totalFee - factoryFees; // 5
+        // const lpFees = totalFee - factoryFees; // 5
       } else {
         // V2 token - use protocol fee breakdown
         const totalFactoryFee =
           (inputAmount * BigInt(state.baseSwapRate)) / 10000n;
         const protocolFee =
           (totalFactoryFee * BigInt(state.protocolFee)) / 10000n;
-        const lpFee = (totalFactoryFee * BigInt(state.lpFee)) / 10000n;
+        // const lpFee = (totalFactoryFee * BigInt(state.lpFee)) / 10000n;
         factoryFees = protocolFee;
       }
 
