@@ -262,7 +262,7 @@ export class ApexDefiWrapperFactory extends StatefulEventSubscriber<WrapperFacto
             );
           } else {
             // Fallback for older wrappers - assume standard decimals
-            originalTokenDecimals = 18; // Default for most ERC20
+            originalTokenDecimals = 0; // Default for most ERC20
             wrappedTokenDecimals = 18; // ERC314 always has 18 decimals
           }
 
