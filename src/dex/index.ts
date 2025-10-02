@@ -101,8 +101,6 @@ import { UsdcUsualUSDC } from './usual/usdc-usual-usdc';
 import { UsualUSDCUsd0 } from './usual/usual-usdc-usd0';
 import { UsualMWrappedM } from './usual/usual-m-wrapped-m';
 import { UsualMUsd0 } from './usual/usual-m-usd0';
-import { MWrappedM } from './usual/m-wrapped-m';
-import { WrappedMM } from './usual/wrapped-m-m';
 import { UsualPP } from './usual-pp/usual-pp';
 import { AlgebraIntegral } from './algebra-integral/algebra-integral';
 import { Ekubo } from './ekubo/ekubo';
@@ -213,8 +211,6 @@ const Dexes = [
   UsdcUsualUSDC,
   UsualUSDCUsd0,
   UsualMWrappedM,
-  MWrappedM,
-  WrappedMM,
   UsualMUsd0,
   UsualPP,
   Ekubo,

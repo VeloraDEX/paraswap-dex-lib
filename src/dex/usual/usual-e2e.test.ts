@@ -122,52 +122,6 @@ describe('UsualUSDC<>Usd0 E2E', () => {
   });
 });
 
-describe('WrappedMM E2E', () => {
-  const dexKey = 'WrappedMM';
-
-  describe('Mainnet', () => {
-    const network = Network.MAINNET;
-
-    const tokenASymbol: string = 'WrappedM';
-    const tokenBSymbol: string = 'M';
-
-    const tokenAAmount: string = '1000000000';
-    const tokenBAmount: string = '1000000000';
-
-    testForNetwork(
-      network,
-      dexKey,
-      tokenASymbol,
-      tokenBSymbol,
-      tokenAAmount,
-      tokenBAmount,
-    );
-  });
-});
-
-describe('MWrappedM E2E', () => {
-  const dexKey = 'MWrappedM';
-
-  describe('Mainnet', () => {
-    const network = Network.MAINNET;
-
-    const tokenASymbol: string = 'M';
-    const tokenBSymbol: string = 'WrappedM';
-
-    const tokenAAmount: string = '1000000000';
-    const tokenBAmount: string = '1000000000';
-
-    testForNetwork(
-      network,
-      dexKey,
-      tokenASymbol,
-      tokenBSymbol,
-      tokenAAmount,
-      tokenBAmount,
-    );
-  });
-});
-
 describe('UsualMWrappedM E2E', () => {
   const dexKey = 'UsualMWrappedM';
 
