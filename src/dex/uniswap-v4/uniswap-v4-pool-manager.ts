@@ -207,7 +207,7 @@ export class UniswapV4PoolManager extends StatefulEventSubscriber<PoolManagerSta
       }));
   }
 
-  private async queryAllAvailablePools(
+  public async queryAllAvailablePools(
     blockNumber: number,
   ): Promise<SubgraphPool[]> {
     const staticPoolsList = UniswapV4PoolsList[this.network];
