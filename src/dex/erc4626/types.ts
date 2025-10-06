@@ -25,4 +25,6 @@ export type ERC4626Params = {
   vault: Address;
   asset: Address;
   cooldownEnabled?: boolean; // only for sUSDe
+  decimals?: number; // for assets with non-18 decimals
+  depositRedeemOnly?: boolean; // for vaults that only support deposit and redeem
 };

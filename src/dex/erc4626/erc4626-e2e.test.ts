@@ -74,9 +74,10 @@ const config = ERC4626Config;
 for (const dexKey of Object.keys(ERC4626Config)) {
   for (const net of Object.keys(ERC4626Config[dexKey])) {
     const network = Number(net) as Network;
-    const { vault, asset, cooldownEnabled } = config[dexKey][network];
-    const tokenA = { address: vault, decimals: 18 };
-    const tokenB = { address: asset, decimals: 18 };
+    const { vault, asset, cooldownEnabled, decimals } = config[dexKey][network];
+
+    const tokenA = { address: vault, decimals: decimals ?? 18 };
+    const tokenB = { address: asset, decimals: decimals ?? 18 };
 
     testForNetwork(
       network,

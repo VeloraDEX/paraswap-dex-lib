@@ -1,4 +1,3 @@
-import { AsyncOrSync } from 'ts-essentials';
 import {
   Token,
   Address,
@@ -58,6 +57,9 @@ export class ERC4626
     readonly asset: string = ERC4626Config[dexKey][network].asset,
     readonly cooldownEnabled: boolean = ERC4626Config[dexKey][network]
       .cooldownEnabled || false,
+    readonly decimals: number = ERC4626Config[dexKey][network].decimals || 18,
+    readonly depositRedeemOnly: boolean = ERC4626Config[dexKey][network]
+      .depositRedeemOnly || false,
     readonly erc4626Interface: Interface = new Interface(ERC4626_ABI),
   ) {
     super(dexHelper, dexKey);
@@ -168,7 +170,7 @@ export class ERC4626
     }
     return [
       {
-        unit: BI_POWS[18],
+        unit: BI_POWS[this.decimals],
         prices: amounts.map(amount => calcFunction(amount, state)),
         gasCost: isWrap ? 60000 : 70000,
         data: {
@@ -252,22 +254,34 @@ export class ERC4626
     const isSell = side === SwapSide.SELL;
     const { exchange } = data;
 
-    let swapData: string;
-    if (this.isAsset(srcToken)) {
-      swapData = this.erc4626Interface.encodeFunctionData(
-        isSell ? ERC4626Functions.deposit : ERC4626Functions.mint,
-        [isSell ? srcAmount : destAmount, this.augustusAddress],
-      );
+    const isAsset = this.isAsset(srcToken);
+
+    let func: ERC4626Functions;
+    let args: any[];
+
+    if (this.depositRedeemOnly) {
+      if (isAsset) {
+        func = ERC4626Functions.deposit;
+        args = [srcAmount, this.augustusAddress];
+      } else {
+        func = ERC4626Functions.redeem;
+        args = [srcAmount, this.augustusAddress, this.augustusAddress];
+      }
     } else {
-      swapData = this.erc4626Interface.encodeFunctionData(
-        isSell ? ERC4626Functions.redeem : ERC4626Functions.withdraw,
-        [
+      if (isAsset) {
+        func = isSell ? ERC4626Functions.deposit : ERC4626Functions.mint;
+        args = [isSell ? srcAmount : destAmount, this.augustusAddress];
+      } else {
+        func = isSell ? ERC4626Functions.redeem : ERC4626Functions.withdraw;
+        args = [
           isSell ? srcAmount : destAmount,
           this.augustusAddress,
           this.augustusAddress,
-        ],
-      );
+        ];
+      }
     }
+
+    const swapData = this.erc4626Interface.encodeFunctionData(func, args);
 
     return this.buildSimpleParamWithoutWETHConversion(
       srcToken,
@@ -297,18 +311,30 @@ export class ERC4626
     const isSell = side === SwapSide.SELL;
     const { exchange } = data;
 
-    let swapData: string;
-    if (this.isAsset(srcToken)) {
-      swapData = this.erc4626Interface.encodeFunctionData(
-        isSell ? ERC4626Functions.deposit : ERC4626Functions.mint,
-        [isSell ? srcAmount : destAmount, recipient],
-      );
+    const isAsset = this.isAsset(srcToken);
+
+    let func: ERC4626Functions;
+    let args: any[];
+
+    if (this.depositRedeemOnly) {
+      if (isAsset) {
+        func = ERC4626Functions.deposit;
+        args = [srcAmount, recipient];
+      } else {
+        func = ERC4626Functions.redeem;
+        args = [srcAmount, recipient, executorAddress];
+      }
     } else {
-      swapData = this.erc4626Interface.encodeFunctionData(
-        isSell ? ERC4626Functions.redeem : ERC4626Functions.withdraw,
-        [isSell ? srcAmount : destAmount, recipient, executorAddress],
-      );
+      if (isAsset) {
+        func = isSell ? ERC4626Functions.deposit : ERC4626Functions.mint;
+        args = [isSell ? srcAmount : destAmount, recipient];
+      } else {
+        func = isSell ? ERC4626Functions.redeem : ERC4626Functions.withdraw;
+        args = [isSell ? srcAmount : destAmount, recipient, executorAddress];
+      }
     }
+
+    const swapData = this.erc4626Interface.encodeFunctionData(func, args);
 
     return {
       needWrapNative: this.needWrapNative,
@@ -318,9 +344,7 @@ export class ERC4626
       returnAmountPos: isSell
         ? extractReturnAmountPosition(
             this.erc4626Interface,
-            this.isAsset(srcToken)
-              ? ERC4626Functions.deposit
-              : ERC4626Functions.redeem,
+            isAsset ? ERC4626Functions.deposit : ERC4626Functions.redeem,
           )
         : undefined,
       skipApproval: this.isAsset(destToken),

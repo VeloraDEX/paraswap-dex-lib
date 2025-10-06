@@ -45,4 +45,19 @@ export const ERC4626Config: DexConfigMap<ERC4626Params> = {
       cooldownEnabled: true,
     },
   },
+  yoETH: {
+    [Network.BASE]: {
+      vault: '0x3a43aec53490cb9fa922847385d82fe25d0e9de7', // yoETH
+      asset: '0x4200000000000000000000000000000000000006', // WETH
+      depositRedeemOnly: true,
+    },
+  },
+  yoUSD: {
+    [Network.BASE]: {
+      vault: '0x0000000f2eb9f69274678c76222b35eec7588a65', // yoUSD
+      asset: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913', // USDC
+      decimals: 6,
+      depositRedeemOnly: true,
+    },
+  },
 };
