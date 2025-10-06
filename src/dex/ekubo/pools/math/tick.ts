@@ -112,19 +112,26 @@ export function toSqrtRatio(tick: number): bigint {
   return ratio;
 }
 
-const logBase = Math.log(1.0000005);
+const LOG_BASE_SQRT_TICK_SIZE = Math.log(Math.sqrt(1.000001));
 
 export function approximateNumberOfTickSpacingsCrossed(
   sqrtRatioStart: bigint,
   sqrtRatioEnd: bigint,
   tickSpacing: number,
 ): number {
-  if (tickSpacing === FULL_RANGE_TICK_SPACING) {
+  if (tickSpacing === 0) {
     return 0;
   }
 
   const logPriceDiff =
-    Math.log(Number(sqrtRatioEnd) / Number(sqrtRatioStart)) / logBase;
+    Math.log(Number(sqrtRatioEnd) / Number(sqrtRatioStart)) /
+    LOG_BASE_SQRT_TICK_SIZE;
 
-  return Math.floor(Math.abs(logPriceDiff / (tickSpacing * 256)));
+  return Math.floor(Math.abs(logPriceDiff / tickSpacing));
+}
+
+export function approximateSqrtRatioToTick(sqrtRatio: bigint): number {
+  return Math.round(
+    Math.log(Number(sqrtRatio) / 2 ** 128) / LOG_BASE_SQRT_TICK_SIZE,
+  );
 }

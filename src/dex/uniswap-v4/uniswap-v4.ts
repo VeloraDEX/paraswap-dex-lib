@@ -14,7 +14,7 @@ import { IDexHelper } from '../../dex-helper';
 import { getDexKeysWithNetwork, isETHAddress } from '../../utils';
 import { IDex } from '../idex';
 import { SimpleExchange } from '../simple-exchange';
-import { UniswapV4Config } from './config';
+import { UniswapV4Config, UniswapV4PoolsList } from './config';
 import { Pool, PoolPairsInfo, UniswapV4Data } from './types';
 import { BytesLike } from 'ethers';
 import * as CALLDATA_GAS_COST from '../../calldata-gas-cost';
@@ -328,6 +328,7 @@ export class UniswapV4 extends SimpleExchange implements IDex<UniswapV4Data> {
   ): Promise<PoolLiquidity[]> {
     let _tokenAddress = tokenAddress.toLowerCase();
     if (isETHAddress(_tokenAddress)) _tokenAddress = NULL_ADDRESS;
+    const poolIds = UniswapV4PoolsList[this.network]?.map(p => p.id);
 
     const { pools0, pools1 } = await queryAvailablePoolsForToken(
       this.dexHelper,
@@ -336,6 +337,7 @@ export class UniswapV4 extends SimpleExchange implements IDex<UniswapV4Data> {
       UniswapV4Config[this.dexKey][this.network].subgraphURL,
       _tokenAddress,
       limit,
+      poolIds,
     );
 
     if (!(pools0 || pools1)) {

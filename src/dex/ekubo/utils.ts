@@ -34,13 +34,6 @@ export function convertAndSortTokens(
   return a > b ? [b, a] : [a, b];
 }
 
-export function hexStringTokenPair(token0: bigint, token1: bigint): string {
-  return `${hexZeroPad(hexlify(token0), 20)}/${hexZeroPad(
-    hexlify(token1),
-    20,
-  )}`;
-}
-
 export function contractsFromDexParams(
   params: DexParams,
   provider: Provider,

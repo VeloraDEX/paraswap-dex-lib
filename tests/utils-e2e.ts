@@ -44,7 +44,7 @@ import AUGUSTUS_V6_ABI from '../src/abi/augustus-v6/ABI.json';
 import { Interface } from '@ethersproject/abi';
 import { BigNumber } from 'ethers';
 
-const AUGUSTUS_V6_INTERFACE = new Interface(AUGUSTUS_V6_ABI);
+export const AUGUSTUS_V6_INTERFACE = new Interface(AUGUSTUS_V6_ABI);
 
 export const testingEndpoint = process.env.E2E_TEST_ENDPOINT;
 

@@ -94,6 +94,10 @@ export const Tokens: {
       address: '0x4c9edd5852cd905f086c759e8383e09bff1e68b3',
       decimals: 18,
     },
+    ebUSD: {
+      address: '0x09fD37d9AA613789c517e76DF1c53aEce2b60Df4',
+      decimals: 18,
+    },
     EKUBO: {
       address: '0x04C46E830Bb56ce22735d5d8Fc9CB90309317d0f',
       decimals: 18,
@@ -593,6 +597,11 @@ export const Tokens: {
       address: '0x437cc33344a0B27A429f795ff6B469C72698B291',
       decimals: 6,
       symbol: 'wM',
+    },
+    UsualUSDC: {
+      address: '0xb672B3976bAa3952bFb2eCE8eeFB784f8daB1424',
+      decimals: 6,
+      symbol: 'UsualUSDC',
     },
     UsualM: {
       address: '0x4cbc25559dbbd1272ec5b64c7b5f48a2405e6470',

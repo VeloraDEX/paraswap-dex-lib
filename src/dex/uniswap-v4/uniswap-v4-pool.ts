@@ -16,6 +16,7 @@ import { Log, Logger } from '../../types';
 import { BytesLike, Interface } from 'ethers/lib/utils';
 import UniswapV4StateViewABI from '../../abi/uniswap-v4/state-view.abi.json';
 import UniswapV4PoolManagerABI from '../../abi/uniswap-v4/pool-manager.abi.json';
+import UniswapV4StateMulticallABI from '../../abi/uniswap-v4/state-multicall.abi.json';
 import { BlockHeader } from 'web3-eth';
 import { DeepReadonly } from 'ts-essentials';
 import _ from 'lodash';
@@ -50,6 +51,8 @@ export class UniswapV4Pool extends StatefulEventSubscriber<PoolState> {
 
   poolManagerIface: Interface;
 
+  stateMulticallIface: Interface;
+
   constructor(
     readonly dexHelper: IDexHelper,
     parentName: string,
@@ -62,14 +65,18 @@ export class UniswapV4Pool extends StatefulEventSubscriber<PoolState> {
     public readonly token1: string,
     public readonly fee: string,
     public readonly hooks: string,
-    public readonly sqrtPriceX96: bigint,
-    public readonly tick: string,
-    public readonly tickSpacing: string,
+    // TODO: can be removed after state generation would become Multicall only
+    public sqrtPriceX96: bigint,
+    // TODO: can be removed after state generation would become Multicall only
+    public tick: string,
+    public tickSpacing: string,
   ) {
     super(parentName, poolId, dexHelper, logger, true, mapKey);
 
     this.stateViewIface = new Interface(UniswapV4StateViewABI);
     this.poolManagerIface = new Interface(UniswapV4PoolManagerABI);
+    this.stateMulticallIface = new Interface(UniswapV4StateMulticallABI);
+
     this.addressesSubscribed = [this.config.poolManager];
 
     this.logDecoder = (log: Log) => this.poolManagerIface.parseLog(log);
@@ -253,7 +260,7 @@ export class UniswapV4Pool extends StatefulEventSubscriber<PoolState> {
     return state;
   }
 
-  async generateState(blockNumber: number): Promise<PoolState> {
+  async generateStateWithSubgraph(blockNumber: number): Promise<PoolState> {
     const ticks = await this.getTicks(blockNumber);
 
     const callData = this._getStateRequestCallDataPerPool(
@@ -355,6 +362,84 @@ export class UniswapV4Pool extends StatefulEventSubscriber<PoolState> {
     };
   }
 
+  async generateState(blockNumber: number): Promise<PoolState> {
+    const poolKey = {
+      currency0: this.token0,
+      currency1: this.token1,
+      fee: this.fee,
+      tickSpacing: parseInt(this.tickSpacing),
+      hooks: this.hooks,
+    };
+
+    const callData = this.stateMulticallIface.encodeFunctionData(
+      'getFullStateWithRelativeBitmaps',
+      [
+        this.config.poolManager,
+        poolKey,
+        this.getBitmapRange(),
+        this.getBitmapRange(),
+      ],
+    );
+
+    const result = await this.dexHelper.multiWrapper.tryAggregate<any>(
+      false,
+      [
+        {
+          target: this.config.stateMulticall,
+          callData,
+          decodeFunction: (result: MultiResult<BytesLike> | BytesLike) => {
+            const [, toDecode] = extractSuccessAndValue(result);
+            return this.stateMulticallIface.decodeFunctionResult(
+              'getFullStateWithRelativeBitmaps',
+              toDecode,
+            );
+          },
+        },
+      ],
+      blockNumber,
+      this.dexHelper.multiWrapper.defaultBatchSize,
+      false,
+    );
+
+    const stateResult = result[0].returnData[0];
+
+    const ticksResults: Record<NumberAsString, TickInfo> = {};
+    stateResult.ticks.forEach((tick: any) => {
+      if (tick.value.liquidityGross > 0n) {
+        ticksResults[tick.index.toString()] = {
+          liquidityGross: BigInt(tick.value.liquidityGross),
+          liquidityNet: BigInt(tick.value.liquidityNet),
+        };
+      }
+    });
+
+    const tickBitMapResults: Record<NumberAsString, bigint> = {};
+    stateResult.tickBitmap.forEach((bitmap: any) => {
+      tickBitMapResults[bitmap.index.toString()] = BigInt(bitmap.value);
+    });
+
+    return {
+      id: this.poolId,
+      token0: this.token0.toLowerCase(),
+      token1: this.token1.toLowerCase(),
+      fee: this.fee,
+      hooks: this.hooks,
+      feeGrowthGlobal0X128: BigInt(stateResult.feeGrowthGlobal0X128),
+      feeGrowthGlobal1X128: BigInt(stateResult.feeGrowthGlobal1X128),
+      liquidity: BigInt(stateResult.liquidity),
+      slot0: {
+        sqrtPriceX96: BigInt(stateResult.slot0.sqrtPriceX96),
+        tick: BigInt(stateResult.slot0.tick),
+        protocolFee: BigInt(stateResult.slot0.protocolFee),
+        lpFee: BigInt(stateResult.slot0.lpFee),
+      },
+      tickSpacing: parseInt(this.tickSpacing),
+      ticks: ticksResults,
+      tickBitmap: tickBitMapResults,
+      isValid: true,
+    };
+  }
+
   async getTicks(blockNumber: number): Promise<SubgraphTick[]> {
     const defaultPerPageLimit = 1000;
     let curPage = 0;
@@ -413,6 +498,17 @@ export class UniswapV4Pool extends StatefulEventSubscriber<PoolState> {
     const rightBitMapIndex = currentBitMapIndex + range;
 
     return [leftBitMapIndex, rightBitMapIndex];
+  }
+
+  getBitmapRange() {
+    const networkId = this.dexHelper.config.data.network;
+
+    const tickBitMapToUse =
+      TICK_BITMAP_TO_USE_BY_CHAIN[networkId] ?? TICK_BITMAP_TO_USE;
+    const tickBitMapBuffer =
+      TICK_BITMAP_BUFFER_BY_CHAIN[networkId] ?? TICK_BITMAP_BUFFER;
+
+    return tickBitMapToUse + tickBitMapBuffer;
   }
 
   protected async processBlockLogs(

@@ -1,0 +1,781 @@
+[
+  {
+    "inputs": [
+      {
+        "internalType": "contract IPoolManager",
+        "name": "poolManager",
+        "type": "address"
+      },
+      {
+        "components": [
+          {
+            "internalType": "Currency",
+            "name": "currency0",
+            "type": "address"
+          },
+          {
+            "internalType": "Currency",
+            "name": "currency1",
+            "type": "address"
+          },
+          { "internalType": "uint24", "name": "fee", "type": "uint24" },
+          { "internalType": "int24", "name": "tickSpacing", "type": "int24" },
+          {
+            "internalType": "contract IHooks",
+            "name": "hooks",
+            "type": "address"
+          }
+        ],
+        "internalType": "struct PoolKey",
+        "name": "key",
+        "type": "tuple"
+      },
+      { "internalType": "int16", "name": "tickBitmapStart", "type": "int16" },
+      { "internalType": "int16", "name": "tickBitmapEnd", "type": "int16" }
+    ],
+    "name": "getAdditionalBitmapWithTicks",
+    "outputs": [
+      {
+        "components": [
+          { "internalType": "int16", "name": "index", "type": "int16" },
+          { "internalType": "uint256", "name": "value", "type": "uint256" }
+        ],
+        "internalType": "struct IUniswapV4StateMulticall.TickBitMapMappings[]",
+        "name": "tickBitmap",
+        "type": "tuple[]"
+      },
+      {
+        "components": [
+          { "internalType": "int24", "name": "index", "type": "int24" },
+          {
+            "components": [
+              {
+                "internalType": "uint128",
+                "name": "liquidityGross",
+                "type": "uint128"
+              },
+              {
+                "internalType": "int128",
+                "name": "liquidityNet",
+                "type": "int128"
+              },
+              {
+                "internalType": "uint256",
+                "name": "feeGrowthOutside0X128",
+                "type": "uint256"
+              },
+              {
+                "internalType": "uint256",
+                "name": "feeGrowthOutside1X128",
+                "type": "uint256"
+              },
+              { "internalType": "bool", "name": "initialized", "type": "bool" }
+            ],
+            "internalType": "struct IUniswapV4StateMulticall.TickInfo",
+            "name": "value",
+            "type": "tuple"
+          }
+        ],
+        "internalType": "struct IUniswapV4StateMulticall.TickInfoMappings[]",
+        "name": "ticks",
+        "type": "tuple[]getFullStateWithRelativeBitmaps"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "contract IPoolManager",
+        "name": "poolManager",
+        "type": "address"
+      },
+      {
+        "components": [
+          {
+            "internalType": "Currency",
+            "name": "currency0",
+            "type": "address"
+          },
+          {
+            "internalType": "Currency",
+            "name": "currency1",
+            "type": "address"
+          },
+          { "internalType": "uint24", "name": "fee", "type": "uint24" },
+          { "internalType": "int24", "name": "tickSpacing", "type": "int24" },
+          {
+            "internalType": "contract IHooks",
+            "name": "hooks",
+            "type": "address"
+          }
+        ],
+        "internalType": "struct PoolKey",
+        "name": "key",
+        "type": "tuple"
+      },
+      { "internalType": "int16", "name": "tickBitmapStart", "type": "int16" },
+      { "internalType": "int16", "name": "tickBitmapEnd", "type": "int16" }
+    ],
+    "name": "getAdditionalBitmapWithoutTicks",
+    "outputs": [
+      {
+        "components": [
+          { "internalType": "int16", "name": "index", "type": "int16" },
+          { "internalType": "uint256", "name": "value", "type": "uint256" }
+        ],
+        "internalType": "struct IUniswapV4StateMulticall.TickBitMapMappings[]",
+        "name": "tickBitmap",
+        "type": "tuple[]"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "contract IPoolManager",
+        "name": "poolManager",
+        "type": "address"
+      },
+      {
+        "components": [
+          {
+            "internalType": "Currency",
+            "name": "currency0",
+            "type": "address"
+          },
+          {
+            "internalType": "Currency",
+            "name": "currency1",
+            "type": "address"
+          },
+          { "internalType": "uint24", "name": "fee", "type": "uint24" },
+          { "internalType": "int24", "name": "tickSpacing", "type": "int24" },
+          {
+            "internalType": "contract IHooks",
+            "name": "hooks",
+            "type": "address"
+          }
+        ],
+        "internalType": "struct PoolKey",
+        "name": "key",
+        "type": "tuple"
+      },
+      { "internalType": "int16", "name": "tickBitmapStart", "type": "int16" },
+      { "internalType": "int16", "name": "tickBitmapEnd", "type": "int16" }
+    ],
+    "name": "getFullState",
+    "outputs": [
+      {
+        "components": [
+          {
+            "internalType": "contract IPoolManager",
+            "name": "poolManager",
+            "type": "address"
+          },
+          { "internalType": "PoolId", "name": "poolId", "type": "bytes32" },
+          {
+            "components": [
+              {
+                "internalType": "Currency",
+                "name": "currency0",
+                "type": "address"
+              },
+              {
+                "internalType": "Currency",
+                "name": "currency1",
+                "type": "address"
+              },
+              { "internalType": "uint24", "name": "fee", "type": "uint24" },
+              {
+                "internalType": "int24",
+                "name": "tickSpacing",
+                "type": "int24"
+              },
+              {
+                "internalType": "contract IHooks",
+                "name": "hooks",
+                "type": "address"
+              }
+            ],
+            "internalType": "struct PoolKey",
+            "name": "key",
+            "type": "tuple"
+          },
+          {
+            "internalType": "uint256",
+            "name": "blockTimestamp",
+            "type": "uint256"
+          },
+          {
+            "components": [
+              {
+                "internalType": "uint160",
+                "name": "sqrtPriceX96",
+                "type": "uint160"
+              },
+              { "internalType": "int24", "name": "tick", "type": "int24" },
+              {
+                "internalType": "uint24",
+                "name": "protocolFee",
+                "type": "uint24"
+              },
+              { "internalType": "uint24", "name": "lpFee", "type": "uint24" }
+            ],
+            "internalType": "struct IUniswapV4StateMulticall.Slot0",
+            "name": "slot0",
+            "type": "tuple"
+          },
+          { "internalType": "uint128", "name": "liquidity", "type": "uint128" },
+          { "internalType": "int24", "name": "tickSpacing", "type": "int24" },
+          {
+            "internalType": "uint256",
+            "name": "feeGrowthGlobal0X128",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "feeGrowthGlobal1X128",
+            "type": "uint256"
+          },
+          {
+            "components": [
+              { "internalType": "int16", "name": "index", "type": "int16" },
+              { "internalType": "uint256", "name": "value", "type": "uint256" }
+            ],
+            "internalType": "struct IUniswapV4StateMulticall.TickBitMapMappings[]",
+            "name": "tickBitmap",
+            "type": "tuple[]"
+          },
+          {
+            "components": [
+              { "internalType": "int24", "name": "index", "type": "int24" },
+              {
+                "components": [
+                  {
+                    "internalType": "uint128",
+                    "name": "liquidityGross",
+                    "type": "uint128"
+                  },
+                  {
+                    "internalType": "int128",
+                    "name": "liquidityNet",
+                    "type": "int128"
+                  },
+                  {
+                    "internalType": "uint256",
+                    "name": "feeGrowthOutside0X128",
+                    "type": "uint256"
+                  },
+                  {
+                    "internalType": "uint256",
+                    "name": "feeGrowthOutside1X128",
+                    "type": "uint256"
+                  },
+                  {
+                    "internalType": "bool",
+                    "name": "initialized",
+                    "type": "bool"
+                  }
+                ],
+                "internalType": "struct IUniswapV4StateMulticall.TickInfo",
+                "name": "value",
+                "type": "tuple"
+              }
+            ],
+            "internalType": "struct IUniswapV4StateMulticall.TickInfoMappings[]",
+            "name": "ticks",
+            "type": "tuple[]"
+          }
+        ],
+        "internalType": "struct IUniswapV4StateMulticall.StateResult",
+        "name": "state",
+        "type": "tuple"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "contract IPoolManager",
+        "name": "poolManager",
+        "type": "address"
+      },
+      {
+        "components": [
+          {
+            "internalType": "Currency",
+            "name": "currency0",
+            "type": "address"
+          },
+          {
+            "internalType": "Currency",
+            "name": "currency1",
+            "type": "address"
+          },
+          { "internalType": "uint24", "name": "fee", "type": "uint24" },
+          { "internalType": "int24", "name": "tickSpacing", "type": "int24" },
+          {
+            "internalType": "contract IHooks",
+            "name": "hooks",
+            "type": "address"
+          }
+        ],
+        "internalType": "struct PoolKey",
+        "name": "key",
+        "type": "tuple"
+      },
+      { "internalType": "int16", "name": "leftBitmapAmount", "type": "int16" },
+      { "internalType": "int16", "name": "rightBitmapAmount", "type": "int16" }
+    ],
+    "name": "getFullStateWithRelativeBitmaps",
+    "outputs": [
+      {
+        "components": [
+          {
+            "internalType": "contract IPoolManager",
+            "name": "poolManager",
+            "type": "address"
+          },
+          { "internalType": "PoolId", "name": "poolId", "type": "bytes32" },
+          {
+            "components": [
+              {
+                "internalType": "Currency",
+                "name": "currency0",
+                "type": "address"
+              },
+              {
+                "internalType": "Currency",
+                "name": "currency1",
+                "type": "address"
+              },
+              { "internalType": "uint24", "name": "fee", "type": "uint24" },
+              {
+                "internalType": "int24",
+                "name": "tickSpacing",
+                "type": "int24"
+              },
+              {
+                "internalType": "contract IHooks",
+                "name": "hooks",
+                "type": "address"
+              }
+            ],
+            "internalType": "struct PoolKey",
+            "name": "key",
+            "type": "tuple"
+          },
+          {
+            "internalType": "uint256",
+            "name": "blockTimestamp",
+            "type": "uint256"
+          },
+          {
+            "components": [
+              {
+                "internalType": "uint160",
+                "name": "sqrtPriceX96",
+                "type": "uint160"
+              },
+              { "internalType": "int24", "name": "tick", "type": "int24" },
+              {
+                "internalType": "uint24",
+                "name": "protocolFee",
+                "type": "uint24"
+              },
+              { "internalType": "uint24", "name": "lpFee", "type": "uint24" }
+            ],
+            "internalType": "struct IUniswapV4StateMulticall.Slot0",
+            "name": "slot0",
+            "type": "tuple"
+          },
+          { "internalType": "uint128", "name": "liquidity", "type": "uint128" },
+          { "internalType": "int24", "name": "tickSpacing", "type": "int24" },
+          {
+            "internalType": "uint256",
+            "name": "feeGrowthGlobal0X128",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "feeGrowthGlobal1X128",
+            "type": "uint256"
+          },
+          {
+            "components": [
+              { "internalType": "int16", "name": "index", "type": "int16" },
+              { "internalType": "uint256", "name": "value", "type": "uint256" }
+            ],
+            "internalType": "struct IUniswapV4StateMulticall.TickBitMapMappings[]",
+            "name": "tickBitmap",
+            "type": "tuple[]"
+          },
+          {
+            "components": [
+              { "internalType": "int24", "name": "index", "type": "int24" },
+              {
+                "components": [
+                  {
+                    "internalType": "uint128",
+                    "name": "liquidityGross",
+                    "type": "uint128"
+                  },
+                  {
+                    "internalType": "int128",
+                    "name": "liquidityNet",
+                    "type": "int128"
+                  },
+                  {
+                    "internalType": "uint256",
+                    "name": "feeGrowthOutside0X128",
+                    "type": "uint256"
+                  },
+                  {
+                    "internalType": "uint256",
+                    "name": "feeGrowthOutside1X128",
+                    "type": "uint256"
+                  },
+                  {
+                    "internalType": "bool",
+                    "name": "initialized",
+                    "type": "bool"
+                  }
+                ],
+                "internalType": "struct IUniswapV4StateMulticall.TickInfo",
+                "name": "value",
+                "type": "tuple"
+              }
+            ],
+            "internalType": "struct IUniswapV4StateMulticall.TickInfoMappings[]",
+            "name": "ticks",
+            "type": "tuple[]"
+          }
+        ],
+        "internalType": "struct IUniswapV4StateMulticall.StateResult",
+        "name": "state",
+        "type": "tuple"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "contract IPoolManager",
+        "name": "poolManager",
+        "type": "address"
+      },
+      {
+        "components": [
+          {
+            "internalType": "Currency",
+            "name": "currency0",
+            "type": "address"
+          },
+          {
+            "internalType": "Currency",
+            "name": "currency1",
+            "type": "address"
+          },
+          { "internalType": "uint24", "name": "fee", "type": "uint24" },
+          { "internalType": "int24", "name": "tickSpacing", "type": "int24" },
+          {
+            "internalType": "contract IHooks",
+            "name": "hooks",
+            "type": "address"
+          }
+        ],
+        "internalType": "struct PoolKey",
+        "name": "key",
+        "type": "tuple"
+      },
+      { "internalType": "int16", "name": "tickBitmapStart", "type": "int16" },
+      { "internalType": "int16", "name": "tickBitmapEnd", "type": "int16" }
+    ],
+    "name": "getFullStateWithoutTicks",
+    "outputs": [
+      {
+        "components": [
+          {
+            "internalType": "contract IPoolManager",
+            "name": "poolManager",
+            "type": "address"
+          },
+          { "internalType": "PoolId", "name": "poolId", "type": "bytes32" },
+          {
+            "components": [
+              {
+                "internalType": "Currency",
+                "name": "currency0",
+                "type": "address"
+              },
+              {
+                "internalType": "Currency",
+                "name": "currency1",
+                "type": "address"
+              },
+              { "internalType": "uint24", "name": "fee", "type": "uint24" },
+              {
+                "internalType": "int24",
+                "name": "tickSpacing",
+                "type": "int24"
+              },
+              {
+                "internalType": "contract IHooks",
+                "name": "hooks",
+                "type": "address"
+              }
+            ],
+            "internalType": "struct PoolKey",
+            "name": "key",
+            "type": "tuple"
+          },
+          {
+            "internalType": "uint256",
+            "name": "blockTimestamp",
+            "type": "uint256"
+          },
+          {
+            "components": [
+              {
+                "internalType": "uint160",
+                "name": "sqrtPriceX96",
+                "type": "uint160"
+              },
+              { "internalType": "int24", "name": "tick", "type": "int24" },
+              {
+                "internalType": "uint24",
+                "name": "protocolFee",
+                "type": "uint24"
+              },
+              { "internalType": "uint24", "name": "lpFee", "type": "uint24" }
+            ],
+            "internalType": "struct IUniswapV4StateMulticall.Slot0",
+            "name": "slot0",
+            "type": "tuple"
+          },
+          { "internalType": "uint128", "name": "liquidity", "type": "uint128" },
+          { "internalType": "int24", "name": "tickSpacing", "type": "int24" },
+          {
+            "internalType": "uint256",
+            "name": "feeGrowthGlobal0X128",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "feeGrowthGlobal1X128",
+            "type": "uint256"
+          },
+          {
+            "components": [
+              { "internalType": "int16", "name": "index", "type": "int16" },
+              { "internalType": "uint256", "name": "value", "type": "uint256" }
+            ],
+            "internalType": "struct IUniswapV4StateMulticall.TickBitMapMappings[]",
+            "name": "tickBitmap",
+            "type": "tuple[]"
+          },
+          {
+            "components": [
+              { "internalType": "int24", "name": "index", "type": "int24" },
+              {
+                "components": [
+                  {
+                    "internalType": "uint128",
+                    "name": "liquidityGross",
+                    "type": "uint128"
+                  },
+                  {
+                    "internalType": "int128",
+                    "name": "liquidityNet",
+                    "type": "int128"
+                  },
+                  {
+                    "internalType": "uint256",
+                    "name": "feeGrowthOutside0X128",
+                    "type": "uint256"
+                  },
+                  {
+                    "internalType": "uint256",
+                    "name": "feeGrowthOutside1X128",
+                    "type": "uint256"
+                  },
+                  {
+                    "internalType": "bool",
+                    "name": "initialized",
+                    "type": "bool"
+                  }
+                ],
+                "internalType": "struct IUniswapV4StateMulticall.TickInfo",
+                "name": "value",
+                "type": "tuple"
+              }
+            ],
+            "internalType": "struct IUniswapV4StateMulticall.TickInfoMappings[]",
+            "name": "ticks",
+            "type": "tuple[]"
+          }
+        ],
+        "internalType": "struct IUniswapV4StateMulticall.StateResult",
+        "name": "state",
+        "type": "tuple"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "contract IPoolManager",
+        "name": "poolManager",
+        "type": "address"
+      },
+      { "internalType": "Currency", "name": "currency0", "type": "address" },
+      { "internalType": "Currency", "name": "currency1", "type": "address" },
+      { "internalType": "uint24", "name": "fee", "type": "uint24" },
+      { "internalType": "int24", "name": "tickSpacing", "type": "int24" },
+      { "internalType": "contract IHooks", "name": "hooks", "type": "address" },
+      { "internalType": "int16", "name": "tickBitmapStart", "type": "int16" },
+      { "internalType": "int16", "name": "tickBitmapEnd", "type": "int16" }
+    ],
+    "name": "getPoolStateByTokens",
+    "outputs": [
+      {
+        "components": [
+          {
+            "internalType": "contract IPoolManager",
+            "name": "poolManager",
+            "type": "address"
+          },
+          { "internalType": "PoolId", "name": "poolId", "type": "bytes32" },
+          {
+            "components": [
+              {
+                "internalType": "Currency",
+                "name": "currency0",
+                "type": "address"
+              },
+              {
+                "internalType": "Currency",
+                "name": "currency1",
+                "type": "address"
+              },
+              { "internalType": "uint24", "name": "fee", "type": "uint24" },
+              {
+                "internalType": "int24",
+                "name": "tickSpacing",
+                "type": "int24"
+              },
+              {
+                "internalType": "contract IHooks",
+                "name": "hooks",
+                "type": "address"
+              }
+            ],
+            "internalType": "struct PoolKey",
+            "name": "key",
+            "type": "tuple"
+          },
+          {
+            "internalType": "uint256",
+            "name": "blockTimestamp",
+            "type": "uint256"
+          },
+          {
+            "components": [
+              {
+                "internalType": "uint160",
+                "name": "sqrtPriceX96",
+                "type": "uint160"
+              },
+              { "internalType": "int24", "name": "tick", "type": "int24" },
+              {
+                "internalType": "uint24",
+                "name": "protocolFee",
+                "type": "uint24"
+              },
+              { "internalType": "uint24", "name": "lpFee", "type": "uint24" }
+            ],
+            "internalType": "struct IUniswapV4StateMulticall.Slot0",
+            "name": "slot0",
+            "type": "tuple"
+          },
+          { "internalType": "uint128", "name": "liquidity", "type": "uint128" },
+          { "internalType": "int24", "name": "tickSpacing", "type": "int24" },
+          {
+            "internalType": "uint256",
+            "name": "feeGrowthGlobal0X128",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "feeGrowthGlobal1X128",
+            "type": "uint256"
+          },
+          {
+            "components": [
+              { "internalType": "int16", "name": "index", "type": "int16" },
+              { "internalType": "uint256", "name": "value", "type": "uint256" }
+            ],
+            "internalType": "struct IUniswapV4StateMulticall.TickBitMapMappings[]",
+            "name": "tickBitmap",
+            "type": "tuple[]"
+          },
+          {
+            "components": [
+              { "internalType": "int24", "name": "index", "type": "int24" },
+              {
+                "components": [
+                  {
+                    "internalType": "uint128",
+                    "name": "liquidityGross",
+                    "type": "uint128"
+                  },
+                  {
+                    "internalType": "int128",
+                    "name": "liquidityNet",
+                    "type": "int128"
+                  },
+                  {
+                    "internalType": "uint256",
+                    "name": "feeGrowthOutside0X128",
+                    "type": "uint256"
+                  },
+                  {
+                    "internalType": "uint256",
+                    "name": "feeGrowthOutside1X128",
+                    "type": "uint256"
+                  },
+                  {
+                    "internalType": "bool",
+                    "name": "initialized",
+                    "type": "bool"
+                  }
+                ],
+                "internalType": "struct IUniswapV4StateMulticall.TickInfo",
+                "name": "value",
+                "type": "tuple"
+              }
+            ],
+            "internalType": "struct IUniswapV4StateMulticall.TickInfoMappings[]",
+            "name": "ticks",
+            "type": "tuple[]"
+          }
+        ],
+        "internalType": "struct IUniswapV4StateMulticall.StateResult",
+        "name": "state",
+        "type": "tuple"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  }
+]
