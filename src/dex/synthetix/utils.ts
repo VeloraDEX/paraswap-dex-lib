@@ -123,3 +123,14 @@ export function synthStatusDecoder(
       toParse[0].map((isSuspended: boolean) => !!isSuspended),
   );
 }
+
+export function exchangeSuspensionDecoder(
+  result: MultiResult<BytesLike> | BytesLike,
+): boolean {
+  return generalDecoder(
+    result,
+    ['bool', 'uint248'],
+    [false, 0],
+    (toParse: Result) => toParse[0],
+  );
+}

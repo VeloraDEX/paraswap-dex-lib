@@ -30,10 +30,6 @@ export enum RFQType {
   RFQM = 1,
 }
 
-export class SlippageCheckError extends Error {
-  code: ErrorCode = 'SLIPPAGE';
-}
-
 export type HashflowRatesLevel = {
   pair: Record<string, string>;
   levels: Array<Record<string, string>>;

@@ -53,7 +53,7 @@ const fetchAllPoolsQuery = `query {
     pools(first: ${MAX_POOL_CNT.toString()} 
         orderBy: liquidity
         orderDirection: desc
-        where: {liquidity_gt: ${MIN_USD_LIQUIDITY_TO_FETCH.toString()}}) {
+        where: {liquidity_gt: ${MIN_USD_LIQUIDITY_TO_FETCH.toString()}, publicSwap:true}) {
           id
           swapFee
           totalWeight
@@ -269,7 +269,7 @@ export class BalancerV1
         poolAddresses: [p.poolInfo.id],
         exchange: this.dexKey,
         gasCost: BALANCER_SWAP_GAS_COST,
-        poolIdentifier: `${this.dexKey}_${p.poolInfo.id}`,
+        poolIdentifiers: [`${this.dexKey}_${p.poolInfo.id}`],
       };
     });
   }
@@ -394,6 +394,9 @@ export class BalancerV1
     );
     let specialDexFlag = SpecialDex.DEFAULT;
 
+    let insertFromAmountPos;
+    let specialDexSupportsInsertFromAmount;
+
     if (side === SwapSide.SELL) {
       const totalAmount = swaps.reduce<BigNumber>((acc, swap) => {
         return acc.add(swap.tokenInParam);
@@ -407,6 +410,26 @@ export class BalancerV1
           exchangeData,
         ],
       );
+
+      const amount = ethers.utils.defaultAbiCoder.encode(
+        ['uint256'],
+        [totalAmount.toHexString()],
+      );
+      const specialDexDataTotalAmountPos = exchangeData
+        .replace('0x', '')
+        .indexOf(amount.replace('0x', ''));
+
+      // we need to insert _fromAmount in totalAmountIn position
+      // swaps amount (unlike totalAmountIn) will be updated accordingly on special dex
+      const totalAmountInPos = exchangeData
+        .replace('0x', '')
+        .indexOf(amount.replace('0x', ''), specialDexDataTotalAmountPos + 1);
+
+      if (totalAmountInPos !== -1) {
+        insertFromAmountPos = totalAmountInPos / 2;
+        specialDexSupportsInsertFromAmount = true;
+      }
+
       specialDexFlag = SpecialDex.SWAP_ON_BALANCER_V1;
     }
 
@@ -416,6 +439,8 @@ export class BalancerV1
           ? true
           : this.needWrapNative,
       specialDexFlag,
+      insertFromAmountPos,
+      specialDexSupportsInsertFromAmount,
       dexFuncHasRecipient: false,
       exchangeData: exchangeData,
       targetExchange: this.config.exchangeProxy,

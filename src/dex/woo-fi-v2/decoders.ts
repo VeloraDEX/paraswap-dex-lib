@@ -6,10 +6,18 @@ import { DecimalInfo, TokenInfo, TokenState } from './types';
 export function tokenInfoDecoder(
   result: MultiResult<BytesLike> | BytesLike,
 ): TokenInfo {
-  return generalDecoder(result, ['uint192', 'uint16'], undefined, value => ({
-    reserve: value[0].toBigInt(),
-    feeRate: BigInt(value[1].toString()),
-  }));
+  return generalDecoder(
+    result,
+    ['uint192', 'uint16', 'uint128', 'uint128', 'uint192'],
+    undefined,
+    value => ({
+      reserve: value[0].toBigInt(),
+      feeRate: BigInt(value[1].toString()),
+      maxGamma: value[2].toBigInt(),
+      maxNotionalSwap: value[3].toBigInt(),
+      capBal: value[4].toBigInt(),
+    }),
+  );
 }
 
 export function decimalInfoDecoder(

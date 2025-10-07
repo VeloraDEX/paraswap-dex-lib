@@ -234,7 +234,7 @@ export class WooFiV2 extends SimpleExchange implements IDex<WooFiV2Data> {
           unit,
           prices: [0n, ..._prices.slice(1)],
           data: {},
-          poolIdentifier: expectedIdentifier,
+          poolIdentifiers: [expectedIdentifier],
           exchange: this.dexKey,
           gasCost,
           poolAddresses: [this.config.wooPPV2Address],

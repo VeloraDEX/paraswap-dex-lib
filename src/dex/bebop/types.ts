@@ -70,6 +70,7 @@ export type BebopData = {
   sellTokens?: { [address: string]: BebopTokenAmount };
   tx?: BebopTx;
   error?: BebopError;
+  quoteId?: string;
 };
 
 export type DexParams = {
@@ -84,10 +85,6 @@ export type RoutingInstruction = {
   pair: string;
   targetQuote: boolean;
 };
-
-export class SlippageError extends Error {
-  isSlippageError = true;
-}
 
 export type RestrictData = {
   count: number;

@@ -36,17 +36,18 @@ export const STATEFUL_EVENT_SUBSCRIBER_LOG_BATCH_PERIOD = 60 * 1000;
 export enum Network {
   MAINNET = 1,
   RINKEBY = 4,
-  BSC = 56,
-  POLYGON = 137,
-  ZKEVM = 1101,
-  AVALANCHE = 43114,
-  FANTOM = 250,
-  ARBITRUM = 42161,
   OPTIMISM = 10,
-  BASE = 8453,
-  SEPOLIA = 11155111,
+  BSC = 56,
   GNOSIS = 100,
+  UNICHAIN = 130,
+  POLYGON = 137,
+  SONIC = 146,
+  BASE = 8453,
+  ARBITRUM = 42161,
+  AVALANCHE = 43114,
+  SEPOLIA = 11155111,
 }
+
 export const SUBGRAPH_TIMEOUT = 20 * 1000;
 
 export enum LIMIT_ORDER_PROVIDERS {
@@ -72,3 +73,7 @@ export const IS_CAP_SURPLUS_MASK = BigNumber.from('1').shl(92);
 export const IS_SKIP_BLACKLIST_MASK = BigNumber.from('1').shl(93);
 export const IS_REFERRAL_MASK = BigNumber.from('1').shl(94);
 export const IS_TAKE_SURPLUS_MASK = BigNumber.from('1').shl(95);
+
+// used for PoolTracker data
+export const NO_USD_LIQUIDITY = -1;
+export const UNLIMITED_USD_LIQUIDITY = 1234567890;

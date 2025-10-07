@@ -99,6 +99,8 @@ export class RamsesV2EventPool extends UniswapV3EventPool {
       bigint,
     ];
 
+    this._assertActivePool(_state);
+
     const tickBitmap = {};
     const ticks = {};
 

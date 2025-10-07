@@ -6,6 +6,8 @@ import {
 } from '../../src/implementations/local-paraswap-sdk';
 import { TenderlySimulator, StateOverride } from '../tenderly-simulation';
 import { assert } from 'ts-essentials';
+import { AUGUSTUS_V6_INTERFACE } from '../utils-e2e';
+import { BigNumber } from 'ethers';
 
 export type ContractsAugustusV6 = {
   AugustusV6: string;
@@ -34,7 +36,8 @@ export async function runE2ETest(
   contracts: ContractsAugustusV6,
 ) {
   // extract data from priceRoute
-  const { network, srcToken, side, srcAmount } = priceRoute;
+  const { network, srcToken, side, srcAmount, destAmount, contractMethod } =
+    priceRoute;
   // log the route for visibility
   console.log('Price Route:', JSON.stringify(priceRoute, null, 2));
   // The API currently doesn't allow for specifying poolIdentifiers
@@ -55,6 +58,13 @@ export async function runE2ETest(
   const amountToFund = BigInt(srcAmount) * 2n;
   // add allowance override to Augustus
   if (srcToken.toLowerCase() !== ETHER_ADDRESS) {
+    await tenderlySimulator.addTokenBalanceOverride(
+      stateOverride,
+      network,
+      srcToken,
+      senderAddress,
+      amountToFund,
+    );
     await tenderlySimulator.addAllowanceOverride(
       stateOverride,
       network,
@@ -91,13 +101,33 @@ export async function runE2ETest(
     stateOverride,
   };
   // simulate the transaction with overrides
-  const simulation = await tenderlySimulator.simulateTransaction(
-    simulationRequest,
-  );
+  const { simulation, transaction } =
+    await tenderlySimulator.simulateTransaction(simulationRequest);
   // release
   if (paraswap.releaseResources) {
     await paraswap.releaseResources();
   }
   // assert simulation status
   expect(simulation.status).toEqual(true);
+
+  // decode method output
+  const decodedOutput = AUGUSTUS_V6_INTERFACE.decodeFunctionResult(
+    contractMethod,
+    transaction.transaction_info.call_trace.output,
+  );
+  // assert min difference
+  const expectedAmount = BigNumber.from(
+    side === SwapSide.SELL ? destAmount : srcAmount,
+  );
+  const simulatedAmount: BigNumber =
+    side === SwapSide.SELL
+      ? decodedOutput.receivedAmount
+      : decodedOutput.spentAmount;
+  const amountDiff = expectedAmount.lt(simulatedAmount)
+    ? expectedAmount.div(simulatedAmount)
+    : simulatedAmount.div(expectedAmount);
+  const paraswapShare = decodedOutput.paraswapShare?.toNumber() ?? 0;
+
+  expect(amountDiff.toNumber()).toBeLessThanOrEqual(1);
+  expect(paraswapShare).toEqual(0);
 }

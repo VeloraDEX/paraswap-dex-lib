@@ -49,8 +49,10 @@ describe('Oswap EventPool Mainnet', function () {
   // poolAddress -> EventMappings
   const eventsToTest: Record<Address, EventMappings> = {
     [pool.address]: {
-      TraderateChanged: [18917344],
-      Transfer: [18922097, 18924756],
+      TraderateChanged: [22395781, 22395431, 22389403, 22389364, 22389179],
+      Transfer: [22415989, 22409802],
+      RedeemRequested: [22317636, 22280283, 22277504, 22255426, 22250671],
+      RedeemClaimed: [22317698, 22302249, 22255494, 22250723, 22217971],
     },
   };
 

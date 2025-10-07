@@ -32,6 +32,8 @@ export class UniswapV4PoolManager extends StatefulEventSubscriber<PoolManagerSta
 
   poolManagerIface: Interface;
 
+  private wethAddress: string;
+
   private poolsCacheKey = 'pools_cache';
 
   constructor(
@@ -54,6 +56,9 @@ export class UniswapV4PoolManager extends StatefulEventSubscriber<PoolManagerSta
     this.stateViewIface = new Interface(UniswapV4StateViewABI);
     this.poolManagerIface = new Interface(UniswapV4PoolManagerABI);
     this.addressesSubscribed = [this.config.poolManager];
+
+    this.wethAddress =
+      this.dexHelper.config.data.wrappedNativeTokenAddress.toLowerCase();
 
     this.logDecoder = (log: Log) => this.poolManagerIface.parseLog(log);
 
@@ -138,24 +143,54 @@ export class UniswapV4PoolManager extends StatefulEventSubscriber<PoolManagerSta
     const isEthSrc = isETHAddress(srcToken);
     const isEthDest = isETHAddress(destToken);
 
+    const isWethSrc = srcToken.toLowerCase() === this.wethAddress;
+    const isWethDest = destToken.toLowerCase() === this.wethAddress;
+
     const _src = isEthSrc ? NULL_ADDRESS : srcToken.toLowerCase();
     const _dest = isEthDest ? NULL_ADDRESS : destToken.toLowerCase();
 
-    return this.pools
-      .filter(
-        pool =>
-          (pool.token0.address === _src && pool.token1.address === _dest) ||
-          (pool.token0.address === _dest && pool.token1.address === _src),
-      )
-      .sort((a, b) => {
-        const volumeA = parseInt(a.volumeUSD || '0');
-        const volumeB = parseInt(b.volumeUSD || '0');
-        if (volumeA >= volumeB) {
-          return -1;
-        }
+    const matchesSrcToken = (poolToken: string): boolean => {
+      return (
+        poolToken === _src ||
+        (isEthSrc && poolToken === this.wethAddress) ||
+        (isWethSrc && poolToken === NULL_ADDRESS)
+      );
+    };
 
-        return 1;
+    const matchesDestToken = (poolToken: string): boolean => {
+      return (
+        poolToken === _dest ||
+        (isEthDest && poolToken === this.wethAddress) ||
+        (isWethDest && poolToken === NULL_ADDRESS)
+      );
+    };
+
+    return this.pools
+      .filter(pool => {
+        // TODO: temporary, should be used for tests only
+        const token0 = pool.token0.address.toLowerCase();
+        const token1 = pool.token1.address.toLowerCase();
+
+        // force weth pools
+        // return token0 !== NULL_ADDRESS && token1 !== NULL_ADDRESS;
+        // force eth pools
+        // return token0 === NULL_ADDRESS || token1 === NULL_ADDRESS;
+        // all pools
+        return true;
       })
+      .filter(pool => {
+        const token0 = pool.token0.address;
+        const token1 = pool.token1.address;
+
+        return (
+          (matchesSrcToken(token0) && matchesDestToken(token1)) ||
+          (matchesSrcToken(token1) && matchesDestToken(token0))
+        );
+      })
+      .sort(
+        (a, b) =>
+          parseFloat(b.volumeUSD || '0') - parseFloat(a.volumeUSD || '0'),
+      )
       .map(pool => ({
         id: pool.id,
         key: {
@@ -214,6 +249,12 @@ export class UniswapV4PoolManager extends StatefulEventSubscriber<PoolManagerSta
       pools = pools.concat(currentSubgraphPools);
     }
 
+    if (this.config.skipPoolsWithUnconventionalFees) {
+      pools = pools.filter(
+        pool => !this.isPoolWithUnconventionalFees(pool.fee),
+      );
+    }
+
     this.dexHelper.cache.setexAndCacheLocally(
       this.parentName,
       this.network,
@@ -237,6 +278,25 @@ export class UniswapV4PoolManager extends StatefulEventSubscriber<PoolManagerSta
     const hooks = event.args.hooks;
     const sqrtPriceX96 = BigInt(event.args.sqrtPriceX96);
     const tick = parseInt(event.args.tick);
+
+    if (hooks !== NULL_ADDRESS) {
+      this.logger.warn(
+        `Pool ${id} has hooks ${hooks}, which is not supported yet. Skipping.`,
+      );
+      return {};
+    }
+
+    if (
+      this.config.skipPoolsWithUnconventionalFees &&
+      this.isPoolWithUnconventionalFees(fee)
+    ) {
+      this.logger.warn(`Skipping pool ${id} with unconventional fees ${fee}.`);
+      return {};
+    }
+
+    this.logger.info(
+      `Initializing pool ${id} with fee ${fee} and tick spacing ${tickSpacing} on ${this.parentName} `,
+    );
 
     this.pools.push({
       id,
@@ -274,5 +334,9 @@ export class UniswapV4PoolManager extends StatefulEventSubscriber<PoolManagerSta
     this.eventPools[id] = eventPool;
 
     return {};
+  }
+
+  private isPoolWithUnconventionalFees(fee: string | number): boolean {
+    return +fee % 100 !== 0;
   }
 }

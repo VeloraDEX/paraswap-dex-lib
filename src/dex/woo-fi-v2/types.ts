@@ -29,6 +29,9 @@ export type DexParams = {
 export type TokenInfo = {
   reserve: bigint;
   feeRate: bigint;
+  maxGamma: bigint;
+  maxNotionalSwap: bigint;
+  capBal: bigint;
 };
 
 export type TokenState = {

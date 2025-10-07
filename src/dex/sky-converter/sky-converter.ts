@@ -9,7 +9,12 @@ import {
   NumberAsString,
   DexExchangeParam,
 } from '../../types';
-import { SwapSide, Network } from '../../constants';
+import {
+  SwapSide,
+  Network,
+  NO_USD_LIQUIDITY,
+  UNLIMITED_USD_LIQUIDITY,
+} from '../../constants';
 import * as CALLDATA_GAS_COST from '../../calldata-gas-cost';
 import { getDexKeysWithNetwork } from '../../utils';
 import { IDex } from '../../dex/idex';
@@ -18,6 +23,7 @@ import { SkyConverterData } from './types';
 import { SimpleExchange } from '../simple-exchange';
 import { SkyConverterConfig } from './config';
 import { BI_POWS } from '../../bigint-constants';
+import { SkyConverterEventPool } from './sky-converter-pool';
 
 export class SkyConverter
   extends SimpleExchange
@@ -33,6 +39,7 @@ export class SkyConverter
 
   oldToken: Address;
   newToken: Address;
+  private readonly eventPool?: SkyConverterEventPool;
 
   constructor(
     readonly network: Network,
@@ -45,9 +52,24 @@ export class SkyConverter
 
     this.oldToken = this.config.oldTokenAddress.toLowerCase();
     this.newToken = this.config.newTokenAddress.toLowerCase();
+
+    if (this.config.converterFee) {
+      this.eventPool = new SkyConverterEventPool(
+        this.dexKey,
+        this.network,
+        this.dexHelper,
+        this.logger,
+        this.config.converterAddress,
+        this.config.converterIface,
+      );
+    }
   }
 
-  async initializePricing(blockNumber: number) {}
+  async initializePricing(blockNumber: number) {
+    if (this.eventPool) {
+      await this.eventPool.initialize(blockNumber);
+    }
+  }
 
   getAdapters(side: SwapSide): { name: string; index: number }[] | null {
     return null;
@@ -59,27 +81,45 @@ export class SkyConverter
     side: SwapSide,
     blockNumber: number,
   ): Promise<string[]> {
-    if (
+    const isOldToNew =
       srcToken.address.toLowerCase() === this.oldToken &&
-      destToken.address.toLowerCase() === this.newToken
-    ) {
-      return [`${this.dexKey}_${destToken.address}`];
-    } else if (
+      destToken.address.toLowerCase() === this.newToken;
+
+    const isNewToOld =
       srcToken.address.toLowerCase() === this.newToken &&
-      destToken.address.toLowerCase() === this.oldToken
-    ) {
-      return [`${this.dexKey}_${srcToken.address}`];
-    } else {
-      return [];
+      destToken.address.toLowerCase() === this.oldToken;
+
+    if (isOldToNew && this.config.oldToNewFunctionName) {
+      return [`${this.dexKey}_${destToken.address}`];
     }
+
+    if (isNewToOld && this.config.newToOldFunctionName) {
+      return [`${this.dexKey}_${srcToken.address}`];
+    }
+
+    return [];
   }
 
-  oldAmountToNewAmount(amount: bigint) {
-    return amount * this.config.newTokenRateMultiplier;
+  oldAmountToNewAmount(amount: bigint, fee: bigint) {
+    if (fee <= 0n) {
+      return amount * this.config.newTokenRateMultiplier;
+    }
+
+    return (
+      (amount * this.config.newTokenRateMultiplier * (BI_POWS[18] - fee)) /
+      BI_POWS[18]
+    );
   }
 
-  newAmountToOldAmount(amount: bigint) {
-    return amount / this.config.newTokenRateMultiplier;
+  newAmountToOldAmount(amount: bigint, fee: bigint) {
+    if (fee <= 0n) {
+      return amount / this.config.newTokenRateMultiplier;
+    }
+
+    return (
+      (amount * BI_POWS[18]) /
+      (this.config.newTokenRateMultiplier * (BI_POWS[18] - fee))
+    );
   }
 
   async getPricesVolume(
@@ -102,19 +142,32 @@ export class SkyConverter
 
     const isOldToNew = srcToken.address.toLowerCase() === this.oldToken;
 
-    let mappingFunction: Function;
+    if (
+      (isOldToNew && !this.config.oldToNewFunctionName) ||
+      (!isOldToNew && !this.config.newToOldFunctionName)
+    ) {
+      return null;
+    }
+
+    let fee = 0n;
+    if (this.eventPool) {
+      const state = await this.eventPool.getOrGenerateState(blockNumber);
+      fee = state.fee;
+    }
+
+    let mappingFunction: (amount: bigint) => bigint;
 
     if (side === SwapSide.SELL) {
       if (isOldToNew) {
-        mappingFunction = this.oldAmountToNewAmount.bind(this);
+        mappingFunction = amount => this.oldAmountToNewAmount(amount, fee);
       } else {
-        mappingFunction = this.newAmountToOldAmount.bind(this);
+        mappingFunction = amount => this.newAmountToOldAmount(amount, fee);
       }
     } else {
       if (isOldToNew) {
-        mappingFunction = this.newAmountToOldAmount.bind(this);
+        mappingFunction = amount => this.newAmountToOldAmount(amount, fee);
       } else {
-        mappingFunction = this.oldAmountToNewAmount.bind(this);
+        mappingFunction = amount => this.oldAmountToNewAmount(amount, fee);
       }
     }
 
@@ -164,10 +217,20 @@ export class SkyConverter
     data: SkyConverterData,
     side: SwapSide,
   ): DexExchangeParam {
+    const isOldToNew = srcToken.toLowerCase() === this.oldToken;
+
+    const functionName = isOldToNew
+      ? this.config.oldToNewFunctionName
+      : this.config.newToOldFunctionName;
+
+    if (!functionName) {
+      throw new Error(
+        `${this.dexKey}-${this.network}: conversion from ${srcToken} to ${destToken} is not supported`,
+      );
+    }
+
     const swapData = this.config.converterIface.encodeFunctionData(
-      srcToken === this.oldToken
-        ? this.config.oldToNewFunctionName
-        : this.config.newToOldFunctionName,
+      functionName,
       [recipient, srcAmount],
     );
 
@@ -186,7 +249,10 @@ export class SkyConverter
     tokenAddress: Address,
     limit: number,
   ): Promise<PoolLiquidity[]> {
-    if (tokenAddress.toLowerCase() === this.oldToken) {
+    const isOld = tokenAddress.toLowerCase() === this.oldToken;
+    const isNew = tokenAddress.toLowerCase() === this.newToken;
+
+    if (isOld) {
       return [
         {
           exchange: this.dexKey,
@@ -195,12 +261,19 @@ export class SkyConverter
             {
               decimals: 18,
               address: this.newToken,
+              liquidityUSD: this.config.newToOldFunctionName
+                ? UNLIMITED_USD_LIQUIDITY
+                : NO_USD_LIQUIDITY,
             },
           ],
-          liquidityUSD: 1000000000, // infinite
+          liquidityUSD: this.config.oldToNewFunctionName
+            ? UNLIMITED_USD_LIQUIDITY
+            : NO_USD_LIQUIDITY,
         },
       ];
-    } else if (tokenAddress.toLowerCase() === this.newToken) {
+    }
+
+    if (isNew) {
       return [
         {
           exchange: this.dexKey,
@@ -209,9 +282,14 @@ export class SkyConverter
             {
               decimals: 18,
               address: this.oldToken,
+              liquidityUSD: this.config.oldToNewFunctionName
+                ? UNLIMITED_USD_LIQUIDITY
+                : NO_USD_LIQUIDITY,
             },
           ],
-          liquidityUSD: 1000000000, // infinite
+          liquidityUSD: this.config.newToOldFunctionName
+            ? UNLIMITED_USD_LIQUIDITY
+            : NO_USD_LIQUIDITY,
         },
       ];
     }

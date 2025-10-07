@@ -1,4 +1,4 @@
-import { defaultAbiCoder, Interface } from '@ethersproject/abi';
+import { Interface } from '@ethersproject/abi';
 import _ from 'lodash';
 import { pack } from '@ethersproject/solidity';
 import {
@@ -16,12 +16,7 @@ import {
   Token,
   TxInfo,
 } from '../../types';
-import {
-  CACHE_PREFIX,
-  Network,
-  SUBGRAPH_TIMEOUT,
-  SwapSide,
-} from '../../constants';
+import { CACHE_PREFIX, Network, SwapSide } from '../../constants';
 import * as CALLDATA_GAS_COST from '../../calldata-gas-cost';
 import {
   getBigIntPow,
@@ -42,6 +37,7 @@ import {
   UniswapV3Param,
   UniswapV3ParamsDirect,
   UniswapV3ParamsDirectBase,
+  UniswapV3Router,
   UniswapV3SimpleSwapParams,
 } from './types';
 import {
@@ -51,6 +47,7 @@ import {
 import { Adapters, PoolsToPreload, UniswapV3Config } from './config';
 import { UniswapV3EventPool } from './uniswap-v3-pool';
 import UniswapV3RouterABI from '../../abi/uniswap-v3/UniswapV3Router.abi.json';
+import UniswapSwapRouter02ABI from '../../abi/uniswap-v3/UniswapSwapRouter02.abi.json';
 import UniswapV3QuoterV2ABI from '../../abi/uniswap-v3/UniswapV3QuoterV2.abi.json';
 import UniswapV3MultiABI from '../../abi/uniswap-v3/UniswapMulti.abi.json';
 import DirectSwapABI from '../../abi/DirectSwap.json';
@@ -94,8 +91,12 @@ export class UniswapV3
   implements IDex<UniswapV3Data, UniswapV3Param | UniswapV3ParamsDirect>
 {
   protected readonly factory: UniswapV3Factory;
+  readonly routerIface: Interface;
   readonly isFeeOnTransferSupported: boolean = false;
   readonly eventPools: Record<string, UniswapV3EventPool | null> = {};
+
+  protected totalPoolsCount = 0;
+  protected nonNullPoolsCount = 0;
 
   readonly hasConstantPriceLargeAmounts = false;
   readonly needWrapNative = true;
@@ -118,6 +119,8 @@ export class UniswapV3
         'PharaohV2',
         'AlienBaseV3',
         'OkuTradeV3',
+        'PangolinV3',
+        'Wagmi',
       ]),
     );
 
@@ -133,7 +136,6 @@ export class UniswapV3
     dexKey: string,
     protected dexHelper: IDexHelper,
     protected adapters = Adapters[network] || {},
-    readonly routerIface = new Interface(UniswapV3RouterABI),
     readonly quoterIface = new Interface(UniswapV3QuoterV2ABI),
     protected config = UniswapV3Config[dexKey][network],
     protected poolsToPreload = PoolsToPreload[dexKey]?.[network] || [],
@@ -144,6 +146,11 @@ export class UniswapV3
       UniswapV3Config[dexKey][network].subgraphType,
   ) {
     super(dexHelper, dexKey);
+    const routerABI =
+      this.config.routerType === UniswapV3Router.SwapRouter02
+        ? UniswapSwapRouter02ABI
+        : UniswapV3RouterABI;
+    this.routerIface = new Interface(routerABI);
     this.logger = dexHelper.getLogger(dexKey + '-' + network);
     this.uniswapMulti = new this.dexHelper.web3Provider.eth.Contract(
       UniswapV3MultiABI as AbiItem[],
@@ -277,7 +284,9 @@ export class UniswapV3
     if (pool === null) return null;
 
     if (pool) {
-      if (!pool.initFailed) {
+      if (pool.isInactive()) {
+        return null;
+      } else if (!pool.initFailed) {
         return pool;
       } else {
         // if init failed then prefer to early return pool with empty state to fallback to rpc call
@@ -289,6 +298,9 @@ export class UniswapV3
         }
         // else pursue with re-try initialization
       }
+    } else {
+      // new pool going to be added to the mapping
+      this.totalPoolsCount++;
     }
 
     const [token0, token1] = this._sortTokens(srcAddress, destAddress);
@@ -329,19 +341,27 @@ export class UniswapV3
         },
       });
     } catch (e) {
-      if (e instanceof Error && e.message.endsWith('Pool does not exist')) {
+      if (
+        e instanceof Error &&
+        (e.message.endsWith('Pool does not exist') ||
+          e.message.endsWith('Pool is inactive'))
+      ) {
+        if (e.message.endsWith('Pool is inactive')) {
+          this.logger.info(
+            `${this.dexKey}: Adding inactive pool ${pool.poolAddress} to "notExistingPoolSet": srcAddress=${srcAddress}, destAddress=${destAddress}, fee=${fee}`,
+          );
+        }
         // no need to await we want the set to have the pool key but it's not blocking
-        this.dexHelper.cache.zadd(
+        void this.dexHelper.cache.zadd(
           this.notExistingPoolSetKey,
           [Date.now(), key],
           'NX',
         );
 
-        // Pool does not exist for this feeCode, so we can set it to null
-        // to prevent more requests for this pool
+        // prevent more requests for this pool
         pool = null;
         this.logger.trace(
-          `${this.dexHelper}: Pool: srcAddress=${srcAddress}, destAddress=${destAddress}, fee=${fee} not found`,
+          `${this.dexHelper}: ${e.message}: srcAddress=${srcAddress}, destAddress=${destAddress}, fee=${fee}`,
           e,
         );
       } else {
@@ -356,19 +376,16 @@ export class UniswapV3
     }
 
     if (pool !== null) {
-      const allEventPools = Object.values(this.eventPools);
       // if pool was created, delete pool record from non existing set
       this.dexHelper.cache
         .zrem(this.notExistingPoolSetKey, [key])
         .catch(() => {});
-      this.logger.info(
-        `starting to listen to new non-null pool: ${key}. Already following ${allEventPools
-          // Not that I like this reduce, but since it is done only on initialization, expect this to be ok
-          .reduce(
-            (acc, curr) => (curr !== null ? ++acc : acc),
-            0,
-          )} non-null pools or ${allEventPools.length} total pools`,
-      );
+      if (!pool.initFailed) {
+        this.nonNullPoolsCount++;
+        this.logger.info(
+          `starting to listen to new non-null pool: ${key}. Already following ${this.nonNullPoolsCount} non-null pools or ${this.totalPoolsCount} total pools`,
+        );
+      }
     }
 
     this.eventPools[
@@ -607,12 +624,14 @@ export class UniswapV3
             ],
             exchange: pool.poolAddress,
           },
-          poolIdentifier: this.getPoolIdentifier(
-            pool.token0,
-            pool.token1,
-            pool.feeCode,
-            pool.tickSpacing,
-          ),
+          poolIdentifiers: [
+            this.getPoolIdentifier(
+              pool.token0,
+              pool.token1,
+              pool.feeCode,
+              pool.tickSpacing,
+            ),
+          ],
           exchange: this.dexKey,
           gasCost: prices.map(p => (p === 0n ? 0 : UNISWAPV3_QUOTE_GASLIMIT)),
           poolAddresses: [pool.poolAddress],
@@ -743,7 +762,7 @@ export class UniswapV3
         _destToken,
         amounts,
         side,
-        this.network === Network.ZKEVM ? [] : poolsToUse.poolWithoutState,
+        poolsToUse.poolWithoutState,
         blockNumber,
       );
 
@@ -813,12 +832,14 @@ export class UniswapV3
             unit: unitResult.outputs[0],
             prices,
             data: this.prepareData(_srcAddress, _destAddress, pool, state),
-            poolIdentifier: this.getPoolIdentifier(
-              pool.token0,
-              pool.token1,
-              pool.feeCode,
-              pool.tickSpacing,
-            ),
+            poolIdentifiers: [
+              this.getPoolIdentifier(
+                pool.token0,
+                pool.token1,
+                pool.feeCode,
+                pool.tickSpacing,
+              ),
+            ],
             exchange: this.dexKey,
             gasCost: gasCost,
             poolAddresses: [pool.poolAddress],
@@ -1208,9 +1229,11 @@ export class UniswapV3
 
     const _tokenAddress = tokenAddress.toLowerCase();
 
+    const liquidityField = this.config.liquidityField ?? 'totalValueLockedUSD';
+
     const res = await this._querySubgraph(
       `query ($token: Bytes!, $count: Int) {
-                pools0: pools(first: $count, orderBy: totalValueLockedUSD, orderDirection: desc, where: {token0: $token}) {
+                pools0: pools(first: $count, orderBy: ${liquidityField}, orderDirection: desc, where: {token0: $token}) {
                 id
                 token0 {
                   id
@@ -1220,9 +1243,9 @@ export class UniswapV3
                   id
                   decimals
                 }
-                totalValueLockedUSD
+                ${liquidityField}
               }
-              pools1: pools(first: $count, orderBy: totalValueLockedUSD, orderDirection: desc, where: {token1: $token}) {
+              pools1: pools(first: $count, orderBy: ${liquidityField}, orderDirection: desc, where: {token1: $token}) {
                 id
                 token0 {
                   id
@@ -1232,7 +1255,7 @@ export class UniswapV3
                   id
                   decimals
                 }
-                totalValueLockedUSD
+                ${liquidityField}
               }
             }`,
       {
@@ -1248,7 +1271,7 @@ export class UniswapV3
       return [];
     }
 
-    const pools0 = _.map(res.pools0, pool => ({
+    const pools0: PoolLiquidity[] = _.map(res.pools0, pool => ({
       exchange: this.dexKey,
       address: pool.id.toLowerCase(),
       connectorTokens: [
@@ -1257,11 +1280,10 @@ export class UniswapV3
           decimals: parseInt(pool.token1.decimals),
         },
       ],
-      liquidityUSD:
-        parseFloat(pool.totalValueLockedUSD) * UNISWAPV3_EFFICIENCY_FACTOR,
+      liquidityUSD: parseFloat(pool.totalValueLockedUSD ?? 0),
     }));
 
-    const pools1 = _.map(res.pools1, pool => ({
+    const pools1: PoolLiquidity[] = _.map(res.pools1, pool => ({
       exchange: this.dexKey,
       address: pool.id.toLowerCase(),
       connectorTokens: [
@@ -1270,16 +1292,113 @@ export class UniswapV3
           decimals: parseInt(pool.token0.decimals),
         },
       ],
-      liquidityUSD:
-        parseFloat(pool.totalValueLockedUSD) * UNISWAPV3_EFFICIENCY_FACTOR,
+      liquidityUSD: parseFloat(pool.totalValueLockedUSD ?? 0),
     }));
 
-    const pools = _.slice(
-      _.sortBy(_.concat(pools0, pools1), [pool => -1 * pool.liquidityUSD]),
-      0,
-      limit,
+    const allPools = pools0.concat(pools1);
+
+    if (allPools.length === 0) {
+      return [];
+    }
+
+    const poolBalances = await this._getPoolBalances(
+      allPools.map(p => [
+        p.address,
+        tokenAddress,
+        p.connectorTokens[0].address,
+      ]),
     );
-    return pools;
+
+    const tokensAmounts = allPools
+      .map((p, i) => {
+        return [
+          [tokenAddress, poolBalances[i][0]],
+          [p.connectorTokens[0].address, poolBalances[i][1]],
+        ] as [string, bigint | null][];
+      })
+      .flat();
+
+    const poolUsdBalances = await this.dexHelper.getUsdTokenAmounts(
+      tokensAmounts,
+    );
+
+    const pools = allPools.map((pool, i) => {
+      const tokenUsdBalance = poolUsdBalances[i * 2];
+      const connectorTokenUsdBalance = poolUsdBalances[i * 2 + 1];
+
+      let tokenUsdLiquidity = null;
+
+      if (tokenUsdBalance) {
+        tokenUsdLiquidity = tokenUsdBalance * UNISWAPV3_EFFICIENCY_FACTOR;
+      }
+
+      let connectorTokenUsdLiquidity = null;
+
+      if (connectorTokenUsdBalance) {
+        connectorTokenUsdLiquidity =
+          connectorTokenUsdBalance * UNISWAPV3_EFFICIENCY_FACTOR;
+      }
+
+      // connectorToken.liquidityUSD should specify how much liquidity is available for connectorToken -> token swaps
+      // it allows to handle unbalanced pools, when one token has much higher usd liquidity (e.g. 0xA7B3BCC6c88Da2856867d29F11c67C3A85634882)
+      if (tokenUsdLiquidity) {
+        // there's always only one connectorToken
+        pool.connectorTokens[0] = {
+          ...pool.connectorTokens[0],
+          liquidityUSD: tokenUsdLiquidity,
+        };
+      }
+
+      // the amount of connectorToken liquidity is the amount available for token -> connectorToken swaps
+      // take connectorTokenUsdLiquidity by default, in case there's no usd prices fallback to tokenUsdLiquidity
+      const liquidityUSD = connectorTokenUsdLiquidity || tokenUsdLiquidity || 0;
+
+      return {
+        ...pool,
+        liquidityUSD,
+      };
+    });
+
+    return pools
+      .sort((a, b) => b.liquidityUSD - a.liquidityUSD)
+      .slice(0, limit);
+  }
+
+  private async _getPoolBalances(
+    pools: [pool: string, token0: string, token1: string][],
+  ): Promise<[balanceToken0: bigint | null, balanceToken1: bigint | null][]> {
+    const callData: MultiCallParams<bigint>[] = pools
+      .map(pool => [
+        {
+          target: pool[1],
+          callData: this.erc20Interface.encodeFunctionData('balanceOf', [
+            pool[0],
+          ]),
+          decodeFunction: uint256ToBigInt,
+        },
+        {
+          target: pool[2],
+          callData: this.erc20Interface.encodeFunctionData('balanceOf', [
+            pool[0],
+          ]),
+          decodeFunction: uint256ToBigInt,
+        },
+      ])
+      .flat();
+
+    const balanceOfCalls =
+      await this.dexHelper.multiWrapper.tryAggregate<bigint>(false, callData);
+
+    const balances: [bigint | null, bigint | null][] = [];
+    for (let i = 0; i < balanceOfCalls.length; i += 2) {
+      const balanceToken0 = balanceOfCalls[i];
+      const balanceToken1 = balanceOfCalls[i + 1];
+      balances.push([
+        balanceToken0.success ? balanceToken0.returnData : null,
+        balanceToken1.success ? balanceToken1.returnData : null,
+      ]);
+    }
+    return balances;
   }
 
   private async _getPoolsFromIdentifiers(
@@ -1339,6 +1458,7 @@ export class UniswapV3
         amounts,
         zeroForOne,
         side,
+        this.logger,
       );
 
       if (side === SwapSide.SELL) {

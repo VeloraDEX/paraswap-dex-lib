@@ -78,7 +78,7 @@ export const PancakeswapV3Config: DexConfigMap<DexParams> = {
       initRetryFrequency: 10,
       initHash: `0x6ce8eb472fa82df5469c6ab6d485f17c3ad13c8cd7af59b3d4a8026c5ce0f7e2`,
       subgraphURL:
-        'https://api.studio.thegraph.com/query/50473/exchange-clmm/version/latest',
+        'https://api.studio.thegraph.com/query/50473/v3-base/version/latest',
     },
   },
   SwapBasedV3: {

@@ -8,6 +8,7 @@ import {
   AaveV3EthereumLido,
   AaveV3Gnosis,
   AaveV3Optimism,
+  AaveV3Sonic,
 } from '@bgd-labs/aave-address-book';
 
 export const AaveV3StataConfig: DexConfigMap<DexParams> = {
@@ -41,6 +42,12 @@ export const AaveV3StataConfig: DexConfigMap<DexParams> = {
       {
         factory: AaveV3Base.STATA_FACTORY,
         pool: AaveV3Base.POOL,
+      },
+    ],
+    [Network.SONIC]: [
+      {
+        factory: AaveV3Sonic.STATA_FACTORY,
+        pool: AaveV3Sonic.POOL,
       },
     ],
   },

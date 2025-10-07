@@ -647,10 +647,17 @@ export class CurveV1Factory
             ];
 
             implementationAddress = implementationAddress.toLowerCase();
-            coins = coins
-              .map(c => c.toLowerCase())
-              .filter(c => c !== NULL_ADDRESS);
-            coins_decimals = coins_decimals.filter(cd => cd !== 0);
+            const filteredPairs = coins
+              .map((c, idx) => ({
+                coin: c.toLowerCase(),
+                decimals: coins_decimals[idx],
+              }))
+              .filter(
+                ({ coin, decimals }) => coin !== NULL_ADDRESS && decimals > 0,
+              );
+
+            coins = filteredPairs.map(p => p.coin);
+            coins_decimals = filteredPairs.map(p => p.decimals);
 
             const factoryImplementationFromConfig =
               this.config.factoryPoolImplementations[implementationAddress];
@@ -805,9 +812,33 @@ export class CurveV1Factory
       );
     }
 
-    return pools.map(pool =>
-      this.getPoolIdentifier(pool.address, pool.isMetaPool),
-    );
+    return pools
+      .filter(pool => {
+        // same filtering as on pricing ./curve-v1-factory.ts#L975
+        let poolData = pool.getPoolData(srcTokenAddress, destTokenAddress);
+        const state = pool.getState();
+
+        if (!state) {
+          return false;
+        }
+
+        if (poolData === null && !this.needWrapNativeForPricing) {
+          if (isETHAddress(srcTokenAddress)) {
+            poolData = pool.getPoolData(wethAddress, destTokenAddress);
+          } else if (isETHAddress(destTokenAddress)) {
+            poolData = pool.getPoolData(srcTokenAddress, wethAddress);
+          }
+        }
+
+        if (poolData === null) {
+          return false;
+        }
+
+        const j = poolData.path[0].j;
+        // same as for price-handlers/price-handler.ts#L104
+        return state.balances[j] > 0n;
+      })
+      .map(pool => this.getPoolIdentifier(pool.address, pool.isMetaPool));
   }
 
   async getPricesVolume(
@@ -1008,7 +1039,9 @@ export class CurveV1Factory
               unit: side === SwapSide.SELL ? outputs[0] : 0n,
               data: poolData,
               exchange: this.dexKey,
-              poolIdentifier: pool.poolIdentifier,
+              poolIdentifiers: [
+                this.getPoolIdentifier(pool.address, pool.isMetaPool),
+              ],
               gasCost: POOL_EXCHANGE_GAS_COST,
               poolAddresses: [pool.address],
             };

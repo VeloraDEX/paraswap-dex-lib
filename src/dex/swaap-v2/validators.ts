@@ -15,7 +15,7 @@ const ext: joi.Extension = {
   base: joi.object({
     bids: priceLevelsValidator,
     asks: priceLevelsValidator,
-    liquidityUSD: joi.number(),
+    liquidity_USD: joi.number(),
   }),
   rules: {
     bidsLowerThanAsks: {
@@ -45,7 +45,7 @@ const ext: joi.Extension = {
               currentValue.lte(previousValue) ? currentValue : previousValue,
             new BigNumber('123456789012345678901234567890'),
           );
-        return maxBid < minAsk
+        return maxBid.lte(minAsk)
           ? values
           : helpers.message({
               custom: 'the maximum bid is higher than minimum ask',

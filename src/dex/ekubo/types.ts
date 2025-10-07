@@ -1,5 +1,5 @@
-import { BigNumber } from 'ethers';
-import _ from 'lodash';
+import { Interface } from '@ethersproject/abi';
+import { BigNumber, Contract } from 'ethers';
 import { PoolKey } from '../synthetix/types';
 
 export type Pool = {
@@ -10,12 +10,7 @@ export type Pool = {
   ticks: bigint[];
 };
 
-export interface Tick {
-  readonly number: number;
-  liquidityDelta: bigint;
-}
-
-export type QuoteData = {
+export type BasicQuoteData = {
   tick: number;
   sqrtRatio: BigNumber;
   liquidity: BigNumber;
@@ -27,7 +22,18 @@ export type QuoteData = {
   }[];
 };
 
-export type GetQuoteDataResponse = QuoteData[];
+export type TwammQuoteData = {
+  sqrtRatio: BigNumber;
+  liquidity: BigNumber;
+  lastVirtualOrderExecutionTime: BigNumber;
+  saleRateToken0: BigNumber;
+  saleRateToken1: BigNumber;
+  saleRateDeltas: {
+    time: BigNumber;
+    saleRateDelta0: BigNumber;
+    saleRateDelta1: BigNumber;
+  }[];
+};
 
 export type EkuboData = {
   poolKeyAbi: AbiPoolKey;
@@ -39,9 +45,20 @@ export type DexParams = {
   apiUrl: string;
   core: string;
   oracle: string;
+  twamm: string;
+  mevResist: string;
   dataFetcher: string;
+  twammDataFetcher: string;
   router: string;
 };
+
+export type EkuboContract = {
+  contract: Contract;
+  interface: Interface;
+  dataFetcher: Contract;
+};
+
+export type EkuboContracts = Record<'core' | 'twamm', EkuboContract>;
 
 export type AbiPoolKey = {
   token0: string;

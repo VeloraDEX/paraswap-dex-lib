@@ -205,7 +205,7 @@ export class GenericRFQ extends ParaSwapLimitOrders {
       {
         gasCost: Number(ONE_ORDER_GASCOST),
         exchange: this.dexKey,
-        poolIdentifier: expectedIdentifier,
+        poolIdentifiers: [expectedIdentifier],
         prices: outputs,
         unit,
         data: {
@@ -377,33 +377,46 @@ export class GenericRFQ extends ParaSwapLimitOrders {
           ? (makerAssetAmount * srcAmount) / takerAssetAmount
           : makerAssetAmount;
 
-      if (
-        makerAssetAmountFilled <
-        BigInt(
-          new BigNumber(destAmount.toString()).times(slippageFactor).toFixed(0),
-        )
-      ) {
-        const message = `${this.dexKey}: too much slippage on quote ${side} makerAssetAmountFilled ${makerAssetAmountFilled} / destAmount ${destAmount} < ${slippageFactor}`;
-        this.logger.warn(message);
-        throw new SlippageCheckError(message);
+      const requiredAmountWithSlippage = new BigNumber(destAmount.toString())
+        .multipliedBy(slippageFactor)
+        .toFixed(0);
+
+      if (makerAssetAmountFilled < BigInt(requiredAmountWithSlippage)) {
+        throw new SlippageCheckError(
+          this.dexKey,
+          this.network,
+          side,
+          requiredAmountWithSlippage,
+          makerAssetAmountFilled.toString(),
+          slippageFactor,
+        );
       }
     } else {
       if (makerAssetAmount < destAmount) {
-        // Won't receive enough assets
-        const message = `${this.dexKey}: too much slippage on quote ${side}  makerAssetAmount ${makerAssetAmount} < destAmount ${destAmount}`;
-        this.logger.warn(message);
-        throw new SlippageCheckError(message);
-      } else {
-        if (
-          takerAssetAmount >
-          BigInt(slippageFactor.times(srcAmount.toString()).toFixed(0))
-        ) {
-          const message = `${
-            this.dexKey
-          }: too much slippage on quote ${side} takerAssetAmount ${takerAssetAmount} / srcAmount ${srcAmount} > ${slippageFactor.toFixed()}`;
-          this.logger.warn(message);
-          throw new SlippageCheckError(message);
-        }
+        throw new SlippageCheckError(
+          this.dexKey,
+          this.network,
+          side,
+          destAmount.toString(),
+          makerAssetAmount.toString(),
+          slippageFactor,
+          true,
+        );
+      }
+
+      const requiredAmountWithSlippage = new BigNumber(srcAmount.toString())
+        .multipliedBy(slippageFactor)
+        .toFixed(0);
+
+      if (takerAssetAmount > BigInt(requiredAmountWithSlippage)) {
+        throw new SlippageCheckError(
+          this.dexKey,
+          this.network,
+          side,
+          requiredAmountWithSlippage,
+          takerAssetAmount.toString(),
+          slippageFactor,
+        );
       }
     }
 

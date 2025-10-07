@@ -1,8 +1,9 @@
 import dotenv from 'dotenv';
 dotenv.config();
+import _ from 'lodash';
 
 /* eslint-disable no-console */
-import { Provider, StaticJsonRpcProvider } from '@ethersproject/providers';
+import { Provider } from '@ethersproject/providers';
 import {
   IParaSwapSDK,
   LocalParaswapSDK,
@@ -21,9 +22,7 @@ import {
   Address,
   Token,
   TransferFeeParams,
-  Config,
 } from '../src/types';
-import { generateConfig } from '../src/config';
 import {
   DummyDexHelper,
   DummyLimitOrderProvider,
@@ -34,14 +33,18 @@ import {
   constructSimpleSDK,
   SimpleFetchSDK,
 } from '@paraswap/sdk';
-import { ParaSwapVersion } from '@paraswap/core';
+import { OptimalRoute, ParaSwapVersion } from '@paraswap/core';
 import axios from 'axios';
-import { Holders, Tokens } from './constants-e2e';
 import { sleep } from './utils';
 import { assert } from 'ts-essentials';
 import { GenericSwapTransactionBuilder } from '../src/generic-swap-transaction-builder';
 import { DexAdapterService, PricingHelper } from '../src';
 import { v4 as uuid } from 'uuid';
+import AUGUSTUS_V6_ABI from '../src/abi/augustus-v6/ABI.json';
+import { Interface } from '@ethersproject/abi';
+import { BigNumber } from 'ethers';
+
+export const AUGUSTUS_V6_INTERFACE = new Interface(AUGUSTUS_V6_ABI);
 
 export const testingEndpoint = process.env.E2E_TEST_ENDPOINT;
 
@@ -162,6 +165,10 @@ class APIParaswapSDK implements IParaSwapSDK {
   }
 }
 
+type TestE2EOptions = {
+  assertAmounts?: boolean;
+};
+
 export async function testE2E(
   srcToken: Token,
   destToken: Token,
@@ -171,16 +178,17 @@ export async function testE2E(
   dexKeys: string | string[],
   contractMethod: ContractMethod,
   network: Network = Network.MAINNET,
-  _0: Provider,
+  _0?: Provider,
   poolIdentifiers?: { [key: string]: string[] | null } | null,
   limitOrderProvider?: DummyLimitOrderProvider,
   transferFees?: TransferFeeParams,
   // Specified in BPS: part of 10000
   slippage?: number,
   sleepMs?: number,
-  // could be used for networks without tenderly support (e.g. zkEVM)
+  // could be used for networks without tenderly support
   replaceTenderlyWithEstimateGas?: boolean,
   forceRoute?: AddressOrSymbol[],
+  options?: TestE2EOptions,
 ) {
   const useAPI = testingEndpoint && !poolIdentifiers;
   // The API currently doesn't allow for specifying poolIdentifiers
@@ -268,9 +276,8 @@ export async function testE2E(
     stateOverride,
   };
   // simulate the transaction with overrides
-  const simulation = await tenderlySimulator.simulateTransaction(
-    simulationRequest,
-  );
+  const { transaction, simulation } =
+    await tenderlySimulator.simulateTransaction(simulationRequest);
   // log gas estimation if testing against API
   if (useAPI) {
     const estimatedGas = Number(priceRoute.gasCost);
@@ -287,72 +294,49 @@ export async function testE2E(
   }
   // assert simulation status
   expect(simulation.status).toEqual(true);
+
+  // decode method output
+  const decodedOutput = AUGUSTUS_V6_INTERFACE.decodeFunctionResult(
+    contractMethod,
+    transaction.transaction_info.call_trace.output,
+  );
+  // assert min difference
+  const expectedAmount = BigNumber.from(
+    swapSide === SwapSide.SELL ? priceRoute.destAmount : priceRoute.srcAmount,
+  );
+  const simulatedAmount: BigNumber =
+    swapSide === SwapSide.SELL
+      ? decodedOutput.receivedAmount
+      : decodedOutput.spentAmount;
+  const amountDiff = expectedAmount.lt(simulatedAmount)
+    ? expectedAmount.div(simulatedAmount)
+    : simulatedAmount.div(expectedAmount);
+  const paraswapShare = decodedOutput.paraswapShare?.toNumber() ?? 0;
+
+  expect(amountDiff.toNumber()).toBeLessThanOrEqual(1);
+  expect(paraswapShare).toEqual(0);
 }
 
-export type TestParamE2E = {
-  config: Config;
-  srcToken: Token;
-  destToken: Token;
-  senderAddress: Address;
-  thirdPartyAddress?: Address;
-  _amount: string;
-  swapSide: SwapSide;
-  dexKeys: string | string[];
-  contractMethod: ContractMethod;
-  network: Network;
-  poolIdentifiers?: { [key: string]: string[] | null } | null;
-  limitOrderProvider?: DummyLimitOrderProvider;
-  transferFees?: TransferFeeParams;
-  sleepMs?: number;
-  skipTenderly?: boolean;
+const extractAllDexsFromRoute = (bestRoute: OptimalRoute[]) => {
+  return _.flattenDeep(
+    bestRoute.map(r =>
+      r.swaps.map(s => s.swapExchanges.map(se => se.exchange)),
+    ),
+  );
 };
 
-export async function newTestE2E({
-  config,
-  srcToken,
-  destToken,
-  senderAddress,
-  thirdPartyAddress,
-  _amount,
-  swapSide,
-  dexKeys,
-  contractMethod,
-  network,
-  poolIdentifiers,
-  limitOrderProvider,
-  transferFees,
-  sleepMs,
-  skipTenderly,
-}: TestParamE2E) {
-  const useTenderly = !skipTenderly;
-  const sdk = new LocalParaswapSDK(network, dexKeys, '', limitOrderProvider);
-  // initialize pricing
-  await sdk.initializePricing?.();
-  // if sleepMs is provided, pause simulation for specified time
-  if (sleepMs) {
-    await sleep(sleepMs);
+export async function testPriceRoute(priceRoute: OptimalRate) {
+  const slippage = 100n;
+  const { network, srcToken, destToken, side } = priceRoute;
+  const dexKeys = extractAllDexsFromRoute(priceRoute.bestRoute);
+  console.log('Dexes: ', dexKeys.join(', '));
+  const sdk: IParaSwapSDK = new APIParaswapSDK(network, dexKeys, '');
+  if (sdk instanceof APIParaswapSDK) {
+    // initialize as some of the dexs need states to build transaction (e.g. balancer-v2)
+    await sdk?.initializePricing();
   }
-  // fetch the route
-  const amount = BigInt(_amount);
-  const priceRoute = await sdk.getPrices(
-    srcToken,
-    destToken,
-    amount,
-    swapSide,
-    contractMethod,
-    poolIdentifiers,
-    transferFees,
-  );
   // log the route for visibility
   console.log('Price Route:', JSON.stringify(priceRoute, null, 2));
-  // exit function if not using tenderly
-  if (!useTenderly) {
-    console.log('Skipping transaction simulation on Tenderly');
-    if (sdk.releaseResources) {
-      await sdk.releaseResources();
-    }
-    return;
-  }
   // prepare state overrides
   const tenderlySimulator = TenderlySimulator.getInstance();
   // any address works
@@ -362,7 +346,7 @@ export async function newTestE2E({
   // fund x2 just in case
   const amountToFund = BigInt(priceRoute.srcAmount) * 2n;
   // add overrides for src token
-  if (srcToken.address.toLowerCase() === ETHER_ADDRESS) {
+  if (srcToken.toLowerCase() === ETHER_ADDRESS) {
     // add eth balance to user
     tenderlySimulator.addBalanceOverride(
       stateOverride,
@@ -374,25 +358,24 @@ export async function newTestE2E({
     await tenderlySimulator.addTokenBalanceOverride(
       stateOverride,
       network,
-      srcToken.address,
+      srcToken,
       userAddress,
       amountToFund,
     );
     await tenderlySimulator.addAllowanceOverride(
       stateOverride,
       network,
-      srcToken.address,
+      srcToken,
       userAddress,
       priceRoute.contractAddress,
       amountToFund,
     );
   }
   // build swap transaction
-  const _slippage = 700n;
   const minMaxAmount =
-    (swapSide === SwapSide.SELL
-      ? BigInt(priceRoute.destAmount) * (10000n - _slippage)
-      : BigInt(priceRoute.srcAmount) * (10000n + _slippage)) / 10000n;
+    (side === SwapSide.SELL
+      ? BigInt(priceRoute.destAmount) * (10000n - slippage)
+      : BigInt(priceRoute.srcAmount) * (10000n + slippage)) / 10000n;
   const swapParams = await sdk.buildTransaction(
     priceRoute,
     minMaxAmount,
@@ -402,35 +385,27 @@ export async function newTestE2E({
     swapParams.to !== undefined,
     'Transaction params missing `to` property',
   );
-  if (useTenderly) {
-    // assemble `SimulationRequest`
-    const { from, to, data, value } = swapParams;
-    const simulationRequest = {
-      chainId: network,
-      from,
-      to,
-      data,
-      value,
-      blockNumber: priceRoute.blockNumber,
-      stateOverride,
-    };
-    // simulate the transaction with overrides
-    const simulation = await tenderlySimulator.simulateTransaction(
-      simulationRequest,
-    );
-    // log gas estimation
-    const estimatedGas = Number(priceRoute.gasCost);
-    const gasUsed = simulation.gas_used;
-    console.log(
-      `Gas Estimate API: ${
-        priceRoute.gasCost
-      }, Simulated: ${gasUsed}, Difference: ${estimatedGas - gasUsed}`,
-    );
-    // release
-    await sdk.releaseResources?.();
-    // assert simulation status
-    expect(simulation.status).toEqual(true);
+  // assemble `SimulationRequest`
+  const { from, to, data, value } = swapParams;
+  const simulationRequest = {
+    chainId: network,
+    from,
+    to,
+    data,
+    value,
+    blockNumber: priceRoute.blockNumber,
+    stateOverride,
+  };
+  // simulate the transaction with overrides
+  const { simulation } = await tenderlySimulator.simulateTransaction(
+    simulationRequest,
+  );
+  // release
+  if (sdk.releaseResources) {
+    await sdk.releaseResources();
   }
+  // assert simulation status
+  expect(simulation.status).toEqual(true);
 }
 
 export const getEnv = (envName: string, optional: boolean = false): string => {
@@ -442,81 +417,6 @@ export const getEnv = (envName: string, optional: boolean = false): string => {
   }
 
   return process.env[envName]!;
-};
-
-type Pairs = { name: string; sellAmount: string; buyAmount: string }[][];
-type DexToPair = Record<string, Pairs>;
-
-export const constructE2ETests = (
-  testSuiteName: string,
-  network: Network,
-  testDataset: DexToPair,
-) => {
-  const sideToContractMethods = new Map([
-    [
-      SwapSide.SELL,
-      [
-        ContractMethod.simpleSwap,
-        ContractMethod.multiSwap,
-        ContractMethod.megaSwap,
-      ],
-    ],
-    [SwapSide.BUY, [ContractMethod.simpleBuy, ContractMethod.buy]],
-  ]);
-
-  describe(testSuiteName, () => {
-    const tokens = Tokens[network];
-    const holders = Holders[network];
-    const provider = new StaticJsonRpcProvider(
-      generateConfig(network).privateHttpProvider,
-      network,
-    );
-
-    Object.entries(testDataset).forEach(([dexKey, pairs]) => {
-      describe(dexKey, () => {
-        sideToContractMethods.forEach((contractMethods, side) =>
-          describe(`${side}`, () => {
-            contractMethods.forEach((contractMethod: ContractMethod) => {
-              pairs.forEach(pair => {
-                describe(`${contractMethod}`, () => {
-                  it(`${pair[0].name} -> ${pair[1].name}`, async () => {
-                    await testE2E(
-                      tokens[pair[0].name],
-                      tokens[pair[1].name],
-                      holders[pair[0].name],
-                      side === SwapSide.SELL
-                        ? pair[0].sellAmount
-                        : pair[0].buyAmount,
-                      side,
-                      dexKey,
-                      contractMethod,
-                      network,
-                      provider,
-                    );
-                  });
-                  it(`${pair[1].name} -> ${pair[0].name}`, async () => {
-                    await testE2E(
-                      tokens[pair[1].name],
-                      tokens[pair[0].name],
-                      holders[pair[1].name],
-                      side === SwapSide.SELL
-                        ? pair[1].sellAmount
-                        : pair[1].buyAmount,
-                      side,
-                      dexKey,
-                      contractMethod,
-                      network,
-                      provider,
-                    );
-                  });
-                });
-              });
-            });
-          }),
-        );
-      });
-    });
-  });
 };
 
 export const testGasEstimation = async (
@@ -630,7 +530,7 @@ export const testGasEstimation = async (
     stateOverride,
   };
   // simulate the transaction with overrides
-  const simulation = await tenderlySimulator.simulateTransaction(
+  const { simulation } = await tenderlySimulator.simulateTransaction(
     simulationRequest,
   );
   // compare and assert

@@ -14,7 +14,13 @@ import {
 import { IDexTxBuilder } from '../idex';
 import SSPMAbi from '../../abi/SSPM.json';
 import StadeOracleAbi from '../../abi/StaderOracle.json';
-import { ETHER_ADDRESS, Network, NULL_ADDRESS } from '../../constants';
+import {
+  ETHER_ADDRESS,
+  Network,
+  NO_USD_LIQUIDITY,
+  NULL_ADDRESS,
+  UNLIMITED_USD_LIQUIDITY,
+} from '../../constants';
 import { IDexHelper } from '../../dex-helper';
 import { SimpleExchange } from '../simple-exchange';
 import { BI_POWS } from '../../bigint-constants';
@@ -121,7 +127,9 @@ export class Stader
         unit: unitOut,
         data: {},
         exchange: this.dexKey,
-        poolIdentifier: `${ETHER_ADDRESS}_${destToken.address}`.toLowerCase(),
+        poolIdentifiers: [
+          `${ETHER_ADDRESS}_${destToken.address}`.toLowerCase(),
+        ],
         gasCost: 120_000,
         poolAddresses: [destToken.address],
       },
@@ -203,6 +211,7 @@ export class Stader
     tokenAddress: string,
     limit: number,
   ): AsyncOrSync<PoolLiquidity[]> {
+    // swaps available only for ETH/WETH to ETHx
     if (isETHAddress(tokenAddress) || this.isWETH(tokenAddress.toLowerCase())) {
       return [
         {
@@ -212,9 +221,10 @@ export class Stader
             {
               decimals: 18,
               address: this.config.ETHx,
+              liquidityUSD: NO_USD_LIQUIDITY,
             },
           ],
-          liquidityUSD: 1000000000,
+          liquidityUSD: UNLIMITED_USD_LIQUIDITY,
         },
       ];
     }
@@ -229,9 +239,10 @@ export class Stader
           {
             decimals: 18,
             address: t,
+            liquidityUSD: UNLIMITED_USD_LIQUIDITY,
           },
         ],
-        liquidityUSD: 1000000000,
+        liquidityUSD: NO_USD_LIQUIDITY,
       }));
     }
 

@@ -10,6 +10,7 @@ import { ConfigHelper } from '../config';
 import { MultiWrapper } from '../lib/multi-wrapper';
 import { PromiseScheduler } from '../lib/promise-scheduler';
 import { AugustusApprovals } from '../dex/augustus-approvals';
+import { Address } from '@paraswap/sdk';
 
 export interface IDexHelper {
   config: ConfigHelper;
@@ -24,4 +25,7 @@ export interface IDexHelper {
   blockManager: IBlockManager;
   getLogger: LoggerConstructor;
   getTokenUSDPrice: (token: Token, amount: bigint) => Promise<number>;
+  getUsdTokenAmounts: (
+    tokensAmounts: [token: Address, amount: bigint | null][],
+  ) => Promise<number[]>;
 }

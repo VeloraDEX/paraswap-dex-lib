@@ -3,11 +3,7 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 import { testE2E } from '../../../tests/utils-e2e';
-import {
-  Tokens,
-  Holders,
-  NativeTokenSymbols,
-} from '../../../tests/constants-e2e';
+import { Tokens, Holders } from '../../../tests/constants-e2e';
 import { Network, ContractMethod, SwapSide } from '../../constants';
 import { StaticJsonRpcProvider } from '@ethersproject/providers';
 import { generateConfig } from '../../config';
@@ -19,6 +15,7 @@ function testForNetwork(
   tokenBSymbol: string,
   tokenAAmount: string,
   tokenBAmount: string,
+  disableReverse?: boolean,
 ) {
   const provider = new StaticJsonRpcProvider(
     generateConfig(network).privateHttpProvider,
@@ -50,19 +47,22 @@ function testForNetwork(
                 provider,
               );
             });
-            it(`${tokenBSymbol} -> ${tokenASymbol}`, async () => {
-              await testE2E(
-                tokens[tokenBSymbol],
-                tokens[tokenASymbol],
-                holders[tokenBSymbol],
-                side === SwapSide.SELL ? tokenBAmount : tokenAAmount,
-                side,
-                dexKey,
-                contractMethod,
-                network,
-                provider,
-              );
-            });
+
+            if (!disableReverse) {
+              it(`${tokenBSymbol} -> ${tokenASymbol}`, async () => {
+                await testE2E(
+                  tokens[tokenBSymbol],
+                  tokens[tokenASymbol],
+                  holders[tokenBSymbol],
+                  side === SwapSide.SELL ? tokenBAmount : tokenAAmount,
+                  side,
+                  dexKey,
+                  contractMethod,
+                  network,
+                  provider,
+                );
+              });
+            }
           });
         });
       }),
@@ -108,6 +108,7 @@ describe('SkyConverter E2E', () => {
       tokenBSymbol,
       tokenAAmount,
       tokenBAmount,
+      true, // disable SKY -> MKR conversion
     );
   });
 });

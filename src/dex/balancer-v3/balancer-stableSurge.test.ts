@@ -8,18 +8,19 @@ import { BalancerV3 } from './balancer-v3';
 import { testPricesVsOnchain } from './balancer-test-helpers';
 
 const dexKey = 'BalancerV3';
-const blockNumber = 22086000;
-let balancerV3: BalancerV3;
 const network = Network.MAINNET;
 const dexHelper = new DummyDexHelper(network);
 const tokens = Tokens[network];
-const usdc = tokens['USDC'];
-const weth = tokens['WETH'];
-// https://etherscan.io/address/0x6b49054c350b47ca9aa1331ab156a1eedbe94e79
-const stableSurgePool =
-  '0x6b49054c350b47ca9aa1331ab156a1eedbe94e79'.toLowerCase();
 
-describe('BalancerV3 stableSurge hook tests', function () {
+describe('BalancerV3 stableSurge V1 hook tests', function () {
+  const blockNumber = 22086000;
+  let balancerV3: BalancerV3;
+  const tBTC = tokens['tBTCv2'];
+  const baoBTC = tokens['baoBTC'];
+  // https://balancer.fi/pools/ethereum/v3/0xb22bd670c6e57c5fb486914dc478ae668507ddc8
+  const stableSurgeV1Pool =
+    '0xb22bd670c6e57c5fb486914dc478ae668507ddc8'.toLowerCase();
+
   beforeAll(async () => {
     balancerV3 = new BalancerV3(network, dexKey, dexHelper);
     if (balancerV3.initializePricing) {
@@ -30,17 +31,17 @@ describe('BalancerV3 stableSurge hook tests', function () {
   describe('pool with stableSurge hook should be returned', function () {
     it('getPoolIdentifiers', async function () {
       const pools = await balancerV3.getPoolIdentifiers(
-        usdc,
-        weth,
+        tBTC,
+        baoBTC,
         SwapSide.SELL,
         blockNumber,
       );
-      expect(pools.some(pool => pool === stableSurgePool)).toBe(true);
+      expect(pools.some(pool => pool === stableSurgeV1Pool)).toBe(true);
     });
 
     it('getTopPoolsForToken', async function () {
-      const pools = await balancerV3.getTopPoolsForToken(weth.address, 10);
-      expect(pools.some(pool => pool.address === stableSurgePool)).toBe(true);
+      const pools = await balancerV3.getTopPoolsForToken(baoBTC.address, 100);
+      expect(pools.some(pool => pool.address === stableSurgeV1Pool)).toBe(true);
     });
   });
 
@@ -49,32 +50,29 @@ describe('BalancerV3 stableSurge hook tests', function () {
       it('SELL', async function () {
         const amounts = [0n, 100000000n];
         const side = SwapSide.SELL;
-        // await testPricesVsOnchain(amounts, usdc, weth, side, blockNumber, [
-        //   stableSurgePool,
-        // ]);
         await testPricesVsOnchain(
           balancerV3,
           network,
           amounts,
-          usdc,
-          weth,
+          tBTC,
+          baoBTC,
           side,
           blockNumber,
-          [stableSurgePool],
+          [stableSurgeV1Pool],
         );
       });
       it('BUY', async function () {
-        const amounts = [0n, 500000n];
+        const amounts = [0n, 50000000n];
         const side = SwapSide.BUY;
         await testPricesVsOnchain(
           balancerV3,
           network,
           amounts,
-          weth,
-          usdc,
+          tBTC,
+          baoBTC,
           side,
           blockNumber,
-          [stableSurgePool],
+          [stableSurgeV1Pool],
         );
       });
     });
@@ -86,11 +84,11 @@ describe('BalancerV3 stableSurge hook tests', function () {
           balancerV3,
           network,
           amounts,
-          weth,
-          usdc,
+          baoBTC,
+          tBTC,
           side,
           blockNumber,
-          [stableSurgePool],
+          [stableSurgeV1Pool],
         );
       });
       it('BUY', async function () {
@@ -100,13 +98,78 @@ describe('BalancerV3 stableSurge hook tests', function () {
           balancerV3,
           network,
           amounts,
-          weth,
-          usdc,
+          baoBTC,
+          tBTC,
           side,
           blockNumber,
-          [stableSurgePool],
+          [stableSurgeV1Pool],
         );
       });
+    });
+  });
+});
+
+describe('BalancerV3 stableSurge V2 hook tests', function () {
+  const blockNumber = 22466700;
+  let balancerV3: BalancerV3;
+  const EURC = tokens['EUROC'];
+  const RLUSD = tokens['RLUSD'];
+  // https://etherscan.io/address/0x0629e9703f0447402158eedca5148fe98df6d7a3
+  const stableSurgeV2Pool =
+    '0x0629e9703f0447402158eedca5148fe98df6d7a3'.toLowerCase();
+
+  beforeAll(async () => {
+    balancerV3 = new BalancerV3(network, dexKey, dexHelper);
+    if (balancerV3.initializePricing) {
+      await balancerV3.initializePricing(blockNumber);
+    }
+  });
+
+  describe('pool with stableSurge hook should be returned', function () {
+    it('getPoolIdentifiers', async function () {
+      const pools = await balancerV3.getPoolIdentifiers(
+        EURC,
+        RLUSD,
+        SwapSide.SELL,
+        blockNumber,
+      );
+      expect(pools.some(pool => pool === stableSurgeV2Pool)).toBe(true);
+    });
+
+    it('getTopPoolsForToken', async function () {
+      const pools = await balancerV3.getTopPoolsForToken(RLUSD.address, 100);
+      expect(pools.some(pool => pool.address === stableSurgeV2Pool)).toBe(true);
+    });
+  });
+
+  describe('should match onchain pricing', function () {
+    it('SELL', async function () {
+      const amounts = [0n, 100000000n];
+      const side = SwapSide.SELL;
+      await testPricesVsOnchain(
+        balancerV3,
+        network,
+        amounts,
+        EURC,
+        RLUSD,
+        side,
+        blockNumber,
+        [stableSurgeV2Pool],
+      );
+    });
+    it('BUY', async function () {
+      const amounts = [0n, 700000000n];
+      const side = SwapSide.BUY;
+      await testPricesVsOnchain(
+        balancerV3,
+        network,
+        amounts,
+        RLUSD,
+        EURC,
+        side,
+        blockNumber,
+        [stableSurgeV2Pool],
+      );
     });
   });
 });

@@ -223,18 +223,25 @@ export type PoolPrices<T> = {
   prices: bigint[];
   unit: bigint;
   data: T;
-  poolIdentifier?: string;
   exchange: string;
   gasCost: number | number[];
   gasCostL2?: number | number[];
   calldataGasCost?: number | number[];
   poolAddresses?: Array<Address>;
+  poolIdentifiers?: Array<string>;
 };
 
+export type ConnectorToken = Token & { liquidityUSD?: number };
+
 export type PoolLiquidity = {
+  poolIdentifier?: string;
   exchange: string;
   address: Address;
-  connectorTokens: Token[];
+  // by default, PoolLiquidity.liquidityUSD is the liquidity for token <=> connectorToken swaps
+  // but in case available liquidity is different,
+  // then PoolLiquidity.liquidityUSD is the liquidity for token => connectorToken swaps
+  // and PoolLiquidity.connectorTokens.liquidityUSD is the liquidity for connectorToken => token swaps
+  connectorTokens: ConnectorToken[];
   liquidityUSD: number;
 };
 
@@ -315,7 +322,6 @@ export type Config = {
   dexalotAuthToken?: string;
   bebopAuthName?: string;
   bebopAuthToken?: string;
-  idleDaoAuthToken?: string;
   forceRpcFallbackDexs: string[];
   apiKeyTheGraph: string;
   lidoReferralAddress?: Address;

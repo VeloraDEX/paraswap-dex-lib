@@ -101,7 +101,7 @@ export class Dexalot extends SimpleExchange implements IDex<DexalotData> {
     protected rfqInterface = new Interface(mainnetRFQAbi),
   ) {
     super(dexHelper, dexKey);
-    this.logger = dexHelper.getLogger(dexKey);
+    this.logger = dexHelper.getLogger(`${dexKey}-${network}`);
 
     const authToken = dexHelper.config.data.dexalotAuthToken;
     assert(
@@ -535,7 +535,7 @@ export class Dexalot extends SimpleExchange implements IDex<DexalotData> {
           prices,
           unit: BigInt(outDecimals),
           data: {},
-          poolIdentifier: poolIdentifier,
+          poolIdentifiers: [poolIdentifier],
           exchange: this.dexKey,
           gasCost: DEXALOT_GAS_COST,
           poolAddresses: [this.mainnetRFQAddress],
@@ -655,68 +655,59 @@ export class Dexalot extends SimpleExchange implements IDex<DexalotData> {
       const minDeadline = expiryAsBigInt > 0 ? expiryAsBigInt : BI_MAX_UINT256;
 
       const slippageFactor = options.slippageFactor;
-      let isFailOnSlippage = false;
-      let slippageErrorMessage = '';
+
+      const destAmount = optimalSwapExchange.destAmount;
+      const srcAmount = optimalSwapExchange.srcAmount;
+
+      const takerAmount = order.takerAmount;
+      const makerAmount = order.makerAmount;
 
       if (isSell) {
-        if (
-          BigInt(order.makerAmount) <
-          BigInt(
-            new BigNumber(optimalSwapExchange.destAmount.toString())
-              .times(slippageFactor)
-              .toFixed(0),
-          )
-        ) {
-          isFailOnSlippage = true;
-          const message = `${this.dexKey}-${this.network}: too much slippage on quote ${side} quoteTokenAmount ${order.makerAmount} / destAmount ${optimalSwapExchange.destAmount} < ${slippageFactor}`;
-          slippageErrorMessage = message;
-          this.logger.warn(message);
+        const requiredAmountWithSlippage = new BigNumber(destAmount)
+          .multipliedBy(slippageFactor)
+          .toFixed(0);
+
+        if (BigInt(makerAmount) < BigInt(requiredAmountWithSlippage)) {
+          const isTooStrict = BigNumber(1)
+            .minus(slippageFactor)
+            .lt(DEXALOT_MIN_SLIPPAGE_FACTOR_THRESHOLD_FOR_RESTRICTION);
+
+          const SlippageError = isTooStrict
+            ? TooStrictSlippageCheckError
+            : SlippageCheckError;
+
+          throw new SlippageError(
+            this.dexKey,
+            this.network,
+            side,
+            requiredAmountWithSlippage,
+            makerAmount,
+            slippageFactor,
+          );
         }
       } else {
-        if (
-          BigInt(order.takerAmount) >
-          BigInt(
-            slippageFactor
-              .times(optimalSwapExchange.srcAmount.toString())
-              .toFixed(0),
-          )
-        ) {
-          isFailOnSlippage = true;
-          const message = `${this.dexKey}-${
-            this.network
-          }: too much slippage on quote ${side} baseTokenAmount ${
-            order.takerAmount
-          } / srcAmount ${
-            optimalSwapExchange.srcAmount
-          } > ${slippageFactor.toFixed()}`;
-          slippageErrorMessage = message;
-          this.logger.warn(message);
+        const requiredAmountWithSlippage = new BigNumber(srcAmount)
+          .multipliedBy(slippageFactor)
+          .toFixed(0);
+
+        if (BigInt(takerAmount) > BigInt(requiredAmountWithSlippage)) {
+          const isTooStrict = slippageFactor
+            .minus(1)
+            .lt(DEXALOT_MIN_SLIPPAGE_FACTOR_THRESHOLD_FOR_RESTRICTION);
+
+          const SlippageError = isTooStrict
+            ? TooStrictSlippageCheckError
+            : SlippageCheckError;
+
+          throw new SlippageError(
+            this.dexKey,
+            this.network,
+            side,
+            requiredAmountWithSlippage,
+            takerAmount,
+            slippageFactor,
+          );
         }
-      }
-
-      let isTooStrictSlippage = false;
-      if (
-        isFailOnSlippage &&
-        isSell &&
-        new BigNumber(1)
-          .minus(slippageFactor)
-          .lt(DEXALOT_MIN_SLIPPAGE_FACTOR_THRESHOLD_FOR_RESTRICTION)
-      ) {
-        isTooStrictSlippage = true;
-      } else if (
-        isFailOnSlippage &&
-        isBuy &&
-        slippageFactor
-          .minus(1)
-          .lt(DEXALOT_MIN_SLIPPAGE_FACTOR_THRESHOLD_FOR_RESTRICTION)
-      ) {
-        isTooStrictSlippage = true;
-      }
-
-      if (isFailOnSlippage && isTooStrictSlippage) {
-        throw new TooStrictSlippageCheckError(slippageErrorMessage);
-      } else if (isFailOnSlippage && !isTooStrictSlippage) {
-        throw new SlippageCheckError(slippageErrorMessage);
       }
 
       return [
@@ -901,20 +892,22 @@ export class Dexalot extends SimpleExchange implements IDex<DexalotData> {
   }
 
   async isBlacklisted(txOrigin: Address): Promise<boolean> {
-    const cachedBlacklist = await this.dexHelper.cache.get(
-      this.dexKey,
-      this.network,
-      this.blacklistCacheKey,
-    );
+    const [cachedBlacklist, isRateLimited] = await Promise.all([
+      this.dexHelper.cache.get(
+        this.dexKey,
+        this.network,
+        this.blacklistCacheKey,
+      ),
+      this.isRateLimited(txOrigin),
+    ]);
+
+    if (isRateLimited) {
+      return true;
+    }
 
     if (cachedBlacklist) {
       const blacklist = JSON.parse(cachedBlacklist) as string[];
       return blacklist.includes(txOrigin.toLowerCase());
-    }
-
-    // To not show pricing for rate limited users
-    if (await this.isRateLimited(txOrigin)) {
-      return true;
     }
 
     return false;

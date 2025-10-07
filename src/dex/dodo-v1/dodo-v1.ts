@@ -12,7 +12,7 @@ import DodoV2ProxyABI from '../../abi/dodo-v2-proxy.json';
 import { NumberAsString } from '@paraswap/core';
 import { IDexHelper } from '../../dex-helper';
 import { DodoV1Data, DodoV1Functions, DodoV1Param } from './types';
-import { DODOAproveAddress, DODOV2ProxyAddress } from './config';
+import { DODOApproveAddress, DODOV2ProxyAddress } from './config';
 import { extractReturnAmountPosition } from '../../executor/utils';
 
 export class DodoV1
@@ -84,7 +84,7 @@ export class DodoV1
       destAmount,
       swapData,
       DODOV2ProxyAddress[this.network],
-      DODOAproveAddress[this.network], // Warning
+      DODOApproveAddress[this.network], // Warning
     );
   }
 
@@ -118,7 +118,7 @@ export class DodoV1
       dexFuncHasRecipient: false,
       exchangeData: swapData,
       targetExchange: DODOV2ProxyAddress[this.network],
-      spender: DODOAproveAddress[this.network],
+      spender: DODOApproveAddress[this.network],
       returnAmountPos:
         _side === SwapSide.SELL
           ? extractReturnAmountPosition(

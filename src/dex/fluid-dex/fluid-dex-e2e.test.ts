@@ -190,6 +190,44 @@ describe('FluidDex E2E', () => {
       );
     });
   });
+
+  describe('Base', () => {
+    const network = Network.BASE;
+
+    describe('ETH -> wstETH', () => {
+      const tokenASymbol: string = 'wstETH';
+      const tokenBSymbol: string = 'ETH';
+
+      const tokenAAmount: string = '100000000000000';
+      const tokenBAmount: string = '100000000000000';
+
+      testForNetwork(
+        network,
+        dexKey,
+        tokenASymbol,
+        tokenBSymbol,
+        tokenAAmount,
+        tokenBAmount,
+      );
+    });
+
+    describe('ETH -> weETH', () => {
+      const tokenBSymbol: string = 'ETH';
+      const tokenASymbol: string = 'weETH';
+
+      const tokenAAmount: string = '100000000000000';
+      const tokenBAmount: string = '100000000000000';
+
+      testForNetwork(
+        network,
+        dexKey,
+        tokenASymbol,
+        tokenBSymbol,
+        tokenAAmount,
+        tokenBAmount,
+      );
+    });
+  });
 });
 
 function NewColReservesOne(): CollateralReserves {

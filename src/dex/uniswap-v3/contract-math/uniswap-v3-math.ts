@@ -14,6 +14,7 @@ import {
   MAX_PRICING_COMPUTATION_STEPS_ALLOWED,
   OUT_OF_RANGE_ERROR_POSTFIX,
 } from '../constants';
+import { Logger } from 'log4js';
 
 type ModifyPositionParams = {
   tickLower: bigint;
@@ -59,6 +60,7 @@ function _priceComputationCycles(
   zeroForOne: boolean,
   exactInput: boolean,
   side: SwapSide,
+  logger?: Logger,
 ): [
   // result
   PriceComputationState,
@@ -194,13 +196,7 @@ function _priceComputationCycles(
           };
         }
 
-        let liquidityNet = Tick.cross(
-          ticksCopy,
-          step.tickNext,
-          cache.secondsPerLiquidityCumulativeX128,
-          cache.tickCumulative,
-          cache.blockTimestamp,
-        );
+        let liquidityNet = Tick.cross(ticksCopy, step.tickNext);
         if (zeroForOne) liquidityNet = -liquidityNet;
 
         state.liquidity = LiquidityMath.addDelta(state.liquidity, liquidityNet);
@@ -240,19 +236,11 @@ class UniswapV3Math {
     amounts: bigint[],
     zeroForOne: boolean,
     side: SwapSide,
+    logger?: Logger,
   ): OutputResult {
     const slot0Start = poolState.slot0;
 
     const isSell = side === SwapSide.SELL;
-
-    // While calculating, ticks are changing, so to not change the actual state,
-    // we use copy
-    const ticksCopy = Object.keys(poolState.ticks).reduce<
-      Record<NumberAsString, TickInfo>
-    >((memo, index) => {
-      memo[index] = { ...poolState.ticks[index] };
-      return memo;
-    }, {} as Record<NumberAsString, TickInfo>);
 
     const sqrtPriceLimitX96 = zeroForOne
       ? TickMath.MIN_SQRT_RATIO + 1n
@@ -323,7 +311,7 @@ class UniswapV3Math {
         const [finalState, { latestFullCycleState, latestFullCycleCache }] =
           _priceComputationCycles(
             poolState,
-            ticksCopy,
+            poolState.ticks,
             slot0Start,
             state,
             cache,
@@ -331,6 +319,7 @@ class UniswapV3Math {
             zeroForOne,
             exactInput,
             side,
+            logger,
           );
         if (
           finalState.amountSpecifiedRemaining === 0n &&
@@ -364,13 +353,11 @@ class UniswapV3Math {
         if (isSell) {
           outputs[i] = BigInt.asUintN(256, -(zeroForOne ? amount1 : amount0));
           tickCounts[i] = latestFullCycleCache.tickCount;
-          continue;
         } else {
           outputs[i] = zeroForOne
             ? BigInt.asUintN(256, amount0)
             : BigInt.asUintN(256, amount1);
           tickCounts[i] = latestFullCycleCache.tickCount;
-          continue;
         }
       } else {
         outputs[i] = 0n;
@@ -405,6 +392,8 @@ class UniswapV3Math {
     const state = {
       // Because I don't have the exact amount user used, set this number to MAX_NUMBER to proceed
       // with calculations. I think it is not a problem since in loop I don't rely on this value
+      // TODO: not sure if this is correct as original `amountSpecifiedRemaining` might be negative for buy cases
+      // which then affects `if (amountRemaining >= 0n)` cases on `SwapMath.computeSwapStep`
       amountSpecifiedRemaining: BI_MAX_INT,
       amountCalculated: 0n,
       sqrtPriceX96: slot0Start.sqrtPriceX96,
@@ -481,13 +470,7 @@ class UniswapV3Math {
             cache.computedLatestObservation = true;
           }
 
-          let liquidityNet = Tick.cross(
-            poolState.ticks,
-            step.tickNext,
-            cache.secondsPerLiquidityCumulativeX128,
-            cache.tickCumulative,
-            cache.blockTimestamp,
-          );
+          let liquidityNet = Tick.cross(poolState.ticks, step.tickNext);
 
           if (zeroForOne) liquidityNet = -liquidityNet;
 

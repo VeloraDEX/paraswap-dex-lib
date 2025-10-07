@@ -6,8 +6,25 @@ import { Interface } from '@ethersproject/abi';
 import { getDexKeysWithNetwork } from '../../../utils';
 import { SolidlyConfig } from '../config';
 import _ from 'lodash';
+import { uint256DecodeToNumber, addressDecode } from '../../../lib/decoders';
+import { MultiCallParams } from '../../../lib/multi-wrapper';
+import { SolidlyRpcPoolTracker } from '../rpc-pool-tracker';
 
 const velocimeterFactoryABI = [
+  {
+    inputs: [{ internalType: 'uint256', name: '', type: 'uint256' }],
+    name: 'allPairs',
+    outputs: [{ internalType: 'address', name: '', type: 'address' }],
+    stateMutability: 'view',
+    type: 'function',
+  },
+  {
+    inputs: [],
+    name: 'allPairsLength',
+    outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }],
+    stateMutability: 'view',
+    type: 'function',
+  },
   {
     inputs: [{ internalType: '_pair', name: '_stable', type: 'address' }],
     name: 'getFee',
@@ -19,7 +36,7 @@ const velocimeterFactoryABI = [
 
 const velocimeterFactoryIface = new Interface(velocimeterFactoryABI);
 
-export class Velocimeter extends Solidly {
+export class Velocimeter extends SolidlyRpcPoolTracker {
   public static dexKeysWithNetwork: { key: string; networks: Network[] }[] =
     getDexKeysWithNetwork(_.pick(SolidlyConfig, ['Velocimeter']));
 
@@ -53,6 +70,25 @@ export class Velocimeter extends Solidly {
     return {
       callEntry,
       callDecoder,
+    };
+  }
+
+  protected getAllPoolsCallData(): MultiCallParams<number> {
+    return {
+      target: this.factoryAddress,
+      callData: velocimeterFactoryIface.encodeFunctionData(
+        'allPairsLength',
+        [],
+      ),
+      decodeFunction: uint256DecodeToNumber,
+    };
+  }
+
+  protected getPoolCallData(index: number): MultiCallParams<string> {
+    return {
+      target: this.factoryAddress,
+      callData: velocimeterFactoryIface.encodeFunctionData('allPairs', [index]),
+      decodeFunction: addressDecode,
     };
   }
 }

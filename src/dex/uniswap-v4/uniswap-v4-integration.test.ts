@@ -198,8 +198,8 @@ describe('UniswapV4 integration tests', () => {
               blockNumber,
               '0x52f0e24d1c21c8a0cb1e5a5dd6198556bd9e1203',
               price.prices,
-              price.data.pool.key,
-              price.data.zeroForOne,
+              price.data.path[0].pool.key,
+              price.data.path[0].zeroForOne,
               amounts,
             );
             if (res === false) falseChecksCounter++;
@@ -262,8 +262,8 @@ describe('UniswapV4 integration tests', () => {
               blockNumber,
               '0x52f0e24d1c21c8a0cb1e5a5dd6198556bd9e1203',
               price.prices,
-              price.data.pool.key,
-              price.data.zeroForOne,
+              price.data.path[0].pool.key,
+              price.data.path[0].zeroForOne,
               amounts,
             );
             if (res === false) falseChecksCounter++;
@@ -325,8 +325,8 @@ describe('UniswapV4 integration tests', () => {
               blockNumber,
               '0x52f0e24d1c21c8a0cb1e5a5dd6198556bd9e1203',
               price.prices,
-              price.data.pool.key,
-              price.data.zeroForOne,
+              price.data.path[0].pool.key,
+              price.data.path[0].zeroForOne,
               amounts,
             );
             if (res === false) falseChecksCounter++;
@@ -390,8 +390,8 @@ describe('UniswapV4 integration tests', () => {
               blockNumber,
               '0x52f0e24d1c21c8a0cb1e5a5dd6198556bd9e1203',
               price.prices,
-              price.data.pool.key,
-              price.data.zeroForOne,
+              price.data.path[0].pool.key,
+              price.data.path[0].zeroForOne,
               amounts,
             );
             if (res === false) falseChecksCounter++;
@@ -510,8 +510,8 @@ describe('UniswapV4 integration tests', () => {
               blockNumber,
               '0x52f0e24d1c21c8a0cb1e5a5dd6198556bd9e1203',
               price.prices,
-              price.data.pool.key,
-              price.data.zeroForOne,
+              price.data.path[0].pool.key,
+              price.data.path[0].zeroForOne,
               amounts,
             );
             if (res === false) falseChecksCounter++;
@@ -579,8 +579,8 @@ describe('UniswapV4 integration tests', () => {
               blockNumber,
               '0x52f0e24d1c21c8a0cb1e5a5dd6198556bd9e1203',
               price.prices,
-              price.data.pool.key,
-              price.data.zeroForOne,
+              price.data.path[0].pool.key,
+              price.data.path[0].zeroForOne,
               amounts,
             );
             if (res === false) falseChecksCounter++;
@@ -646,8 +646,8 @@ describe('UniswapV4 integration tests', () => {
               blockNumber,
               '0x52f0e24d1c21c8a0cb1e5a5dd6198556bd9e1203',
               price.prices,
-              price.data.pool.key,
-              price.data.zeroForOne,
+              price.data.path[0].pool.key,
+              price.data.path[0].zeroForOne,
               amounts,
             );
             if (res === false) falseChecksCounter++;
@@ -713,8 +713,8 @@ describe('UniswapV4 integration tests', () => {
               blockNumber,
               '0x52f0e24d1c21c8a0cb1e5a5dd6198556bd9e1203',
               price.prices,
-              price.data.pool.key,
-              price.data.zeroForOne,
+              price.data.path[0].pool.key,
+              price.data.path[0].zeroForOne,
               amounts,
             );
             if (res === false) falseChecksCounter++;
@@ -804,8 +804,8 @@ describe('UniswapV4 integration tests', () => {
               blockNumber,
               '0x52f0e24d1c21c8a0cb1e5a5dd6198556bd9e1203',
               price.prices,
-              price.data.pool.key,
-              price.data.zeroForOne,
+              price.data.path[0].pool.key,
+              price.data.path[0].zeroForOne,
               amounts,
             );
             if (res === false) falseChecksCounter++;
@@ -876,8 +876,8 @@ describe('UniswapV4 integration tests', () => {
               blockNumber,
               '0x52f0e24d1c21c8a0cb1e5a5dd6198556bd9e1203',
               price.prices,
-              price.data.pool.key,
-              price.data.zeroForOne,
+              price.data.path[0].pool.key,
+              price.data.path[0].zeroForOne,
               amounts,
             );
             if (res === false) falseChecksCounter++;
@@ -939,8 +939,8 @@ describe('UniswapV4 integration tests', () => {
               blockNumber,
               '0x52f0e24d1c21c8a0cb1e5a5dd6198556bd9e1203',
               price.prices,
-              price.data.pool.key,
-              price.data.zeroForOne,
+              price.data.path[0].pool.key,
+              price.data.path[0].zeroForOne,
               amounts,
             );
             if (res === false) falseChecksCounter++;
@@ -1003,8 +1003,8 @@ describe('UniswapV4 integration tests', () => {
               blockNumber,
               '0x52f0e24d1c21c8a0cb1e5a5dd6198556bd9e1203',
               price.prices,
-              price.data.pool.key,
-              price.data.zeroForOne,
+              price.data.path[0].pool.key,
+              price.data.path[0].zeroForOne,
               amounts,
             );
             if (res === false) falseChecksCounter++;
@@ -1083,8 +1083,8 @@ describe('UniswapV4 integration tests', () => {
               blockNumber,
               '0x52f0e24d1c21c8a0cb1e5a5dd6198556bd9e1203',
               price.prices,
-              price.data.pool.key,
-              price.data.zeroForOne,
+              price.data.path[0].pool.key,
+              price.data.path[0].zeroForOne,
               amounts,
             );
             if (res === false) falseChecksCounter++;
@@ -1160,8 +1160,8 @@ describe('UniswapV4 integration tests', () => {
               blockNumber,
               '0x52f0e24d1c21c8a0cb1e5a5dd6198556bd9e1203',
               price.prices,
-              price.data.pool.key,
-              price.data.zeroForOne,
+              price.data.path[0].pool.key,
+              price.data.path[0].zeroForOne,
               amounts,
             );
             if (res === false) falseChecksCounter++;
@@ -1223,8 +1223,8 @@ describe('UniswapV4 integration tests', () => {
               blockNumber,
               '0x52f0e24d1c21c8a0cb1e5a5dd6198556bd9e1203',
               price.prices,
-              price.data.pool.key,
-              price.data.zeroForOne,
+              price.data.path[0].pool.key,
+              price.data.path[0].zeroForOne,
               amounts,
             );
             if (res === false) falseChecksCounter++;
@@ -1287,8 +1287,8 @@ describe('UniswapV4 integration tests', () => {
               blockNumber,
               '0x52f0e24d1c21c8a0cb1e5a5dd6198556bd9e1203',
               price.prices,
-              price.data.pool.key,
-              price.data.zeroForOne,
+              price.data.path[0].pool.key,
+              price.data.path[0].zeroForOne,
               amounts,
             );
             if (res === false) falseChecksCounter++;
@@ -1361,8 +1361,8 @@ describe('UniswapV4 integration tests', () => {
               blockNumber,
               '0x52f0e24d1c21c8a0cb1e5a5dd6198556bd9e1203',
               price.prices,
-              price.data.pool.key,
-              price.data.zeroForOne,
+              price.data.path[0].pool.key,
+              price.data.path[0].zeroForOne,
               amounts,
             );
             if (res === false) falseChecksCounter++;
@@ -1458,8 +1458,8 @@ describe('UniswapV4 integration tests', () => {
               blockNumber,
               '0x0d5e0f971ed27fbff6c2837bf31316121532048d',
               price.prices,
-              price.data.pool.key,
-              price.data.zeroForOne,
+              price.data.path[0].pool.key,
+              price.data.path[0].zeroForOne,
               amounts,
             );
             if (res === false) falseChecksCounter++;
@@ -1524,8 +1524,8 @@ describe('UniswapV4 integration tests', () => {
               blockNumber,
               '0x0d5e0f971ed27fbff6c2837bf31316121532048d',
               price.prices,
-              price.data.pool.key,
-              price.data.zeroForOne,
+              price.data.path[0].pool.key,
+              price.data.path[0].zeroForOne,
               amounts,
             );
             if (res === false) falseChecksCounter++;
@@ -1587,8 +1587,8 @@ describe('UniswapV4 integration tests', () => {
               blockNumber,
               '0x0d5e0f971ed27fbff6c2837bf31316121532048d',
               price.prices,
-              price.data.pool.key,
-              price.data.zeroForOne,
+              price.data.path[0].pool.key,
+              price.data.path[0].zeroForOne,
               amounts,
             );
             if (res === false) falseChecksCounter++;
@@ -1651,8 +1651,8 @@ describe('UniswapV4 integration tests', () => {
               blockNumber,
               '0x0d5e0f971ed27fbff6c2837bf31316121532048d',
               price.prices,
-              price.data.pool.key,
-              price.data.zeroForOne,
+              price.data.path[0].pool.key,
+              price.data.path[0].zeroForOne,
               amounts,
             );
             if (res === false) falseChecksCounter++;
@@ -1753,8 +1753,8 @@ describe('UniswapV4 integration tests', () => {
               blockNumber,
               '0x0d5e0f971ed27fbff6c2837bf31316121532048d',
               price.prices,
-              price.data.pool.key,
-              price.data.zeroForOne,
+              price.data.path[0].pool.key,
+              price.data.path[0].zeroForOne,
               amounts,
             );
             if (res === false) falseChecksCounter++;
@@ -1813,8 +1813,8 @@ describe('UniswapV4 integration tests', () => {
               blockNumber,
               '0x0d5e0f971ed27fbff6c2837bf31316121532048d',
               price.prices,
-              price.data.pool.key,
-              price.data.zeroForOne,
+              price.data.path[0].pool.key,
+              price.data.path[0].zeroForOne,
               amounts,
             );
             if (res === false) falseChecksCounter++;
@@ -1876,8 +1876,8 @@ describe('UniswapV4 integration tests', () => {
               blockNumber,
               '0x0d5e0f971ed27fbff6c2837bf31316121532048d',
               price.prices,
-              price.data.pool.key,
-              price.data.zeroForOne,
+              price.data.path[0].pool.key,
+              price.data.path[0].zeroForOne,
               amounts,
             );
             if (res === false) falseChecksCounter++;
@@ -1940,8 +1940,8 @@ describe('UniswapV4 integration tests', () => {
               blockNumber,
               '0x0d5e0f971ed27fbff6c2837bf31316121532048d',
               price.prices,
-              price.data.pool.key,
-              price.data.zeroForOne,
+              price.data.path[0].pool.key,
+              price.data.path[0].zeroForOne,
               amounts,
             );
             if (res === false) falseChecksCounter++;
@@ -2028,8 +2028,8 @@ describe('UniswapV4 integration tests', () => {
               blockNumber,
               '0x3972c00f7ed4885e145823eb7c655375d275a1c5',
               price.prices,
-              price.data.pool.key,
-              price.data.zeroForOne,
+              price.data.path[0].pool.key,
+              price.data.path[0].zeroForOne,
               amounts,
             );
             if (res === false) falseChecksCounter++;
@@ -2094,8 +2094,8 @@ describe('UniswapV4 integration tests', () => {
               blockNumber,
               '0x3972c00f7ed4885e145823eb7c655375d275a1c5',
               price.prices,
-              price.data.pool.key,
-              price.data.zeroForOne,
+              price.data.path[0].pool.key,
+              price.data.path[0].zeroForOne,
               amounts,
             );
             if (res === false) falseChecksCounter++;
@@ -2157,8 +2157,8 @@ describe('UniswapV4 integration tests', () => {
               blockNumber,
               '0x3972c00f7ed4885e145823eb7c655375d275a1c5',
               price.prices,
-              price.data.pool.key,
-              price.data.zeroForOne,
+              price.data.path[0].pool.key,
+              price.data.path[0].zeroForOne,
               amounts,
             );
             if (res === false) falseChecksCounter++;
@@ -2221,8 +2221,8 @@ describe('UniswapV4 integration tests', () => {
               blockNumber,
               '0x3972c00f7ed4885e145823eb7c655375d275a1c5',
               price.prices,
-              price.data.pool.key,
-              price.data.zeroForOne,
+              price.data.path[0].pool.key,
+              price.data.path[0].zeroForOne,
               amounts,
             );
             if (res === false) falseChecksCounter++;
@@ -2301,8 +2301,8 @@ describe('UniswapV4 integration tests', () => {
               blockNumber,
               '0x3972c00f7ed4885e145823eb7c655375d275a1c5',
               price.prices,
-              price.data.pool.key,
-              price.data.zeroForOne,
+              price.data.path[0].pool.key,
+              price.data.path[0].zeroForOne,
               amounts,
             );
             if (res === false) falseChecksCounter++;
@@ -2362,8 +2362,8 @@ describe('UniswapV4 integration tests', () => {
               blockNumber,
               '0x3972c00f7ed4885e145823eb7c655375d275a1c5',
               price.prices,
-              price.data.pool.key,
-              price.data.zeroForOne,
+              price.data.path[0].pool.key,
+              price.data.path[0].zeroForOne,
               amounts,
             );
             if (res === false) falseChecksCounter++;
@@ -2425,8 +2425,8 @@ describe('UniswapV4 integration tests', () => {
               blockNumber,
               '0x3972c00f7ed4885e145823eb7c655375d275a1c5',
               price.prices,
-              price.data.pool.key,
-              price.data.zeroForOne,
+              price.data.path[0].pool.key,
+              price.data.path[0].zeroForOne,
               amounts,
             );
             if (res === false) falseChecksCounter++;
@@ -2489,8 +2489,8 @@ describe('UniswapV4 integration tests', () => {
               blockNumber,
               '0x3972c00f7ed4885e145823eb7c655375d275a1c5',
               price.prices,
-              price.data.pool.key,
-              price.data.zeroForOne,
+              price.data.path[0].pool.key,
+              price.data.path[0].zeroForOne,
               amounts,
             );
             if (res === false) falseChecksCounter++;
@@ -2627,8 +2627,8 @@ describe('UniswapV4 integration tests', () => {
               blockNumber,
               '0x3972c00f7ed4885e145823eb7c655375d275a1c5',
               price.prices,
-              price.data.pool.key,
-              price.data.zeroForOne,
+              price.data.path[0].pool.key,
+              price.data.path[0].zeroForOne,
               amounts,
             );
             if (res === false) falseChecksCounter++;
@@ -2636,6 +2636,684 @@ describe('UniswapV4 integration tests', () => {
         );
 
         expect(falseChecksCounter).toBeLessThan(poolPrices!.length);
+      });
+    });
+  });
+
+  describe('Polygon', () => {
+    const network = Network.POLYGON;
+    const dexHelper = new DummyDexHelper(network);
+
+    let blockNumber: number;
+    let uniswapV4: UniswapV4;
+
+    describe('USDCe -> USDCn', () => {
+      const TokenASymbol = 'USDCe';
+      const TokenA = Tokens[network][TokenASymbol];
+
+      const TokenBSymbol = 'USDCn';
+      const TokenB = Tokens[network][TokenBSymbol];
+
+      beforeEach(async () => {
+        // blockNumber = await dexHelper.web3Provider.eth.getBlockNumber();
+        blockNumber = 71514459;
+        uniswapV4 = new UniswapV4(network, dexKey, dexHelper);
+        await uniswapV4.initializePricing(blockNumber);
+      });
+
+      it('USDCe -> USDCn getPoolIdentifiers and getPricesVolume SELL', async () => {
+        console.log('BLOCK: ', blockNumber);
+
+        const amounts = [0n, 3195795n];
+
+        const pools = await uniswapV4.getPoolIdentifiers(
+          TokenA,
+          TokenB,
+          SwapSide.SELL,
+          blockNumber,
+        );
+        console.log(
+          `${TokenASymbol} <> ${TokenBSymbol} Pool Identifiers: `,
+          pools,
+        );
+
+        expect(pools.length).toBeGreaterThan(0);
+
+        const poolPrices = await uniswapV4.getPricesVolume(
+          TokenA,
+          TokenB,
+          amounts,
+          SwapSide.SELL,
+          blockNumber,
+          pools,
+        );
+
+        console.log(
+          `${TokenASymbol} <> ${TokenBSymbol} Pool Prices: `,
+          util.inspect(poolPrices, false, null, true),
+        );
+
+        expect(poolPrices).not.toBeNull();
+
+        let falseChecksCounter = 0;
+        await Promise.all(
+          poolPrices!.map(async price => {
+            const res = await checkOnChainPricing(
+              dexHelper,
+              'quoteExactInputSingle',
+              blockNumber,
+              '0xb3d5c3dfc3a7aebff71895a7191796bffc2c81b9',
+              price.prices,
+              price.data.path[0].pool.key,
+              price.data.path[0].zeroForOne,
+              amounts,
+            );
+            if (res === false) falseChecksCounter++;
+          }),
+        );
+
+        expect(falseChecksCounter).toBeLessThan(poolPrices!.length);
+      });
+    });
+  });
+
+  describe('Unichain', () => {
+    const network = Network.UNICHAIN;
+    const dexHelper = new DummyDexHelper(network);
+
+    let blockNumber: number;
+    let uniswapV4: UniswapV4;
+
+    describe('ETH -> USDC', () => {
+      const TokenASymbol = 'ETH';
+      const TokenA = Tokens[network][TokenASymbol];
+
+      const TokenBSymbol = 'USDC';
+      const TokenB = Tokens[network][TokenBSymbol];
+
+      beforeEach(async () => {
+        blockNumber = await dexHelper.web3Provider.eth.getBlockNumber();
+        uniswapV4 = new UniswapV4(network, dexKey, dexHelper);
+        await uniswapV4.initializePricing(blockNumber);
+      });
+
+      it('ETH -> USDC getPoolIdentifiers and getPricesVolume SELL', async () => {
+        console.log('BLOCK: ', blockNumber);
+
+        const amounts = [
+          0n,
+          1n * BI_POWS[18],
+          2n * BI_POWS[18],
+          3n * BI_POWS[18],
+          4n * BI_POWS[18],
+          5n * BI_POWS[18],
+          6n * BI_POWS[18],
+          7n * BI_POWS[18],
+          8n * BI_POWS[18],
+          9n * BI_POWS[18],
+          10n * BI_POWS[18],
+          11n * BI_POWS[18],
+          12n * BI_POWS[18],
+          13n * BI_POWS[18],
+          14n * BI_POWS[18],
+          15n * BI_POWS[18],
+          16n * BI_POWS[18],
+          17n * BI_POWS[18],
+        ];
+
+        const pools = await uniswapV4.getPoolIdentifiers(
+          TokenA,
+          TokenB,
+          SwapSide.SELL,
+          blockNumber,
+        );
+        console.log(
+          `${TokenASymbol} <> ${TokenBSymbol} Pool Identifiers: `,
+          pools,
+        );
+
+        expect(pools.length).toBeGreaterThan(0);
+
+        const poolPrices = await uniswapV4.getPricesVolume(
+          TokenA,
+          TokenB,
+          amounts,
+          SwapSide.SELL,
+          blockNumber,
+          pools,
+        );
+
+        console.log(
+          `${TokenASymbol} <> ${TokenBSymbol} Pool Prices: `,
+          util.inspect(poolPrices, false, null, true),
+        );
+
+        expect(poolPrices).not.toBeNull();
+
+        let falseChecksCounter = 0;
+        await Promise.all(
+          poolPrices!.map(async price => {
+            const res = await checkOnChainPricing(
+              dexHelper,
+              'quoteExactInputSingle',
+              blockNumber,
+              '0x333e3c607b141b18ff6de9f258db6e77fe7491e0',
+              price.prices,
+              price.data.path[0].pool.key,
+              price.data.path[0].zeroForOne,
+              amounts,
+            );
+            if (res === false) falseChecksCounter++;
+          }),
+        );
+
+        expect(falseChecksCounter).toBeLessThan(poolPrices!.length);
+      });
+
+      it('ETH -> USDC getPoolIdentifiers and getPricesVolume BUY', async () => {
+        console.log('BLOCK NUMBER: ', blockNumber);
+
+        const amounts = [
+          0n,
+          1n * BI_POWS[6],
+          2n * BI_POWS[6],
+          3n * BI_POWS[6],
+          4n * BI_POWS[6],
+          5n * BI_POWS[6],
+          6n * BI_POWS[6],
+          7n * BI_POWS[6],
+          8n * BI_POWS[6],
+          9n * BI_POWS[6],
+          10n * BI_POWS[6],
+        ];
+
+        const pools = await uniswapV4.getPoolIdentifiers(
+          TokenA,
+          TokenB,
+          SwapSide.BUY,
+          blockNumber,
+        );
+        console.log(
+          `${TokenASymbol} <> ${TokenBSymbol} Pool Identifiers: `,
+          pools,
+        );
+
+        expect(pools.length).toBeGreaterThan(0);
+
+        const poolPrices = await uniswapV4.getPricesVolume(
+          TokenA,
+          TokenB,
+          amounts,
+          SwapSide.BUY,
+          blockNumber,
+          pools,
+        );
+
+        console.log(
+          `${TokenASymbol} <> ${TokenBSymbol} Pool Prices: `,
+          util.inspect(poolPrices, false, null, true),
+        );
+
+        expect(poolPrices).not.toBeNull();
+
+        let falseChecksCounter = 0;
+        await Promise.all(
+          poolPrices!.map(async price => {
+            const res = await checkOnChainPricing(
+              dexHelper,
+              'quoteExactOutputSingle',
+              blockNumber,
+              '0x333e3c607b141b18ff6de9f258db6e77fe7491e0',
+              price.prices,
+              price.data.path[0].pool.key,
+              price.data.path[0].zeroForOne,
+              amounts,
+            );
+            if (res === false) falseChecksCounter++;
+          }),
+        );
+
+        expect(falseChecksCounter).toBeLessThan(poolPrices!.length);
+      });
+
+      it('USDC -> ETH getPoolIdentifiers and getPricesVolume SELL', async () => {
+        const amounts = [
+          0n,
+          2n * BI_POWS[6],
+          3n * BI_POWS[6],
+          4n * BI_POWS[6],
+          5n * BI_POWS[6],
+          6n * BI_POWS[6],
+          7n * BI_POWS[6],
+          8n * BI_POWS[6],
+          9n * BI_POWS[6],
+          10n * BI_POWS[6],
+        ];
+
+        const pools = await uniswapV4.getPoolIdentifiers(
+          TokenB,
+          TokenA,
+          SwapSide.SELL,
+          blockNumber,
+        );
+        console.log(
+          `${TokenASymbol} <> ${TokenBSymbol} Pool Identifiers: `,
+          pools,
+        );
+
+        expect(pools.length).toBeGreaterThan(0);
+
+        const poolPrices = await uniswapV4.getPricesVolume(
+          TokenB,
+          TokenA,
+          amounts,
+          SwapSide.SELL,
+          blockNumber,
+          pools,
+        );
+
+        console.log(
+          `${TokenBSymbol} <> ${TokenASymbol} Pool Prices: `,
+          poolPrices,
+        );
+
+        expect(poolPrices).not.toBeNull();
+
+        let falseChecksCounter = 0;
+        await Promise.all(
+          poolPrices!.map(async price => {
+            const res = await checkOnChainPricing(
+              dexHelper,
+              'quoteExactInputSingle',
+              blockNumber,
+              '0x333e3c607b141b18ff6de9f258db6e77fe7491e0',
+              price.prices,
+              price.data.path[0].pool.key,
+              price.data.path[0].zeroForOne,
+              amounts,
+            );
+            if (res === false) falseChecksCounter++;
+          }),
+        );
+
+        expect(falseChecksCounter).toBeLessThan(poolPrices!.length);
+      });
+
+      it('USDC -> ETH getPoolIdentifiers and getPricesVolume BUY', async () => {
+        console.log('BLOCK: ', blockNumber);
+        const amounts = [
+          0n,
+          2n * BI_POWS[18],
+          3n * BI_POWS[18],
+          4n * BI_POWS[18],
+          5n * BI_POWS[18],
+          6n * BI_POWS[18],
+          7n * BI_POWS[18],
+          8n * BI_POWS[18],
+          9n * BI_POWS[18],
+          10n * BI_POWS[18],
+        ];
+
+        const pools = await uniswapV4.getPoolIdentifiers(
+          TokenB,
+          TokenA,
+          SwapSide.BUY,
+          blockNumber,
+        );
+        console.log(
+          `${TokenASymbol} <> ${TokenBSymbol} Pool Identifiers: `,
+          pools,
+        );
+
+        expect(pools.length).toBeGreaterThan(0);
+
+        const poolPrices = await uniswapV4.getPricesVolume(
+          TokenB,
+          TokenA,
+          amounts,
+          SwapSide.BUY,
+          blockNumber,
+          pools,
+        );
+
+        console.log(
+          `${TokenBSymbol} <> ${TokenASymbol} Pool Prices: `,
+          poolPrices,
+        );
+
+        expect(poolPrices).not.toBeNull();
+
+        let falseChecksCounter = 0;
+        await Promise.all(
+          poolPrices!.map(async price => {
+            const res = await checkOnChainPricing(
+              dexHelper,
+              'quoteExactOutputSingle',
+              blockNumber,
+              '0x333e3c607b141b18ff6de9f258db6e77fe7491e0',
+              price.prices,
+              price.data.path[0].pool.key,
+              price.data.path[0].zeroForOne,
+              amounts,
+            );
+            if (res === false) falseChecksCounter++;
+          }),
+        );
+
+        expect(falseChecksCounter).toBeLessThan(poolPrices!.length);
+      });
+
+      it('ETH getTopPoolsForToken', async () => {
+        const poolLiquidity = await uniswapV4.getTopPoolsForToken(
+          TokenA.address,
+          10,
+        );
+        console.log(`${TokenASymbol} Top Pools:`, poolLiquidity);
+
+        if (!uniswapV4.hasConstantPriceLargeAmounts) {
+          checkPoolsLiquidity(poolLiquidity, TokenA.address, dexKey);
+        }
+      });
+
+      it('USDC getTopPoolsForToken', async () => {
+        const poolLiquidity = await uniswapV4.getTopPoolsForToken(
+          TokenB.address,
+          10,
+        );
+        console.log(`${TokenASymbol} Top Pools:`, util.inspect(poolLiquidity));
+
+        if (!uniswapV4.hasConstantPriceLargeAmounts) {
+          checkPoolsLiquidity(poolLiquidity, TokenB.address, dexKey);
+        }
+      });
+    });
+
+    describe('USDC -> DAI', () => {
+      const TokenASymbol = 'USDC';
+      const TokenA = Tokens[network][TokenASymbol];
+
+      const TokenBSymbol = 'DAI';
+      const TokenB = Tokens[network][TokenBSymbol];
+
+      beforeEach(async () => {
+        blockNumber = await dexHelper.web3Provider.eth.getBlockNumber();
+        uniswapV4 = new UniswapV4(network, dexKey, dexHelper);
+        await uniswapV4.initializePricing(blockNumber);
+      });
+
+      it('USDC -> DAI getPoolIdentifiers and getPricesVolume SELL', async () => {
+        const amounts = [
+          0n,
+          1n * BI_POWS[6],
+          2n * BI_POWS[6],
+          3n * BI_POWS[6],
+          4n * BI_POWS[6],
+          5n * BI_POWS[6],
+          6n * BI_POWS[6],
+          7n * BI_POWS[6],
+          8n * BI_POWS[6],
+          9n * BI_POWS[6],
+          10n * BI_POWS[6],
+        ];
+
+        const pools = await uniswapV4.getPoolIdentifiers(
+          TokenA,
+          TokenB,
+          SwapSide.SELL,
+          blockNumber,
+        );
+        console.log(
+          `${TokenASymbol} <> ${TokenBSymbol} Pool Identifiers: `,
+          pools,
+        );
+
+        expect(pools.length).toBeGreaterThan(0);
+
+        const poolPrices = await uniswapV4.getPricesVolume(
+          TokenA,
+          TokenB,
+          amounts,
+          SwapSide.SELL,
+          blockNumber,
+          pools,
+        );
+
+        console.log(
+          `${TokenASymbol} <> ${TokenBSymbol} Pool Prices: `,
+          util.inspect(poolPrices, false, null, true),
+        );
+
+        expect(poolPrices).not.toBeNull();
+
+        let falseChecksCounter = 0;
+        await Promise.all(
+          poolPrices!.map(async price => {
+            const res = await checkOnChainPricing(
+              dexHelper,
+              'quoteExactInputSingle',
+              blockNumber,
+              '0x333e3c607b141b18ff6de9f258db6e77fe7491e0',
+              price.prices,
+              price.data.path[0].pool.key,
+              price.data.path[0].zeroForOne,
+              amounts,
+            );
+            if (res === false) falseChecksCounter++;
+          }),
+        );
+
+        expect(falseChecksCounter).toBeLessThan(poolPrices!.length);
+      });
+
+      it('USDC -> DAI getPoolIdentifiers and getPricesVolume BUY', async () => {
+        console.log('BLOCK NUMBER: ', blockNumber);
+
+        const amounts = [
+          0n,
+          1n * BI_POWS[18],
+          2n * BI_POWS[18],
+          3n * BI_POWS[18],
+          4n * BI_POWS[18],
+        ];
+
+        const pools = await uniswapV4.getPoolIdentifiers(
+          TokenA,
+          TokenB,
+          SwapSide.BUY,
+          blockNumber,
+        );
+        console.log(
+          `${TokenASymbol} <> ${TokenBSymbol} Pool Identifiers: `,
+          pools,
+        );
+
+        expect(pools.length).toBeGreaterThan(0);
+
+        const poolPrices = await uniswapV4.getPricesVolume(
+          TokenA,
+          TokenB,
+          amounts,
+          SwapSide.BUY,
+          blockNumber,
+          pools,
+        );
+
+        console.log(
+          `${TokenASymbol} <> ${TokenBSymbol} Pool Prices: `,
+          util.inspect(poolPrices, false, null, true),
+        );
+
+        expect(poolPrices).not.toBeNull();
+
+        let falseChecksCounter = 0;
+        await Promise.all(
+          poolPrices!.map(async price => {
+            const res = await checkOnChainPricing(
+              dexHelper,
+              'quoteExactOutputSingle',
+              blockNumber,
+              '0x333e3c607b141b18ff6de9f258db6e77fe7491e0',
+              price.prices,
+              price.data.path[0].pool.key,
+              price.data.path[0].zeroForOne,
+              amounts,
+            );
+            if (res === false) falseChecksCounter++;
+          }),
+        );
+
+        expect(falseChecksCounter).toBeLessThan(poolPrices!.length);
+      });
+
+      it('DAI -> USDC getPoolIdentifiers and getPricesVolume SELL', async () => {
+        const amounts = [
+          0n,
+          2n * BI_POWS[18],
+          3n * BI_POWS[18],
+          4n * BI_POWS[18],
+          5n * BI_POWS[18],
+          6n * BI_POWS[18],
+          7n * BI_POWS[18],
+          8n * BI_POWS[18],
+          9n * BI_POWS[18],
+          10n * BI_POWS[18],
+        ];
+
+        const pools = await uniswapV4.getPoolIdentifiers(
+          TokenB,
+          TokenA,
+          SwapSide.SELL,
+          blockNumber,
+        );
+        console.log(
+          `${TokenASymbol} <> ${TokenBSymbol} Pool Identifiers: `,
+          pools,
+        );
+
+        expect(pools.length).toBeGreaterThan(0);
+
+        const poolPrices = await uniswapV4.getPricesVolume(
+          TokenB,
+          TokenA,
+          amounts,
+          SwapSide.SELL,
+          blockNumber,
+          pools,
+        );
+
+        console.log(
+          `${TokenBSymbol} <> ${TokenASymbol} Pool Prices: `,
+          poolPrices,
+        );
+
+        expect(poolPrices).not.toBeNull();
+
+        let falseChecksCounter = 0;
+        await Promise.all(
+          poolPrices!.map(async price => {
+            const res = await checkOnChainPricing(
+              dexHelper,
+              'quoteExactInputSingle',
+              blockNumber,
+              '0x333e3c607b141b18ff6de9f258db6e77fe7491e0',
+              price.prices,
+              price.data.path[0].pool.key,
+              price.data.path[0].zeroForOne,
+              amounts,
+            );
+            if (res === false) falseChecksCounter++;
+          }),
+        );
+
+        expect(falseChecksCounter).toBeLessThan(poolPrices!.length);
+      });
+
+      it('DAI -> USDC getPoolIdentifiers and getPricesVolume BUY', async () => {
+        console.log('BLOCK: ', blockNumber);
+        const amounts = [
+          0n,
+          2n * BI_POWS[6],
+          3n * BI_POWS[6],
+          4n * BI_POWS[6],
+          5n * BI_POWS[6],
+          6n * BI_POWS[6],
+          7n * BI_POWS[6],
+          8n * BI_POWS[6],
+          9n * BI_POWS[6],
+          10n * BI_POWS[6],
+        ];
+
+        const pools = await uniswapV4.getPoolIdentifiers(
+          TokenB,
+          TokenA,
+          SwapSide.BUY,
+          blockNumber,
+        );
+        console.log(
+          `${TokenASymbol} <> ${TokenBSymbol} Pool Identifiers: `,
+          pools,
+        );
+
+        expect(pools.length).toBeGreaterThan(0);
+
+        const poolPrices = await uniswapV4.getPricesVolume(
+          TokenB,
+          TokenA,
+          amounts,
+          SwapSide.BUY,
+          blockNumber,
+          pools,
+        );
+
+        console.log(
+          `${TokenBSymbol} <> ${TokenASymbol} Pool Prices: `,
+          poolPrices,
+        );
+
+        expect(poolPrices).not.toBeNull();
+
+        let falseChecksCounter = 0;
+        await Promise.all(
+          poolPrices!.map(async price => {
+            const res = await checkOnChainPricing(
+              dexHelper,
+              'quoteExactOutputSingle',
+              blockNumber,
+              '0x333e3c607b141b18ff6de9f258db6e77fe7491e0',
+              price.prices,
+              price.data.path[0].pool.key,
+              price.data.path[0].zeroForOne,
+              amounts,
+            );
+            if (res === false) falseChecksCounter++;
+          }),
+        );
+
+        expect(falseChecksCounter).toBeLessThan(poolPrices!.length);
+      });
+
+      it('USDC getTopPoolsForToken', async () => {
+        const poolLiquidity = await uniswapV4.getTopPoolsForToken(
+          TokenA.address,
+          10,
+        );
+        console.log(`${TokenASymbol} Top Pools:`, poolLiquidity);
+
+        if (!uniswapV4.hasConstantPriceLargeAmounts) {
+          checkPoolsLiquidity(poolLiquidity, TokenA.address, dexKey);
+        }
+      });
+
+      it('DAI getTopPoolsForToken', async () => {
+        const poolLiquidity = await uniswapV4.getTopPoolsForToken(
+          TokenB.address,
+          10,
+        );
+        console.log(`${TokenASymbol} Top Pools:`, util.inspect(poolLiquidity));
+
+        if (!uniswapV4.hasConstantPriceLargeAmounts) {
+          checkPoolsLiquidity(poolLiquidity, TokenB.address, dexKey);
+        }
       });
     });
   });

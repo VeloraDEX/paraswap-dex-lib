@@ -30,9 +30,9 @@ export const BalancerConfig: DexConfigMap<DexParams> = {
     },
   },
   BeetsFi: {
-    [Network.FANTOM]: {
-      subgraphURL: '4XKeW12D2RAhqefPYT3MLoT64p1JnT5TBLnYaNeSLA8k',
-      vaultAddress: '0x20dd72ed959b6147912c2e529f0a0c651c33c9ce',
+    [Network.SONIC]: {
+      subgraphURL: 'wwazpiPPt5oJMiTNnQ2VjVxKnKakGDuE2FfEZPD4TKj',
+      vaultAddress: '0xBA12222222228d8Ba445958a75a0704d566BF2C8',
     },
     [Network.OPTIMISM]: {
       subgraphURL: 'F5jeL2nMXZt5LU6kSway7Vi2PTUcqDbw1gMQEbrmiVdJ',
@@ -57,10 +57,6 @@ export const Adapters: Record<number, AdapterMappings> = {
   [Network.POLYGON]: {
     [SwapSide.SELL]: [{ name: 'PolygonAdapter01', index: 9 }],
     [SwapSide.BUY]: [{ name: 'PolygonBuyAdapter', index: 6 }],
-  },
-  [Network.FANTOM]: {
-    [SwapSide.SELL]: [{ name: 'FantomAdapter01', index: 5 }],
-    [SwapSide.BUY]: [{ name: 'FantomBuyAdapter', index: 4 }],
   },
   [Network.ARBITRUM]: {
     [SwapSide.SELL]: [{ name: 'ArbitrumAdapter01', index: 5 }],

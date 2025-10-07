@@ -91,7 +91,6 @@ describe('CurveV1', function () {
   beforeAll(async () => {
     blockNumber = await dexHelper.web3Provider.eth.getBlockNumber();
     curveV1 = new CurveV1(Network.MAINNET, dexKey, dexHelper);
-    await curveV1.startListening();
   });
 
   it('getPoolIdentifiers and getPricesVolume SELL', async function () {
@@ -131,9 +130,12 @@ describe('CurveV1', function () {
     );
   });
 
-  it('getTopPoolsForToken', async function () {
+  it.only('getTopPoolsForToken', async function () {
     await curveV1.updatePoolState();
-    const poolLiquidity = await curveV1.getTopPoolsForToken(TokenA.address, 10);
+    const poolLiquidity = await curveV1.getTopPoolsForToken(
+      '0x0000000000085d4780b73119b644ae5ecd22b376',
+      10,
+    );
     console.log(`${TokenASymbol} Top Pools:`, poolLiquidity);
 
     if (!curveV1.hasConstantPriceLargeAmounts) {

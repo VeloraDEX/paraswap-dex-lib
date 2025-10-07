@@ -1,10 +1,9 @@
-import { PoolState, TickInfo, ModifyLiquidityParams, Pool } from '../types';
+import { PoolState, ModifyLiquidityParams, Pool } from '../types';
 import { TickMath } from './TickMath';
 import { TickBitMap } from './TickBitMap';
 import { Tick } from './Tick';
 import { _require } from '../../../utils';
 import { LiquidityMath } from './LiquidityMath';
-import { Position } from './Position';
 import { SqrtPriceMath } from './SqrtPriceMath';
 import { UnsafeMath } from './UnsafeMath';
 import { FixedPoint128 } from './FixedPoint128';
@@ -12,7 +11,7 @@ import { ProtocolFeeLibrary } from './ProtocolFeeLibrary';
 import { SwapMath } from './SwapMath';
 import { BalanceDelta, toBalanceDelta } from './BalanceDelta';
 import { DeepReadonly } from 'ts-essentials';
-import { NumberAsString, SwapSide } from '@paraswap/core';
+import { SwapSide } from '@paraswap/core';
 import {
   MAX_PRICING_COMPUTATION_STEPS_ALLOWED,
   SWAP_EVENT_MAX_CYCLES,
@@ -46,8 +45,6 @@ class UniswapV4PoolMath {
     amounts: bigint[],
     zeroForOne: boolean,
     side: SwapSide,
-    logger: Logger,
-    reqId: number,
   ): bigint[] | null {
     const isSell = side === SwapSide.SELL;
 
@@ -58,20 +55,15 @@ class UniswapV4PoolMath {
         }
 
         const amountSpecified = -amount;
-        const [amount0, amount1] = this._swap(
-          poolState,
-          {
-            zeroForOne,
-            amountSpecified,
-            tickSpacing: BigInt(pool.key.tickSpacing),
-            sqrtPriceLimitX96: zeroForOne
-              ? TickMath.MIN_SQRT_PRICE + 1n
-              : TickMath.MAX_SQRT_PRICE - 1n,
-            lpFeeOverride: 0n,
-          } as SwapParams,
-          logger,
-          reqId,
-        );
+        const [amount0, amount1] = this._swap(poolState, {
+          zeroForOne,
+          amountSpecified,
+          tickSpacing: BigInt(pool.key.tickSpacing),
+          sqrtPriceLimitX96: zeroForOne
+            ? TickMath.MIN_SQRT_PRICE + 1n
+            : TickMath.MAX_SQRT_PRICE - 1n,
+          lpFeeOverride: 0n,
+        } as SwapParams);
 
         const amountSpecifiedActual =
           zeroForOne === amountSpecified < 0n ? amount0 : amount1;
@@ -90,20 +82,15 @@ class UniswapV4PoolMath {
 
         const amountSpecified = amount;
 
-        const [amount0, amount1] = this._swap(
-          poolState,
-          {
-            zeroForOne,
-            amountSpecified: amount,
-            tickSpacing: BigInt(pool.key.tickSpacing),
-            sqrtPriceLimitX96: zeroForOne
-              ? TickMath.MIN_SQRT_PRICE + 1n
-              : TickMath.MAX_SQRT_PRICE - 1n,
-            lpFeeOverride: 0n,
-          } as SwapParams,
-          logger,
-          reqId,
-        );
+        const [amount0, amount1] = this._swap(poolState, {
+          zeroForOne,
+          amountSpecified: amount,
+          tickSpacing: BigInt(pool.key.tickSpacing),
+          sqrtPriceLimitX96: zeroForOne
+            ? TickMath.MIN_SQRT_PRICE + 1n
+            : TickMath.MAX_SQRT_PRICE - 1n,
+          lpFeeOverride: 0n,
+        } as SwapParams);
 
         const amountSpecifiedActual =
           zeroForOne === amountSpecified < 0n ? amount0 : amount1;
@@ -117,21 +104,9 @@ class UniswapV4PoolMath {
     }
   }
 
-  _swap(
-    poolState: PoolState,
-    params: SwapParams,
-    logger: Logger,
-    reqId: number,
-  ): [bigint, bigint] {
+  _swap(poolState: PoolState, params: SwapParams): [bigint, bigint] {
     const slot0Start = poolState.slot0;
     const zeroForOne = params.zeroForOne;
-
-    // making a copy because we don't need to modify existing poolState.ticks
-    const ticksCopy: Record<NumberAsString, TickInfo> = {};
-    // eslint-disable-next-line no-restricted-syntax
-    for (const tick of Object.keys(poolState.ticks)) {
-      ticksCopy[tick] = { ...poolState.ticks[tick] };
-    }
 
     const protocolFee = zeroForOne
       ? ProtocolFeeLibrary.getZeroForOneFee(BigInt(slot0Start.protocolFee))
@@ -299,16 +274,7 @@ class UniswapV4PoolMath {
 
       if (result.sqrtPriceX96 === step.sqrtPriceNextX96) {
         if (step.initialized) {
-          const [feeGrowthGlobal0X128, feeGrowthGlobal1X128] = zeroForOne
-            ? [step.feeGrowthGlobalX128, poolState.feeGrowthGlobal1X128]
-            : [poolState.feeGrowthGlobal0X128, step.feeGrowthGlobalX128];
-
-          let liquidityNet = Tick.cross(
-            ticksCopy,
-            step.tickNext,
-            feeGrowthGlobal0X128,
-            feeGrowthGlobal1X128,
-          );
+          let liquidityNet = Tick.cross(poolState.ticks, step.tickNext);
 
           if (zeroForOne) {
             liquidityNet = -liquidityNet;
@@ -327,10 +293,6 @@ class UniswapV4PoolMath {
 
       counter++;
     }
-
-    // logger.info(
-    //   `_swap_iterations_counter_${poolState.id}_${reqId}: ${counter} (amount: ${params.amountSpecified})`,
-    // );
 
     if (counter >= MAX_PRICING_COMPUTATION_STEPS_ALLOWED) {
       return [0n, 0n];
@@ -382,42 +344,6 @@ class UniswapV4PoolMath {
     );
   }
 
-  getFeeGrowthInside(
-    poolState: PoolState,
-    tickLower: bigint,
-    tickUpper: bigint,
-  ): { feeGrowthInside0X128: bigint; feeGrowthInside1X128: bigint } {
-    let lower: TickInfo = poolState.ticks[tickLower.toString()];
-    let upper: TickInfo = poolState.ticks[tickUpper.toString()];
-    const tickCurrent = BigInt(poolState.slot0?.tick!);
-
-    let feeGrowthInside0X128: bigint;
-    let feeGrowthInside1X128: bigint;
-
-    if (tickCurrent < tickLower) {
-      feeGrowthInside0X128 =
-        lower.feeGrowthOutside0X128! - upper.feeGrowthOutside0X128!;
-      feeGrowthInside1X128 =
-        lower.feeGrowthOutside1X128! - upper.feeGrowthOutside1X128!;
-    } else if (tickCurrent >= tickUpper) {
-      feeGrowthInside0X128 =
-        upper.feeGrowthOutside0X128! - lower.feeGrowthOutside0X128!;
-      feeGrowthInside1X128 =
-        upper.feeGrowthOutside1X128! - lower.feeGrowthOutside1X128!;
-    } else {
-      feeGrowthInside0X128 =
-        BigInt(poolState.feeGrowthGlobal0X128!) -
-        BigInt(lower.feeGrowthOutside0X128!) -
-        BigInt(upper.feeGrowthOutside0X128!);
-      feeGrowthInside1X128 =
-        BigInt(poolState.feeGrowthGlobal1X128!) -
-        BigInt(lower.feeGrowthOutside1X128!) -
-        BigInt(upper.feeGrowthOutside1X128!);
-    }
-
-    return { feeGrowthInside0X128, feeGrowthInside1X128 };
-  }
-
   modifyLiquidity(
     poolState: PoolState,
     {
@@ -425,8 +351,6 @@ class UniswapV4PoolMath {
       tickLower,
       tickUpper,
       tickSpacing,
-      salt,
-      owner,
     }: ModifyLiquidityParams,
   ) {
     Tick.check(tickLower, tickUpper);
@@ -486,22 +410,6 @@ class UniswapV4PoolMath {
       }
     }
 
-    const { feeGrowthInside0X128, feeGrowthInside1X128 } =
-      this.getFeeGrowthInside(poolState, tickLower, tickUpper);
-
-    const { feesOwed0, feesOwed1 } = Position.update(
-      poolState,
-      owner,
-      tickLower,
-      tickUpper,
-      salt,
-      liquidityDelta,
-      feeGrowthInside0X128,
-      feeGrowthInside1X128,
-    );
-
-    const feeDelta = toBalanceDelta(feesOwed0, feesOwed1);
-
     if (liquidityDelta < 0n) {
       if (flippedLower) {
         Tick.clear(poolState, tickLower);
@@ -558,7 +466,7 @@ class UniswapV4PoolMath {
         );
       }
 
-      return { delta, feeDelta };
+      return { delta };
     }
   }
 
@@ -625,9 +533,7 @@ class UniswapV4PoolMath {
         : ProtocolFeeLibrary.calculateSwapFee(protocolFee, lpFee);
 
     const paramsTickSpacing = poolState.tickSpacing;
-    const paramsSqrtPriceLimitX96 = zeroForOne
-      ? TickMath.MIN_SQRT_PRICE + 1n
-      : TickMath.MAX_SQRT_PRICE - 1n;
+    const paramsSqrtPriceLimitX96 = newSqrtPriceX96;
 
     let step = {
       feeGrowthGlobalX128: zeroForOne
@@ -720,16 +626,7 @@ class UniswapV4PoolMath {
 
       if (result.sqrtPriceX96 === step.sqrtPriceNextX96) {
         if (step.initialized) {
-          const [feeGrowthGlobal0X128, feeGrowthGlobal1X128] = zeroForOne
-            ? [step.feeGrowthGlobalX128, poolState.feeGrowthGlobal1X128]
-            : [poolState.feeGrowthGlobal0X128, step.feeGrowthGlobalX128];
-
-          let liquidityNet = Tick.cross(
-            poolState.ticks,
-            step.tickNext,
-            feeGrowthGlobal0X128,
-            feeGrowthGlobal1X128,
-          );
+          let liquidityNet = Tick.cross(poolState.ticks, step.tickNext);
 
           if (zeroForOne) {
             liquidityNet = -liquidityNet;
@@ -754,6 +651,16 @@ class UniswapV4PoolMath {
         `Swap event (amount0: ${amount0}, amount1: ${amount1}, newSqrtPriceX96: ${newSqrtPriceX96}, newTick: ${newTick}, newLiquidity: ${newLiquidity}, newSwapFee: ${newSwapFee}) max cycles are reached  ${counter} for pool: ${poolState.id}`,
       );
     }
+
+    const currentTick = result.tick;
+    const currentPrice = result.sqrtPriceX96;
+
+    _require(
+      currentPrice === newSqrtPriceX96 && currentTick === newTick,
+      'LOGIC ERROR: calculated (currentPrice,currentTick) and (newSqrtPriceX96, newTick) from event should always be equal at the end',
+      { currentPrice, newSqrtPriceX96, currentTick, newTick },
+      'currentPrice === newSqrtPriceX96 && currentTick === newTick',
+    );
 
     poolState.slot0.tick = newTick;
     poolState.slot0.sqrtPriceX96 = newSqrtPriceX96;

@@ -430,7 +430,7 @@ export class KyberDmm
         ],
       },
       exchange: this.dexKey,
-      poolIdentifier,
+      poolIdentifiers: [poolIdentifier],
       gasCost: this.config.poolGasCost,
       poolAddresses: [pool.poolAddress],
     };

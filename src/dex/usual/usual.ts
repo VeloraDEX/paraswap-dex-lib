@@ -7,7 +7,12 @@ import {
   Logger,
   PoolLiquidity,
 } from '../../types';
-import { SwapSide, Network } from '../../constants';
+import {
+  SwapSide,
+  Network,
+  UNLIMITED_USD_LIQUIDITY,
+  NO_USD_LIQUIDITY,
+} from '../../constants';
 import * as CALLDATA_GAS_COST from '../../calldata-gas-cost';
 import { IDex } from '../idex';
 import { IDexHelper } from '../../dex-helper/idex-helper';
@@ -107,7 +112,7 @@ export class Usual extends SimpleExchange implements IDex<UsualBondData> {
         poolAddresses: [this.config.toToken.address],
         exchange: this.dexKey,
         gasCost: 70000,
-        poolIdentifier: this.dexKey,
+        poolIdentifiers: [`${this.dexKey}_${this.config.toToken.address}`],
       },
     ];
   }
@@ -147,9 +152,18 @@ export class Usual extends SimpleExchange implements IDex<UsualBondData> {
         exchange: this.dexKey,
         address: this.config.toToken.address,
         connectorTokens: [
-          isFromToken ? this.config.toToken : this.config.fromToken,
+          isFromToken
+            ? {
+                ...this.config.toToken,
+                // specify that there's no liquidity for toToken => fromToken
+                liquidityUSD: NO_USD_LIQUIDITY,
+              }
+            : {
+                ...this.config.fromToken,
+                liquidityUSD: UNLIMITED_USD_LIQUIDITY,
+              },
         ],
-        liquidityUSD: 1000000000, // Just returning a big number so this DEX will be preferred
+        liquidityUSD: isFromToken ? UNLIMITED_USD_LIQUIDITY : NO_USD_LIQUIDITY,
       },
     ];
   }

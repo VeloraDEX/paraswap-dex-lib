@@ -14,13 +14,14 @@ const SUPPORTED_NETWORKS = [
   Network.BASE,
   Network.POLYGON,
   Network.OPTIMISM,
-  Network.ZKEVM,
   Network.GNOSIS,
+  Network.UNICHAIN,
+  Network.SONIC,
 ];
 const SUPPORTED_EXCHANGES = Object.keys(WethConfig);
 
 export const isSingleWrapRoute = (priceRoute: OptimalRate): boolean => {
-  //note: FANTOM and ARBITRUM doesnt support fallback deposit case
+  // Note: ARBITRUM does not support fallback deposit case
 
   const isSingleSwap =
     priceRoute.bestRoute.length === 1 &&

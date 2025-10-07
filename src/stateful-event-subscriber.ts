@@ -35,7 +35,12 @@ export abstract class StatefulEventSubscriber<State>
   //Invalid flag - indicates that the currently stored state might not be valid
   protected invalid: boolean = false;
 
+  // Indicates that state should not be tracked/updated
+  protected inactive: boolean = false;
+
   isTracking: () => boolean = () => false;
+  isInactive: () => boolean = () => this.inactive;
+
   public addressesSubscribed: string[] = [];
 
   public cacheName: string;
@@ -91,7 +96,6 @@ export abstract class StatefulEventSubscriber<State>
     if (options && options.state) {
       this.setState(options.state, blockNumber, 'initialize_1');
     } else if (options && options.forceRegenerate) {
-      // ZkEVM forces to always regenerate state when it is old
       this.logger.debug(
         `${this.parentName}: ${this.name}: forced to regenerate state`,
       );
@@ -172,6 +176,8 @@ export abstract class StatefulEventSubscriber<State>
       }
     }
 
+    this.addressesSubscribed = this.addressesSubscribed.filter(a => !!a);
+
     // always subscribeToLogs
     this.dexHelper.blockManager.subscribeToLogs(
       this,
@@ -179,6 +185,11 @@ export abstract class StatefulEventSubscriber<State>
       masterBn || blockNumber,
     );
     this.isInitialized = true;
+  }
+
+  async updatePoolState(blockNumber: number) {
+    const state = await this.generateState(blockNumber);
+    this.setState(state, blockNumber);
   }
 
   protected getPoolIdentifierData() {
@@ -250,6 +261,11 @@ export abstract class StatefulEventSubscriber<State>
     logs: Readonly<Log>[],
     blockHeaders: Readonly<{ [blockNumber: number]: Readonly<BlockHeader> }>,
   ): Promise<void> {
+    if (this.inactive) {
+      this.logger.warn(`Skipping updating inactive pool ${this.name}`);
+      return;
+    }
+
     let index = 0;
     let lastBlockNumber: number | undefined;
     while (index < logs.length) {
@@ -305,7 +321,7 @@ export abstract class StatefulEventSubscriber<State>
     ) {
       const network = this.dexHelper.config.data.network;
       const createNewState = async () => {
-        if (this.state !== null) {
+        if (this.state !== null || this.inactive) {
           return true;
         }
         const latestBlockNumber =
@@ -362,6 +378,13 @@ export abstract class StatefulEventSubscriber<State>
         }
       }
     }
+  }
+
+  inactivate(): void {
+    this.logger.info(
+      `StatefulEventSubscriber_1 inactivate: ${this.parentName}: ${this.name}`,
+    );
+    this.inactive = true;
   }
 
   invalidate(): void {

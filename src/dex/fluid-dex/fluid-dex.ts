@@ -1,4 +1,3 @@
-import { BytesLike } from 'ethers/lib/utils';
 import { Interface } from '@ethersproject/abi';
 import {
   Token,
@@ -12,16 +11,16 @@ import {
 } from '../../types';
 import { SwapSide, Network } from '../../constants';
 import * as CALLDATA_GAS_COST from '../../calldata-gas-cost';
-import { Context, IDex } from '../../dex/idex';
-import { IDexHelper } from '../../dex-helper/idex-helper';
+import { Context, IDex } from '../idex';
+import { IDexHelper } from '../../dex-helper';
 import {
   CollateralReserves,
   DebtReserves,
   FluidDexData,
   FluidDexPool,
-  Pool,
   DexLimits,
   TokenLimit,
+  PoolWithDecimals,
 } from './types';
 import { SimpleExchange } from '../simple-exchange';
 import FluidDexPoolABI from '../../abi/fluid-dex/fluid-dex.abi.json';
@@ -29,8 +28,6 @@ import { FluidDexConfig, FLUID_DEX_GAS_COST } from './config';
 import { FluidDexFactory } from './fluid-dex-factory';
 import { getDexKeysWithNetwork, getBigIntPow } from '../../utils';
 import { extractReturnAmountPosition } from '../../executor/utils';
-import { MultiResult } from '../../lib/multi-wrapper';
-import { generalDecoder } from '../../lib/decoders';
 import { BigNumber } from 'ethers';
 import { sqrt } from './utils';
 import { FluidDexLiquidityProxy } from './fluid-dex-liquidity-proxy';
@@ -94,13 +91,15 @@ export class FluidDex extends SimpleExchange implements IDex<FluidDexData> {
   }
 
   private generateFluidDexPoolsFromPoolsFactory(
-    pools: readonly Pool[],
+    pools: readonly PoolWithDecimals[],
   ): FluidDexPool[] {
     return pools.map(pool => ({
-      id: `FluidDex_${pool.address.toLowerCase()}`,
-      address: pool.address.toLowerCase(),
-      token0: pool.token0.toLowerCase(),
-      token1: pool.token1.toLowerCase(),
+      id: `FluidDex_${pool.address}`,
+      address: pool.address,
+      token0: pool.token0,
+      token1: pool.token1,
+      token0Decimals: pool.token0Decimals,
+      token1Decimals: pool.token1Decimals,
     }));
   }
 
@@ -132,25 +131,12 @@ export class FluidDex extends SimpleExchange implements IDex<FluidDexData> {
     return null;
   }
 
-  protected onPoolCreatedUpdatePools(poolsFromFactory: readonly Pool[]) {
+  protected onPoolCreatedUpdatePools(
+    poolsFromFactory: readonly PoolWithDecimals[],
+  ) {
     this.pools = this.generateFluidDexPoolsFromPoolsFactory(poolsFromFactory);
     this.logger.info(`${this.dexKey}: pools list was updated ...`);
   }
-
-  decodePools = (result: MultiResult<BytesLike> | BytesLike): Pool[] => {
-    return generalDecoder(
-      result,
-      ['tuple(address pool, address token0, address token1)[]'],
-      undefined,
-      decoded => {
-        return decoded.map((decodedPool: any) => ({
-          address: decodedPool[0][0].toLowerCase(),
-          token0: decodedPool[0][1].toLowerCase(),
-          token1: decodedPool[0][2].toLowerCase(),
-        }));
-      },
-    );
-  };
 
   // Returns list of pool identifiers that can be used
   // for a given swap. poolIdentifiers must be unique
@@ -173,13 +159,11 @@ export class FluidDex extends SimpleExchange implements IDex<FluidDexData> {
     // A pair must have 2 different tokens.
     if (srcAddress === destAddress) return [];
 
-    const pools = this.pools.filter(
+    return this.pools.filter(
       pool =>
         (srcAddress === pool.token0 && destAddress === pool.token1) ||
         (srcAddress === pool.token1 && destAddress === pool.token0),
     );
-
-    return pools;
   }
 
   // Returns pool prices for amounts.
@@ -274,18 +258,16 @@ export class FluidDex extends SimpleExchange implements IDex<FluidDexData> {
               poolId: pool.id,
             },
             exchange: this.dexKey,
-            poolIdentifier: pool.id,
+            poolIdentifiers: [pool.id],
             gasCost: FLUID_DEX_GAS_COST,
             poolAddresses: [pool.address],
           };
         }),
       );
 
-      const notNullResults = poolsPrices.filter(
+      return poolsPrices.filter(
         res => res !== null,
       ) as ExchangePrices<FluidDexData>;
-
-      return notNullResults;
     } catch (e) {
       this.logger.error(
         `Error_getPricesVolume ${srcToken.address || srcToken.symbol}, ${
@@ -324,14 +306,137 @@ export class FluidDex extends SimpleExchange implements IDex<FluidDexData> {
     };
   }
 
+  async updatePoolState() {
+    const blockNumber = await this.dexHelper.web3Provider.eth.getBlockNumber();
+
+    this.pools = await this.fetchFluidDexPools(blockNumber);
+
+    this.eventPools = await Promise.all(
+      this.pools.map(async pool => {
+        const eventPool = new FluidDexEventPool(
+          this.dexKey,
+          pool.address,
+          this.network,
+          this.dexHelper,
+          this.logger,
+        );
+        await eventPool.updatePoolState(blockNumber);
+        return eventPool;
+      }),
+    );
+
+    await this.liquidityProxy.updatePoolState(blockNumber);
+  }
+
   // Returns list of top pools based on liquidity. Max
   // limit number pools should be returned.
   async getTopPoolsForToken(
     tokenAddress: Address,
     limit: number,
   ): Promise<PoolLiquidity[]> {
-    //@TODO
-    return [];
+    try {
+      const normalizedTokenAddress = tokenAddress.toLowerCase();
+
+      const relevantPools = this.pools.filter(
+        pool =>
+          pool.token0 === normalizedTokenAddress ||
+          pool.token1 === normalizedTokenAddress,
+      );
+
+      if (!relevantPools.length) {
+        return [];
+      }
+
+      const liquidityProxyState = this.liquidityProxy.getStaleState();
+
+      if (!liquidityProxyState) {
+        return [];
+      }
+
+      const poolLiquidity: PoolLiquidity[] = [];
+
+      for (const pool of relevantPools) {
+        const currentPoolReserves = liquidityProxyState.poolsReserves.find(
+          poolReserve => poolReserve.pool.toLowerCase() === pool.address,
+        );
+
+        if (!currentPoolReserves) {
+          continue;
+        }
+
+        const eventPool = this.eventPools.find(
+          eventPool => eventPool.poolAddress.toLowerCase() === pool.address,
+        );
+
+        if (!eventPool) continue;
+
+        try {
+          const state = eventPool.getStaleState();
+          if (!state || state.isSwapAndArbitragePaused) {
+            // Skip paused pools
+            continue;
+          }
+
+          const token0Supply =
+            currentPoolReserves.dexLimits.withdrawableToken0.available +
+            currentPoolReserves.dexLimits.borrowableToken0.available;
+          const token1Supply =
+            currentPoolReserves.dexLimits.withdrawableToken1.available +
+            currentPoolReserves.dexLimits.borrowableToken1.available;
+
+          if (token0Supply === 0n || token1Supply === 0n) {
+            // Skip pools with no liquidity
+            continue;
+          }
+
+          const [token0LiquidityUSD, token1LiquidityUSD] =
+            await this.dexHelper.getUsdTokenAmounts([
+              [pool.token0, token0Supply],
+              [pool.token1, token1Supply],
+            ]);
+
+          // Determine connector token (the other token in the pair)
+          const [connectorToken, liquidityUSD] =
+            pool.token0.toLowerCase() === normalizedTokenAddress
+              ? [
+                  {
+                    address: pool.token1,
+                    decimals: pool.token1Decimals,
+                    liquidityUSD: token1LiquidityUSD,
+                  },
+                  token0LiquidityUSD,
+                ]
+              : [
+                  {
+                    address: pool.token0,
+                    decimals: pool.token0Decimals,
+                    liquidityUSD: token0LiquidityUSD,
+                  },
+                  token1LiquidityUSD,
+                ];
+
+          poolLiquidity.push({
+            exchange: this.dexKey,
+            address: pool.address,
+            connectorTokens: [connectorToken],
+            liquidityUSD,
+          });
+        } catch (error) {
+          this.logger.debug(
+            `Error getting liquidity for pool ${pool.id}`,
+            error,
+          );
+        }
+      }
+
+      // Sort by liquidity and return top pools
+      return poolLiquidity
+        .sort((a, b) => b.liquidityUSD - a.liquidityUSD)
+        .slice(0, limit);
+    } catch (error) {
+      this.logger.error('Error in getTopPoolsForToken', error);
+      return [];
+    }
   }
 
   async getDexParam(

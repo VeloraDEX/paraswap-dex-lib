@@ -171,7 +171,7 @@ export type CustomPoolConfig = {
   name: CustomImplementationNames | FactoryImplementationNames;
   address: Address;
   lpTokenAddress: Address;
-  // Liquidity is fetched from curve API: https://api.curve.fi/api/getPools/ethereum/SLUG
+  // Liquidity is fetched from curve API: https://api.curve.finance/v1/getPools/ethereum/SLUG
   liquidityApiSlug: string;
   // There are some difference in input like uint128 or uint256
   // If we don't use proper type encoding we receive an error

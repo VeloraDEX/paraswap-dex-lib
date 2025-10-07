@@ -64,6 +64,18 @@ export class MultiWrapper {
       allCalls[Math.floor(i / batchSize)] = batch;
     }
 
+    if (allCalls.length > 25) {
+      this.logger.warn(
+        `MultiWrapper.tryAggregate: Number of batches (${
+          allCalls.length
+        }) exceeds 25 (total calls ${
+          calls.length
+        }), this may lead to performance issues. First call: ${JSON.stringify(
+          calls[0],
+        )}`,
+      );
+    }
+
     const aggregatedResult = await Promise.all(
       allCalls.map(batch =>
         this.multi.methods
@@ -85,7 +97,7 @@ export class MultiWrapper {
       if (!undecodedElement.success) {
         if (reportFails) {
           this.logger.error(
-            `Multicall request number ${i} for ${calls[i].target} failed`,
+            `Multicall request number ${i} for ${calls[i].target} with data ${calls[i].callData} on ${blockNumber} failed`,
           );
         }
 

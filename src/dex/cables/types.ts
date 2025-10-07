@@ -107,7 +107,3 @@ export type RestrictData = {
   count: number;
   addedDatetimeMs: number;
 } | null;
-
-export class SlippageError extends Error {
-  isSlippageError = true;
-}

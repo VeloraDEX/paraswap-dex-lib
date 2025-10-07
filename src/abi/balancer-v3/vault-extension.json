@@ -1548,16 +1548,16 @@
     "anonymous": false,
     "inputs": [
       {
-        "indexed": false,
+        "indexed": true,
         "internalType": "address",
         "name": "pool",
         "type": "address"
       },
       {
-        "indexed": false,
-        "internalType": "string",
+        "indexed": true,
+        "internalType": "bytes32",
         "name": "eventKey",
-        "type": "string"
+        "type": "bytes32"
       },
       {
         "indexed": false,

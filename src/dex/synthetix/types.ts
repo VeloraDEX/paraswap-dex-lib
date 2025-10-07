@@ -73,6 +73,7 @@ export type PoolState = {
   };
   blockTimestamp: bigint;
   isSystemSuspended: boolean;
+  isExchangeSuspended: boolean;
   // proxyAddress -> boolean. It requires both exchange and active values to be true
   areSynthsSuspended: Record<string, boolean>;
   exchangeDynamicFeeConfig: ExchangeDynamicFeeConfig;
@@ -101,6 +102,11 @@ export type OnchainConfigValues = Pick<
   aggregatorsAddresses: Record<string, string>;
   systemStatusAddress: Address;
   liquidityEstimationInUSD: number;
+
+  isSystemSuspended: boolean;
+  isExchangeSuspended: boolean;
+  areSynthsSuspended: Record<string, boolean>;
+  exchangeDynamicFeeConfig: ExchangeDynamicFeeConfig;
 };
 
 export type SynthetixData = {

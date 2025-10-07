@@ -2,6 +2,7 @@ import { STABLE_GAS_COST } from './stablePool';
 import { Step } from './types';
 import { WEIGHTED_GAS_COST } from './weightedPool';
 import { GYROECLP_GAS_COST } from './gyroECLPPool';
+import { RECLAMM_GAS_COST } from './reClammPool';
 
 // https://sepolia.etherscan.io/tx/0x8c2c5ec7fc2855ed2ffab3467ee434f4e374e0ecf791e8d2b93c8d74e3f5b1fe
 // 0x7ec61d6dcf0ea412327c30f013e60578c0ff4d83c334a95fb3a68739860e6f59
@@ -33,6 +34,10 @@ export function getGasCost(steps: Step[]): number {
         return BUFFER_WRAP_UNWRAP_GAS_COST;
       case 'GYROE':
         return GYROECLP_GAS_COST;
+      case 'RECLAMM':
+        return RECLAMM_GAS_COST;
+      case 'RECLAMM_V2':
+        return RECLAMM_GAS_COST;
       default:
         return WEIGHTED_GAS_COST;
     }

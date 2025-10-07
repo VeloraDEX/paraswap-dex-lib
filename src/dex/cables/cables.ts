@@ -43,12 +43,8 @@ import {
   CABLES_TOKENS_CACHES_TTL_S,
 } from './constants';
 import { CablesRateFetcher } from './rate-fetcher';
-import {
-  CablesData,
-  CablesRFQResponse,
-  RestrictData,
-  SlippageError,
-} from './types';
+import { CablesData, CablesRFQResponse, RestrictData } from './types';
+import { SlippageCheckError } from '../generic-rfq/types';
 import mainnetRFQAbi from '../../abi/cables/CablesMainnetRFQ.json';
 import { Interface } from 'ethers/lib/utils';
 import BigNumber from 'bignumber.js';
@@ -203,31 +199,39 @@ export class Cables extends SimpleExchange implements IDex<any> {
       const minDeadline = expiryAsBigInt > 0 ? expiryAsBigInt : BI_MAX_UINT256;
 
       if (side === SwapSide.BUY) {
-        const requiredAmount = BigInt(optimalSwapExchange.srcAmount);
-        const quoteAmount = BigInt(order.takerAmount);
-        const requiredAmountWithSlippage = new BigNumber(
-          requiredAmount.toString(),
-        )
+        const requiredAmount = optimalSwapExchange.srcAmount;
+        const quoteAmount = order.takerAmount;
+
+        const requiredAmountWithSlippage = new BigNumber(requiredAmount)
           .multipliedBy(options.slippageFactor)
           .toFixed(0);
-        if (quoteAmount > BigInt(requiredAmountWithSlippage)) {
-          throw new SlippageError(
-            `Slipped, factor: ${quoteAmount.toString()} > ${requiredAmountWithSlippage}`,
+
+        if (BigInt(quoteAmount) > BigInt(requiredAmountWithSlippage)) {
+          throw new SlippageCheckError(
+            this.dexKey,
+            this.network,
+            side,
+            requiredAmountWithSlippage,
+            quoteAmount,
+            options.slippageFactor,
           );
         }
       } else {
-        const requiredAmount = BigInt(optimalSwapExchange.destAmount);
-        const quoteAmount = BigInt(order.makerAmount);
-        const requiredAmountWithSlippage = new BigNumber(
-          requiredAmount.toString(),
-        )
+        const requiredAmount = optimalSwapExchange.destAmount;
+        const quoteAmount = order.makerAmount;
+
+        const requiredAmountWithSlippage = new BigNumber(requiredAmount)
           .multipliedBy(options.slippageFactor)
           .toFixed(0);
-        if (quoteAmount < BigInt(requiredAmountWithSlippage)) {
-          throw new SlippageError(
-            `Slipped, factor: ${
-              options.slippageFactor
-            } ${quoteAmount.toString()} < ${requiredAmountWithSlippage}`,
+
+        if (BigInt(quoteAmount) < BigInt(requiredAmountWithSlippage)) {
+          throw new SlippageCheckError(
+            this.dexKey,
+            this.network,
+            side,
+            requiredAmountWithSlippage,
+            quoteAmount,
+            options.slippageFactor,
           );
         }
       }
@@ -243,6 +247,7 @@ export class Cables extends SimpleExchange implements IDex<any> {
       ];
     } catch (e: any) {
       const message = `${this.dexKey}-${this.network}: ${e}`;
+
       this.logger.error(message);
       if (!e?.isSlippageError) {
         this.restrict();
@@ -596,6 +601,7 @@ export class Cables extends SimpleExchange implements IDex<any> {
           exchange: this.dexKey,
           gasCost: CABLES_GAS_COST,
           poolAddresses: [this.mainnetRFQAddress],
+          poolIdentifiers: pools,
           data: {},
         },
       ];

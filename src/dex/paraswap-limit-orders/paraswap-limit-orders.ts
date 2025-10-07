@@ -175,7 +175,7 @@ export class ParaSwapLimitOrders
             orderInfos: null,
             maxOrdersCount,
           },
-          poolIdentifier: expectedIdentifier,
+          poolIdentifiers: [expectedIdentifier],
           exchange: this.dexKey,
           gasCost: gasCosts.map(v => Number(v)),
           poolAddresses: [this.augustusRFQAddress],

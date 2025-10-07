@@ -117,14 +117,14 @@ describe('CurveV1StableNG E2E', () => {
     });
   });
 
-  describe('Fantom', () => {
-    const network = Network.FANTOM;
+  describe('Sonic', () => {
+    const network = Network.SONIC;
 
-    const tokenASymbol: string = 'scrvUSDC_e';
-    const tokenBSymbol: string = 'scrvUSDC_p';
+    const tokenASymbol: string = 'USDCe';
+    const tokenBSymbol: string = 'USDT';
 
-    const tokenAAmount: string = '20232903693079';
-    const tokenBAmount: string = '40232903693079';
+    const tokenAAmount: string = '10000000';
+    const tokenBAmount: string = '10000000';
 
     testForNetwork(
       network,

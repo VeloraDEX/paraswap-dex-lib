@@ -39,6 +39,8 @@ export class OSwapEventPool extends StatefulEventSubscriber<OSwapPoolState> {
     this.addressesSubscribed = [pool.address, pool.token0, pool.token1];
     this.handlers['TraderateChanged'] = this.handleTraderateChanged.bind(this);
     this.handlers['Transfer'] = this.handleTransfer.bind(this);
+    this.handlers['RedeemRequested'] = this.handleRedeemRequested.bind(this);
+    this.handlers['RedeemClaimed'] = this.handleRedeemClaimed.bind(this);
   }
 
   protected parseLog(log: Log) {
@@ -85,16 +87,19 @@ export class OSwapEventPool extends StatefulEventSubscriber<OSwapPoolState> {
   async generateState(
     blockNumber: number,
   ): Promise<DeepReadonly<OSwapPoolState>> {
-    const iERC20 = new Interface(ERC20ABI);
     const callData: MultiCallParams<bigint>[] = [
       {
         target: this.pool.token0,
-        callData: iERC20.encodeFunctionData('balanceOf', [this.pool.address]),
+        callData: this.iERC20.encodeFunctionData('balanceOf', [
+          this.pool.address,
+        ]),
         decodeFunction: uint256ToBigInt,
       },
       {
         target: this.pool.token1,
-        callData: iERC20.encodeFunctionData('balanceOf', [this.pool.address]),
+        callData: this.iERC20.encodeFunctionData('balanceOf', [
+          this.pool.address,
+        ]),
         decodeFunction: uint256ToBigInt,
       },
       {
@@ -107,6 +112,16 @@ export class OSwapEventPool extends StatefulEventSubscriber<OSwapPoolState> {
         callData: this.iOSwap.encodeFunctionData('traderate1', []),
         decodeFunction: uint256ToBigInt,
       },
+      {
+        target: this.pool.address,
+        callData: this.iOSwap.encodeFunctionData('withdrawsQueued', []),
+        decodeFunction: uint256ToBigInt,
+      },
+      {
+        target: this.pool.address,
+        callData: this.iOSwap.encodeFunctionData('withdrawsClaimed', []),
+        decodeFunction: uint256ToBigInt,
+      },
     ];
 
     const results = await this.dexHelper.multiWrapper.aggregate<bigint>(
@@ -115,11 +130,22 @@ export class OSwapEventPool extends StatefulEventSubscriber<OSwapPoolState> {
       this.dexHelper.multiWrapper.defaultBatchSize,
     );
 
+    const [
+      balance0,
+      balance1,
+      traderate0,
+      traderate1,
+      withdrawsQueued,
+      withdrawsClaimed,
+    ] = results;
+
     return {
-      balance0: results[0].toString(),
-      balance1: results[1].toString(),
-      traderate0: results[2].toString(),
-      traderate1: results[3].toString(),
+      balance0: balance0.toString(),
+      balance1: balance1.toString(),
+      traderate0: traderate0.toString(),
+      traderate1: traderate1.toString(),
+      withdrawsQueued: withdrawsQueued.toString(),
+      withdrawsClaimed: withdrawsClaimed.toString(),
     };
   }
 
@@ -145,8 +171,8 @@ export class OSwapEventPool extends StatefulEventSubscriber<OSwapPoolState> {
   ): DeepReadonly<OSwapPoolState> | null {
     return {
       ...state,
-      traderate0: event.args.traderate0.toBigInt(),
-      traderate1: event.args.traderate1.toBigInt(),
+      traderate0: event.args.traderate0.toString(),
+      traderate1: event.args.traderate1.toString(),
     };
   }
 
@@ -173,7 +199,9 @@ export class OSwapEventPool extends StatefulEventSubscriber<OSwapPoolState> {
       } else if (tokenAddress === this.pool.token1) {
         balance1 -= amount;
       }
-    } else if (toAddress == this.pool.address) {
+    }
+
+    if (toAddress == this.pool.address) {
       if (tokenAddress === this.pool.token0) {
         balance0 += amount;
       } else if (tokenAddress === this.pool.token1) {
@@ -185,6 +213,31 @@ export class OSwapEventPool extends StatefulEventSubscriber<OSwapPoolState> {
       ...state,
       balance0: balance0.toString(),
       balance1: balance1.toString(),
+    };
+  }
+
+  handleRedeemRequested(
+    event: any,
+    state: DeepReadonly<OSwapPoolState>,
+    log: Readonly<Log>,
+  ) {
+    return {
+      ...state,
+      withdrawsQueued: event.args.queued.toString(),
+    };
+  }
+
+  handleRedeemClaimed(
+    event: any,
+    state: DeepReadonly<OSwapPoolState>,
+    log: Readonly<Log>,
+  ) {
+    const withdrawsClaimed: bigint = BigInt(state.withdrawsClaimed);
+    const assets: bigint = event.args.assets.toBigInt();
+
+    return {
+      ...state,
+      withdrawsClaimed: (withdrawsClaimed + assets).toString(),
     };
   }
 }

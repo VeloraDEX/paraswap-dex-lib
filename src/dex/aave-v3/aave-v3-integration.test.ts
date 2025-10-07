@@ -10,18 +10,17 @@ import {
 } from '../../../tests/utils';
 import { BI_POWS } from '../../bigint-constants';
 
-const network = Network.POLYGON;
-const TokenASymbol = 'USDT';
+const network = Network.MAINNET;
+const TokenASymbol = 'WETH';
 const TokenA = {
-  address: '0xc2132d05d31c914a87c6611c10748aeb04b58e8f',
-  decimals: 6,
+  address: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2',
+  decimals: 18,
 };
 
-const TokenBSymbol = 'aPolUSDT';
+const TokenBSymbol = 'aEthWETH';
 const TokenB = {
-  address: '0x6ab707aca953edaefbc4fd23ba73294241490620',
-  decimals: 6,
-  symbol: 'aPolUSDT',
+  address: '0x4d5f47fa6a74757f35c14fd3a6ef8e3c9bc514e8',
+  decimals: 18,
 };
 
 const amounts = [0n, BI_POWS[6], 2000000n];
@@ -50,7 +49,7 @@ describe('AaveV3', function () {
         TOKEN_LIST_CACHE_KEY,
         0,
       ),
-    ).resolves.toMatch('aPol');
+    ).resolves.toContain('aEthWETH');
   });
 
   if (TokenA) {
@@ -84,6 +83,7 @@ describe('AaveV3', function () {
           blockNumber,
           pools,
         );
+
         console.log(
           `${TokenASymbol} <> ${TokenBSymbol} Pool Prices: `,
           poolPrices,
@@ -91,6 +91,16 @@ describe('AaveV3', function () {
 
         expect(poolPrices).not.toBeNull();
         checkConstantPoolPrices(poolPrices!, amounts, dexKey);
+
+        if (aaveV3.updatePoolState) {
+          await aaveV3.updatePoolState();
+        }
+
+        const topPoolsA = await aaveV3.getTopPoolsForToken(TokenA.address, 10);
+        const topPoolsB = await aaveV3.getTopPoolsForToken(TokenB.address, 10);
+
+        expect(topPoolsA.length).toBeGreaterThan(0);
+        expect(topPoolsB.length).toBeGreaterThan(0);
       });
 
       it('getPoolIdentifiers and getPricesVolume BUY', async function () {
@@ -136,11 +146,18 @@ describe('AaveV3', function () {
       const dexHelper = new DummyDexHelper(network);
       const aaveV3 = new AaveV3(network, dexKey, dexHelper);
 
+      if (aaveV3.updatePoolState) {
+        await aaveV3.updatePoolState();
+      }
+
       const poolLiquidity = await aaveV3.getTopPoolsForToken(
         TokenA.address,
         10,
       );
-      console.log(`${TokenASymbol} Top Pools:`, poolLiquidity);
+      console.log(
+        `${TokenASymbol} Top Pools:`,
+        JSON.stringify(poolLiquidity, null, 2),
+      );
 
       checkPoolsLiquidity(poolLiquidity, TokenA.address, dexKey);
     });

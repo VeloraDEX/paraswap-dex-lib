@@ -1,17 +1,12 @@
 import _ from 'lodash';
-import { Interface, defaultAbiCoder } from '@ethersproject/abi';
+import { Interface } from '@ethersproject/abi';
+import { parseBytes32String } from '@ethersproject/strings';
 import { DeepReadonly } from 'ts-essentials';
 import { Log, Logger } from '../../types';
 import { catchParseLogError } from '../../utils';
 import { StatefulEventSubscriber } from '../../stateful-event-subscriber';
 import { IDexHelper } from '../../dex-helper/idex-helper';
-import {
-  PoolState,
-  PoolStateMap,
-  StableMutableState,
-  Step,
-  TokenInfo,
-} from './types';
+import { PoolState, PoolStateMap, Step, TokenInfo } from './types';
 import { getPoolsApi } from './getPoolsApi';
 import vaultExtensionAbi_V3 from '../../abi/balancer-v3/vault-extension.json';
 import {
@@ -34,6 +29,23 @@ import {
   HooksConfigMap,
 } from './hooks/balancer-hook-event-subscriber';
 import { StableSurge, StableSurgeHookState } from './hooks/stableSurgeHook';
+import {
+  isQuantAMMPoolState,
+  QauntAMMPoolState,
+  updateLatestQuantAMMState,
+  updateQuantAMMPoolState,
+} from './quantAMMPool';
+import { combineInterfaces } from './utils';
+import { isAkronPoolState } from './hooks/akronHook';
+import {
+  centerednessMarginUpdatedEvent,
+  isReClammPool,
+  lastTimestampUpdatedEvent,
+  priceRatioStateUpdatedEvent,
+  dailyPriceShiftExponentUpdatedEvent,
+  ReClammPoolState,
+  virtualBalancesUpdatedEvent,
+} from './reClammPool';
 
 export const WAD = BI_POWS[18];
 const FEE_SCALING_FACTOR = BI_POWS[11];
@@ -81,11 +93,30 @@ export class BalancerV3EventPool extends StatefulEventSubscriber<PoolStateMap> {
         'function maxDeposit(address receiver) external view returns (uint256 maxAssets)',
         'function maxMint(address receiver) external view returns (uint256 maxShares)',
       ]),
+      ['QUANT_AMM_WEIGHTED']: new Interface([
+        'function getQuantAMMWeightedPoolDynamicData() external view returns (tuple(uint256[] balancesLiveScaled18, uint256[] tokenRates, uint256 totalSupply, bool isPoolInitialized, bool isPoolPaused, bool isPoolInRecoveryMode, int256[] firstFourWeightsAndMultipliers, int256[] secondFourWeightsAndMultipliers, uint40 lastUpdateTime, uint40 lastInteropTime) data)',
+        'function getQuantAMMWeightedPoolImmutableData() external view returns (tuple(address[] tokens, uint256 oracleStalenessThreshold, uint256 poolRegistry, int256[][] ruleParameters, uint64[] lambda, uint64 epsilonMax, uint64 absoluteWeightGuardRail, uint64 updateInterval, uint256 maxTradeSizeRatio) data)',
+      ]),
+      ['QUANT_UPDATEWEIGHTRUNNER']: new Interface([
+        'event WeightsUpdated(address indexed poolAddress, address updateOwner, int256[] weights, uint40 lastInterpolationTimePossible, uint40 lastUpdateTime)',
+      ]),
+      ['RECLAMM']: new Interface([
+        'function getReClammPoolDynamicData() external view returns (tuple(uint256[] balancesLiveScaled18, uint256[] tokenRates, uint256 staticSwapFeePercentage, uint256 totalSupply, uint256 lastTimestamp, uint256[] lastVirtualBalances, uint256 dailyPriceShiftExponent, uint256 dailyPriceShiftBase, uint256 centerednessMargin, uint256 currentPriceRatio, uint256 currentFourthRootPriceRatio, uint256 startFourthRootPriceRatio, uint256 endFourthRootPriceRatio, uint32 priceRatioUpdateStartTime, uint32 priceRatioUpdateEndTime, bool isPoolInitialized, bool isPoolPaused, bool isPoolInRecoveryMode) data)',
+      ]),
+      ['RECLAMM_V2']: new Interface([
+        'function getReClammPoolDynamicData() external view returns (tuple(uint256[] balancesLiveScaled18, uint256[] tokenRates, uint256 staticSwapFeePercentage, uint256 totalSupply, uint256 lastTimestamp, uint256[] lastVirtualBalances, uint256 dailyPriceShiftExponent, uint256 dailyPriceShiftBase, uint256 centerednessMargin, uint256 currentPriceRatio, uint256 currentFourthRootPriceRatio, uint256 startFourthRootPriceRatio, uint256 endFourthRootPriceRatio, uint32 priceRatioUpdateStartTime, uint32 priceRatioUpdateEndTime, bool isPoolInitialized, bool isPoolPaused, bool isPoolInRecoveryMode) data)',
+      ]),
     };
 
-    this.logDecoder = (log: Log) => this.interfaces['VAULT'].parseLog(log);
+    this.logDecoder = (log: Log) =>
+      combineInterfaces([
+        this.interfaces['VAULT'],
+        this.interfaces['QUANT_UPDATEWEIGHTRUNNER'],
+      ]).parseLog(log);
     this.addressesSubscribed = [
       BalancerV3Config.BalancerV3[network].vaultAddress,
+      // QuantWeightRunner will emit events for Weight changes on any pool
+      BalancerV3Config.BalancerV3[network].quantAmmUpdateWeightRunnerAddress!,
     ];
 
     // Add handlers
@@ -99,6 +130,7 @@ export class BalancerV3EventPool extends StatefulEventSubscriber<PoolStateMap> {
       this.poolSwapFeePercentageChangedEvent.bind(this);
     this.handlers['PoolPausedStateChanged'] =
       this.poolPausedStateChanged.bind(this);
+    this.handlers['WeightsUpdated'] = this.quantWeightsUpdatedEvent.bind(this);
 
     // replicates V3 maths with fees, pool and hook logic
     this.vault = new Vault();
@@ -173,7 +205,7 @@ export class BalancerV3EventPool extends StatefulEventSubscriber<PoolStateMap> {
   }
 
   async getUpdatedPoolState(
-    existingPoolState: DeepReadonly<PoolStateMap>,
+    blockNumber: number,
   ): Promise<DeepReadonly<PoolStateMap> | null> {
     // Get all latest pools from API
     const apiPoolStateMap = await getPoolsApi(
@@ -181,35 +213,16 @@ export class BalancerV3EventPool extends StatefulEventSubscriber<PoolStateMap> {
       this.hooksConfigMap,
     );
 
-    // Filter out pools that already exist in existing state
-    const newApiPools = Object.entries(apiPoolStateMap).reduce(
-      (acc, [address, pool]) => {
-        if (!existingPoolState[address]) {
-          acc[address] = pool;
-        }
-        return acc;
-      },
-      {} as typeof apiPoolStateMap,
-    );
-
-    // If no new pools return
-    if (Object.keys(newApiPools).length === 0) {
-      return null;
-    }
-
-    // Only get on-chain state for new pools
-    const newOnChainPools = await getOnChainState(
+    // Get on-chain state for all pools to ensure correct state
+    const latestOnChainPools = await getOnChainState(
       this.network,
-      newApiPools,
+      apiPoolStateMap,
       this.dexHelper,
       this.interfaces,
+      blockNumber,
     );
 
-    // Merge existing pools with new pools
-    return {
-      ...existingPoolState,
-      ...newOnChainPools,
-    };
+    return latestOnChainPools;
   }
 
   liquidityAddedEvent(
@@ -334,13 +347,43 @@ export class BalancerV3EventPool extends StatefulEventSubscriber<PoolStateMap> {
       return null;
     }
 
+    // Convert bytes32 eventKey to string
+    const eventKeyString = parseBytes32String(event.args.eventKey);
+
     const newState = _.cloneDeep(state) as PoolStateMap;
-    switch (event.args.eventKey) {
+    switch (eventKeyString) {
       case 'AmpUpdateStarted':
         ampUpdateStartedEvent(newState[poolAddress], event.args.eventData);
         return newState;
       case 'AmpUpdateStopped':
         ampUpdateStoppedEvent(newState[poolAddress], event.args.eventData);
+        return newState;
+      case 'LastTimestampUpdated':
+        lastTimestampUpdatedEvent(newState[poolAddress], event.args.eventData);
+        return newState;
+      case 'PriceRatioStateUpdated':
+        priceRatioStateUpdatedEvent(
+          newState[poolAddress],
+          event.args.eventData,
+        );
+        return newState;
+      case 'DailyPriceShiftExponentUpdated':
+        dailyPriceShiftExponentUpdatedEvent(
+          newState[poolAddress],
+          event.args.eventData,
+        );
+        return newState;
+      case 'CenterednessMarginUpdated':
+        centerednessMarginUpdatedEvent(
+          newState[poolAddress],
+          event.args.eventData,
+        );
+        return newState;
+      case 'VirtualBalancesUpdated':
+        virtualBalancesUpdatedEvent(
+          newState[poolAddress],
+          event.args.eventData,
+        );
         return newState;
       default:
         return null;
@@ -401,13 +444,46 @@ export class BalancerV3EventPool extends StatefulEventSubscriber<PoolStateMap> {
     return newState;
   }
 
+  quantWeightsUpdatedEvent(
+    event: any,
+    state: DeepReadonly<PoolStateMap>,
+    log: Readonly<Log>,
+  ): DeepReadonly<PoolStateMap> | null {
+    const poolAddress = event.args.poolAddress.toLowerCase();
+    // Check if the pool exists in our state
+    if (!state[poolAddress]) {
+      return null;
+    }
+
+    // Create a new state with the updated weights
+    const newState = _.cloneDeep(state) as PoolStateMap;
+
+    // Update the pool's weights and timestamps
+    if (isQuantAMMPoolState(newState[poolAddress]))
+      updateQuantAMMPoolState(
+        newState[poolAddress] as QauntAMMPoolState,
+        event.args.weights,
+        event.args.lastUpdateTime,
+        event.args.lastInterpolationTimePossible,
+      );
+
+    return newState;
+  }
+
   getMaxSwapAmount(
     pool: PoolState,
     tokenIn: TokenInfo,
     tokenOut: TokenInfo,
     swapKind: SwapKind,
+    timestamp: number,
   ): bigint {
     // Find the maximum swap amount the pool will support
+
+    // Update ReClamm pool state with latest block timestamp
+    if (isReClammPool(pool)) {
+      (pool as ReClammPoolState).currentTimestamp = BigInt(timestamp);
+    }
+
     const maxSwapAmount = this.vault.getMaxSwapAmount(
       {
         swapKind,
@@ -485,6 +561,26 @@ export class BalancerV3EventPool extends StatefulEventSubscriber<PoolStateMap> {
           };
         }
       }
+
+      // Update QuantAMM pool state with latest timestamp
+      if (isQuantAMMPoolState(step.poolState))
+        updateLatestQuantAMMState(
+          step.poolState as QauntAMMPoolState,
+          BigInt(timestamp),
+        );
+      // if weighted and akron then update hookState similar to above
+      if (isAkronPoolState(step.poolState)) {
+        hookState = {
+          weights: step.poolState.weights,
+          minimumSwapFeePercentage: step.poolState.swapFee,
+        };
+      }
+      // Update ReClamm pool state with latest block timestamp
+      if (isReClammPool(step.poolState)) {
+        (step.poolState as ReClammPoolState).currentTimestamp =
+          BigInt(timestamp);
+      }
+
       // try/catch as the swap can fail for e.g. wrapAmountTooSmall, etc
       try {
         outputAmountRaw = this.vault.swap(
@@ -510,9 +606,7 @@ export class BalancerV3EventPool extends StatefulEventSubscriber<PoolStateMap> {
    */
   async updateStatePools(): Promise<void> {
     const blockNumber = await this.dexHelper.provider.getBlockNumber();
-    // We just want the current saved state
-    const currentState = this.getStaleState() || {};
-    const updatedPoolState = await this.getUpdatedPoolState(currentState);
+    const updatedPoolState = await this.getUpdatedPoolState(blockNumber);
     if (updatedPoolState) this.setState(updatedPoolState, blockNumber);
   }
 

@@ -31,7 +31,10 @@ import {
   Token,
 } from '../../types';
 import { getDexKeysWithNetwork, Utils } from '../../utils';
-import { TooStrictSlippageCheckError } from '../generic-rfq/types';
+import {
+  SlippageCheckError,
+  TooStrictSlippageCheckError,
+} from '../generic-rfq/types';
 import { SimpleExchange } from '../simple-exchange';
 import { Adapters, HashflowConfig } from './config';
 import {
@@ -57,7 +60,6 @@ import {
   HashflowData,
   PriceLevel,
   RfqError,
-  SlippageCheckError,
 } from './types';
 import { SpecialDex } from '../../executor/types';
 
@@ -507,11 +509,9 @@ export class Hashflow extends SimpleExchange implements IDex<HashflowData> {
           },
           prices,
           unit: unitPrice,
-          poolIdentifier: this.getPoolIdentifier(
-            _srcToken.address,
-            _destToken.address,
-            mm,
-          ),
+          poolIdentifiers: [
+            this.getPoolIdentifier(_srcToken.address, _destToken.address, mm),
+          ],
           poolAddresses: [this.routerAddress],
         } as PoolPrices<HashflowData>;
       });
@@ -561,6 +561,7 @@ export class Hashflow extends SimpleExchange implements IDex<HashflowData> {
     const _destTokenAddress = _destToken.address.toLowerCase();
 
     let rfq: RfqResponse;
+    let quoteId: string | undefined;
 
     try {
       rfq = await this.api.requestQuote({
@@ -579,33 +580,36 @@ export class Hashflow extends SimpleExchange implements IDex<HashflowData> {
         marketMakers: [mm],
       });
 
+      quoteId = rfq.rfqId;
+
       if (rfq.status !== 'success') {
-        const message = `${this.dexKey}-${
-          this.network
-        }: Failed to fetch RFQ for ${this.getPairName(
-          _srcTokenAddress,
-          _destTokenAddress,
-        )}: ${JSON.stringify(rfq)}`;
-        this.logger.warn(message);
-        throw new RfqError(message, `${rfq?.error?.code}` as ErrorCode);
-      } else if (!rfq.quotes[0].quoteData) {
-        const message = `${this.dexKey}-${
-          this.network
-        }: Failed to fetch RFQ for ${this.getPairName(
-          _srcTokenAddress,
-          _destTokenAddress,
-        )}. Missing quote data`;
-        this.logger.warn(message);
-        throw new RfqError(message, 'MISSING_QUOTE_DATA');
-      } else if (!rfq.quotes[0].signature) {
-        const message = `${this.dexKey}-${
-          this.network
-        }: Failed to fetch RFQ for ${this.getPairName(
-          _srcTokenAddress,
-          _destTokenAddress,
-        )}. Missing signature`;
-        this.logger.warn(message);
-        throw new RfqError(message, 'MISSING_SIGNATURE_DATA');
+        throw new RfqError(
+          `Failed to fetch RFQ for ${this.getPairName(
+            _srcTokenAddress,
+            _destTokenAddress,
+          )}: ${JSON.stringify(rfq)}`,
+          `${rfq?.error?.code}` as ErrorCode,
+        );
+      }
+
+      if (!rfq.quotes[0].quoteData) {
+        throw new RfqError(
+          `Failed to fetch RFQ for ${this.getPairName(
+            _srcTokenAddress,
+            _destTokenAddress,
+          )}. Missing quote data`,
+          'MISSING_QUOTE_DATA',
+        );
+      }
+
+      if (!rfq.quotes[0].signature) {
+        throw new RfqError(
+          `Failed to fetch RFQ for ${this.getPairName(
+            _srcTokenAddress,
+            _destTokenAddress,
+          )}. Missing signature`,
+          'MISSING_SIGNATURE_DATA',
+        );
       }
 
       assert(
@@ -620,76 +624,72 @@ export class Hashflow extends SimpleExchange implements IDex<HashflowData> {
       const expiryAsBigInt = BigInt(rfq.quotes[0].quoteData.quoteExpiry);
       const minDeadline = expiryAsBigInt > 0 ? expiryAsBigInt : BI_MAX_UINT256;
 
-      const baseTokenAmount = BigInt(rfq.quotes[0].quoteData.baseTokenAmount);
-      const quoteTokenAmount = BigInt(rfq.quotes[0].quoteData.quoteTokenAmount);
+      const baseTokenAmount = rfq.quotes[0].quoteData.baseTokenAmount;
+      const quoteTokenAmount = rfq.quotes[0].quoteData.quoteTokenAmount;
 
-      const srcAmount = BigInt(optimalSwapExchange.srcAmount);
-      const destAmount = BigInt(optimalSwapExchange.destAmount);
+      const srcAmount = optimalSwapExchange.srcAmount;
+      const destAmount = optimalSwapExchange.destAmount;
 
       const slippageFactor = options.slippageFactor;
 
-      let isFailOnSlippage = false;
-      let slippageErrorMessage = '';
-
       if (side === SwapSide.SELL) {
-        if (
-          quoteTokenAmount <
-          BigInt(
-            new BigNumber(destAmount.toString())
-              .times(slippageFactor)
-              .toFixed(0),
-          )
-        ) {
-          isFailOnSlippage = true;
-          const message = `${this.dexKey}-${this.network}: too much slippage on quote ${side} quoteTokenAmount ${quoteTokenAmount} / destAmount ${destAmount} < ${slippageFactor}`;
-          slippageErrorMessage = message;
-          this.logger.warn(message);
+        const requiredAmountWithSlippage = new BigNumber(destAmount)
+          .multipliedBy(slippageFactor)
+          .toFixed(0);
+
+        if (BigInt(quoteTokenAmount) < BigInt(requiredAmountWithSlippage)) {
+          const isTooStrict = BigNumber(1)
+            .minus(slippageFactor)
+            .lt(HASHFLOW_MIN_SLIPPAGE_FACTOR_THRESHOLD_FOR_RESTRICTION);
+
+          const SlippageError = isTooStrict
+            ? TooStrictSlippageCheckError
+            : SlippageCheckError;
+
+          throw new SlippageError(
+            this.dexKey,
+            this.network,
+            side,
+            requiredAmountWithSlippage,
+            quoteTokenAmount,
+            slippageFactor,
+          );
         }
       } else {
-        if (quoteTokenAmount < destAmount) {
-          isFailOnSlippage = true;
-          // Won't receive enough assets
-          const message = `${this.dexKey}-${this.network}: too much slippage on quote ${side}  quoteTokenAmount ${quoteTokenAmount} < destAmount ${destAmount}`;
-          slippageErrorMessage = message;
-          this.logger.warn(message);
-        } else {
-          if (
-            baseTokenAmount >
-            BigInt(slippageFactor.times(srcAmount.toString()).toFixed(0))
-          ) {
-            isFailOnSlippage = true;
-            const message = `${this.dexKey}-${
-              this.network
-            }: too much slippage on quote ${side} baseTokenAmount ${baseTokenAmount} / srcAmount ${srcAmount} > ${slippageFactor.toFixed()}`;
-            slippageErrorMessage = message;
-            this.logger.warn(message);
-          }
+        if (BigInt(quoteTokenAmount) < BigInt(destAmount)) {
+          throw new SlippageCheckError(
+            this.dexKey,
+            this.network,
+            side,
+            destAmount,
+            quoteTokenAmount,
+            slippageFactor,
+            true,
+          );
         }
-      }
 
-      let isTooStrictSlippage = false;
-      if (
-        isFailOnSlippage &&
-        side === SwapSide.SELL &&
-        new BigNumber(1)
-          .minus(slippageFactor)
-          .lt(HASHFLOW_MIN_SLIPPAGE_FACTOR_THRESHOLD_FOR_RESTRICTION)
-      ) {
-        isTooStrictSlippage = true;
-      } else if (
-        isFailOnSlippage &&
-        side === SwapSide.BUY &&
-        slippageFactor
-          .minus(1)
-          .lt(HASHFLOW_MIN_SLIPPAGE_FACTOR_THRESHOLD_FOR_RESTRICTION)
-      ) {
-        isTooStrictSlippage = true;
-      }
+        const requiredAmountWithSlippage = new BigNumber(srcAmount.toString())
+          .multipliedBy(slippageFactor)
+          .toFixed(0);
 
-      if (isFailOnSlippage && isTooStrictSlippage) {
-        throw new TooStrictSlippageCheckError(slippageErrorMessage);
-      } else if (isFailOnSlippage && !isTooStrictSlippage) {
-        throw new SlippageCheckError(slippageErrorMessage);
+        if (BigInt(baseTokenAmount) > BigInt(requiredAmountWithSlippage)) {
+          const isTooStrict = slippageFactor
+            .minus(1)
+            .lt(HASHFLOW_MIN_SLIPPAGE_FACTOR_THRESHOLD_FOR_RESTRICTION);
+
+          const SlippageError = isTooStrict
+            ? TooStrictSlippageCheckError
+            : SlippageCheckError;
+
+          throw new SlippageError(
+            this.dexKey,
+            this.network,
+            side,
+            requiredAmountWithSlippage,
+            baseTokenAmount,
+            slippageFactor,
+          );
+        }
       }
 
       return [
@@ -704,31 +704,33 @@ export class Hashflow extends SimpleExchange implements IDex<HashflowData> {
         { deadline: minDeadline },
       ];
     } catch (e) {
+      const prefix = `${this.dexKey}-${this.network}${
+        quoteId ? ` quoteId=${quoteId}` : ''
+      }`;
+
       if (
         e instanceof Error &&
         e.message?.toLowerCase().includes('user is restricted')
       ) {
         this.logger.warn(
-          `${this.dexKey}-${this.network}: Encountered restricted user=${options.userAddress}. Adding to local blacklist cache`,
+          `${prefix}: Encountered restricted user=${options.userAddress}. Adding to local blacklist cache`,
         );
         await this.setBlacklist(options.userAddress);
+      } else if (e instanceof TooStrictSlippageCheckError) {
+        this.logger.warn(
+          `${prefix}: Market Maker ${mm} failed to build transaction on side ${side} with too strict slippage. Skipping restriction ${e}`,
+        );
       } else {
-        if (e instanceof TooStrictSlippageCheckError) {
-          this.logger.warn(
-            `${this.dexKey}-${this.network}: Market Maker ${mm} failed to build transaction on side ${side} with too strict slippage. Skipping restriction`,
-          );
-        } else {
-          this.logger.warn(
-            `${this.dexKey}-${this.network} MM unknown preprocess transaction error: ${e}`,
-          );
-          const code =
-            e instanceof RfqError || e instanceof SlippageCheckError
-              ? e?.code || UNKNOWN_ERROR_CODE
-              : UNKNOWN_ERROR_CODE;
-          await this.restrictMM(mm, code).catch(err =>
-            this.logger.warn(`Failed to restrict MM ${mm}: ${err}`),
-          );
-        }
+        this.logger.warn(`${prefix}: MM preprocess error ${e}`);
+
+        const code =
+          e instanceof RfqError || e instanceof SlippageCheckError
+            ? e.code || UNKNOWN_ERROR_CODE
+            : UNKNOWN_ERROR_CODE;
+
+        await this.restrictMM(mm, code).catch(err =>
+          this.logger.warn(`${prefix}: Failed to restrict MM ${mm}: ${err}`),
+        );
       }
 
       throw e;

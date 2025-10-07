@@ -11,7 +11,7 @@ import {
   NumberAsString,
   DexExchangeParam,
 } from '../../types';
-import { SwapSide, Network } from '../../constants';
+import { SwapSide, Network, UNLIMITED_USD_LIQUIDITY } from '../../constants';
 import * as CALLDATA_GAS_COST from '../../calldata-gas-cost';
 import { getDexKeysWithNetwork } from '../../utils';
 import { IDex } from '../../dex/idex';
@@ -177,7 +177,7 @@ export class WstETH extends SimpleExchange implements IDex<WstETHData> {
         poolAddresses: [this.config.wstETHAddress],
         exchange: this.dexKey,
         gasCost: wrap ? 60000 : 70000,
-        poolIdentifier: this.dexKey,
+        poolIdentifiers: [this.dexKey],
       },
     ];
   }
@@ -277,13 +277,15 @@ export class WstETH extends SimpleExchange implements IDex<WstETHData> {
     tokenAddress: Address,
     _limit: number,
   ): Promise<PoolLiquidity[]> {
-    tokenAddress = tokenAddress.toLowerCase();
-    if (
-      tokenAddress !== this.config.stETHAddress &&
-      tokenAddress !== this.config.wstETHAddress
-    ) {
+    const token = tokenAddress.toLowerCase();
+
+    const stETH = this.config.stETHAddress.toLowerCase();
+    const wstETH = this.config.wstETHAddress.toLowerCase();
+
+    if (token !== stETH && token !== wstETH) {
       return [];
     }
+
     return [
       {
         exchange: this.dexKey,
@@ -292,12 +294,12 @@ export class WstETH extends SimpleExchange implements IDex<WstETHData> {
           {
             decimals: 18,
             address:
-              tokenAddress === this.config.stETHAddress
+              token === stETH
                 ? this.config.wstETHAddress
                 : this.config.stETHAddress,
           },
         ],
-        liquidityUSD: 1000000000, // Just returning a big number so this DEX will be preferred
+        liquidityUSD: UNLIMITED_USD_LIQUIDITY,
       },
     ];
   }

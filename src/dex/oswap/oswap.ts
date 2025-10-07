@@ -160,7 +160,7 @@ export class OSwap extends SimpleExchange implements IDex<OSwapData> {
       checkLiquidity &&
       !this.hasEnoughLiquidity(pool, state, from, amount, price, side)
     ) {
-      throw new Error('Not enough liquidity');
+      return 0n;
     }
 
     return price;
@@ -175,12 +175,21 @@ export class OSwap extends SimpleExchange implements IDex<OSwapData> {
     needed: bigint,
     side: SwapSide,
   ): boolean {
+    const outstandingWithdrawals =
+      BigInt(state.withdrawsQueued) - BigInt(state.withdrawsClaimed);
+
+    if (outstandingWithdrawals > 0n) {
+      if (needed + outstandingWithdrawals > BigInt(state.balance0)) {
+        return false;
+      }
+    }
+
     if (side === SwapSide.SELL) {
       return from.address.toLowerCase() === pool.token0
         ? needed <= BigInt(state.balance1)
         : needed <= BigInt(state.balance0);
     }
-    // SwapSide.BUY
+
     return from.address.toLowerCase() === pool.token0
       ? amount <= BigInt(state.balance1)
       : amount <= BigInt(state.balance0);
@@ -254,7 +263,7 @@ export class OSwap extends SimpleExchange implements IDex<OSwapData> {
             path: [srcToken.address, destToken.address],
           },
           exchange: this.dexKey,
-          poolIdentifier: pool.id,
+          poolIdentifiers: [pool.id],
           gasCost: OSWAP_GAS_COST,
           poolAddresses: [pool.address],
         },

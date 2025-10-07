@@ -236,8 +236,8 @@ describe('CurveV1StableNG integration', function () {
     });
   });
 
-  describe('Fantom', () => {
-    const network = Network.FANTOM;
+  describe('Gnosis', () => {
+    const network = Network.GNOSIS;
     const dexHelper = new DummyDexHelper(network);
 
     const tokens = Tokens[network];
@@ -256,9 +256,9 @@ describe('CurveV1StableNG integration', function () {
       }
     });
 
-    describe('scrvUSDC_e -> scrvUSDC_p', () => {
-      const srcTokenSymbol = 'scrvUSDC_e';
-      const destTokenSymbol = 'scrvUSDC_p';
+    describe('WXDAI -> BREAD', () => {
+      const srcTokenSymbol = 'WXDAI';
+      const destTokenSymbol = 'BREAD';
       const amountsForSell = [
         0n,
         1n * BI_POWS[tokens[srcTokenSymbol].decimals],
@@ -332,7 +332,6 @@ describe('CurveV1StableNG integration', function () {
           tokens[srcTokenSymbol].address,
           10,
         );
-        console.log(`${srcTokenSymbol} Top Pools:`, poolLiquidity);
 
         if (!newCurveV1StableNG.hasConstantPriceLargeAmounts) {
           checkPoolsLiquidity(

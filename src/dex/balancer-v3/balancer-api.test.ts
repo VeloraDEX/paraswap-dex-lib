@@ -8,6 +8,7 @@ import { ImmutablePoolStateMap } from './types';
 const network = 1;
 const rstETHLidoPoolAddr = '0x121edb0badc036f5fc610d015ee14093c142313b';
 const stableSurgePoolAddr = '0x9ed5175aecb6653c1bdaa19793c16fd74fbeeb37';
+const poolUnorderedTokensAddr = '0xc1d48bb722a22cc6abf19facbe27470f08b3db8c';
 const hooksConfigMap = loadHooksConfig(network);
 
 describe('Balancer API Tests', function () {
@@ -28,6 +29,7 @@ describe('Balancer API Tests', function () {
         tokensUnderlying: ['0x7f39c581f595b53c5cb19bd0b3f8da6c935e2ca0', null],
         weights: [0n, 0n],
         poolType: 'STABLE',
+        version: 1,
         hookAddress: undefined,
         hookType: undefined,
         supportsUnbalancedLiquidity: true,
@@ -59,6 +61,7 @@ describe('Balancer API Tests', function () {
         tokensUnderlying: ['0x7f39c581f595b53c5cb19bd0b3f8da6c935e2ca0', null],
         weights: [0n, 0n],
         poolType: 'STABLE',
+        version: 1,
         hookAddress: '0xb18fa0cb5de8cecb8899aae6e38b1b7ed77885da',
         hookType: 'StableSurge',
         supportsUnbalancedLiquidity: true,
@@ -78,6 +81,41 @@ describe('Balancer API Tests', function () {
         z: 0n,
       };
       expect(pools[stableSurgePoolAddr]).toEqual(expectedPool);
+    });
+
+    it('should fetch pool with correct token order', function () {
+      const expectedPool = {
+        poolAddress: poolUnorderedTokensAddr,
+        tokens: [
+          '0x5f9d59db355b4a60501544637b00e94082ca575b',
+          '0x7bc3485026ac48b6cf9baf0a377477fff5703af8',
+        ],
+        tokensUnderlying: [
+          '0x4c9edd5852cd905f086c759e8383e09bff1e68b3',
+          '0xdac17f958d2ee523a2206206994597c13d831ec7',
+        ],
+        weights: [0n, 0n],
+        poolType: 'STABLE',
+        version: 1,
+        hookAddress: undefined,
+        hookType: undefined,
+        supportsUnbalancedLiquidity: true,
+        dSq: 0n,
+        paramsAlpha: 0n,
+        paramsBeta: 0n,
+        paramsC: 0n,
+        paramsLambda: 0n,
+        paramsS: 0n,
+        tauAlphaX: 0n,
+        tauAlphaY: 0n,
+        tauBetaX: 0n,
+        tauBetaY: 0n,
+        u: 0n,
+        v: 0n,
+        w: 0n,
+        z: 0n,
+      };
+      expect(pools[poolUnorderedTokensAddr]).toEqual(expectedPool);
     });
   });
 
@@ -107,7 +145,7 @@ describe('Balancer API Tests', function () {
         {
           address: '0x7a4effd87c2f3c55ca251080b1343b605f327e3a',
           decimals: 18,
-          canUseBufferForSwaps: false,
+          canUseBufferForSwaps: null,
           underlyingToken: null,
         },
       ];

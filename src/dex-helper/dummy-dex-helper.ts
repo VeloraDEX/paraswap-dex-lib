@@ -170,6 +170,10 @@ class DummyCache implements ICache {
     return this.hashStorage[mapKey]?.[key] ?? null;
   }
 
+  async hlen(mapKey: string): Promise<number> {
+    return Object.keys(this.hashStorage[mapKey] ?? {}).length;
+  }
+
   async hmget(mapKey: string, keys: string[]): Promise<(string | null)[]> {
     return keys.map(key => this.hashStorage?.[mapKey]?.[key] ?? null);
   }
@@ -271,8 +275,8 @@ export class DummyRequestWrapper implements IRequestWrapper {
 
     let url = `https://gateway-arbitrum.network.thegraph.com/api/${this.apiKeyTheGraph}/${type}/id/${subgraph}`;
 
-    // support for the subgraphs that are on the studio and were not migrated to decentralized network yet (base and zkEVM)
-    if (subgraph.includes('studio.thegraph.com')) {
+    // support for the subgraphs that are on the studio and were not migrated to decentralized network yet
+    if (subgraph.includes('https://')) {
       url = subgraph;
     }
 
@@ -320,6 +324,9 @@ export class DummyDexHelper implements IDexHelper {
   getLogger: LoggerConstructor;
   web3Provider: Web3;
   getTokenUSDPrice: (token: Token, amount: bigint) => Promise<number>;
+  getUsdTokenAmounts: (
+    tokenAmounts: [toke: string, amount: bigint | null][],
+  ) => Promise<number[]>;
 
   constructor(network: number, rpcUrl?: string) {
     this.config = new ConfigHelper(false, generateConfig(network), 'is');
@@ -346,6 +353,16 @@ export class DummyDexHelper implements IDexHelper {
     // For testing use only full parts like 1, 2, 3 ETH, not 0.1 ETH etc
     this.getTokenUSDPrice = async (token, amount) =>
       Number(amount / BigInt(10 ** token.decimals));
+
+    // For testing use only full parts like 1, 2, 3 ETH, not 0.1 ETH etc
+    this.getUsdTokenAmounts = async (tokenAmounts: [string, bigint | null][]) =>
+      tokenAmounts.map(([token, amount]) => {
+        if (amount === null) {
+          return 0;
+        }
+        return Number(amount / BigInt(10 ** 18));
+      });
+
     this.multiWrapper = new MultiWrapper(
       this.multiContract,
       this.getLogger(`MultiWrapper-${network}`),

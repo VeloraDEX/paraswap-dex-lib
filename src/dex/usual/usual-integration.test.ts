@@ -4,7 +4,12 @@ dotenv.config();
 
 import { Interface } from '@ethersproject/abi';
 import { DummyDexHelper } from '../../dex-helper/index';
-import { Network, SwapSide } from '../../constants';
+import {
+  Network,
+  NO_USD_LIQUIDITY,
+  SwapSide,
+  UNLIMITED_USD_LIQUIDITY,
+} from '../../constants';
 import { BI_POWS } from '../../bigint-constants';
 import {
   checkPoolPrices,
@@ -18,6 +23,8 @@ import { Usual } from './usual';
 import { UsualBond } from './usual-bond';
 import { WrappedMM } from './wrapped-m-m';
 import { MWrappedM } from './m-wrapped-m';
+import { UsdcUsualUSDC } from './usdc-usual-usdc';
+import { UsualUSDCUsd0 } from './usual-usdc-usd0';
 
 async function testPricingOnNetwork(
   usual: Usual,
@@ -62,7 +69,12 @@ async function testPricingOnNetwork(
 
   expect(poolPrices).not.toBeNull();
   if (usual.hasConstantPriceLargeAmounts) {
-    checkConstantPoolPrices(poolPrices!, amounts, dexKey);
+    const fromDec = networkTokens[srcTokenSymbol].decimals;
+    const toDec = networkTokens[destTokenSymbol].decimals;
+    const expectedOut = amounts.map(
+      a => (a * BI_POWS[toDec]) / BI_POWS[fromDec],
+    );
+    checkConstantPoolPrices(poolPrices!, expectedOut, dexKey);
   } else {
     checkPoolPrices(poolPrices!, amounts, side, dexKey);
   }
@@ -203,19 +215,29 @@ describe('WrappedM<>UsualM', function () {
 
     it('getTopPoolsForToken: WrappedM', async function () {
       const tokenA = Tokens[network]['WrappedM'];
+      const tokenB = Tokens[network]['UsualM'];
       const dexHelper = new DummyDexHelper(network);
       const usualMWrappedM = new UsualMWrappedM(network, dexKey, dexHelper);
 
-      const poolLiquidity = await usualMWrappedM.getTopPoolsForToken(
+      const poolLiquidityA = await usualMWrappedM.getTopPoolsForToken(
         tokenA.address,
+        10,
+      );
+
+      const poolLiquidityB = await usualMWrappedM.getTopPoolsForToken(
+        tokenB.address,
         10,
       );
       console.log(
         `${tokenA.symbol} Top Pools:`,
-        JSON.stringify(poolLiquidity, null, 2),
+        JSON.stringify(poolLiquidityA, null, 2),
       );
 
-      checkPoolsLiquidity(poolLiquidity, tokenA.address, dexKey);
+      // swap is available only from WrappedM to UsualM
+      expect(poolLiquidityA[0].liquidityUSD).toBe(UNLIMITED_USD_LIQUIDITY);
+      expect(poolLiquidityB[0].liquidityUSD).toBe(NO_USD_LIQUIDITY);
+
+      checkPoolsLiquidity(poolLiquidityA, tokenA.address, dexKey);
     });
 
     it('getTopPoolsForToken: UsualM', async function () {
@@ -510,6 +532,206 @@ describe('M<>WrappedM', function () {
       );
 
       checkPoolsLiquidity(poolLiquidity, tokenA.address, dexKey);
+    });
+  });
+});
+
+describe('USDC<>UsualUSDC', function () {
+  const dexKey = 'UsdcUsualUSDC';
+  let blockNumber: number;
+  let usdcUusdc: UsdcUsualUSDC;
+
+  describe('Mainnet', () => {
+    const network = Network.MAINNET;
+    const dexHelper = new DummyDexHelper(network);
+
+    const srcTokenSymbol = 'USDC';
+    const destTokenSymbol = 'UsualUSDC';
+
+    const amountsForSell = [
+      0n,
+      1n * BI_POWS[18],
+      2n * BI_POWS[18],
+      3n * BI_POWS[18],
+      4n * BI_POWS[18],
+      5n * BI_POWS[18],
+      6n * BI_POWS[18],
+      7n * BI_POWS[18],
+      8n * BI_POWS[18],
+      9n * BI_POWS[18],
+      10n * BI_POWS[18],
+    ];
+
+    beforeAll(async () => {
+      blockNumber = await dexHelper.web3Provider.eth.getBlockNumber();
+      usdcUusdc = new UsdcUsualUSDC(network, dexKey, dexHelper);
+      if (usdcUusdc.initializePricing) {
+        await usdcUusdc.initializePricing(blockNumber);
+      }
+    });
+
+    it('getPoolIdentifiers and getPricesVolume SELL', async function () {
+      await testPricingOnNetwork(
+        usdcUusdc,
+        network,
+        dexKey,
+        blockNumber,
+        srcTokenSymbol,
+        destTokenSymbol,
+        SwapSide.SELL,
+        amountsForSell,
+        '',
+      );
+    });
+
+    it('getPoolIdentifiers and getPricesVolume BUY', async function () {
+      await testPricingOnNetwork(
+        usdcUusdc,
+        network,
+        dexKey,
+        blockNumber,
+        srcTokenSymbol,
+        destTokenSymbol,
+        SwapSide.BUY,
+        amountsForSell,
+        '',
+      );
+    });
+
+    it(`getTopPoolsForToken: ${srcTokenSymbol}`, async function () {
+      const tokenA = Tokens[network][srcTokenSymbol];
+      const dexHelper = new DummyDexHelper(network);
+      const usdcUusdc = new UsdcUsualUSDC(network, dexKey, dexHelper);
+
+      const poolLiquidity = await usdcUusdc.getTopPoolsForToken(
+        tokenA.address,
+        10,
+      );
+      console.log(
+        `${tokenA.symbol} Top Pools:`,
+        JSON.stringify(poolLiquidity, null, 2),
+      );
+
+      expect(poolLiquidity[0].liquidityUSD).toBe(UNLIMITED_USD_LIQUIDITY);
+
+      checkPoolsLiquidity(poolLiquidity, tokenA.address, dexKey);
+    });
+
+    it(`getTopPoolsForToken: ${destTokenSymbol}`, async function () {
+      const tokenA = Tokens[network][destTokenSymbol];
+      const dexHelper = new DummyDexHelper(network);
+      const usdcUusdc = new UsdcUsualUSDC(network, dexKey, dexHelper);
+
+      const poolLiquidity = await usdcUusdc.getTopPoolsForToken(
+        tokenA.address,
+        10,
+      );
+      console.log(
+        `${tokenA.symbol} Top Pools:`,
+        JSON.stringify(poolLiquidity, null, 2),
+      );
+
+      expect(poolLiquidity[0].liquidityUSD).toBe(NO_USD_LIQUIDITY);
+    });
+  });
+});
+
+describe('UsualUSDC<>USD0', function () {
+  const dexKey = 'UsualUSDCUsd0';
+  let blockNumber: number;
+  let uusdcUsd0: UsualUSDCUsd0;
+
+  describe('Mainnet', () => {
+    const network = Network.MAINNET;
+    const dexHelper = new DummyDexHelper(network);
+
+    const srcTokenSymbol = 'UsualUSDC';
+    const destTokenSymbol = 'USD0';
+
+    const amountsForSell = [
+      0n,
+      1n * BI_POWS[18],
+      2n * BI_POWS[18],
+      3n * BI_POWS[18],
+      4n * BI_POWS[18],
+      5n * BI_POWS[18],
+      6n * BI_POWS[18],
+      7n * BI_POWS[18],
+      8n * BI_POWS[18],
+      9n * BI_POWS[18],
+      10n * BI_POWS[18],
+    ];
+
+    beforeAll(async () => {
+      blockNumber = await dexHelper.web3Provider.eth.getBlockNumber();
+      uusdcUsd0 = new UsualUSDCUsd0(network, dexKey, dexHelper);
+      if (uusdcUsd0.initializePricing) {
+        await uusdcUsd0.initializePricing(blockNumber);
+      }
+    });
+
+    it(`getPoolIdentifiers and getPricesVolume SELL`, async function () {
+      await testPricingOnNetwork(
+        uusdcUsd0,
+        network,
+        dexKey,
+        blockNumber,
+        srcTokenSymbol,
+        destTokenSymbol,
+        SwapSide.SELL,
+        amountsForSell,
+        '',
+      );
+    });
+
+    it(`getPoolIdentifiers and getPricesVolume BUY`, async function () {
+      await testPricingOnNetwork(
+        uusdcUsd0,
+        network,
+        dexKey,
+        blockNumber,
+        srcTokenSymbol,
+        destTokenSymbol,
+        SwapSide.BUY,
+        amountsForSell,
+        '',
+      );
+    });
+
+    it(`getTopPoolsForToken: ${srcTokenSymbol}`, async function () {
+      const tokenA = Tokens[network][srcTokenSymbol];
+      const dexHelper = new DummyDexHelper(network);
+      const uusdcUsd0 = new UsualUSDCUsd0(network, dexKey, dexHelper);
+
+      const poolLiquidity = await uusdcUsd0.getTopPoolsForToken(
+        tokenA.address,
+        10,
+      );
+      console.log(
+        `${tokenA.symbol} Top Pools:`,
+        JSON.stringify(poolLiquidity, null, 2),
+      );
+
+      expect(poolLiquidity[0].liquidityUSD).toBe(UNLIMITED_USD_LIQUIDITY);
+
+      checkPoolsLiquidity(poolLiquidity, tokenA.address, dexKey);
+    });
+
+    it(`getTopPoolsForToken: ${destTokenSymbol}`, async function () {
+      const tokenA = Tokens[network][destTokenSymbol];
+      const dexHelper = new DummyDexHelper(network);
+      const uusdcUsd0 = new UsualUSDCUsd0(network, dexKey, dexHelper);
+
+      const poolLiquidity = await uusdcUsd0.getTopPoolsForToken(
+        tokenA.address,
+        10,
+      );
+      console.log(
+        `${tokenA.symbol} Top Pools:`,
+        JSON.stringify(poolLiquidity, null, 2),
+      );
+
+      expect(poolLiquidity[0].liquidityUSD).toBe(NO_USD_LIQUIDITY);
     });
   });
 });

@@ -31,7 +31,7 @@ import {
 } from './encoder';
 import { UniswapV4PoolManager } from './uniswap-v4-pool-manager';
 import { DeepReadonly } from 'ts-essentials';
-import { PoolState } from '../uniswap-v4/types';
+import { PoolState } from './types';
 import { uniswapV4PoolMath } from './contract-math/uniswap-v4-pool-math';
 import { SwapSide } from '@paraswap/core';
 import { queryAvailablePoolsForToken } from './subgraph';
@@ -41,6 +41,8 @@ import { PoolsRegistryHashKey } from '../uniswap-v3/uniswap-v3';
 
 export class UniswapV4 extends SimpleExchange implements IDex<UniswapV4Data> {
   readonly hasConstantPriceLargeAmounts = false;
+
+  // to prevent wrap/unwrap on v6 contract level, because we are doing wrap/unwrap on UniV4 Router level, check tx encoder for details
   needWrapNative = false;
 
   logger: Logger;
@@ -50,6 +52,8 @@ export class UniswapV4 extends SimpleExchange implements IDex<UniswapV4Data> {
 
   public static dexKeysWithNetwork: { key: string; networks: Network[] }[] =
     getDexKeysWithNetwork(UniswapV4Config);
+
+  private wethAddress: string;
 
   constructor(
     protected network: Network,
@@ -62,6 +66,9 @@ export class UniswapV4 extends SimpleExchange implements IDex<UniswapV4Data> {
     super(dexHelper, dexKey);
     this.logger = dexHelper.getLogger(dexKey);
     this.quoterIface = new Interface(QuoterAbi);
+
+    this.wethAddress =
+      this.dexHelper.config.data.wrappedNativeTokenAddress.toLowerCase();
 
     this.poolManager = new UniswapV4PoolManager(
       dexHelper,
@@ -95,11 +102,7 @@ export class UniswapV4 extends SimpleExchange implements IDex<UniswapV4Data> {
       blockNumber,
     );
 
-    if (!pool) {
-      return false;
-    }
-
-    return true;
+    return Boolean(pool);
   }
 
   async getPoolIdentifiers(
@@ -131,7 +134,6 @@ export class UniswapV4 extends SimpleExchange implements IDex<UniswapV4Data> {
     amounts: bigint[],
     zeroForOne: boolean,
     side: SwapSide,
-    reqId: number,
   ): bigint[] | null {
     try {
       const outputsResult = uniswapV4PoolMath.queryOutputs(
@@ -140,8 +142,6 @@ export class UniswapV4 extends SimpleExchange implements IDex<UniswapV4Data> {
         amounts,
         zeroForOne,
         side,
-        this.logger,
-        reqId,
       );
 
       if (
@@ -170,9 +170,6 @@ export class UniswapV4 extends SimpleExchange implements IDex<UniswapV4Data> {
     blockNumber: number,
     limitPools?: string[],
   ): Promise<ExchangePrices<UniswapV4Data> | null> {
-    const reqId = Math.floor(Math.random() * 10000);
-    // const getPricesVolumeStart = Date.now();
-
     const pools: Pool[] = await this.poolManager.getAvailablePoolsForPair(
       from.address.toLowerCase(),
       to.address.toLowerCase(),
@@ -186,9 +183,21 @@ export class UniswapV4 extends SimpleExchange implements IDex<UniswapV4Data> {
     const pricesPromises = availablePools.map(async poolId => {
       const pool = pools.find(p => p.id === poolId)!;
 
+      const fromAddress = from.address.toLowerCase();
+      const poolCurrency0 = pool.key.currency0;
+
+      const isFromEth = isETHAddress(fromAddress);
+      const isFromWeth = fromAddress === this.wethAddress;
+
+      const currency0IsEth = poolCurrency0 === NULL_ADDRESS;
+      const currency0IsWeth = poolCurrency0 === this.wethAddress;
+
       const zeroForOne =
-        from.address.toLowerCase() === pool.key.currency0.toLowerCase() ||
-        (isETHAddress(from.address) && pool.key.currency0 === NULL_ADDRESS);
+        fromAddress === poolCurrency0 ||
+        (isFromEth && currency0IsEth) || // ETH is src and native ETH pool
+        (isFromEth && currency0IsWeth) || // ETH is src and WETH pool
+        (isFromWeth && currency0IsEth); // WETH is src and native ETH pool
+      // WETH is src and WETH pool is handled in fromAddress === poolCurrency0 case
 
       const eventPool = await this.poolManager.getEventPool(
         poolId,
@@ -198,23 +207,8 @@ export class UniswapV4 extends SimpleExchange implements IDex<UniswapV4Data> {
       const poolState = (await eventPool?.getState(blockNumber)) || null;
 
       let prices: bigint[] | null;
-      if (poolState) {
-        // const getOutputsStart = Date.now();
-        prices = this._getOutputs(
-          pool,
-          poolState,
-          amounts,
-          zeroForOne,
-          side,
-          reqId,
-        );
-        // this.logger.info(
-        //   `_getOutputs_${pool.id}_${reqId}: ${
-        //     Date.now() - getOutputsStart
-        //   } ms (src: ${from.address}, dest: ${
-        //     to.address
-        //   }, amounts: ${JSON.stringify(amounts)})`,
-        // );
+      if (poolState !== null && poolState.isValid) {
+        prices = this._getOutputs(pool, poolState, amounts, zeroForOne, side);
       } else {
         this.logger.warn(
           `${this.dexKey}-${this.network}: pool ${poolId} state was not found...falling back to rpc`,
@@ -255,22 +249,73 @@ export class UniswapV4 extends SimpleExchange implements IDex<UniswapV4Data> {
         poolAddresses: [this.poolManagerAddress],
         exchange: this.dexKey,
         gasCost: 100_000,
-        poolIdentifier: poolId,
+        poolIdentifiers: [poolId],
       };
     });
 
     const prices = await Promise.all(pricesPromises);
-    // this.logger.info(
-    //   `getPricesVolume_${from.address}_${to.address}_${reqId}: ${
-    //     Date.now() - getPricesVolumeStart
-    //   } ms`,
-    // );
     return prices.filter(res => res !== null);
   }
 
   // Returns estimated gas cost of calldata for this DEX in multiSwap
   getCalldataGasCost(poolPrices: PoolPrices<UniswapV4Data>): number | number[] {
-    return CALLDATA_GAS_COST.DEX_NO_PAYLOAD;
+    if (poolPrices.data.path.length === 1) {
+      return (
+        CALLDATA_GAS_COST.DEX_OVERHEAD +
+        // poolKey -> currency0
+        CALLDATA_GAS_COST.ADDRESS +
+        // poolKey -> currency1
+        CALLDATA_GAS_COST.ADDRESS +
+        // poolKey -> fee
+        CALLDATA_GAS_COST.wordNonZeroBytes(3) +
+        // poolKey -> tickSpacing
+        CALLDATA_GAS_COST.wordNonZeroBytes(3) +
+        //poolKey -> hooks
+        CALLDATA_GAS_COST.ADDRESS +
+        // zeroForOne
+        CALLDATA_GAS_COST.BOOL +
+        // amountIn
+        CALLDATA_GAS_COST.AMOUNT +
+        // amountOutMinimum
+        CALLDATA_GAS_COST.AMOUNT +
+        // hookData
+        CALLDATA_GAS_COST.ZERO_BYTE
+      );
+    } else {
+      return (
+        CALLDATA_GAS_COST.DEX_OVERHEAD +
+        // currency
+        CALLDATA_GAS_COST.ADDRESS +
+        // amount
+        CALLDATA_GAS_COST.AMOUNT +
+        // minAmount
+        CALLDATA_GAS_COST.AMOUNT +
+        //
+        poolPrices.data.path.reduce(step => {
+          return (
+            CALLDATA_GAS_COST.DEX_OVERHEAD +
+            // poolKey -> currency0
+            CALLDATA_GAS_COST.ADDRESS +
+            // poolKey -> currency1
+            CALLDATA_GAS_COST.ADDRESS +
+            // poolKey -> fee
+            CALLDATA_GAS_COST.wordNonZeroBytes(3) +
+            // poolKey -> tickSpacing
+            CALLDATA_GAS_COST.wordNonZeroBytes(3) +
+            //poolKey -> hooks
+            CALLDATA_GAS_COST.ADDRESS +
+            // zeroForOne
+            CALLDATA_GAS_COST.BOOL +
+            // amountIn
+            CALLDATA_GAS_COST.AMOUNT +
+            // amountOutMinimum
+            CALLDATA_GAS_COST.AMOUNT +
+            // hookData
+            CALLDATA_GAS_COST.ZERO_BYTE
+          );
+        }, 0)
+      );
+    }
   }
 
   getAdapters(side: SwapSide): { name: string; index: number }[] | null {
@@ -388,55 +433,43 @@ export class UniswapV4 extends SimpleExchange implements IDex<UniswapV4Data> {
     data: UniswapV4Data,
     side: SwapSide,
   ): DexExchangeParam {
-    let exchangeData: string;
+    let encodingMethod: (
+      srcToken: Address,
+      destToken: Address,
+      data: UniswapV4Data,
+      amount1: bigint,
+      amount2: bigint,
+      recipient: Address,
+      weth: Address,
+    ) => string;
 
-    if (data.path.length === 1) {
-      // Single hop
-      const path = data.path[0];
-      if (side === SwapSide.SELL) {
-        exchangeData = swapExactInputSingleCalldata(
-          srcToken,
-          destToken,
-          path.pool.key,
-          path.zeroForOne,
-          BigInt(srcAmount),
-          // destMinAmount (can be 0 on dex level)
-          0n,
-          recipient,
-        );
-      } else {
-        exchangeData = swapExactOutputSingleCalldata(
-          srcToken,
-          destToken,
-          path.pool.key,
-          path.zeroForOne,
-          BigInt(destAmount),
-          recipient,
-        );
-      }
+    if (data.path.length === 1 && side === SwapSide.SELL) {
+      // Single-hop encoding for SELL side
+      encodingMethod = swapExactInputSingleCalldata;
+    } else if (data.path.length === 1 && side === SwapSide.BUY) {
+      // Single-hop encoding for BUY side
+      encodingMethod = swapExactOutputSingleCalldata;
+    } else if (data.path.length > 1 && side === SwapSide.SELL) {
+      // Multi-hop encoding for SELL side
+      encodingMethod = swapExactInputCalldata;
+    } else if (data.path.length > 1 && side === SwapSide.BUY) {
+      // Multi-hop encoding for BUY side
+      encodingMethod = swapExactOutputCalldata;
     } else {
-      // Multi-hop
-      exchangeData = '0x';
-
-      if (side === SwapSide.SELL) {
-        exchangeData = swapExactInputCalldata(
-          srcToken,
-          destToken,
-          data,
-          BigInt(srcAmount),
-          0n,
-          recipient,
-        );
-      } else {
-        exchangeData = swapExactOutputCalldata(
-          srcToken,
-          destToken,
-          data,
-          BigInt(destAmount),
-          recipient,
-        );
-      }
+      throw new Error(
+        `${this.dexKey}-${this.network}: Logic error for side: ${side}, data.path.length: ${data.path.length}`,
+      );
     }
+
+    const exchangeData = encodingMethod(
+      srcToken,
+      destToken,
+      data,
+      BigInt(srcAmount),
+      side === SwapSide.SELL ? 0n : BigInt(destAmount),
+      recipient,
+      this.wethAddress,
+    );
 
     return {
       needWrapNative: this.needWrapNative,
@@ -444,8 +477,11 @@ export class UniswapV4 extends SimpleExchange implements IDex<UniswapV4Data> {
       dexFuncHasRecipient: true,
       exchangeData,
       targetExchange: this.routerAddress,
-      permit2Approval: true,
       returnAmountPos: undefined,
+      transferSrcTokenBeforeSwap: isETHAddress(srcToken)
+        ? undefined
+        : this.routerAddress,
+      skipApproval: true,
     };
   }
 

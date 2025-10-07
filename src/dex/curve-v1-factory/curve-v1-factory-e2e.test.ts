@@ -34,7 +34,7 @@ export function testForNetwork(
     network,
   );
   const tokens = Tokens[network];
-  const holders = Holders[network];
+  const holders = Holders[network] ?? {};
 
   describe(`${network}`, () => {
     sideToContractMethods.forEach((contractMethods, side) =>
@@ -347,24 +347,7 @@ describe('CurveV1Factory E2E', () => {
       tokenBAmount,
     );
   });
-  describe('Fantom', () => {
-    const network = Network.FANTOM;
 
-    const tokenASymbol: string = 'TOR';
-    const tokenBSymbol: string = 'USDC';
-
-    const tokenAAmount: string = '111000000000000000000';
-    const tokenBAmount: string = '111000000';
-
-    testForNetwork(
-      network,
-      dexKey,
-      tokenASymbol,
-      tokenBSymbol,
-      tokenAAmount,
-      tokenBAmount,
-    );
-  });
   describe('Arbitrum', () => {
     const network = Network.ARBITRUM;
 

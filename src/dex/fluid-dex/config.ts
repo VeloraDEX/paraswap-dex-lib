@@ -7,21 +7,28 @@ export const FluidDexConfig: DexConfigMap<DexParams> = {
     [Network.MAINNET]: {
       commonAddresses: {
         liquidityProxy: '0x52aa899454998be5b000ad077a46bbe360f4e497',
-        resolver: '0xb387f9C2092cF7c4943F97842887eBff7AE96EB3',
+        resolver: '0xC93876C0EEd99645DD53937b25433e311881A27C',
         dexFactory: '0x91716C4EDA1Fb55e84Bf8b4c7085f84285c19085',
       },
     },
     [Network.ARBITRUM]: {
       commonAddresses: {
         liquidityProxy: '0x52Aa899454998Be5b000Ad077a46Bbe360F4e497',
-        resolver: '0xCe6F4E40152a1DF97ae95a7e4F60D944871A4060',
+        resolver: '0x666A400b8cDA0Dc9b59D61706B0F982dDdAF2d98',
         dexFactory: '0x91716C4EDA1Fb55e84Bf8b4c7085f84285c19085',
       },
     },
     [Network.POLYGON]: {
       commonAddresses: {
         liquidityProxy: '0x52Aa899454998Be5b000Ad077a46Bbe360F4e497',
-        resolver: '0xA508fd16Bf3391Fb555cce478C616BDe4a613052',
+        resolver: '0x18DeDd1cF3Af3537D4e726D2Aa81004D65DA8581',
+        dexFactory: '0x91716C4EDA1Fb55e84Bf8b4c7085f84285c19085',
+      },
+    },
+    [Network.BASE]: {
+      commonAddresses: {
+        liquidityProxy: '0x52Aa899454998Be5b000Ad077a46Bbe360F4e497',
+        resolver: '0x41E6055a282F8b7Abdb8D22Bcd85c2A0eE22e38A',
         dexFactory: '0x91716C4EDA1Fb55e84Bf8b4c7085f84285c19085',
       },
     },

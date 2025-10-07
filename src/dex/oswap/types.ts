@@ -7,6 +7,8 @@ export type OSwapPoolState = {
   traderate1: string;
   balance0: string;
   balance1: string;
+  withdrawsQueued: string;
+  withdrawsClaimed: string;
 };
 
 // OSwapPoolState is the state of the event subscriber. It is the minimum

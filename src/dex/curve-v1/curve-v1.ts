@@ -96,7 +96,7 @@ import { hexConcat, hexZeroPad, hexlify } from 'ethers/lib/utils';
 
 const CURVE_DEFAULT_CHUNKS = 10;
 
-const CURVE_LENDING_POOl_GAS = 340 * 1000;
+const CURVE_LENDING_POOL_GAS = 340 * 1000;
 const CURVE_POOL_GAS = 200 * 1000;
 
 const coder = new AbiCoder();
@@ -768,9 +768,9 @@ export class CurveV1
               deadline: 0,
             },
             exchange: this.dexKey,
-            poolIdentifier: `${this.dexKey}_${poolConfig.name.toLowerCase()}`,
+            poolIdentifiers: [this.getPoolIdentifier(poolConfig.name)],
             gasCost: poolConfig.isLending
-              ? CURVE_LENDING_POOl_GAS
+              ? CURVE_LENDING_POOL_GAS
               : CURVE_POOL_GAS,
             poolAddresses: [_price.exchange],
           });

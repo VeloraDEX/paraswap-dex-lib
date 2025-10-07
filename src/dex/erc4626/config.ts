@@ -38,4 +38,11 @@ export const ERC4626Config: DexConfigMap<ERC4626Params> = {
       asset: '0xbdC7c08592Ee4aa51D06C27Ee23D5087D65aDbcD', // USDL
     },
   },
+  sUSDe: {
+    [Network.MAINNET]: {
+      vault: '0x9d39a5de30e57443bff2a8307a4256c8797a3497', // sUSDe
+      asset: '0x4c9edd5852cd905f086c759e8383e09bff1e68b3', // USDe
+      cooldownEnabled: true,
+    },
+  },
 };

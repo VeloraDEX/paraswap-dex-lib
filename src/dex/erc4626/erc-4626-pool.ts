@@ -5,7 +5,7 @@ import type { IDexHelper } from '../../dex-helper';
 import type { DeepReadonly } from 'ts-essentials';
 import type { Address, BlockHeader, Log, Logger } from '../../types';
 import type { ERC4626PoolState } from './types';
-import { uint256ToBigInt } from '../../lib/decoders';
+import { uint24ToBigInt, uint256ToBigInt } from '../../lib/decoders';
 import { Network } from '../../constants';
 
 export class ERC4626EventPool extends StatefulEventSubscriber<ERC4626PoolState> {
@@ -23,6 +23,7 @@ export class ERC4626EventPool extends StatefulEventSubscriber<ERC4626PoolState> 
     private depositTopic: string,
     private withdrawTopic: string,
     private transferTopic: string,
+    private cooldownEnabled: boolean = false,
   ) {
     super(parentName, poolName, dexHelper, logger);
     this.addressesSubscribed = [vault, asset];
@@ -72,9 +73,21 @@ export class ERC4626EventPool extends StatefulEventSubscriber<ERC4626PoolState> 
         callData: this.wrapperInterface.encodeFunctionData('totalSupply', []),
         decodeFunction: uint256ToBigInt,
       },
+      ...(this.cooldownEnabled
+        ? [
+            {
+              target: this.vault,
+              callData: this.wrapperInterface.encodeFunctionData(
+                'cooldownDuration',
+                [],
+              ),
+              decodeFunction: uint24ToBigInt,
+            },
+          ]
+        : []),
     ];
 
-    const [totalAssets, totalSupply] =
+    const [totalAssets, totalSupply, cooldownDuration] =
       await this.dexHelper.multiWrapper.tryAggregate<bigint>(
         true,
         calls,
@@ -84,7 +97,16 @@ export class ERC4626EventPool extends StatefulEventSubscriber<ERC4626PoolState> 
     return {
       totalAssets: totalAssets.returnData,
       totalShares: totalSupply.returnData,
+      cooldownDuration: cooldownDuration?.returnData,
     };
+  }
+
+  withdrawRedeemAllowed(state: ERC4626PoolState): boolean {
+    if (state.cooldownDuration) {
+      return state.cooldownDuration === 0n;
+    }
+
+    return true;
   }
 
   async getOrGenerateState(blockNumber: number): Promise<ERC4626PoolState> {
@@ -99,11 +121,10 @@ export class ERC4626EventPool extends StatefulEventSubscriber<ERC4626PoolState> 
   async handleDeposit(
     event: any,
     state: DeepReadonly<ERC4626PoolState>,
-    log: Readonly<Log>,
+    _: Readonly<Log>,
   ): Promise<DeepReadonly<ERC4626PoolState>> {
     return {
-      // skip assets update, as it should be already handled in handleAssetTransferToVault
-      totalAssets: state.totalAssets,
+      ...state,
       totalShares: state.totalShares + BigInt(event.args.shares),
     };
   }
@@ -111,20 +132,21 @@ export class ERC4626EventPool extends StatefulEventSubscriber<ERC4626PoolState> 
   async handleAssetTransferToVault(
     event: any,
     state: DeepReadonly<ERC4626PoolState>,
-    log: Readonly<Log>,
+    _: Readonly<Log>,
   ): Promise<DeepReadonly<ERC4626PoolState>> {
     return {
+      ...state,
       totalAssets: state.totalAssets + BigInt(event.args.value),
-      totalShares: state.totalShares,
     };
   }
 
   async handleWithdraw(
     event: any,
     state: DeepReadonly<ERC4626PoolState>,
-    log: Readonly<Log>,
+    _: Readonly<Log>,
   ): Promise<DeepReadonly<ERC4626PoolState>> {
     return {
+      ...state,
       totalAssets: BigInt(state.totalAssets) - BigInt(event.args.assets),
       totalShares: BigInt(state.totalShares) - BigInt(event.args.shares),
     };

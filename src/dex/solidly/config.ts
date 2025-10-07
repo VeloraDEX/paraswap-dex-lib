@@ -3,18 +3,6 @@ import { DexConfigMap, AdapterMappings } from '../../types';
 import { Network, SwapSide } from '../../constants';
 
 export const SolidlyConfig: DexConfigMap<DexParams> = {
-  Solidly: {
-    [Network.FANTOM]: {
-      subgraphURL: '3fCME6o1i4p15Dk8d7Sz3rcWPg9NAh6Umi8nbtd8Avix',
-      factoryAddress: '0x3faab499b519fdc5819e3d7ed0c26111904cbc28',
-      router: '0x93d2611EB8b85bE4FDEa9D94Ce9913D90072eC0f',
-      initCode:
-        '0x57ae84018c47ebdaf7ddb2d1216c8c36389d12481309af65428eb6d460f747a4',
-      // Fixed Fees, same for volatile and stable pools
-      feeCode: 1,
-      poolGasCost: 180 * 1000,
-    },
-  },
   SolidlyV2: {
     [Network.MAINNET]: {
       factoryAddress: '0x777de5Fe8117cAAA7B44f396E93a401Cf5c9D4d6',
@@ -41,19 +29,6 @@ export const SolidlyConfig: DexConfigMap<DexParams> = {
       poolGasCost: 180 * 1000,
     },
   },
-  SpiritSwapV2: {
-    [Network.FANTOM]: {
-      factoryAddress: '0x9d3591719038752db0c8bEEe2040FfcC3B2c6B9c',
-      router: '0x93d2611EB8b85bE4FDEa9D94Ce9913D90072eC0f',
-      initCode:
-        '0x5442fb448d86f32a7d2a9dc1a457e64bf5a6c77415d98802aac4fb5a9dc5ecd9',
-      // updatable fees on the pool contract without event
-      stableFee: 4, // 10000 / 2500 = 4 in BPS
-      volatileFee: 18, // ceil(10000 / 556) = 18 in BPS
-      poolGasCost: 180 * 1000,
-      feeCode: 4,
-    },
-  },
   Velodrome: {
     [Network.OPTIMISM]: {
       subgraphURL: '2bam2XEb91cFqABFPSKj3RiSjpop9HvDt1MnYq5cDX5E',
@@ -70,7 +45,7 @@ export const SolidlyConfig: DexConfigMap<DexParams> = {
   },
   VelodromeV2: {
     [Network.OPTIMISM]: {
-      // There is no subgraph for VelodromeV2
+      // RPC pool tracker is used
       factoryAddress: '0xF1046053aa5682b4F9a81b5481394DA16BE5FF5a',
       router: '0xa2f581b012E0f2dcCDe86fCbfb529f4aC5dD4983',
       initCode:
@@ -81,7 +56,7 @@ export const SolidlyConfig: DexConfigMap<DexParams> = {
   },
   Aerodrome: {
     [Network.BASE]: {
-      // There is no subgraph for Aerodrome
+      // RPC pool tracker is used, as it inherits from VelodromeV2
       factoryAddress: '0x420DD381b31aEf6683db6B902084cB0FFECe40Da',
       router: '0xDCf4EE5B700e2a5Fec458e06B763A4a3E3004494',
       subgraphURL: '7uEwiKmfbRQqV8Ec9nvdKrMFVFQv5qaM271gdBvHtywj',
@@ -128,6 +103,7 @@ export const SolidlyConfig: DexConfigMap<DexParams> = {
   },
   PharaohV1: {
     [Network.AVALANCHE]: {
+      // RPC pool tracker is used
       factoryAddress: '0xAAA16c016BF556fcD620328f0759252E29b1AB57',
       router: '0x609AcD8Fc955Dd7E744c7DFFc9930a7A6654DE43',
       initCode:
@@ -139,15 +115,8 @@ export const SolidlyConfig: DexConfigMap<DexParams> = {
     },
   },
   Equalizer: {
-    [Network.FANTOM]: {
-      factoryAddress: '0xc6366EFD0AF1d09171fe0EBF32c7943BB310832a',
-      router: '0x93d2611EB8b85bE4FDEa9D94Ce9913D90072eC0f',
-      initCode:
-        '0x02ada2a0163cd4f7e0f0c9805f5230716a95b174140e4c84c14883de216cc6a3',
-      feeCode: 0,
-      poolGasCost: 180 * 1000,
-    },
     [Network.BASE]: {
+      // RPC pool tracker is used
       factoryAddress: '0xed8db60acc29e14bc867a497d94ca6e3ceb5ec04',
       router: '0xDCf4EE5B700e2a5Fec458e06B763A4a3E3004494',
       initCode:
@@ -158,23 +127,14 @@ export const SolidlyConfig: DexConfigMap<DexParams> = {
     },
   },
   Velocimeter: {
-    [Network.FANTOM]: {
-      factoryAddress: '0x472f3C3c9608fe0aE8d702f3f8A2d12c410C881A',
-      router: '0x93d2611EB8b85bE4FDEa9D94Ce9913D90072eC0f',
-      initCode:
-        '0xac4013aa7118234c1dd1f9cc4cdd3933d5a426224bc691c1bde3d8930a7e6151', // PairFactory.pairCodeHash
-      feeCode: 0, // dynamic fees
-      poolGasCost: 180 * 1000, // just same as other forks
-      // no subgraph
-    },
     [Network.BASE]: {
+      // RPC pool tracker is used
       factoryAddress: '0xe21Aac7F113Bd5DC2389e4d8a8db854a87fD6951',
       router: '0xDCf4EE5B700e2a5Fec458e06B763A4a3E3004494',
       initCode:
         '0xac4013aa7118234c1dd1f9cc4cdd3933d5a426224bc691c1bde3d8930a7e6151', // PairFactory.pairCodeHash
       feeCode: 0, // dynamic fees
       poolGasCost: 180 * 1000, // just same as other forks
-      // no subgraph
     },
   },
   Usdfi: {
@@ -188,14 +148,22 @@ export const SolidlyConfig: DexConfigMap<DexParams> = {
       feeCode: 0, // dynamic fees
     },
   },
+  Blackhole: {
+    [Network.AVALANCHE]: {
+      // RPC pool tracker is used
+      factoryAddress: '0xfE926062Fb99CA5653080d6C14fE945Ad68c265C',
+      router: '0xCaD684775d7879E63f5d319dAcC8086EeCC01B01',
+      initCode:
+        '0x87b2d661db12ce27ece6305198fcb950a2522c8e43e3b90e93256b71a6db5899',
+      poolGasCost: 180 * 1000,
+      feeCode: 0, // dynamic fees
+    },
+  },
 };
 
 export const Adapters: Record<number, AdapterMappings> = {
   [Network.POLYGON]: {
     [SwapSide.SELL]: [{ name: 'PolygonAdapter02', index: 3 }], // dystopia
-  },
-  [Network.FANTOM]: {
-    [SwapSide.SELL]: [{ name: 'FantomAdapter01', index: 10 }], // solidly, spiritSwapV2, equalizer, velocimeter
   },
   [Network.OPTIMISM]: {
     [SwapSide.SELL]: [{ name: 'OptimismAdapter01', index: 8 }], // velodrome
@@ -207,7 +175,7 @@ export const Adapters: Record<number, AdapterMappings> = {
     [SwapSide.SELL]: [{ name: 'Adapter04', index: 1 }], // solidly
   },
   [Network.AVALANCHE]: {
-    [SwapSide.SELL]: [{ name: 'AvalancheAdapter02', index: 3 }], // solisnek (deprecated)
+    [SwapSide.SELL]: [{ name: 'AvalancheAdapter02', index: 3 }], // solisnek (deprecated) + blackhole
   },
   [Network.ARBITRUM]: {
     [SwapSide.SELL]: [{ name: 'ArbitrumAdapter02', index: 1 }], // chronos, ramses

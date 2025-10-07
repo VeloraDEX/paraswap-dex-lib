@@ -1,23 +1,10 @@
-import {
-  SparkData,
-  SparkParams,
-  SparkSDaiFunctions,
-  SparkSUSDSFunctions,
-  SparkSUSDSPsmFunctions,
-} from './types';
-import {
-  Address,
-  DexConfigMap,
-  DexExchangeParam,
-  NumberAsString,
-} from '../../types';
+import { SparkParams, SparkSDaiFunctions, SparkSUSDSFunctions } from './types';
+import { DexConfigMap } from '../../types';
 import { Network } from '../../constants';
 import { SwapSide } from '@paraswap/core';
-import PotAbi from '../../abi/maker-psm/pot.json';
+import PotAbi from '../../abi/lite-psm/pot.json';
 import SavingsUSDSAbi from '../../abi/sdai/SavingsUSDS.abi.json';
 import SavingsDaiAbi from '../../abi/sdai/SavingsDai.abi.json';
-import SparkPSM3Abi from '../../abi/sdai/PSM3.abi.json';
-import SSRAuthOracleAbi from '../../abi/sdai/SSRAuthOracle.abi.json';
 import { Interface } from '@ethersproject/abi';
 
 export const SDaiConfig: DexConfigMap<SparkParams> = {

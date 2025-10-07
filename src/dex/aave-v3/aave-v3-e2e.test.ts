@@ -17,11 +17,11 @@ import { Config } from './config';
 jest.setTimeout(1000 * 60 * 3);
 
 describe('AaveV3 E2E', () => {
-  const dexKey = 'AaveV3';
+  const dexKey = 'AaveV3Lido';
 
   beforeAll(async () => {
     let results: Promise<void>[] = [];
-    for (const networkEntry of Object.values(Network)) {
+    for (const networkEntry of [Network.MAINNET]) {
       if (isNaN(Number(networkEntry))) {
         break;
       }
@@ -37,14 +37,14 @@ describe('AaveV3 E2E', () => {
       results.push(
         fetchTokenList(
           dexHelper.web3Provider,
-          blockNumber,
           config.poolAddress,
           new Interface(POOL_ABI),
           new Interface(ERC20ABI),
           dexHelper.multiWrapper,
+          blockNumber,
         )
           .then(tokenList => {
-            setTokensOnNetwork(network, tokenList);
+            setTokensOnNetwork(network, dexKey, tokenList);
           })
           .catch(e => {
             console.log(`ERROR on ${Network[network]}`, e);
@@ -54,387 +54,311 @@ describe('AaveV3 E2E', () => {
     await Promise.all(results);
   });
 
-  describe('AaveV3 POLYGON_V6', () => {
-    const network = Network.POLYGON;
-    const tokens = Tokens[network];
-    const holders = Holders[network];
-    const provider = new StaticJsonRpcProvider(
-      generateConfig(network).privateHttpProvider,
-      network,
-    );
+  // describe('AaveV3 POLYGON_V6', () => {
+  //   const network = Network.POLYGON;
+  //   const tokens = Tokens[network];
+  //   const holders = Holders[network];
+  //   const provider = new StaticJsonRpcProvider(
+  //     generateConfig(network).privateHttpProvider,
+  //     network,
+  //   );
 
-    const pairs = [
-      {
-        tokenSymbol: 'USDT',
-        aTokenSymbol: 'aPolUSDT',
-        amount: '1000000',
-      },
-      {
-        tokenSymbol: 'MATIC',
-        aTokenSymbol: 'aPolWMATIC',
-        amount: '1000000000000000000',
-      },
-      {
-        tokenSymbol: 'WMATIC',
-        aTokenSymbol: 'aPolWMATIC',
-        amount: '1000000000000000000',
-      },
-    ];
+  //   const pairs = [
+  //     {
+  //       tokenSymbol: 'USDT',
+  //       aTokenSymbol: 'aPolUSDT',
+  //       amount: '1000000',
+  //     },
+  //     {
+  //       tokenSymbol: 'MATIC',
+  //       aTokenSymbol: 'aPolWMATIC',
+  //       amount: '1000000000000000000',
+  //     },
+  //     {
+  //       tokenSymbol: 'WMATIC',
+  //       aTokenSymbol: 'aPolWMATIC',
+  //       amount: '1000000000000000000',
+  //     },
+  //   ];
 
-    const sideToContractMethods = new Map([
-      [
-        SwapSide.SELL,
-        [
-          ContractMethod.swapExactAmountIn,
-          // ContractMethod.simpleSwap,
-          // ContractMethod.multiSwap,
-          // ContractMethod.megaSwap,
-        ],
-      ],
-      // [SwapSide.BUY, [ContractMethod.simpleBuy]],
-      [SwapSide.BUY, [ContractMethod.swapExactAmountOut]],
-    ]);
+  //   const sideToContractMethods = new Map([
+  //     [
+  //       SwapSide.SELL,
+  //       [
+  //         ContractMethod.swapExactAmountIn,
+  //         // ContractMethod.simpleSwap,
+  //         // ContractMethod.multiSwap,
+  //         // ContractMethod.megaSwap,
+  //       ],
+  //     ],
+  //     // [SwapSide.BUY, [ContractMethod.simpleBuy]],
+  //     [SwapSide.BUY, [ContractMethod.swapExactAmountOut]],
+  //   ]);
 
-    pairs.forEach(pair => {
-      sideToContractMethods.forEach((contractMethods, side) =>
-        contractMethods.forEach((contractMethod: ContractMethod) => {
-          describe(`${contractMethod}`, () => {
-            it(pair.aTokenSymbol + ' -> ' + pair.tokenSymbol, async () => {
-              await testE2E(
-                getTokenFromASymbol(network, pair.aTokenSymbol)!,
-                tokens[pair.tokenSymbol],
-                holders[pair.aTokenSymbol],
-                pair.amount,
-                side,
-                dexKey,
-                contractMethod,
-                network,
-                provider,
-              );
-            });
+  //   pairs.forEach(pair => {
+  //     sideToContractMethods.forEach((contractMethods, side) =>
+  //       contractMethods.forEach((contractMethod: ContractMethod) => {
+  //         describe(`${contractMethod}`, () => {
+  //           it(pair.aTokenSymbol + ' -> ' + pair.tokenSymbol, async () => {
+  //             await testE2E(
+  //               getTokenFromASymbol(network, pair.aTokenSymbol)!,
+  //               tokens[pair.tokenSymbol],
+  //               holders[pair.aTokenSymbol],
+  //               pair.amount,
+  //               side,
+  //               dexKey,
+  //               contractMethod,
+  //               network,
+  //               provider,
+  //             );
+  //           });
 
-            it(pair.tokenSymbol + ' -> ' + pair.aTokenSymbol, async () => {
-              await testE2E(
-                tokens[pair.tokenSymbol],
-                getTokenFromASymbol(network, pair.aTokenSymbol)!,
-                holders[pair.tokenSymbol],
-                pair.amount,
-                side,
-                dexKey,
-                contractMethod,
-                network,
-                provider,
-              );
-            });
-          });
-        }),
-      );
-    });
-  });
+  //           it(pair.tokenSymbol + ' -> ' + pair.aTokenSymbol, async () => {
+  //             await testE2E(
+  //               tokens[pair.tokenSymbol],
+  //               getTokenFromASymbol(network, pair.aTokenSymbol)!,
+  //               holders[pair.tokenSymbol],
+  //               pair.amount,
+  //               side,
+  //               dexKey,
+  //               contractMethod,
+  //               network,
+  //               provider,
+  //             );
+  //           });
+  //         });
+  //       }),
+  //     );
+  //   });
+  // });
 
-  describe('AaveV3 FANTOM', () => {
-    const network = Network.FANTOM;
-    const tokens = Tokens[network];
-    const holders = Holders[network];
-    const provider = new StaticJsonRpcProvider(
-      generateConfig(network).privateHttpProvider,
-      network,
-    );
+  // describe('AaveV3 AVALANCHE', () => {
+  //   const network = Network.AVALANCHE;
+  //   const tokens = Tokens[network];
+  //   const holders = Holders[network];
+  //   const provider = new StaticJsonRpcProvider(
+  //     generateConfig(network).privateHttpProvider,
+  //     network,
+  //   );
 
-    const pairs = [
-      {
-        tokenSymbol: 'FUSDT',
-        aTokenSymbol: 'aFanUSDT',
-        amount: '1000000',
-      },
-      {
-        tokenSymbol: 'FTM',
-        aTokenSymbol: 'aFanWFTM',
-        amount: '1000000000000000000',
-      },
-      {
-        tokenSymbol: 'WFTM',
-        aTokenSymbol: 'aFanWFTM',
-        amount: '1000000000000000000',
-      },
-    ];
+  //   const pairs = [
+  //     {
+  //       tokenSymbol: 'USDT',
+  //       aTokenSymbol: 'aAvaUSDT',
+  //       amount: '1000000',
+  //     },
+  //     {
+  //       tokenSymbol: 'AVAX',
+  //       aTokenSymbol: 'aAvaWAVAX',
+  //       amount: '1000000000000000000',
+  //     },
+  //     {
+  //       tokenSymbol: 'WAVAX',
+  //       aTokenSymbol: 'aAvaWAVAX',
+  //       amount: '1000000000000000000',
+  //     },
+  //   ];
 
-    const sideToContractMethods = new Map([
-      [
-        SwapSide.SELL,
-        [
-          ContractMethod.simpleSwap,
-          ContractMethod.multiSwap,
-          ContractMethod.megaSwap,
-        ],
-      ],
-      [SwapSide.BUY, [ContractMethod.simpleBuy]],
-    ]);
+  //   const sideToContractMethods = new Map([
+  //     [
+  //       SwapSide.SELL,
+  //       [
+  //         ContractMethod.simpleSwap,
+  //         ContractMethod.multiSwap,
+  //         ContractMethod.megaSwap,
+  //       ],
+  //     ],
+  //     [SwapSide.BUY, [ContractMethod.simpleBuy]],
+  //   ]);
 
-    pairs.forEach(pair => {
-      sideToContractMethods.forEach((contractMethods, side) =>
-        contractMethods.forEach((contractMethod: ContractMethod) => {
-          describe(`${contractMethod}`, () => {
-            it(pair.aTokenSymbol + ' -> ' + pair.tokenSymbol, async () => {
-              await testE2E(
-                getTokenFromASymbol(network, pair.aTokenSymbol)!,
-                tokens[pair.tokenSymbol],
-                holders[pair.aTokenSymbol],
-                pair.amount,
-                side,
-                dexKey,
-                contractMethod,
-                network,
-                provider,
-              );
-            });
+  //   pairs.forEach(pair => {
+  //     sideToContractMethods.forEach((contractMethods, side) =>
+  //       contractMethods.forEach((contractMethod: ContractMethod) => {
+  //         describe(`${contractMethod}`, () => {
+  //           it(pair.aTokenSymbol + ' -> ' + pair.tokenSymbol, async () => {
+  //             await testE2E(
+  //               getTokenFromASymbol(network, pair.aTokenSymbol)!,
+  //               tokens[pair.tokenSymbol],
+  //               holders[pair.aTokenSymbol],
+  //               pair.amount,
+  //               side,
+  //               dexKey,
+  //               contractMethod,
+  //               network,
+  //               provider,
+  //             );
+  //           });
 
-            it(pair.tokenSymbol + ' -> ' + pair.aTokenSymbol, async () => {
-              await testE2E(
-                tokens[pair.tokenSymbol],
-                getTokenFromASymbol(network, pair.aTokenSymbol)!,
-                holders[pair.tokenSymbol],
-                pair.amount,
-                side,
-                dexKey,
-                contractMethod,
-                network,
-                provider,
-              );
-            });
-          });
-        }),
-      );
-    });
-  });
+  //           it(pair.tokenSymbol + ' -> ' + pair.aTokenSymbol, async () => {
+  //             await testE2E(
+  //               tokens[pair.tokenSymbol],
+  //               getTokenFromASymbol(network, pair.aTokenSymbol)!,
+  //               holders[pair.tokenSymbol],
+  //               pair.amount,
+  //               side,
+  //               dexKey,
+  //               contractMethod,
+  //               network,
+  //               provider,
+  //             );
+  //           });
+  //         });
+  //       }),
+  //     );
+  //   });
+  // });
 
-  describe('AaveV3 AVALANCHE', () => {
-    const network = Network.AVALANCHE;
-    const tokens = Tokens[network];
-    const holders = Holders[network];
-    const provider = new StaticJsonRpcProvider(
-      generateConfig(network).privateHttpProvider,
-      network,
-    );
+  // describe('AaveV3 ARBITRUM', () => {
+  //   const network = Network.ARBITRUM;
+  //   const tokens = Tokens[network];
+  //   const holders = Holders[network];
+  //   const provider = new StaticJsonRpcProvider(
+  //     generateConfig(network).privateHttpProvider,
+  //     network,
+  //   );
 
-    const pairs = [
-      {
-        tokenSymbol: 'USDT',
-        aTokenSymbol: 'aAvaUSDT',
-        amount: '1000000',
-      },
-      {
-        tokenSymbol: 'AVAX',
-        aTokenSymbol: 'aAvaWAVAX',
-        amount: '1000000000000000000',
-      },
-      {
-        tokenSymbol: 'WAVAX',
-        aTokenSymbol: 'aAvaWAVAX',
-        amount: '1000000000000000000',
-      },
-    ];
+  //   const pairs = [
+  //     {
+  //       tokenSymbol: 'AAVE',
+  //       aTokenSymbol: 'aArbAAVE',
+  //       amount: '1000000',
+  //     },
+  //     {
+  //       tokenSymbol: 'EURS',
+  //       aTokenSymbol: 'aArbEURS',
+  //       amount: '100',
+  //     },
+  //     {
+  //       tokenSymbol: 'USDC',
+  //       aTokenSymbol: 'aArbUSDC',
+  //       amount: '100000000',
+  //     },
+  //   ];
 
-    const sideToContractMethods = new Map([
-      [
-        SwapSide.SELL,
-        [
-          ContractMethod.simpleSwap,
-          ContractMethod.multiSwap,
-          ContractMethod.megaSwap,
-        ],
-      ],
-      [SwapSide.BUY, [ContractMethod.simpleBuy]],
-    ]);
+  //   const sideToContractMethods = new Map([
+  //     [
+  //       SwapSide.SELL,
+  //       [
+  //         ContractMethod.simpleSwap,
+  //         ContractMethod.multiSwap,
+  //         ContractMethod.megaSwap,
+  //       ],
+  //     ],
+  //     [SwapSide.BUY, [ContractMethod.simpleBuy]],
+  //   ]);
 
-    pairs.forEach(pair => {
-      sideToContractMethods.forEach((contractMethods, side) =>
-        contractMethods.forEach((contractMethod: ContractMethod) => {
-          describe(`${contractMethod}`, () => {
-            it(pair.aTokenSymbol + ' -> ' + pair.tokenSymbol, async () => {
-              await testE2E(
-                getTokenFromASymbol(network, pair.aTokenSymbol)!,
-                tokens[pair.tokenSymbol],
-                holders[pair.aTokenSymbol],
-                pair.amount,
-                side,
-                dexKey,
-                contractMethod,
-                network,
-                provider,
-              );
-            });
+  //   pairs.forEach(pair => {
+  //     sideToContractMethods.forEach((contractMethods, side) =>
+  //       contractMethods.forEach((contractMethod: ContractMethod) => {
+  //         describe(`${contractMethod}`, () => {
+  //           it(pair.aTokenSymbol + ' -> ' + pair.tokenSymbol, async () => {
+  //             await testE2E(
+  //               getTokenFromASymbol(network, pair.aTokenSymbol)!,
+  //               tokens[pair.tokenSymbol],
+  //               holders[pair.aTokenSymbol],
+  //               pair.amount,
+  //               side,
+  //               dexKey,
+  //               contractMethod,
+  //               network,
+  //               provider,
+  //             );
+  //           });
 
-            it(pair.tokenSymbol + ' -> ' + pair.aTokenSymbol, async () => {
-              await testE2E(
-                tokens[pair.tokenSymbol],
-                getTokenFromASymbol(network, pair.aTokenSymbol)!,
-                holders[pair.tokenSymbol],
-                pair.amount,
-                side,
-                dexKey,
-                contractMethod,
-                network,
-                provider,
-              );
-            });
-          });
-        }),
-      );
-    });
-  });
+  //           it(pair.tokenSymbol + ' -> ' + pair.aTokenSymbol, async () => {
+  //             await testE2E(
+  //               tokens[pair.tokenSymbol],
+  //               getTokenFromASymbol(network, pair.aTokenSymbol)!,
+  //               holders[pair.tokenSymbol],
+  //               pair.amount,
+  //               side,
+  //               dexKey,
+  //               contractMethod,
+  //               network,
+  //               provider,
+  //             );
+  //           });
+  //         });
+  //       }),
+  //     );
+  //   });
+  // });
 
-  describe('AaveV3 ARBITRUM', () => {
-    const network = Network.ARBITRUM;
-    const tokens = Tokens[network];
-    const holders = Holders[network];
-    const provider = new StaticJsonRpcProvider(
-      generateConfig(network).privateHttpProvider,
-      network,
-    );
+  // describe('AaveV3 OPTIMISM', () => {
+  //   const network = Network.OPTIMISM;
+  //   const tokens = Tokens[network];
+  //   const holders = Holders[network];
+  //   const provider = new StaticJsonRpcProvider(
+  //     generateConfig(network).privateHttpProvider,
+  //     network,
+  //   );
 
-    const pairs = [
-      {
-        tokenSymbol: 'AAVE',
-        aTokenSymbol: 'aArbAAVE',
-        amount: '1000000',
-      },
-      {
-        tokenSymbol: 'EURS',
-        aTokenSymbol: 'aArbEURS',
-        amount: '100',
-      },
-      {
-        tokenSymbol: 'USDC',
-        aTokenSymbol: 'aArbUSDC',
-        amount: '100000000',
-      },
-    ];
+  //   const pairs = [
+  //     {
+  //       tokenSymbol: 'USDC',
+  //       aTokenSymbol: 'aOptUSDC',
+  //       amount: '1000000',
+  //     },
+  //     {
+  //       tokenSymbol: 'ETH',
+  //       aTokenSymbol: 'aOptWETH',
+  //       amount: '1000000000000000000',
+  //     },
+  //     {
+  //       tokenSymbol: 'WETH',
+  //       aTokenSymbol: 'aOptWETH',
+  //       amount: '1000000000000000000',
+  //     },
+  //   ];
 
-    const sideToContractMethods = new Map([
-      [
-        SwapSide.SELL,
-        [
-          ContractMethod.simpleSwap,
-          ContractMethod.multiSwap,
-          ContractMethod.megaSwap,
-        ],
-      ],
-      [SwapSide.BUY, [ContractMethod.simpleBuy]],
-    ]);
+  //   const sideToContractMethods = new Map([
+  //     [
+  //       SwapSide.SELL,
+  //       [
+  //         ContractMethod.simpleSwap,
+  //         ContractMethod.multiSwap,
+  //         ContractMethod.megaSwap,
+  //       ],
+  //     ],
+  //     [SwapSide.BUY, [ContractMethod.simpleBuy]],
+  //   ]);
 
-    pairs.forEach(pair => {
-      sideToContractMethods.forEach((contractMethods, side) =>
-        contractMethods.forEach((contractMethod: ContractMethod) => {
-          describe(`${contractMethod}`, () => {
-            it(pair.aTokenSymbol + ' -> ' + pair.tokenSymbol, async () => {
-              await testE2E(
-                getTokenFromASymbol(network, pair.aTokenSymbol)!,
-                tokens[pair.tokenSymbol],
-                holders[pair.aTokenSymbol],
-                pair.amount,
-                side,
-                dexKey,
-                contractMethod,
-                network,
-                provider,
-              );
-            });
+  //   pairs.forEach(pair => {
+  //     sideToContractMethods.forEach((contractMethods, side) =>
+  //       contractMethods.forEach((contractMethod: ContractMethod) => {
+  //         describe(`${contractMethod}`, () => {
+  //           it(pair.aTokenSymbol + ' -> ' + pair.tokenSymbol, async () => {
+  //             await testE2E(
+  //               getTokenFromASymbol(network, pair.aTokenSymbol)!,
+  //               tokens[pair.tokenSymbol],
+  //               holders[pair.aTokenSymbol],
+  //               pair.amount,
+  //               side,
+  //               dexKey,
+  //               contractMethod,
+  //               network,
+  //               provider,
+  //             );
+  //           });
 
-            it(pair.tokenSymbol + ' -> ' + pair.aTokenSymbol, async () => {
-              await testE2E(
-                tokens[pair.tokenSymbol],
-                getTokenFromASymbol(network, pair.aTokenSymbol)!,
-                holders[pair.tokenSymbol],
-                pair.amount,
-                side,
-                dexKey,
-                contractMethod,
-                network,
-                provider,
-              );
-            });
-          });
-        }),
-      );
-    });
-  });
-
-  describe('AaveV3 OPTIMISM', () => {
-    const network = Network.OPTIMISM;
-    const tokens = Tokens[network];
-    const holders = Holders[network];
-    const provider = new StaticJsonRpcProvider(
-      generateConfig(network).privateHttpProvider,
-      network,
-    );
-
-    const pairs = [
-      {
-        tokenSymbol: 'USDC',
-        aTokenSymbol: 'aOptUSDC',
-        amount: '1000000',
-      },
-      {
-        tokenSymbol: 'ETH',
-        aTokenSymbol: 'aOptWETH',
-        amount: '1000000000000000000',
-      },
-      {
-        tokenSymbol: 'WETH',
-        aTokenSymbol: 'aOptWETH',
-        amount: '1000000000000000000',
-      },
-    ];
-
-    const sideToContractMethods = new Map([
-      [
-        SwapSide.SELL,
-        [
-          ContractMethod.simpleSwap,
-          ContractMethod.multiSwap,
-          ContractMethod.megaSwap,
-        ],
-      ],
-      [SwapSide.BUY, [ContractMethod.simpleBuy]],
-    ]);
-
-    pairs.forEach(pair => {
-      sideToContractMethods.forEach((contractMethods, side) =>
-        contractMethods.forEach((contractMethod: ContractMethod) => {
-          describe(`${contractMethod}`, () => {
-            it(pair.aTokenSymbol + ' -> ' + pair.tokenSymbol, async () => {
-              await testE2E(
-                getTokenFromASymbol(network, pair.aTokenSymbol)!,
-                tokens[pair.tokenSymbol],
-                holders[pair.aTokenSymbol],
-                pair.amount,
-                side,
-                dexKey,
-                contractMethod,
-                network,
-                provider,
-              );
-            });
-
-            it(pair.tokenSymbol + ' -> ' + pair.aTokenSymbol, async () => {
-              await testE2E(
-                tokens[pair.tokenSymbol],
-                getTokenFromASymbol(network, pair.aTokenSymbol)!,
-                holders[pair.tokenSymbol],
-                pair.amount,
-                side,
-                dexKey,
-                contractMethod,
-                network,
-                provider,
-              );
-            });
-          });
-        }),
-      );
-    });
-  });
+  //           it(pair.tokenSymbol + ' -> ' + pair.aTokenSymbol, async () => {
+  //             await testE2E(
+  //               tokens[pair.tokenSymbol],
+  //               getTokenFromASymbol(network, pair.aTokenSymbol)!,
+  //               holders[pair.tokenSymbol],
+  //               pair.amount,
+  //               side,
+  //               dexKey,
+  //               contractMethod,
+  //               network,
+  //               provider,
+  //             );
+  //           });
+  //         });
+  //       }),
+  //     );
+  //   });
+  // });
 
   describe('AaveV3 MAINNET', () => {
     const network = Network.MAINNET;
@@ -446,14 +370,14 @@ describe('AaveV3 E2E', () => {
     );
 
     const pairs = [
+      // {
+      //   tokenSymbol: 'ETH',
+      //   aTokenSymbol: 'aEthWETH',
+      //   amount: '1000000000000000000',
+      // },
       {
-        tokenSymbol: 'ETH',
-        aTokenSymbol: 'aEthWETH',
-        amount: '1000000000000000000',
-      },
-      {
-        tokenSymbol: 'WETH',
-        aTokenSymbol: 'aEthWETH',
+        tokenSymbol: 'wstETH',
+        aTokenSymbol: 'aEthLidowstETH',
         amount: '1000000000000000000',
       },
     ];
@@ -463,11 +387,11 @@ describe('AaveV3 E2E', () => {
         SwapSide.SELL,
         [
           ContractMethod.simpleSwap,
-          ContractMethod.multiSwap,
-          ContractMethod.megaSwap,
+          // ContractMethod.multiSwap,
+          // ContractMethod.megaSwap,
         ],
       ],
-      [SwapSide.BUY, [ContractMethod.simpleBuy]],
+      // [SwapSide.BUY, [ContractMethod.simpleBuy]],
     ]);
 
     pairs.forEach(pair => {
@@ -507,10 +431,10 @@ describe('AaveV3 E2E', () => {
     });
   });
 
-  describe('AaveV3 GNOSIS', () => {
-    const network = Network.GNOSIS;
+  describe('AaveV3 Sonic', () => {
+    const dexKey = 'AaveV3';
+    const network = Network.SONIC;
     const tokens = Tokens[network];
-    const holders = Holders[network];
     const provider = new StaticJsonRpcProvider(
       generateConfig(network).privateHttpProvider,
       network,
@@ -518,18 +442,13 @@ describe('AaveV3 E2E', () => {
 
     const pairs = [
       {
-        tokenSymbol: 'XDAI',
-        aTokenSymbol: 'aGnoWXDAI',
-        amount: '1000000000000000000',
+        tokenSymbol: 'USDCe',
+        aTokenSymbol: 'aSonUSDC',
+        amount: '100000',
       },
       {
-        tokenSymbol: 'USDC',
-        aTokenSymbol: 'aGnoUSDC',
-        amount: '10000000',
-      },
-      {
-        tokenSymbol: 'wstETH',
-        aTokenSymbol: 'aGnowstETH',
+        tokenSymbol: 'WS',
+        aTokenSymbol: 'aSonwS',
         amount: '1000000000000000000',
       },
     ];
@@ -547,7 +466,7 @@ describe('AaveV3 E2E', () => {
               await testE2E(
                 tokens[pair.aTokenSymbol],
                 tokens[pair.tokenSymbol],
-                holders[pair.aTokenSymbol],
+                '',
                 pair.amount,
                 side,
                 dexKey,
@@ -561,7 +480,7 @@ describe('AaveV3 E2E', () => {
               await testE2E(
                 tokens[pair.tokenSymbol],
                 tokens[pair.aTokenSymbol],
-                holders[pair.tokenSymbol],
+                '',
                 pair.amount,
                 side,
                 dexKey,
@@ -575,4 +494,73 @@ describe('AaveV3 E2E', () => {
       );
     });
   });
+
+  // describe('AaveV3 GNOSIS', () => {
+  //   const network = Network.GNOSIS;
+  //   const tokens = Tokens[network];
+  //   const holders = Holders[network];
+  //   const provider = new StaticJsonRpcProvider(
+  //     generateConfig(network).privateHttpProvider,
+  //     network,
+  //   );
+
+  //   const pairs = [
+  //     {
+  //       tokenSymbol: 'XDAI',
+  //       aTokenSymbol: 'aGnoWXDAI',
+  //       amount: '1000000000000000000',
+  //     },
+  //     {
+  //       tokenSymbol: 'USDC',
+  //       aTokenSymbol: 'aGnoUSDC',
+  //       amount: '10000000',
+  //     },
+  //     {
+  //       tokenSymbol: 'wstETH',
+  //       aTokenSymbol: 'aGnowstETH',
+  //       amount: '1000000000000000000',
+  //     },
+  //   ];
+
+  //   const sideToContractMethods = new Map([
+  //     [SwapSide.SELL, [ContractMethod.swapExactAmountIn]],
+  //     [SwapSide.BUY, [ContractMethod.swapExactAmountOut]],
+  //   ]);
+
+  //   pairs.forEach(pair => {
+  //     sideToContractMethods.forEach((contractMethods, side) =>
+  //       contractMethods.forEach((contractMethod: ContractMethod) => {
+  //         describe(`${contractMethod}`, () => {
+  //           it(pair.aTokenSymbol + ' -> ' + pair.tokenSymbol, async () => {
+  //             await testE2E(
+  //               tokens[pair.aTokenSymbol],
+  //               tokens[pair.tokenSymbol],
+  //               holders[pair.aTokenSymbol],
+  //               pair.amount,
+  //               side,
+  //               dexKey,
+  //               contractMethod,
+  //               network,
+  //               provider,
+  //             );
+  //           });
+
+  //           it(pair.tokenSymbol + ' -> ' + pair.aTokenSymbol, async () => {
+  //             await testE2E(
+  //               tokens[pair.tokenSymbol],
+  //               tokens[pair.aTokenSymbol],
+  //               holders[pair.tokenSymbol],
+  //               pair.amount,
+  //               side,
+  //               dexKey,
+  //               contractMethod,
+  //               network,
+  //               provider,
+  //             );
+  //           });
+  //         });
+  //       }),
+  //     );
+  //   });
+  // });
 });

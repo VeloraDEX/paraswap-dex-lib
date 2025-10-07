@@ -405,8 +405,8 @@ describe('WooFiV2', function () {
     );
   });
 
-  describe('Fantom', () => {
-    const network = Network.FANTOM;
+  describe('Sonic', () => {
+    const network = Network.SONIC;
     const dexHelper = new DummyDexHelper(network);
     const initProps: { dex: WooFiV2; blockNumber: number } = {
       dex: new WooFiV2(network, dexKey, dexHelper),
@@ -418,10 +418,10 @@ describe('WooFiV2', function () {
       await initProps.dex.initializePricing(initProps.blockNumber);
     });
 
-    const baseATokenSymbol = 'WFTM';
-    const quoteTokenSymbol = 'USDC';
-    const baseBTokenSymbol = 'ETH';
-    const untradableSymbol = 'POPS';
+    const baseATokenSymbol = 'WS';
+    const quoteTokenSymbol = 'USDCe';
+    const baseBTokenSymbol = 'WETH';
+    const untradableSymbol = 'BOO';
 
     runTestsForChain(
       dexHelper,

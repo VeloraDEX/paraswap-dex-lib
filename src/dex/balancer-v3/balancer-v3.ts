@@ -28,6 +28,7 @@ import balancerBatchRouterAbi from '../../abi/balancer-v3/batch-router.json';
 import { getGasCost } from './getGasCost';
 import { Block } from '@ethersproject/abstract-provider';
 import { BalancerEventHook } from './hooks/balancer-hook-event-subscriber';
+import { removeCircularStepPairs } from './utils';
 
 const MAX_UINT256 =
   '115792089237316195423570985008687907853269984665640564039457584007913129639935';
@@ -275,6 +276,7 @@ export class BalancerV3 extends SimpleExchange implements IDex<BalancerV3Data> {
             tokenInInfo,
             tokenOutInfo,
             swapKind,
+            block.timestamp,
           );
 
           let unit = 0n;
@@ -296,7 +298,7 @@ export class BalancerV3 extends SimpleExchange implements IDex<BalancerV3Data> {
             exchange: this.dexKey,
             gasCost: getGasCost(steps),
             poolAddresses: [pool.poolAddress],
-            poolIdentifier: `${this.dexKey}_${pool.poolAddress}`,
+            poolIdentifiers: [pool.poolAddress],
           };
 
           for (let j = 0; j < amounts.length; j++) {
@@ -420,16 +422,21 @@ export class BalancerV3 extends SimpleExchange implements IDex<BalancerV3Data> {
     data: BalancerV3Data,
     side: SwapSide,
   ): DexExchangeParam {
+    const steps = removeCircularStepPairs(data.steps);
+    if (steps.length === 0) {
+      this.logger.error(`${this.dexKey}: getDexParam: no steps`);
+    }
+
     if (side === SwapSide.SELL) {
-      return this.getExactInParam(srcToken, destToken, srcAmount, data);
+      return this.getExactInParam(srcToken, destToken, srcAmount, {
+        ...data,
+        steps,
+      });
     } else {
-      return this.getExactOutParam(
-        srcToken,
-        destToken,
-        srcAmount,
-        destAmount,
-        data,
-      );
+      return this.getExactOutParam(srcToken, destToken, srcAmount, destAmount, {
+        ...data,
+        steps,
+      });
     }
   }
 
@@ -591,6 +598,7 @@ export class BalancerV3 extends SimpleExchange implements IDex<BalancerV3Data> {
   // getTopPoolsForToken. It is optional for a DEX
   // to implement this
   async updatePoolState(): Promise<void> {
+    this.eventPools.setHooksConfigMap(this.eventHooks.hooksConfigMap);
     await this.eventPools.updateStatePools();
   }
 
