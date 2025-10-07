@@ -1,11 +1,11 @@
-import { AbiCoder, Interface } from '@ethersproject/abi';
 import { DeepReadonly } from 'ts-essentials';
 import { Log, Logger } from '../../types';
 import { catchParseLogError } from '../../utils';
 import { StatefulEventSubscriber } from '../../stateful-event-subscriber';
 import { IDexHelper } from '../../dex-helper/idex-helper';
 import { PoolState } from './types';
-import curveABI from '../../abi/stabull/stabull-curve.json';
+import { erc20Iface } from '../../lib/tokens/utils';
+import { uint256ToBigInt } from '../../lib/decoders';
 
 export class StabullEventPool extends StatefulEventSubscriber<PoolState> {
   handlers: {
@@ -18,28 +18,19 @@ export class StabullEventPool extends StatefulEventSubscriber<PoolState> {
 
   logDecoder: (log: Log) => any;
 
-  coder = new AbiCoder();
-
-  addressesSubscribed: string[];
-  poolAddress: string;
-
   constructor(
     readonly parentName: string,
     protected network: number,
     protected dexHelper: IDexHelper,
-    protected poolAddress_: string,
+    readonly poolAddress: string,
     protected addressesSubscribed_: string[],
     logger: Logger,
-    protected stabullIface = new Interface(curveABI),
   ) {
-    super(parentName, `StabullPool-${poolAddress_}`, dexHelper, logger);
+    super(parentName, poolAddress.toLowerCase(), dexHelper, logger);
 
-    this.logDecoder = (log: Log) => this.stabullIface.parseLog(log);
+    this.logDecoder = (log: Log) => erc20Iface.parseLog(log);
     this.addressesSubscribed = addressesSubscribed_;
-    this.poolAddress = poolAddress_.toLowerCase();
-
-    // Add handlers
-    this.handlers['Transfer'] = this.handleTransfer.bind(this);
+    this.poolAddress = poolAddress.toLowerCase();
   }
 
   /**
@@ -80,28 +71,29 @@ export class StabullEventPool extends StatefulEventSubscriber<PoolState> {
     let calldata = [
       {
         target: this.addressesSubscribed[0],
-        callData: this.stabullIface.encodeFunctionData('balanceOf', [
+        callData: erc20Iface.encodeFunctionData('balanceOf', [
           this.poolAddress,
         ]),
+        decodeFunction: uint256ToBigInt,
       },
       {
         target: this.addressesSubscribed[1],
-        callData: this.stabullIface.encodeFunctionData('balanceOf', [
+        callData: erc20Iface.encodeFunctionData('balanceOf', [
           this.poolAddress,
         ]),
+        decodeFunction: uint256ToBigInt,
       },
     ];
 
-    const data: { returnData: any[] } =
-      await this.dexHelper.multiContract.methods
-        .aggregate(calldata)
-        .call({}, blockNumber);
+    const data = await this.dexHelper.multiWrapper.tryAggregate(
+      true,
+      calldata,
+      blockNumber,
+    );
 
-    const decodedData0 = this.coder.decode(['uint256'], data.returnData[0]);
-    const decodedData1 = this.coder.decode(['uint256'], data.returnData[1]);
     return {
-      reserves0: decodedData0.toString(),
-      reserves1: decodedData1.toString(),
+      reserves0: data[0].success ? data[0].returnData : 0n,
+      reserves1: data[1].success ? data[1].returnData : 0n,
     };
   }
 
@@ -118,12 +110,11 @@ export class StabullEventPool extends StatefulEventSubscriber<PoolState> {
     state: DeepReadonly<PoolState>,
     log: Readonly<Log>,
   ): DeepReadonly<PoolState> | null {
-    const poolAddress = this.poolAddress.toLowerCase();
     const from = event.args.from.toLowerCase();
     const to = event.args.to.toLowerCase();
 
     // Check if pool is involved in the transfer
-    if (from !== poolAddress && to !== poolAddress) {
+    if (from !== this.poolAddress && to !== this.poolAddress) {
       return null;
     }
 
@@ -131,22 +122,16 @@ export class StabullEventPool extends StatefulEventSubscriber<PoolState> {
     const eventTokenAddress = log.address.toLowerCase();
     const isToken0 =
       eventTokenAddress === this.addressesSubscribed[0].toLowerCase();
-    const isToken1 =
-      eventTokenAddress === this.addressesSubscribed[1].toLowerCase();
 
-    if (!isToken0 && !isToken1) {
-      return null;
-    }
-
-    const value = event.args.value.toString();
+    const value: bigint = event.args.value.toBigInt();
     const reserveKey = isToken0 ? 'reserves0' : 'reserves1';
     const currentReserve = state[reserveKey];
 
     // Pool is sending tokens (decrease) or receiving tokens (increase)
-    const isFromPool = from === poolAddress;
+    const isFromPool = from === this.poolAddress;
     const newReserve = isFromPool
-      ? (BigInt(currentReserve) - BigInt(value)).toString()
-      : (BigInt(currentReserve) + BigInt(value)).toString();
+      ? currentReserve - value
+      : currentReserve + value;
 
     return {
       ...state,

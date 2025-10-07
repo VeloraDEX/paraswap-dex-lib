@@ -1,4 +1,3 @@
-import { AsyncOrSync } from 'ts-essentials';
 import {
   Token,
   Address,
@@ -8,26 +7,29 @@ import {
   PoolLiquidity,
   Logger,
   DexExchangeParam,
+  ConnectorToken,
 } from '../../types';
 import { SwapSide, Network } from '../../constants';
 import * as CALLDATA_GAS_COST from '../../calldata-gas-cost';
 import { getDexKeysWithNetwork } from '../../utils';
 import { IDex } from '../../dex/idex';
 import { IDexHelper } from '../../dex-helper/idex-helper';
-import { PoolConfig, PoolsConfig, StabullData } from './types';
-import { SimpleExchange } from '../simple-exchange';
-import { Adapters, StabullConfig } from './config';
 import { StabullEventPool } from './stabull-pool';
+import { PoolsConfig, StabullData } from './types';
+import {
+  getLocalDeadlineAsFriendlyPlaceholder,
+  SimpleExchange,
+} from '../simple-exchange';
+import { StabullConfig } from './config';
 import curveABI from '../../abi/stabull/stabull-curve.json';
 import routerABI from '../../abi/stabull/stabull-router.json';
-import { AbiItem } from 'web3-utils';
 import { ethers } from 'ethers';
+import { uint256ToBigInt } from '../../lib/decoders';
+import { BI_POWS } from '../../bigint-constants';
 
 export class Stabull extends SimpleExchange implements IDex<StabullData> {
-  private pools: any = {};
+  private pools: Record<string, StabullEventPool> = {};
   private poolsConfig: PoolsConfig;
-
-  // protected eventPools: StabullEventPool;
 
   readonly hasConstantPriceLargeAmounts = false;
   readonly needWrapNative = true;
@@ -43,7 +45,10 @@ export class Stabull extends SimpleExchange implements IDex<StabullData> {
     readonly network: Network,
     readonly dexKey: string,
     readonly dexHelper: IDexHelper,
-    protected adapters = Adapters[network] || {},
+    protected poolIface = new ethers.utils.Interface(curveABI),
+    protected routerIface = new ethers.utils.Interface(routerABI),
+    protected routerAddress = StabullConfig.Stabull[network].router,
+    protected quoteCurrency = StabullConfig.Stabull[network].quoteCurrency,
   ) {
     super(dexHelper, dexKey);
     this.logger = dexHelper.getLogger(dexKey);
@@ -52,7 +57,7 @@ export class Stabull extends SimpleExchange implements IDex<StabullData> {
     //Iterate over pools and Initialize event pools
     Object.keys(this.poolsConfig).forEach(poolAddress => {
       const pool = this.poolsConfig[poolAddress];
-      const tokens = pool.tokens;
+      const tokenAddresses = pool.tokens.map(t => t.address);
 
       // Initialize event pools
       this.pools[poolAddress] = new StabullEventPool(
@@ -60,7 +65,7 @@ export class Stabull extends SimpleExchange implements IDex<StabullData> {
         network,
         dexHelper,
         poolAddress,
-        tokens,
+        tokenAddresses,
         this.logger,
       );
     });
@@ -70,7 +75,7 @@ export class Stabull extends SimpleExchange implements IDex<StabullData> {
   // Returns the list of contract adapters (name and index)
   // for a buy/sell. Return null if there are no adapters.
   getAdapters(side: SwapSide): { name: string; index: number }[] | null {
-    return this.adapters[side] ? this.adapters[side] : null;
+    return null;
   }
 
   // Returns list of pool identifiers that can be used
@@ -83,60 +88,16 @@ export class Stabull extends SimpleExchange implements IDex<StabullData> {
     side: SwapSide,
     blockNumber: number,
   ): Promise<string[]> {
-    // Try to find a direct pool first
+    const pool = Object.entries(this.poolsConfig).find(([, pool]) => {
+      const tokenAddresses = pool.tokens.map(t => t.address.toLowerCase());
 
-    if (!srcToken || !destToken) {
-      this.logger.error(
-        `Missing tokens: srcToken=${!!srcToken}, destToken=${!!destToken}`,
+      return (
+        tokenAddresses.includes(srcToken.address.toLowerCase()) &&
+        tokenAddresses.includes(destToken.address.toLowerCase())
       );
-      return [];
-    }
+    })?.[0];
 
-    // Add address null checks
-    if (!srcToken.address || !destToken.address) {
-      this.logger.error(
-        `Missing token addresses: srcToken.address=${!!srcToken.address}, destToken.address=${!!destToken.address}`,
-      );
-      return [];
-    }
-    const directPool = this.findPoolForTokens(
-      srcToken.address,
-      destToken.address,
-    );
-
-    if (directPool) {
-      // Direct swap is possible
-      return [`${this.dexKey}_${directPool.toLowerCase()}_direct`];
-    }
-
-    // If no direct pool exists, try to find a path through the quote currency (USDC)
-    const stabullConfig = StabullConfig.Stabull[this.network];
-    const quoteCurrency = stabullConfig.quoteCurrency;
-
-    // Find pools for srcToken -> USDC and USDC -> destToken
-    const srcToQuotePool = this.findPoolForTokens(
-      srcToken.address,
-      quoteCurrency,
-    );
-
-    const quoteToDestPool = this.findPoolForTokens(
-      quoteCurrency,
-      destToken.address,
-    );
-
-    if (srcToQuotePool && quoteToDestPool) {
-      // Multi-hop swap is possible
-      return [
-        `${
-          this.dexKey
-        }_${srcToQuotePool.toLowerCase()}_${quoteToDestPool.toLowerCase()}_multihop`,
-      ];
-    }
-
-    this.logger.debug(
-      `No path found for ${srcToken.address}/${destToken.address}`,
-    );
-    return [];
+    return pool ? [`${this.dexKey}_${pool}`.toLowerCase()] : [];
   }
 
   // Returns pool prices for amounts.
@@ -151,198 +112,63 @@ export class Stabull extends SimpleExchange implements IDex<StabullData> {
     blockNumber: number,
     limitPools?: string[],
   ): Promise<null | ExchangePrices<StabullData>> {
-    const pools = await this.getPoolIdentifiers(
+    const poolIdentifiers = await this.getPoolIdentifiers(
       srcToken,
       destToken,
       side,
       blockNumber,
     );
 
-    if (pools.length === 0) {
+    if (poolIdentifiers.length === 0) return null;
+
+    const poolIdentifier = poolIdentifiers[0];
+    const poolAddress = poolIdentifier.split('_')[1];
+
+    if (!poolAddress) {
+      this.logger.debug(`Invalid pool identifier: ${poolIdentifier}`);
       return null;
     }
 
-    const poolIdentifier = pools[0];
-    const poolParts = poolIdentifier.split('_');
-    const isMultiHop = poolParts.length === 4 && poolParts[3] === 'multihop';
+    const isSell = side === SwapSide.SELL;
+    const methodName = isSell ? 'viewOriginSwap' : 'viewTargetSwap';
 
     try {
-      if (!isMultiHop) {
-        // Direct swap case
-        const poolAddress = poolParts[1];
-        const methodName =
-          side === SwapSide.SELL ? 'viewOriginSwap' : 'viewTargetSwap';
+      const unitAmount =
+        BI_POWS[isSell ? srcToken.decimals : destToken.decimals];
+      const queryAmounts = [unitAmount, ...amounts];
 
-        // Create contract interface once outside the loop
-        const poolContract = new this.dexHelper.web3Provider.eth.Contract(
-          curveABI as unknown as AbiItem,
-          poolAddress,
-        );
+      const callData = queryAmounts.map(amount => ({
+        target: poolAddress,
+        callData: this.poolIface.encodeFunctionData(methodName, [
+          srcToken.address,
+          destToken.address,
+          amount.toString(),
+        ]),
+        decodeFunction: uint256ToBigInt,
+      }));
 
-        // Prepare all call entries at once
-        const callData = amounts.map(amount => ({
-          target: poolAddress,
-          callData: poolContract.methods[methodName](
-            srcToken.address,
-            destToken.address,
-            amount.toString(),
-          ).encodeABI(),
-        }));
+      const quotes = await this.dexHelper.multiWrapper.tryAggregate(
+        false,
+        callData,
+        blockNumber,
+        this.dexHelper.multiWrapper.defaultBatchSize,
+        false,
+      );
 
-        // Execute multicall in a single transaction
-        const { returnData } = await this.dexHelper.multiContract.methods
-          .aggregate(callData)
-          .call();
+      const unit = quotes[0].success ? quotes[0].returnData : 0n;
+      const prices = quotes.slice(1).map(q => (q.success ? q.returnData : 0n));
 
-        // Process all results at once
-        const quotes = returnData.map((data: any) =>
-          this.dexHelper.web3Provider.eth.abi
-            .decodeParameter('uint256', data)
-            .toString(),
-        );
-
-        return [
-          {
-            prices: quotes.map((quote: any) => BigInt(quote.toString())),
-            unit: amounts[0],
-            data: {
-              exchange: poolAddress,
-              poolAddress: poolAddress,
-              factory: '', // Replace with actual factory address if available
-              secondPoolAddress: '',
-              quoteCurrency: '',
-              isMultihop: false,
-            },
-            exchange: this.dexKey,
-            gasCost: 150000, // Estimated gas cost for a swap
-            poolAddresses: [poolAddress],
-          },
-        ];
-      } else {
-        // Multi-hop swap case
-        const stabullConfig = StabullConfig.Stabull[this.network];
-        const quoteCurrency = stabullConfig.quoteCurrency;
-
-        const srcToQuotePoolAddress = poolParts[1];
-        const quoteToDestPoolAddress = poolParts[2];
-
-        const srcToQuoteContract = new this.dexHelper.web3Provider.eth.Contract(
-          curveABI as unknown as AbiItem,
-          srcToQuotePoolAddress,
-        );
-
-        const quoteToDestContract =
-          new this.dexHelper.web3Provider.eth.Contract(
-            curveABI as unknown as AbiItem,
-            quoteToDestPoolAddress,
-          );
-
-        let quotes;
-
-        if (side === SwapSide.SELL) {
-          // First multicall: srcToken -> USDC
-          const firstHopCalls = amounts.map(amount => ({
-            target: srcToQuotePoolAddress,
-            callData: srcToQuoteContract.methods
-              .viewOriginSwap(
-                srcToken.address,
-                quoteCurrency,
-                amount.toString(),
-              )
-              .encodeABI(),
-          }));
-
-          const { returnData: firstHopData } =
-            await this.dexHelper.multiContract.methods
-              .aggregate(firstHopCalls)
-              .call();
-
-          const quoteAmounts = firstHopData.map((data: string) =>
-            this.dexHelper.web3Provider.eth.abi
-              .decodeParameter('uint256', data)
-              .toString(),
-          );
-
-          // Second multicall: USDC -> destToken
-          const secondHopCalls = quoteAmounts.map((quoteAmount: any) => ({
-            target: quoteToDestPoolAddress,
-            callData: quoteToDestContract.methods
-              .viewOriginSwap(quoteCurrency, destToken.address, quoteAmount)
-              .encodeABI(),
-          }));
-
-          const { returnData: secondHopData } =
-            await this.dexHelper.multiContract.methods
-              .aggregate(secondHopCalls)
-              .call();
-
-          quotes = secondHopData.map((data: any) =>
-            this.dexHelper.web3Provider.eth.abi
-              .decodeParameter('uint256', data)
-              .toString(),
-          );
-        } else {
-          // BUY side - First multicall: USDC -> destToken (reverse calculation)
-          const firstHopCalls = amounts.map(amount => ({
-            target: quoteToDestPoolAddress,
-            callData: quoteToDestContract.methods
-              .viewTargetSwap(
-                quoteCurrency,
-                destToken.address,
-                amount.toString(),
-              )
-              .encodeABI(),
-          }));
-
-          const { returnData: firstHopData } =
-            await this.dexHelper.multiContract.methods
-              .aggregate(firstHopCalls)
-              .call();
-
-          const quoteAmounts = firstHopData.map((data: any) =>
-            this.dexHelper.web3Provider.eth.abi
-              .decodeParameter('uint256', data)
-              .toString(),
-          );
-
-          // Second multicall: srcToken -> USDC (reverse calculation)
-          const secondHopCalls = quoteAmounts.map((quoteAmount: any) => ({
-            target: srcToQuotePoolAddress,
-            callData: srcToQuoteContract.methods
-              .viewTargetSwap(srcToken.address, quoteCurrency, quoteAmount)
-              .encodeABI(),
-          }));
-
-          const { returnData: secondHopData } =
-            await this.dexHelper.multiContract.methods
-              .aggregate(secondHopCalls)
-              .call();
-
-          quotes = secondHopData.map((data: string) =>
-            this.dexHelper.web3Provider.eth.abi
-              .decodeParameter('uint256', data)
-              .toString(),
-          );
-        }
-
-        return [
-          {
-            prices: quotes.map((quote: any) => BigInt(quote.toString())),
-            unit: amounts[0],
-            data: {
-              exchange: srcToQuotePoolAddress, // Using the first pool as the exchange
-              poolAddress: srcToQuotePoolAddress,
-              secondPoolAddress: quoteToDestPoolAddress,
-              factory: '', // Replace with actual factory address if available
-              quoteCurrency: quoteCurrency,
-              isMultihop: true,
-            },
-            exchange: this.dexKey,
-            gasCost: 300000, // Estimated gas cost for a multi-hop swap (higher than single swap)
-            poolAddresses: [srcToQuotePoolAddress, quoteToDestPoolAddress],
-          },
-        ];
-      }
+      return [
+        {
+          unit,
+          prices,
+          data: { poolAddress },
+          exchange: this.dexKey,
+          gasCost: 150000,
+          poolAddresses: [poolAddress],
+          poolIdentifiers: [poolIdentifier],
+        },
+      ];
     } catch (e) {
       this.logger.error('Failed to get prices', e);
       return null;
@@ -351,8 +177,13 @@ export class Stabull extends SimpleExchange implements IDex<StabullData> {
 
   // Returns estimated gas cost of calldata for this DEX in multiSwap
   getCalldataGasCost(poolPrices: PoolPrices<StabullData>): number | number[] {
-    // TODO: update if there is any payload in getAdapterParam
-    return CALLDATA_GAS_COST.DEX_NO_PAYLOAD;
+    return (
+      CALLDATA_GAS_COST.DEX_OVERHEAD +
+      CALLDATA_GAS_COST.FUNCTION_SELECTOR +
+      CALLDATA_GAS_COST.ADDRESS * 2 +
+      CALLDATA_GAS_COST.AMOUNT * 2 +
+      CALLDATA_GAS_COST.TIMESTAMP
+    );
   }
 
   // Encode params required by the exchange adapter
@@ -368,15 +199,9 @@ export class Stabull extends SimpleExchange implements IDex<StabullData> {
     data: StabullData,
     side: SwapSide,
   ): AdapterExchangeParam => {
-    // Use ethers.utils.defaultAbiCoder instead of this.abiCoder
-    const payload = ethers.utils.defaultAbiCoder.encode(
-      ['address', 'uint256', 'uint256'],
-      [data.poolAddress, side === SwapSide.SELL ? srcAmount : destAmount, 0],
-    );
-
     return {
       targetExchange: StabullConfig.Stabull[this.network].router,
-      payload,
+      payload: '0x',
       networkFee: '0',
     };
   };
@@ -387,7 +212,14 @@ export class Stabull extends SimpleExchange implements IDex<StabullData> {
   // getTopPoolsForToken. It is optional for a DEX
   // to implement this
   async updatePoolState(): Promise<void> {
-    // TODO: complete me!
+    const blockNumber = await this.dexHelper.web3Provider.eth.getBlockNumber();
+
+    await Promise.all(
+      Object.values(this.pools).map(async poolInstance => {
+        const state = await poolInstance.generateState(blockNumber);
+        poolInstance.setState(state, blockNumber);
+      }),
+    );
   }
 
   // Returns list of top pools based on liquidity. Max
@@ -396,114 +228,74 @@ export class Stabull extends SimpleExchange implements IDex<StabullData> {
     tokenAddress: Address,
     limit: number,
   ): Promise<PoolLiquidity[]> {
-    // For now, we'll return a constant value for any pools that contain this token
-    const relevantPools: PoolLiquidity[] = [];
+    const lowerToken = tokenAddress.toLowerCase();
+    const poolsWithToken = [];
 
-    // Convert the token address to lowercase for consistent comparison
-    const lowerTokenAddress = tokenAddress.toLowerCase();
-
-    // Loop through our configured pools to find ones containing the requested token
-    Object.keys(this.poolsConfig).forEach(poolAddress => {
-      const pool = this.pools[poolAddress];
-
-      // Check if the pool contains the token
-      const hasToken = pool.addressesSubscribed
-        .map((token: any) => token.toLowerCase())
-        .includes(lowerTokenAddress);
-
-      if (hasToken) {
-        // Get the other tokens in the pool as connector tokens
-        const connectorTokens = pool.addressesSubscribed
-          .filter((token: any) => token.toLowerCase() !== lowerTokenAddress)
-          .map((tokenAddress: any) => this.getTokenFromAddress(tokenAddress));
-        const state = pool.getState();
-        relevantPools.push({
-          exchange: this.dexKey,
-          address: poolAddress,
-          connectorTokens: connectorTokens,
-          liquidityUSD: state.reserves1,
-        });
-
-        // Break if we've reached the limit
-        if (relevantPools.length >= limit) {
-          return relevantPools;
-        }
-      }
-    });
-
-    this.logger.info(
-      `Found ${relevantPools.length} pools for token ${tokenAddress}`,
-    );
-    return relevantPools;
-  }
-
-  // This is optional function in case if your implementation has acquired any resources
-  // you need to release for graceful shutdown. For example, it may be any interval timer
-  releaseResources(): AsyncOrSync<void> {
-    // TODO: complete me!
-  }
-
-  // ====================================New functions=============================================
-
-  /**
-   * Loads pool information from a config file
-   * @param blockNumber Not needed when using config, but kept for interface consistency
-   * @returns Array of pool information objects
-   */
-  async fetchPoolsFromFactory(blockNumber: number): Promise<any[]> {
-    try {
-      // Extract the pools configuration for the current network
-      const networkConfig = StabullConfig.Stabull[this.network];
-      if (!networkConfig) {
-        this.logger.error(
-          `No configuration found for network: ${this.network}`,
-        );
-        return [];
-      }
-
-      // Map the pools configuration to the desired format
-      const pools = Object.values(networkConfig.pools).map(poolConfig => {
-        return {
-          address: poolConfig.pool,
-          tokens: poolConfig.tokens,
-          // Add any other relevant pool information from your config
-        };
-      });
-
-      this.logger.info(`Loaded ${pools.length} pools from config`);
-      return pools;
-    } catch (error) {
-      this.logger.error(`Error loading pools from config: ${error}`);
-      return [];
-    }
-  }
-
-  /**
-   * Finds the pool address for the given source and destination token addresses.
-   *
-   * @param srcTokenAddress - The address of the source token.
-   * @param destTokenAddress - The address of the destination token.
-   * @returns The pool address if a pool containing both tokens is found, otherwise null.
-   */
-  findPoolForTokens(
-    srcTokenAddress: string,
-    destTokenAddress: string,
-  ): string | null {
-    const lowerSrcTokenAddress = srcTokenAddress.toLowerCase();
-    const lowerDestTokenAddress = destTokenAddress.toLowerCase();
-
-    const foundPoolAddress = Object.keys(this.poolsConfig).find(poolAddress => {
-      const pool = this.poolsConfig[poolAddress];
-      const lowercaseTokens = pool.tokens.map(token => token.toLowerCase());
-
-      // Check if both tokens are in the pool
-      return (
-        lowercaseTokens.includes(lowerSrcTokenAddress) &&
-        lowercaseTokens.includes(lowerDestTokenAddress)
+    for (const [poolAddress, pool] of Object.entries(this.pools)) {
+      const tokenIndex = pool.addressesSubscribed.findIndex(
+        t => t.toLowerCase() === lowerToken,
       );
-    });
+      if (tokenIndex === -1) continue;
 
-    return foundPoolAddress || null;
+      poolsWithToken.push({
+        pool,
+        tokenIndex,
+        connectorIndex: 1 - tokenIndex,
+        poolConfig: this.poolsConfig[poolAddress],
+      });
+    }
+
+    if (poolsWithToken.length === 0) return [];
+
+    const tokenToAmount = new Map<string, bigint>();
+
+    for (const { pool, tokenIndex, connectorIndex } of poolsWithToken) {
+      const state = pool.getStaleState();
+      if (!state) continue;
+
+      const token = pool.addressesSubscribed[tokenIndex];
+      const connector = pool.addressesSubscribed[connectorIndex];
+
+      tokenToAmount.set(
+        token,
+        state[tokenIndex === 0 ? 'reserves0' : 'reserves1'] ?? 0n,
+      );
+      tokenToAmount.set(
+        connector,
+        state[connectorIndex === 0 ? 'reserves0' : 'reserves1'] ?? 0n,
+      );
+    }
+
+    const tokenAmountsArray = Array.from(tokenToAmount.entries());
+    const usdAmounts = await this.dexHelper.getUsdTokenAmounts(
+      tokenAmountsArray,
+    );
+    const usdMap = new Map(
+      tokenAmountsArray.map((t, i) => [t[0], usdAmounts[i]]),
+    );
+
+    const relevantPools = poolsWithToken.map(
+      ({ pool, tokenIndex, connectorIndex, poolConfig }) => {
+        const token = pool.addressesSubscribed[tokenIndex];
+        const connector = pool.addressesSubscribed[connectorIndex];
+
+        return {
+          exchange: this.dexKey,
+          address: pool.poolAddress,
+          connectorTokens: [
+            {
+              address: connector,
+              decimals: poolConfig.tokens[connectorIndex]?.decimals ?? 18,
+              liquidityUSD: usdMap.get(connector) ?? 0,
+            },
+          ],
+          liquidityUSD: usdMap.get(token) ?? 0,
+        };
+      },
+    );
+
+    relevantPools.sort((a, b) => b.liquidityUSD - a.liquidityUSD);
+    return relevantPools.slice(0, limit);
   }
 
   /**
@@ -534,243 +326,43 @@ export class Stabull extends SimpleExchange implements IDex<StabullData> {
     },
     executorAddress: string,
   ): Promise<DexExchangeParam> {
-    // Get Stabull configuration for this network
-    const stabullConfig = StabullConfig.Stabull[this.network];
-    const routerAddress = stabullConfig.router;
-    const quoteCurrency = stabullConfig.quoteCurrency;
-
-    // Set a reasonable deadline
-    const deadline = Math.floor(Date.now() / 1000) + 300; // 5 minutes
-
     // For SELL operations, always use the router for swaps
     if (side === SwapSide.SELL) {
-      const routerInterface = new ethers.utils.Interface(routerABI);
-
-      const swapData = routerInterface.encodeFunctionData('originSwap', [
-        quoteCurrency, // quoteCurrency
+      const swapData = this.routerIface.encodeFunctionData('originSwap', [
+        this.quoteCurrency, // quoteCurrency
         srcToken, // origin
         destToken, // target
         srcAmount, // originAmount
         '1', // minTargetAmount - set to minimum to ensure execution
-        deadline, // deadline
+        getLocalDeadlineAsFriendlyPlaceholder(), // deadline
       ]);
 
       return {
         needWrapNative: this.needWrapNative,
         dexFuncHasRecipient: false,
         exchangeData: swapData,
-        targetExchange: routerAddress,
-        spender: routerAddress,
+        targetExchange: this.routerAddress,
+        spender: this.routerAddress,
         returnAmountPos: 0,
       };
     }
 
-    if (data.isMultihop) {
-      // Multi-hop BUY operation (srcToken -> USDC -> destToken)
-
-      // Use the viewTargetSwap function to calculate the amount of srcToken needed
-      const routerInterface = new ethers.utils.Interface(routerABI);
-
-      // Calculate the amount of srcToken needed to get the desired destAmount via USDC
-      const srcAmountNeededResult = await this.dexHelper.web3Provider.eth.call({
-        to: routerAddress,
-        data: routerInterface.encodeFunctionData('viewTargetSwap', [
-          quoteCurrency, // _quoteCurrency
-          srcToken, // _origin
-          destToken, // _target
-          destAmount, // _targetAmount
-        ]),
-      });
-
-      // Parse the result to get the srcToken amount needed
-      const srcAmountNeeded = routerInterface
-        .decodeFunctionResult('viewTargetSwap', srcAmountNeededResult)[0]
-        .toString();
-
-      // Using originSwap on the router for multi-hop BUY
-      const swapData = routerInterface.encodeFunctionData('originSwap', [
-        quoteCurrency, // quoteCurrency (required by the router to identify the path)
-        srcToken, // origin
-        destToken, // target
-        srcAmountNeeded, // originAmount (calculated amount needed)
-        destAmount, // minTargetAmount (ensure we get at least this amount)
-        deadline, // deadline
-      ]);
-
-      // For multi-hop BUY operations, we'll use the router
-      // with our calculated srcAmount to ensure we get the desired destAmount
-      return {
-        needWrapNative: this.needWrapNative,
-        dexFuncHasRecipient: false,
-        exchangeData: swapData,
-        targetExchange: routerAddress, // Use router for multi-hop coordination
-        spender: routerAddress, // Router needs approval for srcToken
-        returnAmountPos: 0,
-      };
-    } else {
-      // Direct swap case for BUY operations (one token must be quote currency)
-      const poolAddress = data.poolAddress || data.exchange;
-
-      if (!poolAddress) {
-        this.logger.error(
-          `Missing pool address for BUY operation with tokens: ${srcToken} -> ${destToken}`,
-        );
-        throw new Error('Pool address is required for BUY operations');
-      }
-
-      // Verify that one of the tokens is the quote currency
-      if (
-        srcToken.toLowerCase() !== quoteCurrency.toLowerCase() &&
-        destToken.toLowerCase() !== quoteCurrency.toLowerCase()
-      ) {
-        this.logger.error(
-          `For direct BUY operations, one token must be the quote currency (${quoteCurrency})`,
-        );
-        throw new Error(
-          `Direct target swaps require one token to be ${quoteCurrency}`,
-        );
-      }
-
-      const poolInterface = new ethers.utils.Interface(curveABI);
-
-      const swapData = poolInterface.encodeFunctionData('targetSwap', [
-        srcToken, // origin
-        destToken, // target
-        ethers.constants.MaxUint256.toString(), // maxOriginAmount
-        destAmount, // targetAmount
-        deadline, // deadline
-      ]);
-
-      return {
-        needWrapNative: this.needWrapNative,
-        dexFuncHasRecipient: false,
-        exchangeData: swapData,
-        targetExchange: poolAddress,
-        spender: poolAddress,
-        returnAmountPos: 0,
-      };
-    }
-  }
-
-  /**
-   * Determines if two tokens share a curve based on the pool configuration.
-   *
-   * @param token1 - The address of the first token.
-   * @param token2 - The address of the second token.
-   * @param poolConfig - The configuration of the pool.
-   * @returns True if both tokens are in the pool, otherwise false.
-   */
-  tokensShareCurve(
-    token1: string,
-    token2: string,
-    poolConfig: PoolConfig,
-  ): boolean {
-    // Convert tokens to lowercase for comparison
-    const lowerCaseToken1 = token1.toLowerCase();
-    const lowerCaseToken2 = token2.toLowerCase();
-    const lowerCasePoolTokens = poolConfig.tokens.map(token =>
-      token.toLowerCase(),
-    );
-
-    // Check if both tokens are in the tokens array of this pool
-    const token1Included = lowerCasePoolTokens.includes(lowerCaseToken1);
-    const token2Included = lowerCasePoolTokens.includes(lowerCaseToken2);
-
-    return token1Included && token2Included;
-  }
-
-  /**
-   * Finds the appropriate curve (pool) for a given token pair.
-   *
-   * @param token1 - The address of the first token.
-   * @param token2 - The address of the second token.
-   * @returns The address of the curve (pool) if found, otherwise throws an error.
-   */
-  findCurveForTokenPair(token1: string, token2: string): string {
-    const foundPoolAddress = Object.keys(this.poolsConfig).find(poolAddress =>
-      this.tokensShareCurve(token1, token2, this.poolsConfig[poolAddress]),
-    );
-
-    if (!foundPoolAddress) {
-      throw new Error(`No curve found for token pair ${token1}/${token2}`);
-    }
-
-    return this.poolsConfig[foundPoolAddress].pool;
-  }
-
-  /**
-   * Calculates the required intermediary amount for a multi-hop swap.
-   *
-   * @param intermediaryToken - The address of the intermediary token.
-   * @param destToken - The address of the destination token.
-   * @param destAmount - The desired amount of the destination token.
-   * @param curveAddress - The address of the curve (pool).
-   * @returns A promise that resolves to the required intermediary amount.
-   */
-  async getRequiredIntermediaryAmount(
-    intermediaryToken: string,
-    destToken: string,
-    destAmount: string,
-    curveAddress: string,
-  ): Promise<string> {
-    // This would make an actual call to the viewTargetSwap function on the curve
-    // to get the required amount of intermediary token
-
-    // For example (pseudocode):
-    const curveInterface = new ethers.utils.Interface([
-      'function viewTargetSwap(address origin, address target, uint256 targetAmount) view returns (uint256)',
+    // Direct swap case for BUY operations (one token must be quote currency)
+    const swapData = this.poolIface.encodeFunctionData('targetSwap', [
+      srcToken, // origin
+      destToken, // target
+      ethers.constants.MaxUint256.toString(), // maxOriginAmount
+      destAmount, // targetAmount
+      getLocalDeadlineAsFriendlyPlaceholder(), // deadline
     ]);
-
-    const encodedCall = curveInterface.encodeFunctionData('viewTargetSwap', [
-      intermediaryToken,
-      destToken,
-      destAmount,
-    ]);
-
-    const result = await this.dexHelper.provider.call({
-      to: curveAddress,
-      data: encodedCall,
-    });
-
-    return curveInterface
-      .decodeFunctionResult('viewTargetSwap', result)[0]
-      .toString();
-  }
-
-  /**
-   * Returns the allowance target address for a token pair.
-   *
-   * @param srcToken - The address of the source token.
-   * @param destToken - The address of the destination token.
-   * @returns The allowance target address (router address).
-   */
-  getAllowanceTarget(srcToken: string, destToken: string): string {
-    return StabullConfig.Stabull[this.network].router;
-  }
-
-  /**
-   * Retrieves token details from its address.
-   *
-   * @param address - The address of the token.
-   * @returns The token details, including address, decimals, and symbol.
-   */
-  getTokenFromAddress(address: string): Token {
-    // Check if this is the native token address
-    if (
-      address.toLowerCase() ===
-      '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE'.toLowerCase()
-    ) {
-      return {
-        address,
-        decimals: 18,
-        symbol: 'ETH',
-      };
-    }
 
     return {
-      address,
-      decimals: 6,
-      symbol: '',
+      needWrapNative: this.needWrapNative,
+      dexFuncHasRecipient: false,
+      exchangeData: swapData,
+      targetExchange: data.poolAddress,
+      spender: data.poolAddress,
+      returnAmountPos: 0,
     };
   }
 }

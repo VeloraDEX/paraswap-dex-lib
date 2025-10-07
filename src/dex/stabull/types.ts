@@ -1,51 +1,25 @@
 export type PoolState = {
-  reserves0: string;
-  reserves1: string;
+  reserves0: bigint;
+  reserves1: bigint;
 };
 
 export type StabullData = {
-  exchange: string; // The address of the exchange contract
-  poolAddress?: string; // The address of the pool being used
-  secondPoolAddress: string;
-  quoteCurrency: string;
-  factory?: string; // The address of the factory
-  isMultihop: boolean;
+  poolAddress: string; // The address of the pool being used
 };
 
-export type DexParams = {
-  factory: string;
-  router: string;
-  curve: string;
-  quoteCurrency: string;
-  pools: {
-    [address: string]: {
-      id: string;
-      source: string;
-      pool: string;
-      tokens: string[];
-      lpt: string;
-      tokenAssim: string;
-      usdcAssim: string;
-    };
-  };
-};
-
-export type DexConfigMap<T> = {
-  Stabull: {
-    [network: number]: T;
-  };
-};
-
-export type PoolConfig = {
-  id: string;
-  source: string;
-  pool: string;
-  tokens: string[];
-  lpt: string;
-  tokenAssim: string;
-  usdcAssim: string;
+export type TokenConfig = {
+  address: string;
+  decimals: number;
 };
 
 export type PoolsConfig = {
-  [poolAddress: string]: PoolConfig;
+  [poolAddress: string]: {
+    tokens: TokenConfig[];
+  };
+};
+
+export type DexParams = {
+  router: string;
+  quoteCurrency: string;
+  pools: PoolsConfig;
 };
