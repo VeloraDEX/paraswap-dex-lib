@@ -256,7 +256,6 @@ export async function queryOnePageForAllAvailablePoolsFromSubgraph(
           address: id
         }
         hooks
-        tick
       }
     }`;
 
@@ -317,7 +316,6 @@ export async function queryPoolsFromSubgraph(
           address: id
         }
         hooks
-        tick
       }
     }`;
 

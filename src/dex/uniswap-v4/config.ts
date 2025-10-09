@@ -73,14 +73,12 @@ export const UniswapV4Config: DexConfigMap<DexParams> = {
   },
 };
 
-// TODO: `tick`, `ticks`, field can be removed after state generation would become Multicall only
 export const UniswapV4PoolsList: Record<number, SubgraphPool[]> = {
   [Network.BASE]: [
     {
       fee: '7',
       hooks: '0x0000000000000000000000000000000000000000',
       id: '0xf13203ddbf2c9816a79b656a1a952521702715d92fea465b84ae2ed6e94a7f22',
-      tick: '-1',
       tickSpacing: '1',
       token0: {
         address: '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913', // symbol: 'USDC',
@@ -88,13 +86,11 @@ export const UniswapV4PoolsList: Record<number, SubgraphPool[]> = {
       token1: {
         address: '0xfde4c96c8593536e31f229ea8f37b2ada2699bb2', // symbol: 'USDT',
       },
-      ticks: [],
     },
     {
       fee: '500',
       hooks: '0x0000000000000000000000000000000000000000',
       id: '0x96d4b53a38337a5733179751781178a2613306063c511b78cd02684739288c0a',
-      tick: '-191996',
       tickSpacing: '10',
       token0: {
         address: '0x0000000000000000000000000000000000000000', // symbol: 'ETH',
@@ -102,13 +98,11 @@ export const UniswapV4PoolsList: Record<number, SubgraphPool[]> = {
       token1: {
         address: '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913', // symbol: 'USDC',
       },
-      ticks: [],
     },
     {
       fee: '20',
       hooks: '0x0000000000000000000000000000000000000000',
       id: '0xd3020570106c58635ff7f549659c4c310409c9a5d698cb826842bc8a39e3ce81',
-      tick: '-1',
       tickSpacing: '1',
       token0: {
         address: '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913', // symbol: 'USDC',
@@ -116,13 +110,11 @@ export const UniswapV4PoolsList: Record<number, SubgraphPool[]> = {
       token1: {
         address: '0xfde4c96c8593536e31f229ea8f37b2ada2699bb2', // symbol: 'USDT',
       },
-      ticks: [],
     },
     {
       fee: '500',
       hooks: '0x0000000000000000000000000000000000000000',
       id: '0x12d76c5c8ec8edffd3c143995b0aa43fe44a6d71eb9113796272909e54b8e078',
-      tick: '-71293',
       tickSpacing: '10',
       token0: {
         address: '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913', // symbol: 'USDC',
@@ -130,13 +122,11 @@ export const UniswapV4PoolsList: Record<number, SubgraphPool[]> = {
       token1: {
         address: '0xcbb7c0000ab88b473b1f5afd9ef808440eed33bf', // symbol: 'cbBTC',
       },
-      ticks: [],
     },
     {
       fee: '5',
       hooks: '0x0000000000000000000000000000000000000000',
       id: '0x7681c00520c26da8d8970c21a65461c726f274068eb08743debc1178e697044e',
-      tick: '0',
       tickSpacing: '1',
       token0: {
         address: '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913', // symbol: 'USDC',
@@ -144,13 +134,11 @@ export const UniswapV4PoolsList: Record<number, SubgraphPool[]> = {
       token1: {
         address: '0xfde4c96c8593536e31f229ea8f37b2ada2699bb2', // symbol: 'USDT',
       },
-      ticks: [],
     },
     {
       fee: '3000',
       hooks: '0x0000000000000000000000000000000000000000',
       id: '0x179492f1f9c7b2e2518a01eda215baab8adf0b02dd3a90fe68059c0cac5686f5',
-      tick: '-71284',
       tickSpacing: '60',
       token0: {
         address: '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913', // symbol: 'USDC',
@@ -158,13 +146,11 @@ export const UniswapV4PoolsList: Record<number, SubgraphPool[]> = {
       token1: {
         address: '0xcbb7c0000ab88b473b1f5afd9ef808440eed33bf', // symbol: 'cbBTC',
       },
-      ticks: [],
     },
     {
       fee: '100',
       hooks: '0x0000000000000000000000000000000000000000',
       id: '0xcdcbb476543e5c703f7562009cb4e2a6c543dc09fe740abf8be0c01c31c82884',
-      tick: '-276326',
       tickSpacing: '1',
       token0: {
         address: '0x6bb7a212910682dcfdbd5bcbb3e28fb4e8da10ee', // symbol: 'GHO',
@@ -172,13 +158,11 @@ export const UniswapV4PoolsList: Record<number, SubgraphPool[]> = {
       token1: {
         address: '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913', // symbol: 'USDC',
       },
-      ticks: [],
     },
     {
       fee: '11',
       hooks: '0x0000000000000000000000000000000000000000',
       id: '0x90305e6043c0879a665262237e4643df9b48c1ba51aec5abe82c5d98f0da54bd',
-      tick: '6',
       tickSpacing: '1',
       token0: {
         address: '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913', // symbol: 'USDC',
@@ -186,13 +170,11 @@ export const UniswapV4PoolsList: Record<number, SubgraphPool[]> = {
       token1: {
         address: '0xfde4c96c8593536e31f229ea8f37b2ada2699bb2', // symbol: 'USDT',
       },
-      ticks: [],
     },
     {
       fee: '90',
       hooks: '0x4440854b2d02c57a0dc5c58b7a884562d875c0c4',
       id: '0xaf15cd1f9c3874bbcfddfc2b544544612c9de8c8bae28ba21c129c6b286c1e19',
-      tick: '-191997',
       tickSpacing: '2',
       token0: {
         address: '0x0000000000000000000000000000000000000000', // symbol: 'ETH',
@@ -200,13 +182,11 @@ export const UniswapV4PoolsList: Record<number, SubgraphPool[]> = {
       token1: {
         address: '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913', // symbol: 'USDC',
       },
-      ticks: [],
     },
     {
       fee: '6',
       hooks: '0x0000000000000000000000000000000000000000',
       id: '0xfba2c4592d32a4e2e6393b8898f9110b4e272983f4bd416b38f81672a17fe3dc',
-      tick: '6',
       tickSpacing: '1',
       token0: {
         address: '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913', // symbol: 'USDC',
@@ -214,13 +194,11 @@ export const UniswapV4PoolsList: Record<number, SubgraphPool[]> = {
       token1: {
         address: '0xfde4c96c8593536e31f229ea8f37b2ada2699bb2', // symbol: 'USDT',
       },
-      ticks: [],
     },
     // {
     //   fee: '8388608',
     //   hooks: '0xdd5eeaff7bd481ad55db083062b13a3cdf0a68cc',
     //   id: '0xd6ba4bdd2ebdde6b9beab0085f42f08bf69a80e515e399cf93716505c738169b',
-    //   tick: '222003',
     //   tickSpacing: '200',
     //   token0: {
     //     address: '0x4200000000000000000000000000000000000006', // symbol: 'WETH',
@@ -228,13 +206,11 @@ export const UniswapV4PoolsList: Record<number, SubgraphPool[]> = {
     //   token1: {
     //     address: '0x4a0aaf171446dda0ed95295c46820e2015a28b07', // symbol: 'QE',
     //   },
-    //   ticks: [],
     // },
     // {
     //   fee: '3000',
     //   hooks: '0x0000000000000000000000000000000000000000',
     //   id: '0xe070797535b13431808f8fc81fdbe7b41362960ed0b55bc2b6117c49c51b7eb9',
-    //   tick: '-192002',
     //   tickSpacing: '60',
     //   token0: {
     //     address: '0x0000000000000000000000000000000000000000', // symbol: 'ETH',
@@ -242,13 +218,11 @@ export const UniswapV4PoolsList: Record<number, SubgraphPool[]> = {
     //   token1: {
     //     address: '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913', // symbol: 'USDC',
     //   },
-    //   ticks: [],
     // },
     // {
     //   fee: '10000',
     //   hooks: '0x0000000000000000000000000000000000000000',
     //   id: '0x438c7f6a3b32fdcf043ad3285dbc128486df894a1f3d448b1da38b2f2a1a43cb',
-    //   tick: '281203',
     //   tickSpacing: '200',
     //   token0: {
     //     address: '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913', // symbol: 'USDC',
@@ -256,13 +230,11 @@ export const UniswapV4PoolsList: Record<number, SubgraphPool[]> = {
     //   token1: {
     //     address: '0xc0634090f2fe6c6d75e61be2b949464abb498973', // symbol: 'KTA',
     //   },
-    //   ticks: [],
     // },
     // {
     //   fee: '8388608',
     //   hooks: '0x34a45c6b61876d739400bd71228cbcbd4f53e8cc',
     //   id: '0x9cda3a1ca4814877cfc50f17cb3f428dd553a53bdb5836c6f181ff24574e4320',
-    //   tick: '183762',
     //   tickSpacing: '200',
     //   token0: {
     //     address: '0x4200000000000000000000000000000000000006', // symbol: 'WETH',
@@ -270,13 +242,11 @@ export const UniswapV4PoolsList: Record<number, SubgraphPool[]> = {
     //   token1: {
     //     address: '0x5eeb2662615782b58251b6f0c3e107571ae1ab07', // symbol: 'RETAKE',
     //   },
-    //   ticks: [],
     // },
     // {
     //   fee: '30000',
     //   hooks: '0x9ea932730a7787000042e34390b8e435dd839040',
     //   id: '0xbfadeecc6ae215a0ff707ac2dcb01055c89a8ff003046e883bc5e554ee7465fd',
-    //   tick: '147252',
     //   tickSpacing: '200',
     //   token0: {
     //     address: '0x4200000000000000000000000000000000000006', // symbol: 'WETH',
@@ -284,7 +254,6 @@ export const UniswapV4PoolsList: Record<number, SubgraphPool[]> = {
     //   token1: {
     //     address: '0x885a590198e5f0947f4c92db815cf2a2147980b8', // symbol: 'BaseShake',
     //   },
-    //   ticks: [],
     // },
 
     //
@@ -293,7 +262,6 @@ export const UniswapV4PoolsList: Record<number, SubgraphPool[]> = {
     //   fee: '500',
     //   hooks: '0x0000000000000000000000000000000000000000',
     //   id: '0xa18262d729e388b0a67aa65c0dd2a096482b3a27058be5547a3235d053dd90b4',
-    //   tick: '-276323',
     //   tickSpacing: '10',
     //   token0: {
     //     address: '0x6bb7a212910682dcfdbd5bcbb3e28fb4e8da10ee', // symbol: 'GHO',
@@ -301,13 +269,11 @@ export const UniswapV4PoolsList: Record<number, SubgraphPool[]> = {
     //   token1: {
     //     address: '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913', // symbol: 'USDC',
     //   },
-    //   ticks: [],
     // },
     // {
     //   fee: '100',
     //   hooks: '0x0000000000000000000000000000000000000000',
     //   id: '0x322d9aef3cf895da9e35b95b6c6e8f3c5e2a90b6d447a8bbb1ff2616b608a4d0',
-    //   tick: '3',
     //   tickSpacing: '1',
     //   token0: {
     //     address: '0x102d758f688a4c1c5a80b116bd945d4455460282', // symbol: 'USD₮0',
@@ -315,13 +281,11 @@ export const UniswapV4PoolsList: Record<number, SubgraphPool[]> = {
     //   token1: {
     //     address: '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913', // symbol: 'USDC',
     //   },
-    //   ticks: [],
     // },
     // {
     //   fee: '8',
     //   hooks: '0x0000000000000000000000000000000000000000',
     //   id: '0xe1d05fe2b899df927bc67e5eedaccb95d06bf7c769ed68469bb773615f2401f8',
-    //   tick: '-2',
     //   tickSpacing: '1',
     //   token0: {
     //     address: '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913', // symbol: 'USDC',
@@ -329,13 +293,11 @@ export const UniswapV4PoolsList: Record<number, SubgraphPool[]> = {
     //   token1: {
     //     address: '0xfde4c96c8593536e31f229ea8f37b2ada2699bb2', // symbol: 'USDT',
     //   },
-    //   ticks: [],
     // },
     // {
     //   fee: '1500',
     //   hooks: '0x0000000000000000000000000000000000000000',
     //   id: '0x071526b476f0c45aaebdb6805b96405b8d29c1a47897ade98fbd410db0e3d4d8',
-    //   tick: '-191990',
     //   tickSpacing: '30',
     //   token0: {
     //     address: '0x0000000000000000000000000000000000000000', // symbol: 'ETH',
@@ -343,13 +305,11 @@ export const UniswapV4PoolsList: Record<number, SubgraphPool[]> = {
     //   token1: {
     //     address: '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913', // symbol: 'USDC',
     //   },
-    //   ticks: [],
     // },
     // {
     //   fee: '10',
     //   hooks: '0x4440854b2d02c57a0dc5c58b7a884562d875c0c4',
     //   id: '0xa0ab20a64f46b5676fe1542cb87b454e5104007689e0eef4212aa0cbe34933a1',
-    //   tick: '-1',
     //   tickSpacing: '1',
     //   token0: {
     //     address: '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913', // symbol: 'USDC',
@@ -357,7 +317,6 @@ export const UniswapV4PoolsList: Record<number, SubgraphPool[]> = {
     //   token1: {
     //     address: '0xd9aaec86b65d86f6a7b5b1b0c42ffa531710b6ca', // symbol: 'USDbC',
     //   },
-    //   ticks: [],
     // },
   ],
 };

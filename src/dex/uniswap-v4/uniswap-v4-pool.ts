@@ -2,15 +2,7 @@ import {
   InitializeStateOptions,
   StatefulEventSubscriber,
 } from '../../stateful-event-subscriber';
-import {
-  DexParams,
-  FeeGrowthGlobals,
-  PoolPairsInfo,
-  PoolState,
-  Slot0,
-  SubgraphTick,
-  TickInfo,
-} from './types';
+import { DexParams, PoolPairsInfo, PoolState, TickInfo } from './types';
 import { IDexHelper } from '../../dex-helper';
 import { Log, Logger } from '../../types';
 import { BytesLike, Interface } from 'ethers/lib/utils';
@@ -28,12 +20,9 @@ import {
   TICK_BITMAP_TO_USE,
   TICK_BITMAP_TO_USE_BY_CHAIN,
 } from './constants';
-import { TickBitMap } from './contract-math/TickBitMap';
-import { MultiCallParams, MultiResult } from '../../lib/multi-wrapper';
+import { MultiResult } from '../../lib/multi-wrapper';
 import { NumberAsString } from '@paraswap/core';
-import { extractSuccessAndValue, uint256ToBigInt } from '../../lib/decoders';
-import { LPFeeLibrary } from './contract-math/LPFeeLibrary';
-import { queryTicksForPool } from './subgraph';
+import { extractSuccessAndValue } from '../../lib/decoders';
 
 export class UniswapV4Pool extends StatefulEventSubscriber<PoolState> {
   handlers: {
@@ -65,10 +54,6 @@ export class UniswapV4Pool extends StatefulEventSubscriber<PoolState> {
     public readonly token1: string,
     public readonly fee: string,
     public readonly hooks: string,
-    // TODO: can be removed after state generation would become Multicall only
-    public sqrtPriceX96: bigint,
-    // TODO: can be removed after state generation would become Multicall only
-    public tick: string,
     public tickSpacing: string,
   ) {
     super(parentName, poolId, dexHelper, logger, true, mapKey);
@@ -103,150 +88,6 @@ export class UniswapV4Pool extends StatefulEventSubscriber<PoolState> {
     };
   }
 
-  protected _getStateRequestCallDataPerPool(
-    poolId: string,
-    tick: string,
-    tickSpacing: string,
-    ticks: SubgraphTick[],
-  ) {
-    let callData: MultiCallParams<
-      bigint | Slot0 | FeeGrowthGlobals | TickInfo | [bigint, bigint]
-    >[] = [
-      {
-        target: this.config.stateView,
-        callData: this.stateViewIface.encodeFunctionData('getLiquidity', [
-          poolId,
-        ]),
-        decodeFunction: uint256ToBigInt,
-      },
-      {
-        target: this.config.stateView,
-        callData: this.stateViewIface.encodeFunctionData('getSlot0', [poolId]),
-        decodeFunction: (result: MultiResult<BytesLike> | BytesLike): Slot0 => {
-          const [, toDecode] = extractSuccessAndValue(result);
-
-          const decoded = this.stateViewIface.decodeFunctionResult(
-            'getSlot0',
-            toDecode,
-          );
-
-          return {
-            sqrtPriceX96: BigInt(decoded[0]),
-            tick: BigInt(decoded[1]),
-            protocolFee: BigInt(decoded[2]),
-            lpFee: BigInt(decoded[3]),
-          };
-        },
-      },
-      {
-        target: this.config.stateView,
-        callData: this.stateViewIface.encodeFunctionData(
-          'getFeeGrowthGlobals',
-          [poolId],
-        ),
-        decodeFunction: (
-          result: MultiResult<BytesLike> | BytesLike,
-        ): FeeGrowthGlobals => {
-          const [, toDecode] = extractSuccessAndValue(result);
-
-          const decoded = this.stateViewIface.decodeFunctionResult(
-            'getFeeGrowthGlobals',
-            toDecode,
-          );
-
-          return {
-            feeGrowthGlobal0: BigInt(decoded[0]),
-            feeGrowthGlobal1: BigInt(decoded[1]),
-          };
-        },
-      },
-    ];
-
-    // get ticks calldata
-    ticks.map(tick => {
-      callData.push({
-        target: this.config.stateView,
-        callData: this.stateViewIface.encodeFunctionData('getTickInfo', [
-          poolId,
-          tick.tickIdx,
-        ]),
-        decodeFunction: (
-          result: MultiResult<BytesLike> | BytesLike,
-        ): TickInfo => {
-          const [, toDecode] = extractSuccessAndValue(result);
-
-          const decoded = this.stateViewIface.decodeFunctionResult(
-            'getTickInfo',
-            toDecode,
-          );
-
-          return {
-            liquidityGross: BigInt(decoded[0]),
-            liquidityNet: BigInt(decoded[1]),
-          };
-        },
-      });
-    });
-
-    const [leftBitMapIndex, rightBitMapIndex] = this.getBitmapRangeToRequest(
-      tick,
-      tickSpacing,
-    );
-
-    // get tick bitmap calldata
-    for (let i = leftBitMapIndex; i <= rightBitMapIndex; i++) {
-      callData.push({
-        target: this.config.stateView,
-        callData: this.stateViewIface.encodeFunctionData('getTickBitmap', [
-          poolId,
-          i,
-        ]),
-        decodeFunction: (
-          result: MultiResult<BytesLike> | BytesLike,
-        ): [bigint, bigint] => {
-          const [, toDecode] = extractSuccessAndValue(result);
-
-          const decoded = this.stateViewIface.decodeFunctionResult(
-            'getTickBitmap',
-            toDecode,
-          );
-
-          return [i, BigInt(decoded[0])];
-        },
-      });
-    }
-
-    ticks.map(tick => {
-      const compressed = TickBitMap.compress(
-        BigInt(tick.tickIdx),
-        BigInt(tickSpacing),
-      );
-      const [wordPos] = TickBitMap.position(compressed);
-
-      callData.push({
-        target: this.config.stateView,
-        callData: this.stateViewIface.encodeFunctionData('getTickBitmap', [
-          poolId,
-          wordPos,
-        ]),
-        decodeFunction: (
-          result: MultiResult<BytesLike> | BytesLike,
-        ): [bigint, bigint] => {
-          const [, toDecode] = extractSuccessAndValue(result);
-
-          const decoded = this.stateViewIface.decodeFunctionResult(
-            'getTickBitmap',
-            toDecode,
-          );
-
-          return [wordPos, BigInt(decoded[0])];
-        },
-      });
-    });
-
-    return callData;
-  }
-
   async getOrGenerateState(blockNumber: number): Promise<PoolState> {
     let state = this.getState(blockNumber);
 
@@ -258,108 +99,6 @@ export class UniswapV4Pool extends StatefulEventSubscriber<PoolState> {
       this.setState(state, blockNumber);
     }
     return state;
-  }
-
-  async generateStateWithSubgraph(blockNumber: number): Promise<PoolState> {
-    const ticks = await this.getTicks(blockNumber);
-
-    const callData = this._getStateRequestCallDataPerPool(
-      this.poolId,
-      this.tick,
-      this.tickSpacing,
-      ticks,
-    );
-
-    const results = await this.dexHelper.multiWrapper.tryAggregate<
-      bigint | Slot0 | FeeGrowthGlobals | TickInfo | [bigint, bigint]
-    >(
-      false,
-      callData,
-      blockNumber,
-      this.dexHelper.multiWrapper.defaultBatchSize,
-      false,
-    );
-
-    const liquidityResult = results[0].returnData as bigint;
-    const slot0Result = results[1].returnData as Slot0;
-    const feeGrowthGlobalsResult = results[2].returnData as FeeGrowthGlobals;
-
-    let tickCounter = 0;
-    const ticksResults = ticks.reduce<Record<NumberAsString, TickInfo>>(
-      (memo, tick) => {
-        const curResults = results[3 + tickCounter] as {
-          returnData: TickInfo;
-        };
-
-        const { liquidityNet, liquidityGross } = curResults.returnData;
-
-        if (
-          // skips ticks with 0n values to optimize state size
-          !(liquidityNet === 0n && liquidityGross === 0n)
-        ) {
-          memo[tick.tickIdx] = {
-            liquidityNet,
-            liquidityGross,
-          };
-        }
-
-        tickCounter++;
-
-        return memo;
-      },
-      {},
-    );
-
-    const tickBitMapMinIndex = 3 + tickCounter;
-    const [leftBitMapIndex, rightBitMapIndex] = this.getBitmapRangeToRequest(
-      this.tick,
-      this.tickSpacing,
-    );
-
-    let tickBitMapCounter = 0;
-    const tickBitMapResults: Record<NumberAsString, bigint> = {};
-    for (
-      let i = leftBitMapIndex;
-      i <= Number(rightBitMapIndex) + ticks.length;
-      i++
-    ) {
-      const curResults = results[tickBitMapMinIndex + tickBitMapCounter] as {
-        returnData: [bigint, bigint];
-      };
-
-      const [wordPos, tickBitMap] = curResults.returnData;
-
-      tickBitMapResults[wordPos.toString()] = tickBitMap;
-
-      tickBitMapCounter++;
-    }
-
-    return {
-      id: this.poolId,
-      token0: this.token0.toLowerCase(),
-      token1: this.token1.toLowerCase(),
-      fee: this.fee,
-      hooks: this.hooks,
-      feeGrowthGlobal0X128: feeGrowthGlobalsResult.feeGrowthGlobal0,
-      feeGrowthGlobal1X128: feeGrowthGlobalsResult.feeGrowthGlobal1,
-      liquidity: liquidityResult,
-      slot0: {
-        ...slot0Result,
-        tick: slot0Result.tick === 0n ? BigInt(this.tick) : slot0Result.tick,
-        lpFee:
-          slot0Result.lpFee === 0n
-            ? LPFeeLibrary.getInitialLPFee(BigInt(this.fee))
-            : slot0Result.lpFee,
-        sqrtPriceX96:
-          slot0Result.sqrtPriceX96 === 0n
-            ? this.sqrtPriceX96
-            : slot0Result.sqrtPriceX96,
-      },
-      tickSpacing: parseInt(this.tickSpacing),
-      ticks: ticksResults,
-      tickBitmap: tickBitMapResults,
-      isValid: true,
-    };
   }
 
   async generateState(blockNumber: number): Promise<PoolState> {
@@ -438,66 +177,6 @@ export class UniswapV4Pool extends StatefulEventSubscriber<PoolState> {
       tickBitmap: tickBitMapResults,
       isValid: true,
     };
-  }
-
-  async getTicks(blockNumber: number): Promise<SubgraphTick[]> {
-    const defaultPerPageLimit = 1000;
-    let curPage = 0;
-    let ticks: SubgraphTick[] = [];
-
-    let currentTicks = await queryTicksForPool(
-      this.dexHelper,
-      this.logger,
-      this.parentName,
-      this.config.subgraphURL,
-      blockNumber,
-      this.poolId,
-      curPage * defaultPerPageLimit,
-      defaultPerPageLimit,
-    );
-
-    ticks = ticks.concat(currentTicks);
-
-    while (currentTicks.length === defaultPerPageLimit) {
-      curPage++;
-      currentTicks = await queryTicksForPool(
-        this.dexHelper,
-        this.logger,
-        this.parentName,
-        this.config.subgraphURL,
-        blockNumber,
-        this.poolId,
-        curPage * defaultPerPageLimit,
-        defaultPerPageLimit,
-      );
-
-      ticks = ticks.concat(currentTicks);
-    }
-
-    return ticks;
-  }
-
-  getBitmapRangeToRequest(tick: string, tickSpacing: string): [bigint, bigint] {
-    const networkId = this.dexHelper.config.data.network;
-
-    const tickBitMapToUse =
-      TICK_BITMAP_TO_USE_BY_CHAIN[networkId] ?? TICK_BITMAP_TO_USE;
-    const tickBitMapBuffer =
-      TICK_BITMAP_BUFFER_BY_CHAIN[networkId] ?? TICK_BITMAP_BUFFER;
-
-    const range = tickBitMapToUse + tickBitMapBuffer;
-
-    const compressedTick = TickBitMap.compress(
-      BigInt(tick),
-      BigInt(tickSpacing),
-    );
-
-    const [currentBitMapIndex] = TickBitMap.position(compressedTick);
-
-    const leftBitMapIndex = currentBitMapIndex - range;
-    const rightBitMapIndex = currentBitMapIndex + range;
-
-    return [leftBitMapIndex, rightBitMapIndex];
   }
 
   getBitmapRange() {

@@ -542,9 +542,6 @@ export class UniswapV4 extends SimpleExchange implements IDex<UniswapV4Data> {
       poolInfo.token1.address.toLowerCase(),
       poolInfo.fee,
       poolInfo.hooks,
-      0n,
-      // TODO: next fields are not used in state generation, should be fixed after only Multicall is used
-      poolInfo.tick,
       poolInfo.tickSpacing,
     );
 

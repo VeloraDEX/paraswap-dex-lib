@@ -122,7 +122,7 @@ describe('PancakeswapV3', function () {
         await Promise.all(
           poolPrices!.map(async price => {
             const fee =
-              pancakeswapV3.eventPools[price.poolIdentifier!]!.feeCode;
+              pancakeswapV3.eventPools[price.poolIdentifiers![0]]!.feeCode;
             const res = await checkOnChainPricing(
               pancakeswapV3,
               dexHelper,
@@ -210,7 +210,7 @@ describe('PancakeswapV3', function () {
             await Promise.all(
               poolPrices!.map(async price => {
                 const fee =
-                  pancakeswapV3.eventPools[price.poolIdentifier!]!.feeCode;
+                  pancakeswapV3.eventPools[price.poolIdentifiers![0]]!.feeCode;
                 const res = await checkOnChainPricing(
                   pancakeswapV3,
                   dexHelper,
@@ -268,7 +268,7 @@ describe('PancakeswapV3', function () {
             await Promise.all(
               poolPrices!.map(async price => {
                 const fee =
-                  pancakeswapV3.eventPools[price.poolIdentifier!]!.feeCode;
+                  pancakeswapV3.eventPools[price.poolIdentifiers![0]]!.feeCode;
                 const res = await checkOnChainPricing(
                   pancakeswapV3,
                   dexHelper,
@@ -339,7 +339,7 @@ describe('PancakeswapV3', function () {
             await Promise.all(
               poolPrices!.map(async price => {
                 const fee =
-                  pancakeswapV3.eventPools[price.poolIdentifier!]!.feeCode;
+                  pancakeswapV3.eventPools[price.poolIdentifiers![0]]!.feeCode;
                 const res = await checkOnChainPricing(
                   pancakeswapV3,
                   dexHelper,
@@ -398,7 +398,7 @@ describe('PancakeswapV3', function () {
             await Promise.all(
               poolPrices!.map(async price => {
                 const fee =
-                  pancakeswapV3.eventPools[price.poolIdentifier!]!.feeCode;
+                  pancakeswapV3.eventPools[price.poolIdentifiers![0]]!.feeCode;
                 const res = await checkOnChainPricing(
                   pancakeswapV3,
                   dexHelper,

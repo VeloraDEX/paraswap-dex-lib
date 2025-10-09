@@ -9,7 +9,7 @@ import {
   NumberAsString,
   DexExchangeParam,
 } from '../../types';
-import { SwapSide, Network, UNLIMITED_USD_LIQUIDITY } from '../../constants';
+import { SwapSide, Network } from '../../constants';
 import * as CALLDATA_GAS_COST from '../../calldata-gas-cost';
 import { getDexKeysWithNetwork } from '../../utils';
 import { IDex } from '../../dex/idex';
@@ -440,6 +440,19 @@ export class AaveGsm extends SimpleExchange implements IDex<AaveGsmData> {
     const usdtLiquidity = +formatUnits(usdtState.underlyingLiquidity, 6);
     const usdcLiquidity = +formatUnits(usdcState.underlyingLiquidity, 6);
 
+    const usdtRemainingCapacity = +formatUnits(
+      usdtState.exposureCap > usdtState.underlyingLiquidity
+        ? usdtState.exposureCap - usdtState.underlyingLiquidity
+        : 0n,
+      6,
+    );
+    const usdcRemainingCapacity = +formatUnits(
+      usdcState.exposureCap > usdcState.underlyingLiquidity
+        ? usdcState.exposureCap - usdcState.underlyingLiquidity
+        : 0n,
+      6,
+    );
+
     if (isWaEthUSDC) {
       return [
         {
@@ -448,7 +461,7 @@ export class AaveGsm extends SimpleExchange implements IDex<AaveGsmData> {
           connectorTokens: [
             { decimals: 18, address: GHO, liquidityUSD: usdcLiquidity },
           ],
-          liquidityUSD: UNLIMITED_USD_LIQUIDITY,
+          liquidityUSD: usdcRemainingCapacity,
         },
       ];
     }
@@ -461,7 +474,7 @@ export class AaveGsm extends SimpleExchange implements IDex<AaveGsmData> {
           connectorTokens: [
             { decimals: 18, address: GHO, liquidityUSD: usdtLiquidity },
           ],
-          liquidityUSD: UNLIMITED_USD_LIQUIDITY,
+          liquidityUSD: usdtRemainingCapacity,
         },
       ];
     }
@@ -474,7 +487,7 @@ export class AaveGsm extends SimpleExchange implements IDex<AaveGsmData> {
           {
             decimals: 6,
             address: waEthUSDT,
-            liquidityUSD: UNLIMITED_USD_LIQUIDITY,
+            liquidityUSD: usdtRemainingCapacity,
           },
         ],
         liquidityUSD: usdtLiquidity,
@@ -486,7 +499,7 @@ export class AaveGsm extends SimpleExchange implements IDex<AaveGsmData> {
           {
             decimals: 6,
             address: waEthUSDC,
-            liquidityUSD: UNLIMITED_USD_LIQUIDITY,
+            liquidityUSD: usdcRemainingCapacity,
           },
         ],
         liquidityUSD: usdcLiquidity,
