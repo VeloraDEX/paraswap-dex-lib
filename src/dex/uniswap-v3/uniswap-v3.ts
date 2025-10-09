@@ -512,6 +512,30 @@ export class UniswapV3
     );
   }
 
+  async generateStateByPoolId(
+    poolIdentifier: string,
+    blockNumber: number,
+  ): Promise<DeepReadonly<PoolState | {}> | null> {
+    if (poolIdentifier.includes('factory')) return {};
+
+    const [tokenA, tokenB, feeStr, tickSpacing] = poolIdentifier.split('_');
+
+    const fee = BigInt(feeStr);
+
+    const pool = this.getPoolInstance(
+      tokenA.toLowerCase(),
+      tokenB.toLowerCase(),
+      fee,
+      tickSpacing ? BigInt(tickSpacing) : undefined,
+    );
+
+    if (!pool) {
+      return null;
+    }
+
+    return await pool.generateState(blockNumber);
+  }
+
   async getPricingFromRpc(
     from: Token,
     to: Token,

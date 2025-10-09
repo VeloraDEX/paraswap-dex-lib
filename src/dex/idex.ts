@@ -170,6 +170,16 @@ export interface IDexPricing<ExchangeData> {
     blockNumber: number,
   ): Promise<string[]>;
 
+  // Returns generated state of the pool by its identifier for
+  // a given block number. If the pool is not found or
+  // cannot generate state, return null.
+  // This is optional for a DEX to implement this function
+
+  generateStateByPoolId?(
+    poolId: string,
+    blockNumber: number,
+  ): AsyncOrSync<unknown>;
+
   // Returns pool prices for amounts.
   // If limitPools is defined only pools in limitPools
   // should be used. If limitPools is undefined then
