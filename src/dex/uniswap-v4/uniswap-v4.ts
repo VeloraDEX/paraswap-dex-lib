@@ -551,4 +551,58 @@ export class UniswapV4 extends SimpleExchange implements IDex<UniswapV4Data> {
 
     return await pool.generateState(blockNumber);
   }
+
+  async getOnChainPriceByPoolId(
+    poolIdentifier: string,
+    srcToken: Token,
+    destToken: Token,
+    amount: bigint,
+    side: SwapSide,
+    blockNumber: number,
+  ): Promise<bigint | null> {
+    if (poolIdentifier.includes('factory')) return null;
+
+    const poolManager = new UniswapV4PoolManager(
+      this.dexHelper,
+      this.dexKey,
+      this.network,
+      UniswapV4Config[this.dexKey][this.network],
+      this.logger,
+      this.cacheStateKey,
+    );
+
+    const allPools = await poolManager.queryAllAvailablePools(blockNumber);
+    const subgraphPool = allPools.find(p => p.id === poolIdentifier);
+
+    if (!subgraphPool) {
+      this.logger.warn(
+        `${this.dexKey}-${this.network}: Pool ${poolIdentifier} not found in the list of available pools`,
+      );
+      return null;
+    }
+
+    const pool: Pool = {
+      id: subgraphPool.id,
+      key: {
+        currency0: subgraphPool.token0.address,
+        currency1: subgraphPool.token1.address,
+        fee: subgraphPool.fee,
+        tickSpacing: parseInt(subgraphPool.tickSpacing),
+        hooks: subgraphPool.hooks,
+      },
+    };
+
+    const zeroForOne =
+      srcToken.address.toLowerCase() === pool.key.currency0.toLowerCase();
+
+    const prices = await this.queryPriceFromRpc(
+      zeroForOne,
+      [amount],
+      pool,
+      side,
+      blockNumber,
+    );
+
+    return prices[0] || null;
+  }
 }
