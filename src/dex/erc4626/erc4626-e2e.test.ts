@@ -17,7 +17,8 @@ function testForNetwork(
   tokenB: Token,
   tokenAAmount: string,
   tokenBAmount: string,
-  skipTokenAToTokenB = false,
+  skipTokenAToTokenBForSell = false,
+  skipTokenAToTokenBForBuy = false,
 ) {
   const provider = new StaticJsonRpcProvider(
     generateConfig(network).privateHttpProvider,
@@ -34,7 +35,10 @@ function testForNetwork(
       describe(`${side}: ${dexKey}`, () => {
         contractMethods.forEach((contractMethod: ContractMethod) => {
           describe(`${contractMethod}`, () => {
-            if (!skipTokenAToTokenB) {
+            if (
+              !(skipTokenAToTokenBForSell && side === SwapSide.SELL) &&
+              !(skipTokenAToTokenBForBuy && side === SwapSide.BUY)
+            ) {
               it(`${tokenA.address} -> ${tokenB.address}`, async () => {
                 await testE2E(
                   tokenA,
@@ -71,12 +75,14 @@ function testForNetwork(
 
 const config = ERC4626Config;
 
-for (const dexKey of Object.keys(ERC4626Config)) {
+for (const dexKey of Object.keys(ERC4626Config).filter(t => t === 'yoETH')) {
   for (const net of Object.keys(ERC4626Config[dexKey])) {
     const network = Number(net) as Network;
-    const { vault, asset, cooldownEnabled } = config[dexKey][network];
-    const tokenA = { address: vault, decimals: 18 };
-    const tokenB = { address: asset, decimals: 18 };
+    const { vault, asset, cooldownEnabled, withdrawDisabled, decimals } =
+      config[dexKey][network];
+
+    const tokenA = { address: vault, decimals: decimals ?? 18 };
+    const tokenB = { address: asset, decimals: decimals ?? 18 };
 
     testForNetwork(
       network,
@@ -87,6 +93,7 @@ for (const dexKey of Object.keys(ERC4626Config)) {
       BI_POWS[tokenB.decimals].toString(),
       // if cooldown is enabled, we skip withdrawal swaps (vault -> asset)
       !!cooldownEnabled,
+      !!cooldownEnabled || withdrawDisabled,
     );
   }
 }

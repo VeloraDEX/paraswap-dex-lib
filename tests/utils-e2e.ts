@@ -309,11 +309,11 @@ export async function testE2E(
       ? decodedOutput.receivedAmount
       : decodedOutput.spentAmount;
   const amountDiff = expectedAmount.lt(simulatedAmount)
-    ? expectedAmount.div(simulatedAmount)
-    : simulatedAmount.div(expectedAmount);
+    ? expectedAmount.sub(simulatedAmount)
+    : simulatedAmount.sub(expectedAmount);
   const paraswapShare = decodedOutput.paraswapShare?.toNumber() ?? 0;
 
-  expect(amountDiff.toNumber()).toBeLessThanOrEqual(1);
+  expect(amountDiff.toNumber()).toBeLessThanOrEqual(10); // 10 wei max allowed difference
   expect(paraswapShare).toEqual(0);
 }
 

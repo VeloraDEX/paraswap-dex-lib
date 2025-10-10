@@ -640,6 +640,14 @@ export const Tokens: {
       address: '0x8e870d67f660d95d5be530380d0ec0bd388289e1',
       decimals: 18,
     },
+    cUSD: {
+      address: '0xcCcc62962d17b8914c62D74FfB843d73B2a3cccC',
+      decimals: 18,
+    },
+    stcUSD: {
+      address: '0x88887bE419578051FF9F4eb6C858A951921D8888',
+      decimals: 18,
+    },
   },
   [Network.POLYGON]: {
     jGBP: {
@@ -1658,6 +1666,14 @@ export const Tokens: {
     },
   },
   [Network.BASE]: {
+    yoETH: {
+      address: '0x3a43aec53490cb9fa922847385d82fe25d0e9de7',
+      decimals: 18,
+    },
+    yoUSD: {
+      address: '0x0000000f2eb9f69274678c76222b35eec7588a65',
+      decimals: 6,
+    },
     wstETH: {
       address: `0xc1cba3fcea344f92d9239c08c0568f6f2f0ee452`,
       decimals: 18,

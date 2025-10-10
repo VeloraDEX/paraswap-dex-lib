@@ -1,4 +1,3 @@
-import { AsyncOrSync } from 'ts-essentials';
 import {
   Token,
   Address,
@@ -58,6 +57,9 @@ export class ERC4626
     readonly asset: string = ERC4626Config[dexKey][network].asset,
     readonly cooldownEnabled: boolean = ERC4626Config[dexKey][network]
       .cooldownEnabled || false,
+    readonly decimals: number = ERC4626Config[dexKey][network].decimals || 18,
+    readonly withdrawDisabled: boolean = ERC4626Config[dexKey][network]
+      .withdrawDisabled || false,
     readonly erc4626Interface: Interface = new Interface(ERC4626_ABI),
   ) {
     super(dexHelper, dexKey);
@@ -151,7 +153,7 @@ export class ERC4626
       if (isSrcAsset) {
         calcFunction = this.previewDeposit.bind(this);
       } else {
-        if (!this.eventPool.withdrawRedeemAllowed(state)) {
+        if (!this.redeemAllowed(state)) {
           return null;
         }
         calcFunction = this.previewRedeem.bind(this);
@@ -160,7 +162,7 @@ export class ERC4626
       if (isSrcAsset) {
         calcFunction = this.previewMint.bind(this);
       } else {
-        if (!this.eventPool.withdrawRedeemAllowed(state)) {
+        if (!this.withdrawAllowed(state)) {
           return null;
         }
         calcFunction = this.previewWithdraw.bind(this);
@@ -168,7 +170,7 @@ export class ERC4626
     }
     return [
       {
-        unit: BI_POWS[18],
+        unit: BI_POWS[this.decimals],
         prices: amounts.map(amount => calcFunction(amount, state)),
         gasCost: isWrap ? 60000 : 70000,
         data: {
@@ -212,7 +214,9 @@ export class ERC4626
 
     const vaultToAsset = this.isVault(tokenAddress);
     const vaultToAssetAllowed =
-      state === null ? true : this.eventPool.withdrawRedeemAllowed(state);
+      state === null
+        ? true
+        : this.withdrawAllowed(state) || this.redeemAllowed(state);
 
     let liquidityUSD = UNLIMITED_USD_LIQUIDITY;
     let connectorLiquidityUSD = UNLIMITED_USD_LIQUIDITY;
@@ -231,7 +235,7 @@ export class ERC4626
         address: this.vault,
         connectorTokens: [
           {
-            decimals: 18,
+            decimals: this.decimals,
             address: vaultToAsset ? this.asset : this.vault,
             liquidityUSD: connectorLiquidityUSD,
           },
@@ -373,5 +377,25 @@ export class ERC4626
 
   previewDeposit(assets: bigint, state: ERC4626PoolState) {
     return (assets * state.totalShares) / state.totalAssets;
+  }
+
+  redeemAllowed(state: ERC4626PoolState): boolean {
+    if (state.cooldownDuration) {
+      return state.cooldownDuration === 0n;
+    }
+
+    return true;
+  }
+
+  withdrawAllowed(state: ERC4626PoolState): boolean {
+    if (this.withdrawDisabled) {
+      return false;
+    }
+
+    if (state.cooldownDuration) {
+      return state.cooldownDuration === 0n;
+    }
+
+    return true;
   }
 }

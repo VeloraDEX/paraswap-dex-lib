@@ -101,14 +101,6 @@ export class ERC4626EventPool extends StatefulEventSubscriber<ERC4626PoolState> 
     };
   }
 
-  withdrawRedeemAllowed(state: ERC4626PoolState): boolean {
-    if (state.cooldownDuration) {
-      return state.cooldownDuration === 0n;
-    }
-
-    return true;
-  }
-
   async getOrGenerateState(blockNumber: number): Promise<ERC4626PoolState> {
     let state = this.getState(blockNumber);
     if (!state) {
