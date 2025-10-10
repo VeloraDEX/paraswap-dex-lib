@@ -180,8 +180,12 @@ export interface IDexPricing<ExchangeData> {
     blockNumber: number,
   ): AsyncOrSync<unknown>;
 
-  // Returns on-chain pricing for a specific pool. If the pool is not found,
-  // return null. Used for comparing on-chain vs off-chain pricing.
+  // Returns on-chain pricing for a specific pool.
+  // Return values:
+  // - null: unsupported token pair or direction
+  // - 0n: supported pair but price is not available
+  // - bigint > 0n: actual price
+  // Used for comparing on-chain vs off-chain pricing.
   // This is optional for a DEX to implement this function
   getOnChainPriceByPoolId?(
     poolId: string,

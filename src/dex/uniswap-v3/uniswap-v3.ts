@@ -546,14 +546,26 @@ export class UniswapV3
   ): Promise<bigint | null> {
     if (poolIdentifier.includes('factory')) return null;
 
-    const [, , feeStr] = poolIdentifier.split('_');
+    const [tokenA, tokenB, feeStr] = poolIdentifier.split('_');
 
-    if (!feeStr) {
+    if (!tokenA || !tokenB || !feeStr) {
       this.logger.warn(
         `${this.dexKey}: Invalid pool identifier format: ${poolIdentifier}`,
       );
       return null;
     }
+
+    const srcIsTokenA = srcToken.address.toLowerCase() === tokenA.toLowerCase();
+    const srcIsTokenB = srcToken.address.toLowerCase() === tokenB.toLowerCase();
+    const destIsTokenA =
+      destToken.address.toLowerCase() === tokenA.toLowerCase();
+    const destIsTokenB =
+      destToken.address.toLowerCase() === tokenB.toLowerCase();
+
+    const isSupportedPair =
+      (srcIsTokenA && destIsTokenB) || (srcIsTokenB && destIsTokenA);
+
+    if (!isSupportedPair) return null;
 
     try {
       const callData =
@@ -588,7 +600,7 @@ export class UniswapV3
         blockNumber,
       );
 
-      return result[0] || null;
+      return result[0] || 0n;
     } catch (error) {
       this.logger.error(
         `${this.dexKey}: Error querying on-chain price for pool ${poolIdentifier}: ${error}`,

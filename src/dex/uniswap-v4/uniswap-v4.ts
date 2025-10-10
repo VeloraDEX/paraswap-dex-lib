@@ -592,17 +592,32 @@ export class UniswapV4 extends SimpleExchange implements IDex<UniswapV4Data> {
       },
     };
 
-    const zeroForOne =
-      srcToken.address.toLowerCase() === pool.key.currency0.toLowerCase();
+    const srcIsToken0 =
+      srcToken.address.toLowerCase() ===
+      subgraphPool.token0.address.toLowerCase();
+    const srcIsToken1 =
+      srcToken.address.toLowerCase() ===
+      subgraphPool.token1.address.toLowerCase();
+    const destIsToken0 =
+      destToken.address.toLowerCase() ===
+      subgraphPool.token0.address.toLowerCase();
+    const destIsToken1 =
+      destToken.address.toLowerCase() ===
+      subgraphPool.token1.address.toLowerCase();
+
+    const isSupportedPair =
+      (srcIsToken0 && destIsToken1) || (srcIsToken1 && destIsToken0);
+
+    if (!isSupportedPair) return null;
 
     const prices = await this.queryPriceFromRpc(
-      zeroForOne,
+      srcIsToken0, // zeroForOne
       [amount],
       pool,
       side,
       blockNumber,
     );
 
-    return prices[0] || null;
+    return prices[0] || 0n;
   }
 }
