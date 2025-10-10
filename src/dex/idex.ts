@@ -170,6 +170,32 @@ export interface IDexPricing<ExchangeData> {
     blockNumber: number,
   ): Promise<string[]>;
 
+  // Returns generated state of the pool by its identifier for
+  // a given block number. If the pool is not found or
+  // cannot generate state, return null.
+  // This is optional for a DEX to implement this function
+
+  generateStateByPoolId?(
+    poolId: string,
+    blockNumber: number,
+  ): AsyncOrSync<unknown>;
+
+  // Returns on-chain pricing for a specific pool.
+  // Return values:
+  // - null: unsupported token pair or direction
+  // - 0n: supported pair but price is not available
+  // - bigint > 0n: actual price
+  // Used for comparing on-chain vs off-chain pricing.
+  // This is optional for a DEX to implement this function
+  getOnChainPriceByPoolId?(
+    poolId: string,
+    srcToken: Token,
+    destToken: Token,
+    amount: bigint,
+    side: SwapSide,
+    blockNumber: number,
+  ): Promise<bigint | null>;
+
   // Returns pool prices for amounts.
   // If limitPools is defined only pools in limitPools
   // should be used. If limitPools is undefined then

@@ -38,6 +38,7 @@ import { queryAvailablePoolsForToken } from './subgraph';
 import _ from 'lodash';
 import { UNISWAPV4_EFFICIENCY_FACTOR } from './constants';
 import { PoolsRegistryHashKey } from '../uniswap-v3/uniswap-v3';
+import { UniswapV4Pool } from './uniswap-v4-pool';
 
 export class UniswapV4 extends SimpleExchange implements IDex<UniswapV4Data> {
   readonly hasConstantPriceLargeAmounts = false;
@@ -502,5 +503,121 @@ export class UniswapV4 extends SimpleExchange implements IDex<UniswapV4Data> {
       payload,
       networkFee: '0',
     };
+  }
+
+  async generateStateByPoolId(
+    poolIdentifier: string,
+    blockNumber: number,
+  ): Promise<DeepReadonly<PoolState | {}> | null> {
+    if (poolIdentifier.includes('factory')) return {};
+
+    const poolManager = new UniswapV4PoolManager(
+      this.dexHelper,
+      this.dexKey,
+      this.network,
+      UniswapV4Config[this.dexKey][this.network],
+      this.logger,
+      this.cacheStateKey,
+    );
+
+    const allPools = await poolManager.queryAllAvailablePools(blockNumber);
+    const poolInfo = allPools.find(p => p.id === poolIdentifier);
+
+    if (!poolInfo) {
+      this.logger.warn(
+        `${this.dexKey}-${this.network}: Pool ${poolIdentifier} not found in the list of available pools`,
+      );
+      return null;
+    }
+
+    const pool = new UniswapV4Pool(
+      this.dexHelper,
+      this.dexKey,
+      this.network,
+      UniswapV4Config[this.dexKey][this.network],
+      this.logger,
+      '',
+      poolInfo.id,
+      poolInfo.token0.address.toLowerCase(),
+      poolInfo.token1.address.toLowerCase(),
+      poolInfo.fee,
+      poolInfo.hooks,
+      poolInfo.tickSpacing,
+    );
+
+    if (!pool) {
+      return null;
+    }
+
+    return await pool.generateState(blockNumber);
+  }
+
+  async getOnChainPriceByPoolId(
+    poolIdentifier: string,
+    srcToken: Token,
+    destToken: Token,
+    amount: bigint,
+    side: SwapSide,
+    blockNumber: number,
+  ): Promise<bigint | null> {
+    if (poolIdentifier.includes('factory')) return null;
+
+    const poolManager = new UniswapV4PoolManager(
+      this.dexHelper,
+      this.dexKey,
+      this.network,
+      UniswapV4Config[this.dexKey][this.network],
+      this.logger,
+      this.cacheStateKey,
+    );
+
+    const allPools = await poolManager.queryAllAvailablePools(blockNumber);
+    const subgraphPool = allPools.find(p => p.id === poolIdentifier);
+
+    if (!subgraphPool) {
+      this.logger.warn(
+        `${this.dexKey}-${this.network}: Pool ${poolIdentifier} not found in the list of available pools`,
+      );
+      return null;
+    }
+
+    const pool: Pool = {
+      id: subgraphPool.id,
+      key: {
+        currency0: subgraphPool.token0.address,
+        currency1: subgraphPool.token1.address,
+        fee: subgraphPool.fee,
+        tickSpacing: parseInt(subgraphPool.tickSpacing),
+        hooks: subgraphPool.hooks,
+      },
+    };
+
+    const srcIsToken0 =
+      srcToken.address.toLowerCase() ===
+      subgraphPool.token0.address.toLowerCase();
+    const srcIsToken1 =
+      srcToken.address.toLowerCase() ===
+      subgraphPool.token1.address.toLowerCase();
+    const destIsToken0 =
+      destToken.address.toLowerCase() ===
+      subgraphPool.token0.address.toLowerCase();
+    const destIsToken1 =
+      destToken.address.toLowerCase() ===
+      subgraphPool.token1.address.toLowerCase();
+
+    const isSupportedPair =
+      (srcIsToken0 && destIsToken1) || (srcIsToken1 && destIsToken0);
+
+    if (!isSupportedPair) return null;
+
+    const prices = await this.queryPriceFromRpc(
+      srcIsToken0, // zeroForOne
+      [amount],
+      pool,
+      side,
+      blockNumber,
+    );
+
+    return prices[0] || 0n;
   }
 }

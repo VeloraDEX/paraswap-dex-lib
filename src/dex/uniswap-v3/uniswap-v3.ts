@@ -512,6 +512,104 @@ export class UniswapV3
     );
   }
 
+  async generateStateByPoolId(
+    poolIdentifier: string,
+    blockNumber: number,
+  ): Promise<DeepReadonly<PoolState | {}> | null> {
+    if (poolIdentifier.includes('factory')) return {};
+
+    const [tokenA, tokenB, feeStr, tickSpacing] = poolIdentifier.split('_');
+
+    const fee = BigInt(feeStr);
+
+    const pool = this.getPoolInstance(
+      tokenA.toLowerCase(),
+      tokenB.toLowerCase(),
+      fee,
+      tickSpacing ? BigInt(tickSpacing) : undefined,
+    );
+
+    if (!pool) {
+      return null;
+    }
+
+    return await pool.generateState(blockNumber);
+  }
+
+  async getOnChainPriceByPoolId(
+    poolIdentifier: string,
+    srcToken: Token,
+    destToken: Token,
+    amount: bigint,
+    side: SwapSide,
+    blockNumber: number,
+  ): Promise<bigint | null> {
+    if (poolIdentifier.includes('factory')) return null;
+
+    const [tokenA, tokenB, feeStr] = poolIdentifier.split('_');
+
+    if (!tokenA || !tokenB || !feeStr) {
+      this.logger.warn(
+        `${this.dexKey}: Invalid pool identifier format: ${poolIdentifier}`,
+      );
+      return null;
+    }
+
+    const srcIsTokenA = srcToken.address.toLowerCase() === tokenA.toLowerCase();
+    const srcIsTokenB = srcToken.address.toLowerCase() === tokenB.toLowerCase();
+    const destIsTokenA =
+      destToken.address.toLowerCase() === tokenA.toLowerCase();
+    const destIsTokenB =
+      destToken.address.toLowerCase() === tokenB.toLowerCase();
+
+    const isSupportedPair =
+      (srcIsTokenA && destIsTokenB) || (srcIsTokenB && destIsTokenA);
+
+    if (!isSupportedPair) return null;
+
+    try {
+      const callData =
+        side === SwapSide.SELL
+          ? this.quoterIface.encodeFunctionData('quoteExactInputSingle', [
+              [
+                srcToken.address,
+                destToken.address,
+                amount.toString(),
+                feeStr,
+                0, // sqrtPriceLimitX96
+              ],
+            ])
+          : this.quoterIface.encodeFunctionData('quoteExactOutputSingle', [
+              [
+                srcToken.address,
+                destToken.address,
+                amount.toString(),
+                feeStr,
+                0, // sqrtPriceLimitX96
+              ],
+            ]);
+
+      const result = await this.dexHelper.multiWrapper.aggregate(
+        [
+          {
+            target: this.config.quoter,
+            callData,
+            decodeFunction: uint256ToBigInt,
+          },
+        ],
+        blockNumber,
+      );
+
+      return result[0] || 0n;
+    } catch (error) {
+      this.logger.error(
+        `${this.dexKey}: Error querying on-chain price for pool ${poolIdentifier}: ${error}`,
+      );
+
+      return null;
+    }
+  }
+
   async getPricingFromRpc(
     from: Token,
     to: Token,
