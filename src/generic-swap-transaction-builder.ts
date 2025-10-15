@@ -238,8 +238,8 @@ export class GenericSwapTransactionBuilder {
     isDirectFeeTransfer: boolean,
     beneficiary: Address,
     permit: string,
-    deadline: string,
     uuid: string,
+    genericWithPartnerFee: boolean,
   ) {
     const executorName =
       this.executorDetector.getExecutorByPriceRoute(priceRoute);
@@ -288,11 +288,14 @@ export class GenericSwapTransactionBuilder {
       bytecode,
     ];
 
+    let method = isSell ? 'swapExactAmountIn' : 'swapExactAmountOut';
+
+    if (genericWithPartnerFee) {
+      method = isSell ? 'swapExactAmountIn2' : 'swapExactAmountOut2';
+    }
+
     const encoder = (...params: any[]) =>
-      this.augustusV6Interface.encodeFunctionData(
-        isSell ? 'swapExactAmountIn' : 'swapExactAmountOut',
-        params,
-      );
+      this.augustusV6Interface.encodeFunctionData(method, params);
 
     return {
       encoder,
@@ -441,10 +444,10 @@ export class GenericSwapTransactionBuilder {
     maxFeePerGas,
     maxPriorityFeePerGas,
     permit,
-    deadline,
     uuid,
     beneficiary = NULL_ADDRESS,
     onlyParams = false,
+    genericWithPartnerFee = false,
   }: {
     priceRoute: OptimalRate;
     minMaxAmount: string;
@@ -465,6 +468,7 @@ export class GenericSwapTransactionBuilder {
     uuid: string;
     beneficiary?: Address;
     onlyParams?: boolean;
+    genericWithPartnerFee?: boolean;
   }): Promise<TxObject | (string | string[])[]> {
     // if quotedAmount wasn't passed, use the amount from the route
     const _quotedAmount = quotedAmount
@@ -516,8 +520,8 @@ export class GenericSwapTransactionBuilder {
         isDirectFeeTransfer ?? false,
         _beneficiary,
         permit || '0x',
-        deadline,
         uuid,
+        genericWithPartnerFee,
       ));
     }
 
