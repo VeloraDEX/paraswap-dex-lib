@@ -211,7 +211,7 @@ export const UniswapV2Config: DexConfigMap<DexParams> = {
       },
     },
   },
-  CanarySwap: {
+  Canary: {
     [Network.AVALANCHE]: {
       subgraphURL: 'An3x5Mz4YXEERomXYC4AhGgNhRthPFXNYDnrMCjrAJe',
       factoryAddress: '0xCFBA329d49C24b70F3a8b9CC0853493d4645436b',
