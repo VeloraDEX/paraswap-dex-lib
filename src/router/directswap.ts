@@ -11,7 +11,7 @@ import {
 } from './payload-encoder';
 
 export class DirectSwap<DexDirectReturn> implements IRouter<DexDirectReturn> {
-  // This is just psuedo name as the DirectSwap
+  // This is just pseudo name as the DirectSwap
   // is more generic and works with multiple
   // contract methods.
   contractMethodName: string = 'directSwap';

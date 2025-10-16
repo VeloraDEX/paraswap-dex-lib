@@ -752,7 +752,7 @@ export class Hashflow extends SimpleExchange implements IDex<HashflowData> {
       error.addedDatetimeMS + CONSECUTIVE_ERROR_TIMESPAN_MS < Date.now()
     ) {
       this.logger.warn(
-        `${this.dexKey}-${this.network}: First encounter of error code=${errorCode} for ${mm} OR error ocurred outside of threshold, setting up counter`,
+        `${this.dexKey}-${this.network}: First encounter of error code=${errorCode} for ${mm} OR error occurred outside of threshold, setting up counter`,
       );
       const data: CacheErrorCodesData = {
         ...errorCodes,

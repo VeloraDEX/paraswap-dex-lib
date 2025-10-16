@@ -234,7 +234,7 @@ In order to ensure correctness of encoding please make use of these parameters:
 
 - `needWrapNative`: if true, tells if the DEX only deals with wrapped native tokens (eg. on Ethereum it only executes trades with wETH, not native ETH).
 - `dexFuncHasRecipient`: if true, tells if the DEX can swap and transfer to an arbitrary address (`recipient`) else we would append a transfer call
-- `exchangeData`: the call data required by the DEX, and typically requires targetting the contract's interface to encode data.
+- `exchangeData`: the call data required by the DEX, and typically requires targeting the contract's interface to encode data.
 - `transferSrcTokenBeforeSwap`: if your DEX requires a transfer before the swap happens, rather than encoding it within the `exchangeData`
 - `targetExchange`: the contract against which we swap
 - `spender`: a contract that we need to approve in order to swap against `targetExchange`. If not set, then the spender will be `targetExchange`
