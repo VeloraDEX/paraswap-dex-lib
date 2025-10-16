@@ -31,6 +31,16 @@ export const GMXConfig: DexConfigMap<DexParams> = {
       usdg: '0x548f93779fBC992010C07467cBaf329DD5F059B7',
     },
   },
+  Voodoo: {
+    [Network.BASE]: {
+      vault: '0x4F188Afdc40e6D2Ddddf5fd1b2DF7AEF7Da52f50',
+      reader: '0x8172d3Bc5b8585EE373B2dDe3878fA99618D291B',
+      priceFeed: '0x75dBE30332d9C59963CFbC39f7c044254AccDE36',
+      fastPriceFeed: '0x4fdd516a93FC937c76F03c6D605648Ed1D62Dd25',
+      fastPriceEvents: '0x2Ed7F17BdF9a345c7e09F0c2Dd5B02B287f83bA2',
+      usdg: '0x9ADBF75Db88E965e0d522F93F3c373341B62C1F2',
+    },
+  },
 };
 
 export const Adapters: {
