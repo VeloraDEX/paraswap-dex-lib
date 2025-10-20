@@ -554,13 +554,11 @@ export class UniswapV4 extends SimpleExchange implements IDex<UniswapV4Data> {
 
   async getOnChainPriceByPoolId(
     poolIdentifier: string,
-    srcToken: Token,
-    destToken: Token,
     amount: bigint,
     side: SwapSide,
     blockNumber: number,
-  ): Promise<bigint | null> {
-    if (poolIdentifier.includes('factory')) return null;
+  ): Promise<{ srcToken: string; destToken: string; outputAmount: bigint }[]> {
+    if (poolIdentifier.includes('factory')) return [];
 
     const poolManager = new UniswapV4PoolManager(
       this.dexHelper,
@@ -578,7 +576,7 @@ export class UniswapV4 extends SimpleExchange implements IDex<UniswapV4Data> {
       this.logger.warn(
         `${this.dexKey}-${this.network}: Pool ${poolIdentifier} not found in the list of available pools`,
       );
-      return null;
+      return [];
     }
 
     const pool: Pool = {
@@ -592,32 +590,58 @@ export class UniswapV4 extends SimpleExchange implements IDex<UniswapV4Data> {
       },
     };
 
-    const srcIsToken0 =
-      srcToken.address.toLowerCase() ===
-      subgraphPool.token0.address.toLowerCase();
-    const srcIsToken1 =
-      srcToken.address.toLowerCase() ===
-      subgraphPool.token1.address.toLowerCase();
-    const destIsToken0 =
-      destToken.address.toLowerCase() ===
-      subgraphPool.token0.address.toLowerCase();
-    const destIsToken1 =
-      destToken.address.toLowerCase() ===
-      subgraphPool.token1.address.toLowerCase();
+    const results: {
+      srcToken: string;
+      destToken: string;
+      outputAmount: bigint;
+    }[] = [];
 
-    const isSupportedPair =
-      (srcIsToken0 && destIsToken1) || (srcIsToken1 && destIsToken0);
+    try {
+      // Query prices for both directions (token0 -> token1 and token1 -> token0)
+      const pairs = [
+        {
+          zeroForOne: true,
+          src: subgraphPool.token0.address,
+          dest: subgraphPool.token1.address,
+        },
+        {
+          zeroForOne: false,
+          src: subgraphPool.token1.address,
+          dest: subgraphPool.token0.address,
+        },
+      ];
 
-    if (!isSupportedPair) return null;
+      for (const pair of pairs) {
+        try {
+          const prices = await this.queryPriceFromRpc(
+            pair.zeroForOne,
+            [amount],
+            pool,
+            side,
+            blockNumber,
+          );
 
-    const prices = await this.queryPriceFromRpc(
-      srcIsToken0, // zeroForOne
-      [amount],
-      pool,
-      side,
-      blockNumber,
-    );
+          if (prices[0] && prices[0] > 0n) {
+            results.push({
+              srcToken: pair.src.toLowerCase(),
+              destToken: pair.dest.toLowerCase(),
+              outputAmount: prices[0],
+            });
+          }
+        } catch (error) {
+          // Log failed quotes for debugging
+          this.logger.debug(
+            `${this.dexKey}: Failed quote for pair ${pair.src} -> ${pair.dest}: ${error}`,
+          );
+        }
+      }
 
-    return prices[0] || 0n;
+      return results;
+    } catch (error) {
+      this.logger.error(
+        `${this.dexKey}-${this.network}: Error querying on-chain prices for pool ${poolIdentifier}: ${error}`,
+      );
+      return [];
+    }
   }
 }

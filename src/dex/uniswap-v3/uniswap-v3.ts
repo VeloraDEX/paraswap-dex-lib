@@ -538,13 +538,11 @@ export class UniswapV3
 
   async getOnChainPriceByPoolId(
     poolIdentifier: string,
-    srcToken: Token,
-    destToken: Token,
     amount: bigint,
     side: SwapSide,
     blockNumber: number,
-  ): Promise<bigint | null> {
-    if (poolIdentifier.includes('factory')) return null;
+  ): Promise<{ srcToken: string; destToken: string; outputAmount: bigint }[]> {
+    if (poolIdentifier.includes('factory')) return [];
 
     const [tokenA, tokenB, feeStr] = poolIdentifier.split('_');
 
@@ -552,61 +550,94 @@ export class UniswapV3
       this.logger.warn(
         `${this.dexKey}: Invalid pool identifier format: ${poolIdentifier}`,
       );
-      return null;
+      return [];
     }
 
-    const srcIsTokenA = srcToken.address.toLowerCase() === tokenA.toLowerCase();
-    const srcIsTokenB = srcToken.address.toLowerCase() === tokenB.toLowerCase();
-    const destIsTokenA =
-      destToken.address.toLowerCase() === tokenA.toLowerCase();
-    const destIsTokenB =
-      destToken.address.toLowerCase() === tokenB.toLowerCase();
+    const results: {
+      srcToken: string;
+      destToken: string;
+      outputAmount: bigint;
+    }[] = [];
 
-    const isSupportedPair =
-      (srcIsTokenA && destIsTokenB) || (srcIsTokenB && destIsTokenA);
+    const calls: MultiCallParams<bigint>[] = [];
+    const pairInfo: { srcToken: string; destToken: string }[] = [];
 
-    if (!isSupportedPair) return null;
+    // Build calls for both directions (tokenA -> tokenB and tokenB -> tokenA)
+    const pairs = [
+      { src: tokenA, dest: tokenB },
+      { src: tokenB, dest: tokenA },
+    ];
+
+    for (const pair of pairs) {
+      if (side === SwapSide.SELL) {
+        calls.push({
+          target: this.config.quoter,
+          callData: this.quoterIface.encodeFunctionData(
+            'quoteExactInputSingle',
+            [
+              [
+                pair.src,
+                pair.dest,
+                amount.toString(),
+                feeStr,
+                0, // sqrtPriceLimitX96
+              ],
+            ],
+          ),
+          decodeFunction: uint256ToBigInt,
+        });
+      } else {
+        calls.push({
+          target: this.config.quoter,
+          callData: this.quoterIface.encodeFunctionData(
+            'quoteExactOutputSingle',
+            [
+              [
+                pair.src,
+                pair.dest,
+                amount.toString(),
+                feeStr,
+                0, // sqrtPriceLimitX96
+              ],
+            ],
+          ),
+          decodeFunction: uint256ToBigInt,
+        });
+      }
+
+      pairInfo.push({ srcToken: pair.src, destToken: pair.dest });
+    }
 
     try {
-      const callData =
-        side === SwapSide.SELL
-          ? this.quoterIface.encodeFunctionData('quoteExactInputSingle', [
-              [
-                srcToken.address,
-                destToken.address,
-                amount.toString(),
-                feeStr,
-                0, // sqrtPriceLimitX96
-              ],
-            ])
-          : this.quoterIface.encodeFunctionData('quoteExactOutputSingle', [
-              [
-                srcToken.address,
-                destToken.address,
-                amount.toString(),
-                feeStr,
-                0, // sqrtPriceLimitX96
-              ],
-            ]);
-
-      const result = await this.dexHelper.multiWrapper.aggregate(
-        [
-          {
-            target: this.config.quoter,
-            callData,
-            decodeFunction: uint256ToBigInt,
-          },
-        ],
+      // Execute all calls with tryAggregate to handle failures gracefully
+      const quotesResult = await this.dexHelper.multiWrapper.tryAggregate(
+        false,
+        calls,
         blockNumber,
       );
 
-      return result[0] || 0n;
+      // Process results
+      for (let idx = 0; idx < quotesResult.length; idx++) {
+        if (quotesResult[idx].success) {
+          results.push({
+            srcToken: pairInfo[idx].srcToken.toLowerCase(),
+            destToken: pairInfo[idx].destToken.toLowerCase(),
+            outputAmount: quotesResult[idx].returnData,
+          });
+        } else {
+          // Log failed quotes for debugging
+          this.logger.debug(
+            `${this.dexKey}: Failed quote for pair ${pairInfo[idx].srcToken} -> ${pairInfo[idx].destToken}`,
+          );
+        }
+      }
+
+      return results;
     } catch (error) {
       this.logger.error(
-        `${this.dexKey}: Error querying on-chain price for pool ${poolIdentifier}: ${error}`,
+        `${this.dexKey}: Error querying on-chain prices for pool ${poolIdentifier}: ${error}`,
       );
-
-      return null;
+      return [];
     }
   }
 

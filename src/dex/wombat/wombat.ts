@@ -33,6 +33,7 @@ import { fromWad } from './utils';
 import { WombatPool } from './wombat-pool';
 import { StatePollingManager } from '../../lib/stateful-rpc-poller/state-polling-manager';
 import { extractReturnAmountPosition } from '../../executor/utils';
+import { MultiCallParams } from '../../lib/multi-wrapper';
 
 export class Wombat extends SimpleExchange implements IDex<WombatData> {
   // contract interfaces
@@ -408,65 +409,130 @@ export class Wombat extends SimpleExchange implements IDex<WombatData> {
   }
 
   async getOnChainPriceByPoolId(
-    address: string,
-    srcToken: Token,
-    destToken: Token,
+    poolId: string,
     amount: bigint,
     side: SwapSide,
     blockNumber: number,
-  ): Promise<bigint | null> {
-    if (address.includes('factory')) return null;
+  ): Promise<{ srcToken: string; destToken: string; outputAmount: bigint }[]> {
+    if (poolId.includes('factory')) return [];
 
     try {
-      const srcTokenAddress = this.dexHelper.config.wrapETH(srcToken).address;
-      const destTokenAddress = this.dexHelper.config.wrapETH(destToken).address;
+      // Parse pool identifier to extract pool address
+      // Format: ${dexKey}_${poolAddress}
+      const poolParts = poolId.split('_');
+      if (poolParts.length < 2) {
+        this.logger.warn(
+          `${this.dexKey}: Invalid pool identifier format: ${poolId}`,
+        );
+        return [];
+      }
 
-      if (side === SwapSide.BUY) {
-        // For BUY side, use quoteAmountIn to get the required input amount
-        const result = await this.dexHelper.multiContract.methods
-          .aggregate([
-            {
-              target: address,
+      const poolAddress = poolParts[1];
+
+      // First, get all tokens in the pool
+      const getTokensResult = await this.dexHelper.multiWrapper.aggregate(
+        [
+          {
+            target: poolAddress,
+            callData: Wombat.poolInterface.encodeFunctionData('getTokens', []),
+            decodeFunction: (data: any) => {
+              return Wombat.poolInterface.decodeFunctionResult(
+                'getTokens',
+                data,
+              )[0] as string[];
+            },
+          },
+        ],
+        blockNumber,
+      );
+
+      const tokens = getTokensResult[0];
+
+      if (!tokens || tokens.length < 2) {
+        return [];
+      }
+
+      const results: {
+        srcToken: string;
+        destToken: string;
+        outputAmount: bigint;
+      }[] = [];
+      const calls: MultiCallParams<bigint>[] = [];
+      const pairInfo: { srcToken: string; destToken: string }[] = [];
+
+      // Build calls for all token pairs
+      for (let i = 0; i < tokens.length; i++) {
+        for (let j = 0; j < tokens.length; j++) {
+          if (i === j) continue;
+
+          const srcToken = tokens[i];
+          const destToken = tokens[j];
+
+          if (side === SwapSide.BUY) {
+            calls.push({
+              target: poolAddress,
               callData: Wombat.poolInterface.encodeFunctionData(
                 'quoteAmountIn',
-                [srcTokenAddress, destTokenAddress, amount],
+                [srcToken, destToken, amount],
               ),
-            },
-          ])
-          .call({}, blockNumber);
-
-        const decoded = Wombat.poolInterface.decodeFunctionResult(
-          'quoteAmountIn',
-          result.returnData[0],
-        );
-
-        return BigInt(decoded.amountIn.toString());
-      } else {
-        // For SELL side, quote directly with quotePotentialSwap
-        const result = await this.dexHelper.multiContract.methods
-          .aggregate([
-            {
-              target: address,
+              decodeFunction: (data: any) => {
+                const decoded = Wombat.poolInterface.decodeFunctionResult(
+                  'quoteAmountIn',
+                  data,
+                );
+                return BigInt(decoded.amountIn.toString());
+              },
+            });
+          } else {
+            calls.push({
+              target: poolAddress,
               callData: Wombat.poolInterface.encodeFunctionData(
                 'quotePotentialSwap',
-                [srcTokenAddress, destTokenAddress, amount],
+                [srcToken, destToken, amount],
               ),
-            },
-          ])
-          .call({}, blockNumber);
+              decodeFunction: (data: any) => {
+                const decoded = Wombat.poolInterface.decodeFunctionResult(
+                  'quotePotentialSwap',
+                  data,
+                );
+                return BigInt(decoded.potentialOutcome.toString());
+              },
+            });
+          }
 
-        const decoded = Wombat.poolInterface.decodeFunctionResult(
-          'quotePotentialSwap',
-          result.returnData[0],
-        );
-
-        return BigInt(decoded.potentialOutcome.toString());
+          pairInfo.push({ srcToken, destToken });
+        }
       }
+
+      // Execute all calls with tryAggregate to handle failures gracefully
+      const quotesResult = await this.dexHelper.multiWrapper.tryAggregate(
+        false,
+        calls,
+        blockNumber,
+      );
+
+      // Process results
+      for (let idx = 0; idx < quotesResult.length; idx++) {
+        if (quotesResult[idx].success) {
+          results.push({
+            srcToken: pairInfo[idx].srcToken.toLowerCase(),
+            destToken: pairInfo[idx].destToken.toLowerCase(),
+            outputAmount: quotesResult[idx].returnData,
+          });
+        } else {
+          // Log failed quotes for debugging
+          this.logger.debug(
+            `${this.dexKey}: Failed quote for pair ${pairInfo[idx].srcToken} -> ${pairInfo[idx].destToken}`,
+          );
+        }
+      }
+
+      return results;
     } catch (error) {
       this.logger.error(
-        `Failed to get on-chain price for pool ${address}: ${error}`,
+        `${this.dexKey}: Failed to get on-chain prices for pool ${poolId}: ${error}`,
       );
-      return null;
+      return [];
     }
   }
 }
