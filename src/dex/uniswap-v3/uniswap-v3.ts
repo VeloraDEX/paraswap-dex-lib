@@ -538,9 +538,9 @@ export class UniswapV3
 
   async getOnChainPriceByPoolId(
     poolIdentifier: string,
-    amount: bigint,
     side: SwapSide,
     blockNumber: number,
+    getInputAmount: (token: string) => bigint,
   ): Promise<{ srcToken: string; destToken: string; outputAmount: bigint }[]> {
     if (poolIdentifier.includes('factory')) return [];
 
@@ -556,11 +556,16 @@ export class UniswapV3
     const results: {
       srcToken: string;
       destToken: string;
+      inputAmount: bigint;
       outputAmount: bigint;
     }[] = [];
 
     const calls: MultiCallParams<bigint>[] = [];
-    const pairInfo: { srcToken: string; destToken: string }[] = [];
+    const pairInfo: {
+      srcToken: string;
+      destToken: string;
+      inputAmount: bigint;
+    }[] = [];
 
     // Build calls for both directions (tokenA -> tokenB and tokenB -> tokenA)
     const pairs = [
@@ -569,7 +574,9 @@ export class UniswapV3
     ];
 
     for (const pair of pairs) {
+      let amount: bigint;
       if (side === SwapSide.SELL) {
+        amount = getInputAmount(pair.src);
         calls.push({
           target: this.config.quoter,
           callData: this.quoterIface.encodeFunctionData(
@@ -587,6 +594,7 @@ export class UniswapV3
           decodeFunction: uint256ToBigInt,
         });
       } else {
+        amount = getInputAmount(pair.dest);
         calls.push({
           target: this.config.quoter,
           callData: this.quoterIface.encodeFunctionData(
@@ -605,7 +613,11 @@ export class UniswapV3
         });
       }
 
-      pairInfo.push({ srcToken: pair.src, destToken: pair.dest });
+      pairInfo.push({
+        srcToken: pair.src,
+        destToken: pair.dest,
+        inputAmount: amount,
+      });
     }
 
     try {
@@ -622,6 +634,7 @@ export class UniswapV3
           results.push({
             srcToken: pairInfo[idx].srcToken.toLowerCase(),
             destToken: pairInfo[idx].destToken.toLowerCase(),
+            inputAmount: pairInfo[idx].inputAmount,
             outputAmount: quotesResult[idx].returnData,
           });
         } else {

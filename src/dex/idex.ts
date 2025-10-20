@@ -189,9 +189,9 @@ export interface IDexPricing<ExchangeData> {
   // This is optional for a DEX to implement this function
   getOnChainPriceByPoolId?(
     poolId: string,
-    amount: bigint,
     side: SwapSide,
     blockNumber: number,
+    getInputAmount: (token: string) => bigint,
   ): Promise<{ srcToken: string; destToken: string; outputAmount: bigint }[]>;
 
   // Returns pool prices for amounts.

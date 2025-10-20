@@ -554,9 +554,9 @@ export class UniswapV4 extends SimpleExchange implements IDex<UniswapV4Data> {
 
   async getOnChainPriceByPoolId(
     poolIdentifier: string,
-    amount: bigint,
     side: SwapSide,
     blockNumber: number,
+    getInputAmount: (token: string) => bigint,
   ): Promise<{ srcToken: string; destToken: string; outputAmount: bigint }[]> {
     if (poolIdentifier.includes('factory')) return [];
 
@@ -593,6 +593,7 @@ export class UniswapV4 extends SimpleExchange implements IDex<UniswapV4Data> {
     const results: {
       srcToken: string;
       destToken: string;
+      inputAmount: bigint;
       outputAmount: bigint;
     }[] = [];
 
@@ -613,6 +614,10 @@ export class UniswapV4 extends SimpleExchange implements IDex<UniswapV4Data> {
 
       for (const pair of pairs) {
         try {
+          const amount =
+            side === SwapSide.SELL
+              ? getInputAmount(pair.src)
+              : getInputAmount(pair.dest);
           const prices = await this.queryPriceFromRpc(
             pair.zeroForOne,
             [amount],
@@ -625,6 +630,7 @@ export class UniswapV4 extends SimpleExchange implements IDex<UniswapV4Data> {
             results.push({
               srcToken: pair.src.toLowerCase(),
               destToken: pair.dest.toLowerCase(),
+              inputAmount: amount,
               outputAmount: prices[0],
             });
           }

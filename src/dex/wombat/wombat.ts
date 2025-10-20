@@ -410,9 +410,9 @@ export class Wombat extends SimpleExchange implements IDex<WombatData> {
 
   async getOnChainPriceByPoolId(
     poolId: string,
-    amount: bigint,
     side: SwapSide,
     blockNumber: number,
+    getInputAmount: (token: string) => bigint,
   ): Promise<{ srcToken: string; destToken: string; outputAmount: bigint }[]> {
     if (poolId.includes('factory')) return [];
 
@@ -455,10 +455,15 @@ export class Wombat extends SimpleExchange implements IDex<WombatData> {
       const results: {
         srcToken: string;
         destToken: string;
+        inputAmount: bigint;
         outputAmount: bigint;
       }[] = [];
       const calls: MultiCallParams<bigint>[] = [];
-      const pairInfo: { srcToken: string; destToken: string }[] = [];
+      const pairInfo: {
+        srcToken: string;
+        destToken: string;
+        inputAmount: bigint;
+      }[] = [];
 
       // Build calls for all token pairs
       for (let i = 0; i < tokens.length; i++) {
@@ -467,8 +472,10 @@ export class Wombat extends SimpleExchange implements IDex<WombatData> {
 
           const srcToken = tokens[i];
           const destToken = tokens[j];
+          let amount = 0n;
 
           if (side === SwapSide.BUY) {
+            amount = getInputAmount(destToken);
             calls.push({
               target: poolAddress,
               callData: Wombat.poolInterface.encodeFunctionData(
@@ -484,6 +491,7 @@ export class Wombat extends SimpleExchange implements IDex<WombatData> {
               },
             });
           } else {
+            amount = getInputAmount(srcToken);
             calls.push({
               target: poolAddress,
               callData: Wombat.poolInterface.encodeFunctionData(
@@ -500,7 +508,7 @@ export class Wombat extends SimpleExchange implements IDex<WombatData> {
             });
           }
 
-          pairInfo.push({ srcToken, destToken });
+          pairInfo.push({ srcToken, destToken, inputAmount: amount });
         }
       }
 
@@ -517,6 +525,7 @@ export class Wombat extends SimpleExchange implements IDex<WombatData> {
           results.push({
             srcToken: pairInfo[idx].srcToken.toLowerCase(),
             destToken: pairInfo[idx].destToken.toLowerCase(),
+            inputAmount: pairInfo[idx].inputAmount,
             outputAmount: quotesResult[idx].returnData,
           });
         } else {
