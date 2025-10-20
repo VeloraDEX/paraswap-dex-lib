@@ -406,4 +406,67 @@ export class Wombat extends SimpleExchange implements IDex<WombatData> {
   releaseResources(): AsyncOrSync<void> {
     // TODO: complete me!
   }
+
+  async getOnChainPriceByPoolId(
+    address: string,
+    srcToken: Token,
+    destToken: Token,
+    amount: bigint,
+    side: SwapSide,
+    blockNumber: number,
+  ): Promise<bigint | null> {
+    if (address.includes('factory')) return null;
+
+    try {
+      const srcTokenAddress = this.dexHelper.config.wrapETH(srcToken).address;
+      const destTokenAddress = this.dexHelper.config.wrapETH(destToken).address;
+
+      if (side === SwapSide.BUY) {
+        // For BUY side, use quoteAmountIn to get the required input amount
+        const result = await this.dexHelper.multiContract.methods
+          .aggregate([
+            {
+              target: address,
+              callData: Wombat.poolInterface.encodeFunctionData(
+                'quoteAmountIn',
+                [srcTokenAddress, destTokenAddress, amount],
+              ),
+            },
+          ])
+          .call({}, blockNumber);
+
+        const decoded = Wombat.poolInterface.decodeFunctionResult(
+          'quoteAmountIn',
+          result.returnData[0],
+        );
+
+        return BigInt(decoded.amountIn.toString());
+      } else {
+        // For SELL side, quote directly with quotePotentialSwap
+        const result = await this.dexHelper.multiContract.methods
+          .aggregate([
+            {
+              target: address,
+              callData: Wombat.poolInterface.encodeFunctionData(
+                'quotePotentialSwap',
+                [srcTokenAddress, destTokenAddress, amount],
+              ),
+            },
+          ])
+          .call({}, blockNumber);
+
+        const decoded = Wombat.poolInterface.decodeFunctionResult(
+          'quotePotentialSwap',
+          result.returnData[0],
+        );
+
+        return BigInt(decoded.potentialOutcome.toString());
+      }
+    } catch (error) {
+      this.logger.error(
+        `Failed to get on-chain price for pool ${address}: ${error}`,
+      );
+      return null;
+    }
+  }
 }
