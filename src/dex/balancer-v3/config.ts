@@ -148,6 +148,21 @@ export const BalancerV3Config: DexConfigMap<DexParams> = {
       quantAmmUpdateWeightRunnerAddress:
         '0x8Ca4e2a74B84c1feb9ADe19A0Ce0bFcd57e3f6F7',
     },
+    [Network.PLASMA]: {
+      vaultAddress: '0xbA1333333333a1BA1108E8412f11850A5C319bA9',
+      apiNetworkName: 'PLASMA',
+      balancerRouterAddress: '0x9dA18982a33FD0c7051B19F0d7C76F2d5E7e017c',
+      balancerBatchRouterAddress: '0x85a80afee867aDf27B50BdB7b76DA70f1E853062',
+      hooks: [
+        {
+          type: 'StableSurge', // StableSurgeV2 - Is same as V1 with changes: up to 50k amp factor (vs 5k on v1) and ability to set a swap fee manager
+          apiName: 'STABLE_SURGE',
+          factoryAddress: '0x6B5dA774890Db7B7b96C6f44e6a4b0F657399E2e', // Pools with StableSurge hook will always be deployed from this factory
+          factoryDeploymentBlock: 783985,
+          hookAddress: '0x6817149cb753BF529565B4D023d7507eD2ff4Bc0', // Address of the hook that will be used by pools
+        },
+      ],
+    },
     [Network.AVALANCHE]: {
       vaultAddress: '0xbA1333333333a1BA1108E8412f11850A5C319bA9',
       apiNetworkName: 'AVALANCHE',

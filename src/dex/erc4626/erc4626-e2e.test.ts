@@ -75,7 +75,7 @@ function testForNetwork(
 
 const config = ERC4626Config;
 
-for (const dexKey of Object.keys(ERC4626Config).filter(t => t === 'yoETH')) {
+for (const dexKey of Object.keys(ERC4626Config)) {
   for (const net of Object.keys(ERC4626Config[dexKey])) {
     const network = Number(net) as Network;
     const { vault, asset, cooldownEnabled, withdrawDisabled, decimals } =

@@ -222,6 +222,27 @@ describe('UniswapV3 E2E', () => {
       );
     });
 
+    describe('UniswapV3 PLASMA', () => {
+      const network = Network.PLASMA;
+
+      const tokenASymbol: string = 'WXPL';
+      const tokenBSymbol: string = 'USDT0';
+
+      const tokenAAmount: string = '1000000000000000000';
+      const tokenBAmount: string = '1000000';
+      const nativeTokenAmount = '1000000000000000000';
+
+      testForNetwork(
+        network,
+        dexKey,
+        tokenASymbol,
+        tokenBSymbol,
+        tokenAAmount,
+        tokenBAmount,
+        nativeTokenAmount,
+      );
+    });
+
     describe('UniswapV3 POLYGON', () => {
       const network = Network.POLYGON;
       const tokens = Tokens[network];
