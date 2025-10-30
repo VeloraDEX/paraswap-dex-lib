@@ -201,4 +201,16 @@ describe('UniswapV2 Base E2E', () => {
       tokenBAmount,
     );
   });
+
+  describe('OmniExchangeV2', () => {
+    const dexKey = 'OmniExchangeV2';
+    testForNetwork(
+      network,
+      dexKey,
+      'USDC',
+      'WETH',
+      '10000000',
+      '1000000000000000',
+    );
+  });
 });
