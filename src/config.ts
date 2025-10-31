@@ -35,6 +35,8 @@ type BaseConfig = {
   dexalotAuthToken?: string;
   bebopAuthName?: string;
   bebopAuthToken?: string;
+  renegadeAuthApiKey?: string;
+  renegadeAuthApiSecret?: string;
   forceRpcFallbackDexs: string[];
 };
 
@@ -290,6 +292,8 @@ const baseConfigs: { [network: number]: BaseConfig } = {
     privateHttpProvider: process.env.HTTP_PROVIDER_42161,
     hashFlowAuthToken: process.env.API_KEY_HASHFLOW_AUTH_TOKEN || '',
     swaapV2AuthToken: process.env.API_KEY_SWAAP_V2_AUTH_TOKEN || '',
+    renegadeAuthApiKey: process.env.API_KEY_RENEGADE_AUTH_API_KEY || '',
+    renegadeAuthApiSecret: process.env.API_KEY_RENEGADE_AUTH_API_SECRET || '',
     hashFlowDisabledMMs:
       process.env[`HASHFLOW_DISABLED_MMS_42161`]?.split(',') || [],
     augustusV6Address: '0x6a000f20005980200259b80c5102003040001068',
@@ -401,6 +405,8 @@ const baseConfigs: { [network: number]: BaseConfig } = {
     bebopAuthToken: process.env.API_KEY_BEBOP_AUTH_TOKEN || '',
     hashFlowAuthToken: process.env.API_KEY_HASHFLOW_AUTH_TOKEN || '',
     swaapV2AuthToken: process.env.API_KEY_SWAAP_V2_AUTH_TOKEN || '',
+    renegadeAuthApiKey: process.env.API_KEY_RENEGADE_AUTH_API_KEY || '',
+    renegadeAuthApiSecret: process.env.API_KEY_RENEGADE_AUTH_API_SECRET || '',
     hashFlowDisabledMMs: [],
     augustusV6Address: '0x6a000f20005980200259b80c5102003040001068',
     executorsAddresses: {
@@ -525,6 +531,8 @@ export function generateConfig(network: number): Config {
     dexalotAuthToken: baseConfig.dexalotAuthToken,
     bebopAuthName: baseConfig.bebopAuthName,
     bebopAuthToken: baseConfig.bebopAuthToken,
+    renegadeAuthApiKey: baseConfig.renegadeAuthApiKey,
+    renegadeAuthApiSecret: baseConfig.renegadeAuthApiSecret,
     hashFlowDisabledMMs: baseConfig.hashFlowDisabledMMs,
     forceRpcFallbackDexs: baseConfig.forceRpcFallbackDexs,
     apiKeyTheGraph: process.env.API_KEY_THE_GRAPH || '',

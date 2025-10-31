@@ -322,6 +322,8 @@ export type Config = {
   dexalotAuthToken?: string;
   bebopAuthName?: string;
   bebopAuthToken?: string;
+  renegadeAuthApiKey?: string;
+  renegadeAuthApiSecret?: string;
   forceRpcFallbackDexs: string[];
   apiKeyTheGraph: string;
   lidoReferralAddress?: Address;
