@@ -90,12 +90,12 @@ export class AaveV2
     side: SwapSide,
     blockNumber: number,
   ): Promise<string[]> {
-    const aToken = isAaveV2Pair(
-      this.network,
-      this.dexHelper.config.wrapETH(srcToken),
-      this.dexHelper.config.wrapETH(destToken),
-    );
-    if (aToken === null) {
+    const _src = this.dexHelper.config.wrapETH(srcToken);
+    const _dst = this.dexHelper.config.wrapETH(destToken);
+    const aToken = isAaveV2Pair(this.network, _src, _dst);
+    const fromAToken = aToken == _src;
+
+    if (aToken === null || !fromAToken) {
       return [];
     }
     const tokenAddress = [
@@ -122,10 +122,10 @@ export class AaveV2
     const _src = this.dexHelper.config.wrapETH(srcToken);
     const _dst = this.dexHelper.config.wrapETH(destToken);
     const aToken = isAaveV2Pair(this.network, _src, _dst);
-    if (!aToken) {
+    const fromAToken = aToken == _src;
+    if (!aToken || !fromAToken) {
       return null;
     }
-    const fromAToken = aToken == _src;
     return [
       {
         prices: amounts,
@@ -310,7 +310,7 @@ export class AaveV2
               this.wethGateway,
               WETH_GATEWAY[this.network],
               AaveV2PoolAndWethFunctions.depositETH,
-              [recipient, REF_CODE],
+              [aaveLendingPool[this.network], recipient, REF_CODE],
             ];
           case Network.POLYGON:
             return [
@@ -338,7 +338,7 @@ export class AaveV2
               this.wethGateway,
               WETH_GATEWAY[this.network],
               AaveV2PoolAndWethFunctions.withdrawETH,
-              [amount, recipient],
+              [aaveLendingPool[this.network], amount, recipient],
             ];
           case Network.POLYGON:
             return [

@@ -42,11 +42,6 @@ export function _reduceTicks(
       acc[index] = {
         liquidityGross: bigIntify(value.liquidityGross),
         liquidityNet: bigIntify(value.liquidityNet),
-        tickCumulativeOutside: bigIntify(value.tickCumulativeOutside),
-        secondsPerLiquidityOutsideX128: bigIntify(
-          value.secondsPerLiquidityOutsideX128,
-        ),
-        secondsOutside: bigIntify(value.secondsOutside),
         initialized: value.initialized,
       };
     }

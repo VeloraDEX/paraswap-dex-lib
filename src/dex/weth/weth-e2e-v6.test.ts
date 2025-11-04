@@ -14,6 +14,7 @@ const NETWORKS = [
   Network.AVALANCHE,
   Network.BSC,
   Network.BASE,
+  Network.PLASMA,
   Network.POLYGON,
   Network.OPTIMISM,
   Network.SONIC,

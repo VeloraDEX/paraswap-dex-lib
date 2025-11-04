@@ -87,6 +87,7 @@ export class Solidly extends UniswapV2 {
         'Velocimeter',
         'Usdfi',
         'PharaohV1',
+        'Blackhole',
       ]),
     );
 
@@ -417,7 +418,7 @@ export class Solidly extends UniswapV2 {
             ],
           },
           exchange: this.dexKey,
-          poolIdentifier,
+          poolIdentifiers: [poolIdentifier],
           gasCost: this.poolGasCost,
           poolAddresses: [pairParam.exchange],
         };

@@ -953,7 +953,7 @@ export class BalancerV2
               exchange: this.dexKey,
               gasCost:
                 STABLE_GAS_COST + VARIABLE_GAS_COST_PER_CYCLE * path.length,
-              poolIdentifier: `${this.dexKey}_${poolAddress}`,
+              poolIdentifiers: [`${this.dexKey}_${poolAddress.toLowerCase()}`],
             };
 
             // TODO: re-check what should be the current block time stamp

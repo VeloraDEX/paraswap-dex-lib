@@ -383,7 +383,7 @@ export class FluidDexLite
           unit,
           gasCost,
           exchange: this.dexKey,
-          poolIdentifier,
+          poolIdentifiers: [poolIdentifier],
           data: {
             exchange: this.dexLiteAddress,
             dexKey: pool.dexKey,

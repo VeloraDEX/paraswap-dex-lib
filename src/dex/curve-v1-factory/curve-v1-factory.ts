@@ -647,10 +647,17 @@ export class CurveV1Factory
             ];
 
             implementationAddress = implementationAddress.toLowerCase();
-            coins = coins
-              .map(c => c.toLowerCase())
-              .filter(c => c !== NULL_ADDRESS);
-            coins_decimals = coins_decimals.filter(cd => cd !== 0);
+            const filteredPairs = coins
+              .map((c, idx) => ({
+                coin: c.toLowerCase(),
+                decimals: coins_decimals[idx],
+              }))
+              .filter(
+                ({ coin, decimals }) => coin !== NULL_ADDRESS && decimals > 0,
+              );
+
+            coins = filteredPairs.map(p => p.coin);
+            coins_decimals = filteredPairs.map(p => p.decimals);
 
             const factoryImplementationFromConfig =
               this.config.factoryPoolImplementations[implementationAddress];
@@ -1032,7 +1039,9 @@ export class CurveV1Factory
               unit: side === SwapSide.SELL ? outputs[0] : 0n,
               data: poolData,
               exchange: this.dexKey,
-              poolIdentifier: pool.poolIdentifier,
+              poolIdentifiers: [
+                this.getPoolIdentifier(pool.address, pool.isMetaPool),
+              ],
               gasCost: POOL_EXCHANGE_GAS_COST,
               poolAddresses: [pool.address],
             };

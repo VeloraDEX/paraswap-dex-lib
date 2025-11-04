@@ -205,7 +205,7 @@ export class GenericRFQ extends ParaSwapLimitOrders {
       {
         gasCost: Number(ONE_ORDER_GASCOST),
         exchange: this.dexKey,
-        poolIdentifier: expectedIdentifier,
+        poolIdentifiers: [expectedIdentifier],
         prices: outputs,
         unit,
         data: {

@@ -298,7 +298,7 @@ export class BalancerV3 extends SimpleExchange implements IDex<BalancerV3Data> {
             exchange: this.dexKey,
             gasCost: getGasCost(steps),
             poolAddresses: [pool.poolAddress],
-            poolIdentifier: `${this.dexKey}_${pool.poolAddress}`,
+            poolIdentifiers: [pool.poolAddress],
           };
 
           for (let j = 0; j < amounts.length; j++) {
@@ -598,6 +598,7 @@ export class BalancerV3 extends SimpleExchange implements IDex<BalancerV3Data> {
   // getTopPoolsForToken. It is optional for a DEX
   // to implement this
   async updatePoolState(): Promise<void> {
+    this.eventPools.setHooksConfigMap(this.eventHooks.hooksConfigMap);
     await this.eventPools.updateStatePools();
   }
 

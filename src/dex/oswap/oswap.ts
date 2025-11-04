@@ -263,7 +263,7 @@ export class OSwap extends SimpleExchange implements IDex<OSwapData> {
             path: [srcToken.address, destToken.address],
           },
           exchange: this.dexKey,
-          poolIdentifier: pool.id,
+          poolIdentifiers: [pool.id],
           gasCost: OSWAP_GAS_COST,
           poolAddresses: [pool.address],
         },

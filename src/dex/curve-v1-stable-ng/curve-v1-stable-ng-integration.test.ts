@@ -256,9 +256,9 @@ describe('CurveV1StableNG integration', function () {
       }
     });
 
-    describe('WXDAI -> USDC', () => {
+    describe('WXDAI -> BREAD', () => {
       const srcTokenSymbol = 'WXDAI';
-      const destTokenSymbol = 'USDC';
+      const destTokenSymbol = 'BREAD';
       const amountsForSell = [
         0n,
         1n * BI_POWS[tokens[srcTokenSymbol].decimals],
@@ -332,7 +332,6 @@ describe('CurveV1StableNG integration', function () {
           tokens[srcTokenSymbol].address,
           10,
         );
-        console.log(`${srcTokenSymbol} Top Pools:`, poolLiquidity);
 
         if (!newCurveV1StableNG.hasConstantPriceLargeAmounts) {
           checkPoolsLiquidity(

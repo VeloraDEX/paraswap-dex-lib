@@ -443,7 +443,9 @@ export class Bebop extends SimpleExchange implements IDex<BebopData> {
           prices: outputs,
           unit: BigInt(outDecimals),
           data: {},
-          poolIdentifier: pools[0],
+          poolIdentifiers: [
+            this.getPoolIdentifier(srcToken.address, destToken.address),
+          ],
           exchange: this.dexKey,
           gasCost: BEBOP_GAS_COST,
           poolAddresses: [this.settlementAddress],

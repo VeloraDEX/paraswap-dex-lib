@@ -559,11 +559,13 @@ export class SolidlyV3
               zeroForOne,
               poolAddress: pool.poolAddress,
             },
-            poolIdentifier: this.getPoolIdentifier(
-              pool.token0,
-              pool.token1,
-              pool.tickSpacing,
-            ),
+            poolIdentifiers: [
+              this.getPoolIdentifier(
+                pool.token0,
+                pool.token1,
+                pool.tickSpacing,
+              ),
+            ],
             exchange: this.dexKey,
             gasCost: gasCost,
             poolAddresses: [pool.poolAddress],

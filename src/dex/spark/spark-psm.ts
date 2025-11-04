@@ -9,13 +9,14 @@ import {
 import { SwapSide } from '@paraswap/core/build/constants';
 import { Context } from '../idex';
 import {
+  ConnectorToken,
   DexConfigMap,
   DexExchangeParam,
   ExchangePrices,
   PoolLiquidity,
   Token,
 } from '../../types';
-import { Network } from '../../constants';
+import { Network, UNLIMITED_USD_LIQUIDITY } from '../../constants';
 import { getDexKeysWithNetwork } from '../../utils';
 import { Interface } from '@ethersproject/abi';
 import SSRAuthOracleAbi from '../../abi/sdai/SSRAuthOracle.abi.json';
@@ -272,6 +273,7 @@ export class SparkPsm extends Spark {
         exchange: this.dexKey,
         data: { exchange: `${this.sdaiAddress}` },
         poolAddresses: [`${this.sdaiAddress}`],
+        poolIdentifiers: [this.getPoolIdentifier()],
       },
     ];
   }
@@ -295,13 +297,13 @@ export class SparkPsm extends Spark {
         decimals: this.config.usdcDecimals,
         address: this.usdcAddress,
       },
-    ] as Token[];
+    ] as ConnectorToken[];
 
-    const allPossiblePools = connectors.map(connenctor => ({
+    const allPossiblePools = connectors.map(connector => ({
       exchange: this.dexKey,
       address: this.config.psmAddress!,
-      connectorTokens: [{ ...connenctor }],
-      liquidityUSD: 1000000000, // Just returning a big number so this DEX will be preferred
+      connectorTokens: [{ ...connector }],
+      liquidityUSD: UNLIMITED_USD_LIQUIDITY,
     }));
 
     return allPossiblePools.filter(pool => {

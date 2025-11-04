@@ -3,7 +3,7 @@ dotenv.config();
 import _ from 'lodash';
 
 /* eslint-disable no-console */
-import { Provider, StaticJsonRpcProvider } from '@ethersproject/providers';
+import { Provider } from '@ethersproject/providers';
 import {
   IParaSwapSDK,
   LocalParaswapSDK,
@@ -22,9 +22,7 @@ import {
   Address,
   Token,
   TransferFeeParams,
-  Config,
 } from '../src/types';
-import { generateConfig } from '../src/config';
 import {
   DummyDexHelper,
   DummyLimitOrderProvider,
@@ -37,12 +35,16 @@ import {
 } from '@paraswap/sdk';
 import { OptimalRoute, ParaSwapVersion } from '@paraswap/core';
 import axios from 'axios';
-import { Holders, Tokens } from './constants-e2e';
 import { sleep } from './utils';
 import { assert } from 'ts-essentials';
 import { GenericSwapTransactionBuilder } from '../src/generic-swap-transaction-builder';
 import { DexAdapterService, PricingHelper } from '../src';
 import { v4 as uuid } from 'uuid';
+import AUGUSTUS_V6_ABI from '../src/abi/augustus-v6/ABI.json';
+import { Interface } from '@ethersproject/abi';
+import { BigNumber } from 'ethers';
+
+export const AUGUSTUS_V6_INTERFACE = new Interface(AUGUSTUS_V6_ABI);
 
 export const testingEndpoint = process.env.E2E_TEST_ENDPOINT;
 
@@ -163,6 +165,10 @@ class APIParaswapSDK implements IParaSwapSDK {
   }
 }
 
+type TestE2EOptions = {
+  assertAmounts?: boolean;
+};
+
 export async function testE2E(
   srcToken: Token,
   destToken: Token,
@@ -172,7 +178,7 @@ export async function testE2E(
   dexKeys: string | string[],
   contractMethod: ContractMethod,
   network: Network = Network.MAINNET,
-  _0: Provider,
+  _0?: Provider,
   poolIdentifiers?: { [key: string]: string[] | null } | null,
   limitOrderProvider?: DummyLimitOrderProvider,
   transferFees?: TransferFeeParams,
@@ -182,6 +188,7 @@ export async function testE2E(
   // could be used for networks without tenderly support
   replaceTenderlyWithEstimateGas?: boolean,
   forceRoute?: AddressOrSymbol[],
+  options?: TestE2EOptions,
 ) {
   const useAPI = testingEndpoint && !poolIdentifiers;
   // The API currently doesn't allow for specifying poolIdentifiers
@@ -269,9 +276,8 @@ export async function testE2E(
     stateOverride,
   };
   // simulate the transaction with overrides
-  const simulation = await tenderlySimulator.simulateTransaction(
-    simulationRequest,
-  );
+  const { transaction, simulation } =
+    await tenderlySimulator.simulateTransaction(simulationRequest);
   // log gas estimation if testing against API
   if (useAPI) {
     const estimatedGas = Number(priceRoute.gasCost);
@@ -288,6 +294,27 @@ export async function testE2E(
   }
   // assert simulation status
   expect(simulation.status).toEqual(true);
+
+  // decode method output
+  const decodedOutput = AUGUSTUS_V6_INTERFACE.decodeFunctionResult(
+    contractMethod,
+    transaction.transaction_info.call_trace.output,
+  );
+  // assert min difference
+  const expectedAmount = BigNumber.from(
+    swapSide === SwapSide.SELL ? priceRoute.destAmount : priceRoute.srcAmount,
+  );
+  const simulatedAmount: BigNumber =
+    swapSide === SwapSide.SELL
+      ? decodedOutput.receivedAmount
+      : decodedOutput.spentAmount;
+  const amountDiff = expectedAmount.gt(simulatedAmount)
+    ? expectedAmount.sub(simulatedAmount)
+    : simulatedAmount.sub(expectedAmount);
+  const paraswapShare = decodedOutput.paraswapShare?.toNumber() ?? 0;
+
+  expect(amountDiff.toBigInt()).toBeLessThanOrEqual(10n); // 10 wei max allowed difference
+  expect(paraswapShare).toEqual(0);
 }
 
 const extractAllDexsFromRoute = (bestRoute: OptimalRoute[]) => {
@@ -370,7 +397,7 @@ export async function testPriceRoute(priceRoute: OptimalRate) {
     stateOverride,
   };
   // simulate the transaction with overrides
-  const simulation = await tenderlySimulator.simulateTransaction(
+  const { simulation } = await tenderlySimulator.simulateTransaction(
     simulationRequest,
   );
   // release
@@ -380,161 +407,6 @@ export async function testPriceRoute(priceRoute: OptimalRate) {
   // assert simulation status
   expect(simulation.status).toEqual(true);
 }
-
-export type TestParamE2E = {
-  config: Config;
-  srcToken: Token;
-  destToken: Token;
-  senderAddress: Address;
-  thirdPartyAddress?: Address;
-  _amount: string;
-  swapSide: SwapSide;
-  dexKeys: string | string[];
-  contractMethod: ContractMethod;
-  network: Network;
-  poolIdentifiers?: { [key: string]: string[] | null } | null;
-  limitOrderProvider?: DummyLimitOrderProvider;
-  transferFees?: TransferFeeParams;
-  sleepMs?: number;
-  skipTenderly?: boolean;
-};
-
-export async function newTestE2E({
-  config,
-  srcToken,
-  destToken,
-  senderAddress,
-  thirdPartyAddress,
-  _amount,
-  swapSide,
-  dexKeys,
-  contractMethod,
-  network,
-  poolIdentifiers,
-  limitOrderProvider,
-  transferFees,
-  sleepMs,
-  skipTenderly,
-}: TestParamE2E) {
-  const useTenderly = !skipTenderly;
-  const sdk = new LocalParaswapSDK(network, dexKeys, '', limitOrderProvider);
-  // initialize pricing
-  await sdk.initializePricing?.();
-  // if sleepMs is provided, pause simulation for specified time
-  if (sleepMs) {
-    await sleep(sleepMs);
-  }
-  // fetch the route
-  const amount = BigInt(_amount);
-  const priceRoute = await sdk.getPrices(
-    srcToken,
-    destToken,
-    amount,
-    swapSide,
-    contractMethod,
-    poolIdentifiers,
-    transferFees,
-  );
-  // log the route for visibility
-  console.log('Price Route:', JSON.stringify(priceRoute, null, 2));
-  // exit function if not using tenderly
-  if (!useTenderly) {
-    console.log('Skipping transaction simulation on Tenderly');
-    if (sdk.releaseResources) {
-      await sdk.releaseResources();
-    }
-    return;
-  }
-  // prepare state overrides
-  const tenderlySimulator = TenderlySimulator.getInstance();
-  // any address works
-  const userAddress = TenderlySimulator.DEFAULT_OWNER;
-  // init `StateOverride` object
-  const stateOverride: StateOverride = {};
-  // fund x2 just in case
-  const amountToFund = BigInt(priceRoute.srcAmount) * 2n;
-  // add overrides for src token
-  if (srcToken.address.toLowerCase() === ETHER_ADDRESS) {
-    // add eth balance to user
-    tenderlySimulator.addBalanceOverride(
-      stateOverride,
-      userAddress,
-      amountToFund,
-    );
-  } else {
-    // add token balance and allowance to Augustus
-    await tenderlySimulator.addTokenBalanceOverride(
-      stateOverride,
-      network,
-      srcToken.address,
-      userAddress,
-      amountToFund,
-    );
-    await tenderlySimulator.addAllowanceOverride(
-      stateOverride,
-      network,
-      srcToken.address,
-      userAddress,
-      priceRoute.contractAddress,
-      amountToFund,
-    );
-  }
-  // build swap transaction
-  const _slippage = 700n;
-  const minMaxAmount =
-    (swapSide === SwapSide.SELL
-      ? BigInt(priceRoute.destAmount) * (10000n - _slippage)
-      : BigInt(priceRoute.srcAmount) * (10000n + _slippage)) / 10000n;
-  const swapParams = await sdk.buildTransaction(
-    priceRoute,
-    minMaxAmount,
-    userAddress,
-  );
-  assert(
-    swapParams.to !== undefined,
-    'Transaction params missing `to` property',
-  );
-  if (useTenderly) {
-    // assemble `SimulationRequest`
-    const { from, to, data, value } = swapParams;
-    const simulationRequest = {
-      chainId: network,
-      from,
-      to,
-      data,
-      value,
-      blockNumber: priceRoute.blockNumber,
-      stateOverride,
-    };
-    // simulate the transaction with overrides
-    const simulation = await tenderlySimulator.simulateTransaction(
-      simulationRequest,
-    );
-    // log gas estimation
-    const estimatedGas = Number(priceRoute.gasCost);
-    const gasUsed = simulation.gas_used;
-    console.log(
-      `Gas Estimate API: ${
-        priceRoute.gasCost
-      }, Simulated: ${gasUsed}, Difference: ${estimatedGas - gasUsed}`,
-    );
-    // release
-    await sdk.releaseResources?.();
-    // assert simulation status
-    expect(simulation.status).toEqual(true);
-  }
-}
-
-export const getEnv = (envName: string, optional: boolean = false): string => {
-  if (!process.env[envName]) {
-    if (optional) {
-      return '';
-    }
-    throw new Error(`Missing ${envName}`);
-  }
-
-  return process.env[envName]!;
-};
 
 export const testGasEstimation = async (
   network: Network,
@@ -647,7 +519,7 @@ export const testGasEstimation = async (
     stateOverride,
   };
   // simulate the transaction with overrides
-  const simulation = await tenderlySimulator.simulateTransaction(
+  const { simulation } = await tenderlySimulator.simulateTransaction(
     simulationRequest,
   );
   // compare and assert

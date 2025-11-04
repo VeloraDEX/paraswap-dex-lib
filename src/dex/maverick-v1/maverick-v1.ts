@@ -302,7 +302,9 @@ export class MaverickV1
                   lookback: pool.lookback,
                 },
                 exchange: this.dexKey,
-                poolIdentifier: pool.name,
+                poolIdentifiers: [
+                  `${this.dexKey}_${pool.address.toLowerCase()}`,
+                ],
                 gasCost: gasCosts,
                 poolAddresses: [pool.address],
               };

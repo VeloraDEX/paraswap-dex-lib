@@ -1,10 +1,12 @@
 import { Interface } from '@ethersproject/abi';
 import { IDexHelper } from '../../dex-helper';
 import ERC4626Abi from '../../abi/ERC4626.json';
-import { DexParams, PoolState, VaultState } from './types';
+import { DexParams, PoolState, ProtocolState } from './types';
 import { bigIntify } from '../../utils';
 import { multicall } from './utils';
 import { BigNumber, BytesLike, ethers } from 'ethers';
+import { ETHER_ADDRESS, NULL_ADDRESS } from '../../constants';
+import { BI_POWS } from '../../bigint-constants';
 
 const ERC4626Interface: Interface = new Interface(ERC4626Abi);
 
@@ -624,13 +626,61 @@ export async function updateFeeOverrides(
 }
 
 /* -------------------------------------------------------------------------- */
-/*                                   OTHER                                  */
+/*                                    OTHER                                   */
 /* -------------------------------------------------------------------------- */
 
-export async function updateVaultSharePrices(
-  vaults: VaultState[],
+export async function updatePoolTotalValueLocked(
+  state: ProtocolState,
   dexHelper: IDexHelper,
 ): Promise<void> {
+  const { poolStates, vaultStates } = state;
+  const pools = Object.values(poolStates);
+
+  const getVaultBalance = (vaultAddress: string, reserve: bigint): bigint => {
+    if (vaultAddress === NULL_ADDRESS) return 0n;
+    const vault = vaultStates[vaultAddress];
+    return (reserve * vault.sharePrice) / BI_POWS[Number(vault.vaultDecimals)];
+  };
+
+  const tokenAmounts: [string, bigint][] = pools.flatMap(pool => {
+    const totalBalance0 =
+      pool.rawBalance0 + getVaultBalance(pool.vault0, pool.reserve0);
+    const totalBalance1 =
+      pool.rawBalance1 + getVaultBalance(pool.vault1, pool.reserve1);
+
+    return [
+      [
+        pool.key.currency0 === NULL_ADDRESS
+          ? ETHER_ADDRESS
+          : pool.key.currency0,
+        totalBalance0,
+      ],
+      [
+        pool.key.currency1 === NULL_ADDRESS
+          ? ETHER_ADDRESS
+          : pool.key.currency1,
+        totalBalance1,
+      ],
+    ];
+  });
+
+  const poolUsdBalances = await dexHelper.getUsdTokenAmounts(tokenAmounts);
+
+  pools.forEach((poolState, i) => {
+    const liquidity0 = poolUsdBalances[i * 2];
+    const liquidity1 = poolUsdBalances[i * 2 + 1];
+    poolState.totalValueLockedUSD = bigIntify(
+      Math.round(liquidity0 + liquidity1),
+    );
+  });
+}
+
+export async function updateVaultSharePrices(
+  state: ProtocolState,
+  dexHelper: IDexHelper,
+): Promise<void> {
+  const vaults = Object.values(state.vaultStates);
+
   const multiCallData = vaults.map(vault => {
     return {
       target: vault.address,

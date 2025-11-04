@@ -76,30 +76,23 @@ export async function queryAvailablePoolsForToken(
   subgraphUrl: string,
   tokenAddress: string,
   limit: number,
+  staticPoolsList?: string[],
 ): Promise<{
   pools0: SubgraphConnectorPool[];
   pools1: SubgraphConnectorPool[];
 }> {
+  const list = staticPoolsList
+    ? staticPoolsList.map(t => `"${t}"`).join(',')
+    : '';
   const poolsQuery = `query ($token: Bytes!, $hooks: Bytes!, $minTVL: Int!, $count: Int) {
-      pools0: pools(
-        where: { token0: $token, hooks: $hooks, liquidity_gt: 0, totalValueLockedUSD_gte: $minTVL }
-        orderBy: volumeUSD
-        orderDirection: desc
-        first: $count
-      ) {
-      id
-      volumeUSD
-      token0 {
-        address: id
-        decimals
+    pools0: pools(
+      where: {
+        token0: $token
+        hooks: $hooks
+        liquidity_gt: 0
+        totalValueLockedUSD_gte: $minTVL
+        ${list ? `id_in: [${list}]` : ''}
       }
-      token1 {
-        address: id
-        decimals
-      }
-    }
-    pools1: pools(
-      where: { token1: $token, hooks: $hooks, liquidity_gt: 0, totalValueLockedUSD_gte: $minTVL }
       orderBy: volumeUSD
       orderDirection: desc
       first: $count
@@ -115,7 +108,31 @@ export async function queryAvailablePoolsForToken(
         decimals
       }
     }
-  }`;
+    pools1: pools(
+      where: {
+        token1: $token
+        hooks: $hooks
+        liquidity_gt: 0
+        totalValueLockedUSD_gte: $minTVL
+        ${list ? `id_in: [${list}]` : ''}
+      }
+      orderBy: volumeUSD
+      orderDirection: desc
+      first: $count
+    ) {
+      id
+      volumeUSD
+      token0 {
+        address: id
+        decimals
+      }
+      token1 {
+        address: id
+        decimals
+      }
+    }
+  }
+`;
 
   const res = await dexHelper.httpRequest.querySubgraph<{
     data: {
@@ -239,7 +256,6 @@ export async function queryOnePageForAllAvailablePoolsFromSubgraph(
           address: id
         }
         hooks
-        tick
       }
     }`;
 
@@ -280,4 +296,46 @@ export async function queryOnePageForAllAvailablePoolsFromSubgraph(
   }
 
   return res.data.pools;
+}
+
+export async function queryPoolsFromSubgraph(
+  dexHelper: IDexHelper,
+  subgraphUrl: string,
+  poolIds: string[],
+): Promise<SubgraphPool[] | null> {
+  const poolsQuery = `query ($minTVL: Int!, $hooks: Bytes!, $pools: [Bytes!]!) {
+      pools(where: {liquidity_gt: 0, totalValueLockedUSD_gte: $minTVL, id_in: $pools}) {
+        id
+        fee: feeTier
+        volumeUSD
+        tickSpacing
+        token0 {
+          address: id
+        }
+        token1 {
+          address: id
+        }
+        hooks
+      }
+    }`;
+
+  const res = await dexHelper.httpRequest.querySubgraph<{
+    data: {
+      pools: SubgraphPool[];
+    };
+    errors?: { message: string }[];
+  }>(
+    subgraphUrl,
+    {
+      query: poolsQuery,
+      variables: {
+        hooks: NULL_ADDRESS,
+        minTVL: POOL_MIN_TVL_USD,
+        pools: poolIds,
+      },
+    },
+    { timeout: SUBGRAPH_TIMEOUT },
+  );
+
+  return res?.data?.pools ?? null;
 }

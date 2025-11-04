@@ -101,14 +101,6 @@ export class ERC4626EventPool extends StatefulEventSubscriber<ERC4626PoolState> 
     };
   }
 
-  withdrawRedeemAllowed(state: ERC4626PoolState): boolean {
-    if (state.cooldownDuration) {
-      return state.cooldownDuration === 0n;
-    }
-
-    return true;
-  }
-
   async getOrGenerateState(blockNumber: number): Promise<ERC4626PoolState> {
     let state = this.getState(blockNumber);
     if (!state) {
@@ -121,11 +113,10 @@ export class ERC4626EventPool extends StatefulEventSubscriber<ERC4626PoolState> 
   async handleDeposit(
     event: any,
     state: DeepReadonly<ERC4626PoolState>,
-    log: Readonly<Log>,
+    _: Readonly<Log>,
   ): Promise<DeepReadonly<ERC4626PoolState>> {
     return {
-      // skip assets update, as it should be already handled in handleAssetTransferToVault
-      totalAssets: state.totalAssets,
+      ...state,
       totalShares: state.totalShares + BigInt(event.args.shares),
     };
   }
@@ -133,20 +124,21 @@ export class ERC4626EventPool extends StatefulEventSubscriber<ERC4626PoolState> 
   async handleAssetTransferToVault(
     event: any,
     state: DeepReadonly<ERC4626PoolState>,
-    log: Readonly<Log>,
+    _: Readonly<Log>,
   ): Promise<DeepReadonly<ERC4626PoolState>> {
     return {
+      ...state,
       totalAssets: state.totalAssets + BigInt(event.args.value),
-      totalShares: state.totalShares,
     };
   }
 
   async handleWithdraw(
     event: any,
     state: DeepReadonly<ERC4626PoolState>,
-    log: Readonly<Log>,
+    _: Readonly<Log>,
   ): Promise<DeepReadonly<ERC4626PoolState>> {
     return {
+      ...state,
       totalAssets: BigInt(state.totalAssets) - BigInt(event.args.assets),
       totalShares: BigInt(state.totalShares) - BigInt(event.args.shares),
     };

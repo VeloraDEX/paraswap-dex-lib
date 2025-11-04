@@ -20,6 +20,7 @@ import { deposit, withdraw } from './logic/BunniHubLogic';
 import {
   generateOnChainState,
   updateCuratorFees,
+  updatePoolTotalValueLocked,
   updateStateAfterDeposit,
   updateStateAfterNewBunni,
   updateStateAfterOrderFulfilled,
@@ -38,7 +39,7 @@ import PoolManagerABI from '../../abi/bunni-v2/PoolManager.abi.json';
 
 import { TickMath } from './lib/TickMath';
 import { _updateAmAmmWrite } from './logic/AmAmm';
-import { ZERO_BYTES_32 } from './lib/Constants';
+import { WAD, ZERO_BYTES_32 } from './lib/Constants';
 import { NULL_ADDRESS } from '../../constants';
 import { quoteSwap } from './logic/BunniQuoter';
 
@@ -410,8 +411,7 @@ export class BunniV2EventPool extends StatefulEventSubscriber<ProtocolState> {
     }
 
     // update the total supply (always 1e18 on the first deposit)
-    newPoolState.totalSupply +=
-      newPoolState.totalSupply === 0n ? 1_000_000_000_000_000_000n : shares;
+    newPoolState.totalSupply += newPoolState.totalSupply === 0n ? WAD : shares;
 
     newState.poolStates[poolId] = newPoolState;
     return newState;
@@ -883,12 +883,25 @@ export class BunniV2EventPool extends StatefulEventSubscriber<ProtocolState> {
     );
   }
 
-  async _updateVaultSharePrices(): Promise<void> {
+  async _updatePoolTotalValueLocked(blockNumber?: number): Promise<void> {
+    const _blockNumber =
+      blockNumber || this.dexHelper.blockManager.getLatestBlockNumber();
+
     if (this.state !== null) {
-      await updateVaultSharePrices(
-        Object.values(this.state.vaultStates),
-        this.dexHelper,
-      );
+      const newState = _.cloneDeep(this.state) as ProtocolState;
+      await updatePoolTotalValueLocked(newState, this.dexHelper);
+      this.setState(newState, _blockNumber);
+    }
+  }
+
+  async _updateVaultSharePrices(blockNumber?: number): Promise<void> {
+    const _blockNumber =
+      blockNumber || this.dexHelper.blockManager.getLatestBlockNumber();
+
+    if (this.state !== null) {
+      const newState = _.cloneDeep(this.state) as ProtocolState;
+      await updateVaultSharePrices(newState, this.dexHelper);
+      this.setState(newState, _blockNumber);
     }
   }
 

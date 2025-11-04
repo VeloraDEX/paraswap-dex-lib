@@ -65,16 +65,6 @@ export type DebtReserves = {
   token1ImaginaryReserves: bigint;
 };
 
-export interface PoolWithReserves {
-  pool: string;
-  token0: string;
-  token1: string;
-  fee: number;
-  centerPrice: number;
-  collateralReserves: CollateralReserves;
-  debtReserves: DebtReserves;
-}
-
 export type FluidDexData = {
   poolId: string;
 };
@@ -85,6 +75,8 @@ export type FluidDexPool = {
   address: Address;
   token0: Address;
   token1: Address;
+  token0Decimals: number;
+  token1Decimals: number;
 };
 
 export type DexParams = {
@@ -101,4 +93,9 @@ export type Pool = {
   address: Address;
   token0: Address;
   token1: Address;
+};
+
+export type PoolWithDecimals = Pool & {
+  token0Decimals: number;
+  token1Decimals: number;
 };

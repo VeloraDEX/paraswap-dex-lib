@@ -187,6 +187,11 @@ export abstract class StatefulEventSubscriber<State>
     this.isInitialized = true;
   }
 
+  async updatePoolState(blockNumber: number) {
+    const state = await this.generateState(blockNumber);
+    this.setState(state, blockNumber);
+  }
+
   protected getPoolIdentifierData() {
     throw new Error('getPoolIdentifierData method is not implemented');
   }

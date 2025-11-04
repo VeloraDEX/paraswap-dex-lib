@@ -13,3 +13,4 @@ export const LN2_WAD: bigint = 693147180559945309n;
 export const Q96: bigint = 2n ** 96n;
 export const MAX_INT_128: bigint = 2n ** 127n - 1n;
 export const MIN_INT_128: bigint = -(2n ** 127n);
+export const MIN_INITIAL_SHARES: bigint = 1_000_000_000_000n;

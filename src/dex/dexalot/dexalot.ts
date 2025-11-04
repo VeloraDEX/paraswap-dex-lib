@@ -96,8 +96,8 @@ export class Dexalot extends SimpleExchange implements IDex<DexalotData> {
     readonly dexKey: string,
     readonly dexHelper: IDexHelper,
     protected adapters = Adapters[network] || {},
-    readonly mainnetRFQAddress: string = DexalotConfig['Dexalot'][network]
-      .mainnetRFQAddress,
+    readonly dexalotRouterAddress: string = DexalotConfig['Dexalot'][network]
+      .dexalotRouterAddress,
     protected rfqInterface = new Interface(mainnetRFQAbi),
   ) {
     super(dexHelper, dexKey);
@@ -535,10 +535,10 @@ export class Dexalot extends SimpleExchange implements IDex<DexalotData> {
           prices,
           unit: BigInt(outDecimals),
           data: {},
-          poolIdentifier: poolIdentifier,
+          poolIdentifiers: [poolIdentifier],
           exchange: this.dexKey,
           gasCost: DEXALOT_GAS_COST,
-          poolAddresses: [this.mainnetRFQAddress],
+          poolAddresses: [this.dexalotRouterAddress],
         },
       ];
     } catch (e: unknown) {
@@ -829,7 +829,7 @@ export class Dexalot extends SimpleExchange implements IDex<DexalotData> {
     );
 
     return {
-      targetExchange: this.mainnetRFQAddress,
+      targetExchange: this.dexalotRouterAddress,
       payload,
       networkFee: '0',
     };
@@ -978,7 +978,7 @@ export class Dexalot extends SimpleExchange implements IDex<DexalotData> {
       destToken,
       destAmount,
       swapData,
-      this.mainnetRFQAddress,
+      this.dexalotRouterAddress,
     );
   }
 
@@ -1024,7 +1024,7 @@ export class Dexalot extends SimpleExchange implements IDex<DexalotData> {
       exchangeData,
       needWrapNative: this.needWrapNative,
       dexFuncHasRecipient: false,
-      targetExchange: this.mainnetRFQAddress,
+      targetExchange: this.dexalotRouterAddress,
       returnAmountPos: undefined,
       specialDexFlag: SpecialDex.SWAP_ON_DEXALOT,
       // cannot modify amount due to signature checks
@@ -1070,7 +1070,7 @@ export class Dexalot extends SimpleExchange implements IDex<DexalotData> {
 
       pairsByLiquidity.push({
         exchange: this.dexKey,
-        address: this.mainnetRFQAddress,
+        address: this.dexalotRouterAddress,
         connectorTokens: [
           {
             address: denormalizedToken.address,

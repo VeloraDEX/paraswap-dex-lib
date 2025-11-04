@@ -10,7 +10,7 @@ import {
   NumberAsString,
   DexExchangeParam,
 } from '../../types';
-import { SwapSide, Network } from '../../constants';
+import { SwapSide, Network, UNLIMITED_USD_LIQUIDITY } from '../../constants';
 import * as CALLDATA_GAS_COST from '../../calldata-gas-cost';
 import { getDexKeysWithNetwork } from '../../utils';
 import { Context, IDex } from '../../dex/idex';
@@ -180,6 +180,7 @@ export class AngleTransmuter
         exchange: this.dexKey,
         data: { exchange: this.params[fiat]!.transmuter },
         poolAddresses: [this.params[fiat]!.transmuter],
+        poolIdentifiers: [pool],
       },
     ];
   }
@@ -357,19 +358,23 @@ export class AngleTransmuter
             )
           : [paramFiat.stablecoin];
 
+      let liquidityUSD: number;
+      if (tokenAddressLower === stableCoinLowercase) {
+        liquidityUSD = this.transmuterUSDLiquidity[fiat];
+      } else {
+        liquidityUSD = UNLIMITED_USD_LIQUIDITY;
+      }
+
       return [
         {
           exchange: this.dexKey,
           address: paramFiat.transmuter,
           connectorTokens: connectorTokens.slice(0, limit),
-          // liquidity is potentially infinite if swapping for agXXX, otherwise at most reserves value
-          liquidityUSD:
-            tokenAddressLower === stableCoinLowercase
-              ? this.transmuterUSDLiquidity[fiat]
-              : 1e9,
+          liquidityUSD,
         },
       ];
     }
+
     return [];
   }
 

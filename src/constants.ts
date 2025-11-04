@@ -43,6 +43,7 @@ export enum Network {
   POLYGON = 137,
   SONIC = 146,
   BASE = 8453,
+  PLASMA = 9745,
   ARBITRUM = 42161,
   AVALANCHE = 43114,
   SEPOLIA = 11155111,

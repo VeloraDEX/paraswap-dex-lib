@@ -13,9 +13,13 @@ import { LogDescription } from '@ethersproject/abi/lib.esm';
 import { queryOnePageForAllAvailablePoolsFromSubgraph } from './subgraph';
 import { isETHAddress } from '../../utils';
 import { NULL_ADDRESS } from '../../constants';
-import { POOL_CACHE_REFRESH_INTERVAL } from './constants';
+import {
+  POOL_CACHE_REFRESH_INTERVAL,
+  POOL_CACHE_STORE_INTERVAL,
+} from './constants';
 import { FactoryState } from '../uniswap-v3/types';
 import { UniswapV4Pool } from './uniswap-v4-pool';
+import { UniswapV4PoolsList } from './config';
 
 export class UniswapV4PoolManager extends StatefulEventSubscriber<PoolManagerState> {
   handlers: {
@@ -124,8 +128,6 @@ export class UniswapV4PoolManager extends StatefulEventSubscriber<PoolManagerSta
       subgraphPool.token1.address.toLowerCase(),
       subgraphPool.fee,
       subgraphPool.hooks,
-      0n,
-      subgraphPool.tick,
       subgraphPool.tickSpacing,
     );
 
@@ -167,18 +169,6 @@ export class UniswapV4PoolManager extends StatefulEventSubscriber<PoolManagerSta
 
     return this.pools
       .filter(pool => {
-        // TODO: temporary, should be used for tests only
-        const token0 = pool.token0.address.toLowerCase();
-        const token1 = pool.token1.address.toLowerCase();
-
-        // force weth pools
-        // return token0 !== NULL_ADDRESS && token1 !== NULL_ADDRESS;
-        // force eth pools
-        // return token0 === NULL_ADDRESS || token1 === NULL_ADDRESS;
-        // all pools
-        return true;
-      })
-      .filter(pool => {
         const token0 = pool.token0.address;
         const token1 = pool.token1.address;
 
@@ -206,60 +196,97 @@ export class UniswapV4PoolManager extends StatefulEventSubscriber<PoolManagerSta
   private async queryAllAvailablePools(
     blockNumber: number,
   ): Promise<SubgraphPool[]> {
-    const cachedPools = await this.dexHelper.cache.getAndCacheLocally(
+    const staticPoolsList = UniswapV4PoolsList[this.network];
+
+    if (staticPoolsList) {
+      return staticPoolsList;
+    }
+
+    const cachedPoolsRaw = await this.dexHelper.cache.getAndCacheLocally(
       this.parentName,
       this.network,
       this.poolsCacheKey,
       POOL_CACHE_REFRESH_INTERVAL,
     );
 
-    if (cachedPools) {
-      const pools = JSON.parse(cachedPools);
-      return pools;
+    let cachedPools: SubgraphPool[] = [];
+
+    if (cachedPoolsRaw) {
+      cachedPools = JSON.parse(cachedPoolsRaw);
+
+      const poolsTTL = await this.dexHelper.cache.ttl(
+        this.parentName,
+        this.network,
+        this.poolsCacheKey,
+      );
+
+      if (
+        cachedPools.length &&
+        poolsTTL > POOL_CACHE_STORE_INTERVAL - POOL_CACHE_REFRESH_INTERVAL
+      ) {
+        return cachedPools;
+      }
+
+      this.logger.info(`Pools cache TTL is ${poolsTTL}, refreshing`);
     }
 
-    const defaultPerPageLimit = 1000;
     let pools: SubgraphPool[] = [];
-    let curPage = 0;
 
-    let currentSubgraphPools: SubgraphPool[] =
-      await queryOnePageForAllAvailablePoolsFromSubgraph(
-        this.dexHelper,
-        this.logger,
-        this.parentName,
-        this.config.subgraphURL,
-        blockNumber,
-        curPage * defaultPerPageLimit,
-        defaultPerPageLimit,
-      );
-    pools = pools.concat(currentSubgraphPools);
+    try {
+      const defaultPerPageLimit = 1000;
+      let curPage = 0;
 
-    while (currentSubgraphPools.length === defaultPerPageLimit) {
-      curPage++;
-      currentSubgraphPools = await queryOnePageForAllAvailablePoolsFromSubgraph(
-        this.dexHelper,
-        this.logger,
-        this.parentName,
-        this.config.subgraphURL,
-        blockNumber,
-        curPage * defaultPerPageLimit,
-        defaultPerPageLimit,
-      );
-
+      let currentSubgraphPools: SubgraphPool[] =
+        await queryOnePageForAllAvailablePoolsFromSubgraph(
+          this.dexHelper,
+          this.logger,
+          this.parentName,
+          this.config.subgraphURL,
+          blockNumber,
+          curPage * defaultPerPageLimit,
+          defaultPerPageLimit,
+        );
       pools = pools.concat(currentSubgraphPools);
-    }
 
-    if (this.config.skipPoolsWithUnconventionalFees) {
-      pools = pools.filter(
-        pool => !this.isPoolWithUnconventionalFees(pool.fee),
+      while (currentSubgraphPools.length === defaultPerPageLimit) {
+        curPage++;
+        currentSubgraphPools =
+          await queryOnePageForAllAvailablePoolsFromSubgraph(
+            this.dexHelper,
+            this.logger,
+            this.parentName,
+            this.config.subgraphURL,
+            blockNumber,
+            curPage * defaultPerPageLimit,
+            defaultPerPageLimit,
+          );
+
+        pools = pools.concat(currentSubgraphPools);
+      }
+
+      if (this.config.skipPoolsWithUnconventionalFees) {
+        pools = pools.filter(
+          pool => !this.isPoolWithUnconventionalFees(pool.fee),
+        );
+      }
+    } catch (error) {
+      this.logger.error(
+        `Failed to fetch pools from subgraph for ${this.parentName}: ${error}, using cached pools...`,
+      );
+
+      // cachedPools + already fetched pools
+      pools = cachedPools.concat(
+        pools.filter(p => !cachedPools.find(cp => cp.id === p.id)),
       );
     }
 
+    // always refresh pools in cache, even when subgraph queries failed
+    // so next time we can use previously cached pools
     this.dexHelper.cache.setexAndCacheLocally(
       this.parentName,
       this.network,
       this.poolsCacheKey,
-      POOL_CACHE_REFRESH_INTERVAL,
+      POOL_CACHE_STORE_INTERVAL,
       JSON.stringify(pools),
     );
 
@@ -287,6 +314,14 @@ export class UniswapV4PoolManager extends StatefulEventSubscriber<PoolManagerSta
     }
 
     if (
+      UniswapV4PoolsList[this.network] &&
+      !UniswapV4PoolsList[this.network].some(p => p.id === id)
+    ) {
+      this.logger.warn(`Pool ${id} is not in the static pools list, skipping.`);
+      return {};
+    }
+
+    if (
       this.config.skipPoolsWithUnconventionalFees &&
       this.isPoolWithUnconventionalFees(fee)
     ) {
@@ -308,9 +343,7 @@ export class UniswapV4PoolManager extends StatefulEventSubscriber<PoolManagerSta
       token1: {
         address: currency1.toLowerCase(),
       },
-      tick: tick.toString(),
       tickSpacing: tickSpacing.toString(),
-      ticks: [],
     });
 
     const eventPool = new UniswapV4Pool(
@@ -325,8 +358,6 @@ export class UniswapV4PoolManager extends StatefulEventSubscriber<PoolManagerSta
       currency1.toLowerCase(),
       fee,
       hooks,
-      sqrtPriceX96,
-      tick.toString(),
       tickSpacing.toString(),
     );
     await eventPool.initialize(log.blockNumber);

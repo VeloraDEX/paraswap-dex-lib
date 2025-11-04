@@ -1,16 +1,9 @@
 [
   {
     "inputs": [
-      {
-        "internalType": "address",
-        "name": "onBehalfOf",
-        "type": "address"
-      },
-      {
-        "internalType": "uint16",
-        "name": "referralCode",
-        "type": "uint16"
-      }
+      { "internalType": "address", "name": "", "type": "address" },
+      { "internalType": "address", "name": "onBehalfOf", "type": "address" },
+      { "internalType": "uint16", "name": "referralCode", "type": "uint16" }
     ],
     "name": "depositETH",
     "outputs": [],
@@ -19,16 +12,9 @@
   },
   {
     "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "amount",
-        "type": "uint256"
-      },
-      {
-        "internalType": "address",
-        "name": "to",
-        "type": "address"
-      }
+      { "internalType": "address", "name": "", "type": "address" },
+      { "internalType": "uint256", "name": "amount", "type": "uint256" },
+      { "internalType": "address", "name": "to", "type": "address" }
     ],
     "name": "withdrawETH",
     "outputs": [],

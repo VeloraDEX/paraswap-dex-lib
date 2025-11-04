@@ -65,12 +65,17 @@ describe('Wombat EventPool BSC', function () {
     [v3Pool]: {
       // topic0: 0xf5dd9317b9e63ac316ce44acc85f670b54b339cfa3e9076e1dd55065b922314b
       ['Deposit']: [34558302, 34564573, 34597601],
-      // // topic0: 0xfb80d861da582b723be2d19507ce3e03851820c464abea89156ec77e089b1ad9
+      // topic0: 0xfb80d861da582b723be2d19507ce3e03851820c464abea89156ec77e089b1ad9
       ['Withdraw']: [34567962, 34569797, 34596990],
-      // // topic0: 0x7fa01e8d24e5a6ec56e00b4ff8ee7ed97e7650a7846ec494bbaa5d65f1be9ea4
-      ['SwapV2']: [34609776, 34610336, 34610364, 34611146, 34611872],
+      // topic0: 0x7fa01e8d24e5a6ec56e00b4ff8ee7ed97e7650a7846ec494bbaa5d65f1be9ea4
+      ['SwapV2']: [
+        64528172, 64528566, 64528172, 64530364, 64530424, 64531361, 64531362,
+        64538137, 64569313, 64573375,
+      ],
       // topic0: 0x0fa1e4606af435f32f05b3804033d2933e691fab32ee74d2db6fa82d2741f1ea
       ['AssetRemoved']: [34463362],
+      // topic0: 0x5f22a22ebe30686f71d42a70ccacf870a335e22ee2ac6d257af1b2551582eda6
+      ['TransferTipBucket']: [44227406],
     },
   };
 

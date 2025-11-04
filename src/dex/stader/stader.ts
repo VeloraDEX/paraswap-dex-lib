@@ -127,7 +127,9 @@ export class Stader
         unit: unitOut,
         data: {},
         exchange: this.dexKey,
-        poolIdentifier: `${ETHER_ADDRESS}_${destToken.address}`.toLowerCase(),
+        poolIdentifiers: [
+          `${ETHER_ADDRESS}_${destToken.address}`.toLowerCase(),
+        ],
         gasCost: 120_000,
         poolAddresses: [destToken.address],
       },
