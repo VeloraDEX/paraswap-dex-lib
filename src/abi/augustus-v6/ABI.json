@@ -1610,7 +1610,7 @@
       { "internalType": "bytes", "name": "permit", "type": "bytes" },
       { "internalType": "bytes", "name": "executorData", "type": "bytes" }
     ],
-    "name": "swapExactAmountIn2",
+    "name": "swapExactAmountInPro",
     "outputs": [
       {
         "internalType": "uint256",
@@ -1664,7 +1664,7 @@
       { "internalType": "bytes", "name": "permit", "type": "bytes" },
       { "internalType": "bytes", "name": "executorData", "type": "bytes" }
     ],
-    "name": "swapExactAmountOut2",
+    "name": "swapExactAmountOutPro",
     "outputs": [
       { "internalType": "uint256", "name": "spentAmount", "type": "uint256" },
       {

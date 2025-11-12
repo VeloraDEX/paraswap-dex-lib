@@ -291,7 +291,7 @@ export class GenericSwapTransactionBuilder {
     let method = isSell ? 'swapExactAmountIn' : 'swapExactAmountOut';
 
     if (genericWithPartnerFee) {
-      method = isSell ? 'swapExactAmountIn2' : 'swapExactAmountOut2';
+      method = isSell ? 'swapExactAmountInPro' : 'swapExactAmountOutPro';
     }
 
     const encoder = (...params: any[]) =>
