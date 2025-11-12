@@ -268,7 +268,7 @@ export type DexConfigMap<DexParams> = {
 
 export type TxObject = {
   from: Address;
-  to?: Address; // undefined in case of contract deployment
+  to: Address;
   value: string;
   data: string;
   gasPrice?: string;

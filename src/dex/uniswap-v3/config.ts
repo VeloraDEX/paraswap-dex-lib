@@ -121,6 +121,20 @@ export const UniswapV3Config: DexConfigMap<DexParams> = {
       initHash: `0xe34f199b19b2b4f47f68442619d555527d244f78a3297ea89325f843f87b8b54`,
       subgraphURL: 'GqzP4Xaehti8KSfQmv3ZctFSjnSUYZ4En5NRsiTbvZpz',
     },
+    [Network.PLASMA]: {
+      factory: '0xcb2436774C3e191c85056d248EF4260ce5f27A9D',
+      quoter: '0xaa52bB8110fE38D0d2d2AF0B85C3A3eE622CA455',
+      router: '0x807F4E281B7A3B324825C64ca53c69F0b418dE40',
+      routerType: UniswapV3Router.SwapRouter02,
+      supportedFees: SUPPORTED_FEES,
+      stateMulticall: '0xCd8eA16F74d96E1000df8a57267e098c58399e8b',
+      uniswapMulticall: '0x5d6b0f5335ec95cD2aB7E52f2A0750dd86502435',
+      chunksCount: 10,
+      initRetryFrequency: 10,
+      initHash: `0xe34f199b19b2b4f47f68442619d555527d244f78a3297ea89325f843f87b8b54`,
+      subgraphURL:
+        'https://api.goldsky.com/api/public/project_cmguzcabs5miu01zeehjxb9t1/subgraphs/uniswap-v3/1.0.0/gn',
+    },
     [Network.UNICHAIN]: {
       factory: '0x1f98400000000000000000000000000000000003',
       quoter: '0x385a5cf5f83e99f7bb2852b6a19c3538b9fa7658',

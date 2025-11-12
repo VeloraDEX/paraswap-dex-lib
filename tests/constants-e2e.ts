@@ -1823,6 +1823,73 @@ export const Tokens: {
       decimals: 6,
     },
   },
+  [Network.PLASMA]: {
+    XPL: { address: ETHER_ADDRESS, decimals: 18 },
+    WXPL: {
+      address: '0x6100e367285b01f48d07953803a2d8dca5d19873',
+      decimals: 18,
+    },
+    USDT0: {
+      address: '0xB8CE59FC3717ada4C02eaDF9682A9e934F625ebb',
+      decimals: 6,
+    },
+    sUSDe: {
+      address: '0x211cc4dd073734da055fbf44a2b4667d5e5fe5d2',
+      decimals: 18,
+    },
+    USDe: {
+      address: '0x5d3a1ff2b6bab83b63cd9ad0787074081a52ef34',
+      decimals: 18,
+    },
+    aPlaUSDT0: {
+      address: '0x5D72a9d9A9510Cd8cBdBA12aC62593A58930a948',
+      decimals: 6,
+    },
+    aPlaUSDe: {
+      address: '0x7519403E12111ff6b710877Fcd821D0c12CAF43A',
+      decimals: 18,
+    },
+    aPlasUSDe: {
+      address: '0xC1A318493fF07a68fE438Cee60a7AD0d0DBa300E',
+      decimals: 18,
+    },
+    waPlaUSDT0: {
+      address: '0xe0126f0c4451b2b917064a93040fd4770d6774b5',
+      decimals: 6,
+    },
+    waPlaWETH: {
+      address: '0xa047fdFb3420A27a5f926735b475fE5a1E968786',
+      decimals: 18,
+    },
+    sUSDai: {
+      address: '0x0b2b2b2076d95dda7817e785989fe353fe955ef9',
+      decimals: 18,
+    },
+    USDai: {
+      address: '0x0a1a1a107e45b7ced86833863f482bc5f4ed82ef',
+      decimals: 18,
+    },
+    ezETH: {
+      address: '0x2416092f143378750bb29b79ed961ab195cceea5',
+      decimals: 18,
+    },
+    LITH: {
+      address: '0xabb48792a3161e81b47ca084c0b7a22a50324a44',
+      decimals: 18,
+    },
+    TRLY: {
+      address: '0x295ccdd51701a7ac78a23d1c999b9af0ba352d2f',
+      decimals: 18,
+    },
+    WETH: {
+      address: '0x9895d81bb462a195b4922ed7de0e3acd007c32cb',
+      decimals: 18,
+    },
+    wrsETH: {
+      address: '0xe561fe05c39075312aa9bc6af79ddae981461359',
+      decimals: 18,
+    },
+  },
   [Network.SEPOLIA]: {
     ETH: { address: ETHER_ADDRESS, decimals: 18 },
     WETH: {
@@ -2305,6 +2372,7 @@ export const Holders: {
   },
   [Network.UNICHAIN]: {},
   [Network.SONIC]: {},
+  [Network.PLASMA]: {},
 };
 
 export const NativeTokenSymbols: { [network: number]: string } = {
@@ -2316,6 +2384,7 @@ export const NativeTokenSymbols: { [network: number]: string } = {
   [Network.ARBITRUM]: 'ETH',
   [Network.OPTIMISM]: 'ETH',
   [Network.BASE]: 'ETH',
+  [Network.PLASMA]: 'XPL',
   [Network.SEPOLIA]: 'ETH',
   [Network.GNOSIS]: 'XDAI',
   [Network.UNICHAIN]: 'ETH',
@@ -2330,6 +2399,7 @@ export const WrappedNativeTokenSymbols: { [network: number]: string } = {
   [Network.ARBITRUM]: 'WETH',
   [Network.OPTIMISM]: 'WETH',
   [Network.BASE]: 'WETH',
+  [Network.PLASMA]: 'WXPL',
   [Network.SEPOLIA]: 'WETH',
   [Network.GNOSIS]: 'WXDAI',
 };

@@ -8,7 +8,8 @@ import {
   NULL_ADDRESS,
 } from '../../constants';
 import { generateConfig } from '../../config';
-import { testE2E, getEnv } from '../../../tests/utils-e2e';
+import { testE2E } from '../../../tests/utils-e2e';
+import { getEnv } from './fetch-mm-api';
 import { Tokens } from '../../../tests/constants-e2e';
 import { RFQConfig } from './types';
 import { testConfig } from './e2e-test-config';

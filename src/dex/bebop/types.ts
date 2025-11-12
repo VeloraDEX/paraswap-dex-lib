@@ -60,6 +60,7 @@ export type BebopTokenAmount = {
 };
 
 export type BebopError = {
+  requestId: string;
   errorCode: number;
   message: string;
 };
@@ -71,6 +72,7 @@ export type BebopData = {
   tx?: BebopTx;
   error?: BebopError;
   quoteId?: string;
+  requestId?: string;
 };
 
 export type DexParams = {

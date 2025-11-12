@@ -29,7 +29,6 @@ import AssetABI from '../../abi/wombat/asset.json';
 import ERC20ABI from '../../abi/erc20.json';
 import { WombatQuoter } from './wombat-quoter';
 import { WombatBmw } from './wombat-bmw';
-import { fromWad } from './utils';
 import { WombatPool } from './wombat-pool';
 import { StatePollingManager } from '../../lib/stateful-rpc-poller/state-polling-manager';
 import { extractReturnAmountPosition } from '../../executor/utils';
@@ -176,37 +175,36 @@ export class Wombat extends SimpleExchange implements IDex<WombatData> {
         !limitPools || limitPools.includes(this.getPoolIdentifier(poolAddress)),
     );
 
-    const promises = [];
-    for (const poolAddress of pools) {
-      let state = await this.pools![poolAddress].getState(blockNumber);
-      if (!state) {
-        this.logger.warn(
-          `State of pool ${poolAddress} is null in getPricesVolume, skipping...`,
+    const poolPrices = await Promise.all(
+      pools.map(async poolAddress => {
+        const state = await this.pools![poolAddress].getOrGenerateState(
+          blockNumber,
         );
-        continue;
-      }
-      const [unit, ...prices] = this.computePrices(
-        srcTokenAddress,
-        destTokenAddress,
-        [getBigIntPow(srcToken.decimals), ...amounts],
-        side,
-        state,
-      );
-      promises.push({
-        prices,
-        unit,
-        data: {
-          exchange: poolAddress,
-        },
-        poolAddresses: [poolAddress],
-        exchange: this.dexKey,
-        /** @todo specify gas cost */
-        gasCost: 260 * 1000,
-        poolIdentifiers: [this.getPoolIdentifier(poolAddress)],
-      });
-    }
 
-    return await Promise.all(promises);
+        const [unit, ...prices] = this.computePrices(
+          srcTokenAddress,
+          destTokenAddress,
+          [getBigIntPow(srcToken.decimals), ...amounts],
+          side,
+          state,
+        );
+
+        return {
+          prices,
+          unit,
+          data: {
+            exchange: poolAddress,
+          },
+          poolAddresses: [poolAddress],
+          exchange: this.dexKey,
+          /** @todo specify gas cost */
+          gasCost: 260 * 1000,
+          poolIdentifiers: [this.getPoolIdentifier(poolAddress)],
+        };
+      }),
+    );
+
+    return poolPrices;
   }
 
   // take PoolState to compute price

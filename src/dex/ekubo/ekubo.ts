@@ -503,6 +503,7 @@ export class Ekubo extends SimpleExchange implements IDex<EkuboData> {
           recipient,
         ],
       ),
+      sendEthButSupportsInsertFromAmount: true,
       targetExchange: this.config.router,
       dexFuncHasRecipient: true,
       returnAmountPos: undefined,

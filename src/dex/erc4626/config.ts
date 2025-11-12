@@ -66,4 +66,25 @@ export const ERC4626Config: DexConfigMap<ERC4626Params> = {
       asset: '0xcCcc62962d17b8914c62D74FfB843d73B2a3cccC', // cUSD
     },
   },
+  fUSDT0: {
+    [Network.PLASMA]: {
+      vault: '0x1DD4b13fcAE900C60a350589BE8052959D2Ed27B', // fUSDT0
+      asset: '0xB8CE59FC3717ada4C02eaDF9682A9e934F625ebb', // USDT0
+      decimals: 6,
+    },
+  },
+  eUSDT0: {
+    [Network.PLASMA]: {
+      vault: '0x8Aec278c2fD4cc07B10A8865AEd33775f93EACe6', // eUSDT0
+      asset: '0xB8CE59FC3717ada4C02eaDF9682A9e934F625ebb', // USDT0
+      decimals: 6,
+    },
+  },
+  waPlaUSDT0: {
+    [Network.PLASMA]: {
+      vault: '0xE0126F0c4451B2B917064A93040fd4770D6774b5', // waPlaUSDT0
+      asset: '0xB8CE59FC3717ada4C02eaDF9682A9e934F625ebb', // USDT0
+      decimals: 6,
+    },
+  },
 };

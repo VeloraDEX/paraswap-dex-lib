@@ -4,12 +4,14 @@ import { fromWad, sqrt, toWad, WAD, wdiv, wmul } from './utils';
 export class WombatQuoter {
   private readonly ampFactor: bigint;
   private readonly haircutRate: bigint;
+  private readonly withdrawalHaircutRate: bigint;
   private readonly startCovRatio: bigint;
   private readonly endCovRatio: bigint;
 
   constructor(poolParams: PoolParams) {
     this.ampFactor = poolParams.ampFactor;
     this.haircutRate = poolParams.haircutRate;
+    this.withdrawalHaircutRate = poolParams.withdrawalHaircutRate;
     this.startCovRatio = poolParams.startCovRatio;
     this.endCovRatio = poolParams.endCovRatio;
   }
@@ -138,6 +140,9 @@ export class WombatQuoter {
   ): { actualToAmount: bigint; haircut: bigint } {
     if (fromAmount < 0n) {
       fromAmount = wdiv(fromAmount, WAD - this.haircutRate);
+      if (this.withdrawalHaircutRate > 0n) {
+        fromAmount = wdiv(fromAmount, WAD - this.withdrawalHaircutRate);
+      }
     }
 
     let fromCash = fromAsset.cash;
@@ -169,11 +174,19 @@ export class WombatQuoter {
 
     let actualToAmount, haircut;
     if (fromAmount > 0) {
-      haircut = wmul(idealToAmount, this.haircutRate);
+      const baseHaircut = wmul(idealToAmount, this.haircutRate);
+      const withdrawalHaircut =
+        this.withdrawalHaircutRate > 0n
+          ? wmul(idealToAmount - baseHaircut, this.withdrawalHaircutRate)
+          : 0n;
+      haircut = baseHaircut + withdrawalHaircut;
       actualToAmount = idealToAmount - haircut;
     } else {
       actualToAmount = idealToAmount;
       haircut = wmul(-fromAmount, this.haircutRate);
+      if (this.withdrawalHaircutRate > 0n) {
+        haircut += wmul(-fromAmount, this.withdrawalHaircutRate);
+      }
     }
 
     return { actualToAmount, haircut };

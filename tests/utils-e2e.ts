@@ -408,17 +408,6 @@ export async function testPriceRoute(priceRoute: OptimalRate) {
   expect(simulation.status).toEqual(true);
 }
 
-export const getEnv = (envName: string, optional: boolean = false): string => {
-  if (!process.env[envName]) {
-    if (optional) {
-      return '';
-    }
-    throw new Error(`Missing ${envName}`);
-  }
-
-  return process.env[envName]!;
-};
-
 export const testGasEstimation = async (
   network: Network,
   srcToken: Token,
