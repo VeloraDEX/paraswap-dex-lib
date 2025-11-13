@@ -32,7 +32,7 @@ import {
   TokensMap,
   SwaapV2NotificationResponse,
 } from './types';
-import { SimpleExchange } from '../simple-exchange';
+import { SimpleExchangeWithRestrictions } from '../simple-exchange-with-restrictions';
 import { Adapters, SwaapV2Config } from './config';
 import { RateFetcher } from './rate-fetcher';
 import routerAbi from '../../abi/swaap-v2/vault.json';
@@ -79,9 +79,10 @@ import { BI_MAX_UINT256 } from '../../bigint-constants';
 import { SpecialDex } from '../../executor/types';
 import { extractReturnAmountPosition } from '../../executor/utils';
 
-const BLACKLISTED = 'blacklisted';
-
-export class SwaapV2 extends SimpleExchange implements IDex<SwaapV2Data> {
+export class SwaapV2
+  extends SimpleExchangeWithRestrictions
+  implements IDex<SwaapV2Data>
+{
   readonly isStatePollingDex = true;
   readonly hasConstantPriceLargeAmounts = false;
   readonly needWrapNative = false;
@@ -635,14 +636,20 @@ export class SwaapV2 extends SimpleExchange implements IDex<SwaapV2Data> {
 
       if (isAxiosError(e)) {
         if (e.response?.status === 403) {
-          await this.setBlacklist(options.userAddress, SWAAP_403_TTL_S);
+          await this.addBlacklistedAddress(
+            options.userAddress,
+            SWAAP_403_TTL_S,
+          );
           this.logger.warn(
             `${prefix}: Encountered blacklisted user=${options.userAddress}. Adding to local blacklist cache`,
           );
         }
 
         if (e.response?.status === 429) {
-          await this.setBlacklist(options.userAddress, SWAAP_429_TTL_S);
+          await this.addBlacklistedAddress(
+            options.userAddress,
+            SWAAP_429_TTL_S,
+          );
           this.logger.warn(
             `${prefix}: Encountered restricted user=${options.userAddress}. Adding to local blacklist cache`,
           );
@@ -707,33 +714,6 @@ export class SwaapV2 extends SimpleExchange implements IDex<SwaapV2Data> {
     }
     const restrictionExpired = +createdAt < expirationThreshold;
     return !restrictionExpired;
-  }
-
-  async isBlacklisted(txOrigin: Address): Promise<boolean> {
-    const result = await this.dexHelper.cache.get(
-      this.dexKey,
-      this.network,
-      this.getBlackListKey(txOrigin),
-    );
-    return result === BLACKLISTED;
-  }
-
-  getBlackListKey(address: Address) {
-    return `blacklist_${address}`.toLowerCase();
-  }
-
-  async setBlacklist(
-    txOrigin: Address,
-    ttl: number = SWAAP_403_TTL_S,
-  ): Promise<boolean> {
-    await this.dexHelper.cache.setex(
-      this.dexKey,
-      this.network,
-      this.getBlackListKey(txOrigin),
-      ttl,
-      BLACKLISTED,
-    );
-    return true;
   }
 
   // Returns estimated gas cost of calldata for this DEX in multiSwap

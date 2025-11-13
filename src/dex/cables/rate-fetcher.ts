@@ -2,7 +2,7 @@ import { Network } from '../../constants';
 import { IDexHelper } from '../../dex-helper';
 import { Fetcher } from '../../lib/fetcher/fetcher';
 import { validateAndCast } from '../../lib/validators';
-import { Logger, Token } from '../../types';
+import { Logger } from '../../types';
 import { PairData } from '../cables/types';
 import {
   CablesBlacklistResponse,
@@ -32,8 +32,6 @@ export class CablesRateFetcher {
   public pricesCacheTTL: number;
 
   public blacklistFetcher: Fetcher<CablesBlacklistResponse>;
-  public blacklistCacheKey: string;
-  public blacklistCacheTTL: number;
 
   constructor(
     private dexHelper: IDexHelper,
@@ -50,9 +48,6 @@ export class CablesRateFetcher {
 
     this.pricesCacheKey = config.rateConfig.pricesCacheKey;
     this.pricesCacheTTL = config.rateConfig.pricesCacheTTLSecs;
-
-    this.blacklistCacheKey = config.rateConfig.blacklistCacheKey;
-    this.blacklistCacheTTL = config.rateConfig.blacklistCacheTTLSecs;
 
     this.pairsFetcher = new Fetcher<CablesPairsResponse>(
       dexHelper.httpRequest,
@@ -102,7 +97,9 @@ export class CablesRateFetcher {
             );
           },
         },
-        handler: this.handleBlacklistResponse.bind(this),
+        handler: this.buildBlacklistResponseHandler(
+          config.rateConfig.setBlacklist,
+        ),
       },
       config.rateConfig.blacklistIntervalMs,
       logger,
@@ -174,15 +171,13 @@ export class CablesRateFetcher {
     );
   }
 
-  private handleBlacklistResponse(res: CablesBlacklistResponse): void {
-    const { blacklist } = res;
-    this.dexHelper.cache.setex(
-      this.dexKey,
-      this.network,
-      this.blacklistCacheKey,
-      this.blacklistCacheTTL,
-      JSON.stringify(blacklist.map(item => item.toLowerCase())),
-    );
+  private buildBlacklistResponseHandler(
+    setBlacklist: (addresses: string[]) => Promise<void>,
+  ): (res: CablesBlacklistResponse) => void {
+    return (res: CablesBlacklistResponse) => {
+      const { blacklist } = res;
+      void setBlacklist(blacklist);
+    };
   }
 
   // Convert addresses to lowercase

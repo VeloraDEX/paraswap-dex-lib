@@ -43,6 +43,10 @@ class DummyCache implements ICache {
     return null;
   }
 
+  async mget(keys: string[]): Promise<Array<string | null>> {
+    return Promise.all(keys.map(this.rawget));
+  }
+
   async keys(
     dexKey: string,
     network: number,
@@ -62,7 +66,6 @@ class DummyCache implements ICache {
 
   async rawget(key: string): Promise<string | null> {
     return this.storage[key] ? this.storage[key] : null;
-    return null;
   }
 
   async rawset(
@@ -96,6 +99,19 @@ class DummyCache implements ICache {
   ): Promise<void> {
     this.storage[`${network}_${dexKey}_${cacheKey}`.toLowerCase()] = value;
     return;
+  }
+
+  async msetex(...args: Array<string | number>): Promise<void> {
+    if (args.length % 3 !== 0) {
+      throw new Error('Wrong number of params');
+    }
+
+    for (let i = 0; i < args.length; i += 3) {
+      const key = args[i];
+      const value = args[i + 1];
+      // ignore ttl
+      this.storage[key] = value.toString();
+    }
   }
 
   async getAndCacheLocally(

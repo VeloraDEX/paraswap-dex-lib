@@ -15,7 +15,7 @@ import {
 } from '../../types';
 import { SwapSide, Network } from '../../constants';
 import * as CALLDATA_GAS_COST from '../../calldata-gas-cost';
-import { getDexKeysWithNetwork, Utils } from '../../utils';
+import { getDexKeysWithNetwork } from '../../utils';
 import { IDex } from '../../dex/idex';
 import { IDexHelper } from '../../dex-helper/idex-helper';
 import {
@@ -23,27 +23,21 @@ import {
   BebopLevel,
   BebopPair,
   BebopPricingResponse,
-  RestrictData,
   RoutingInstruction,
   TokenDataMap,
 } from './types';
 import { SlippageCheckError } from '../generic-rfq/types';
 import settlementABI from '../../abi/bebop/BebopSettlement.abi.json';
-import { SimpleExchange } from '../simple-exchange';
+import { SimpleExchangeWithRestrictions } from '../simple-exchange-with-restrictions';
 import { BebopConfig } from './config';
 import { Interface } from 'ethers/lib/utils';
 import { RateFetcher } from './rate-fetcher';
 import {
   BEBOP_API_URL,
-  BEBOP_ERRORS_CACHE_KEY,
   BEBOP_GAS_COST,
   BEBOP_INIT_TIMEOUT_MS,
   BEBOP_PRICES_CACHE_TTL,
   BEBOP_QUOTE_TIMEOUT_MS,
-  BEBOP_RESTRICTED_CACHE_KEY,
-  BEBOP_RESTRICT_CHECK_INTERVAL_MS,
-  BEBOP_RESTRICT_COUNT_THRESHOLD,
-  BEBOP_RESTRICT_TTL_S,
   BEBOP_TOKENS_CACHE_TTL,
   BEBOP_TOKENS_POLLING_INTERVAL_MS,
   BEBOP_WS_API_URL,
@@ -57,7 +51,10 @@ import { getBigNumberPow } from '../../bignumber-constants';
 import { ethers, utils } from 'ethers';
 import qs from 'qs';
 
-export class Bebop extends SimpleExchange implements IDex<BebopData> {
+export class Bebop
+  extends SimpleExchangeWithRestrictions
+  implements IDex<BebopData>
+{
   readonly hasConstantPriceLargeAmounts = false;
   readonly needWrapNative = true;
 
@@ -87,7 +84,7 @@ export class Bebop extends SimpleExchange implements IDex<BebopData> {
       .settlementAddress,
     protected settlementInterface = new Interface(settlementABI),
   ) {
-    super(dexHelper, dexKey);
+    super(dexHelper, dexKey, { enableDexRestriction: true });
     this.logger = dexHelper.getLogger(`${dexKey}-${network}`);
     this.tokensCacheKey = `tokens`;
     this.pricesCacheKey = `prices`;
@@ -390,11 +387,6 @@ export class Bebop extends SimpleExchange implements IDex<BebopData> {
     blockNumber: number,
     limitPools?: string[],
   ): Promise<null | ExchangePrices<BebopData>> {
-    const isRestricted = await this.isRestricted();
-    if (isRestricted) {
-      return null;
-    }
-
     const srcToken = this.dexHelper.config.wrapETH(_srcToken);
     const destToken = this.dexHelper.config.wrapETH(_destToken);
 
@@ -852,79 +844,6 @@ export class Bebop extends SimpleExchange implements IDex<BebopData> {
       }
       throw new Error(message);
     }
-  }
-
-  async restrict() {
-    const errorsDataRaw = await this.dexHelper.cache.get(
-      this.dexKey,
-      this.network,
-      BEBOP_ERRORS_CACHE_KEY,
-    );
-
-    const errorsData: RestrictData = Utils.Parse(errorsDataRaw);
-    const ERRORS_TTL_S = Math.floor(BEBOP_RESTRICT_CHECK_INTERVAL_MS / 1000);
-
-    if (
-      !errorsData ||
-      errorsData?.addedDatetimeMs + BEBOP_RESTRICT_CHECK_INTERVAL_MS <
-        Date.now()
-    ) {
-      this.logger.warn(
-        `${this.dexKey}-${this.network}: First encounter of error OR error ocurred outside of threshold, setting up counter`,
-      );
-      const data: RestrictData = {
-        count: 1,
-        addedDatetimeMs: Date.now(),
-      };
-      await this.dexHelper.cache.setex(
-        this.dexKey,
-        this.network,
-        BEBOP_ERRORS_CACHE_KEY,
-        ERRORS_TTL_S,
-        Utils.Serialize(data),
-      );
-      return;
-    } else {
-      if (errorsData.count + 1 >= BEBOP_RESTRICT_COUNT_THRESHOLD) {
-        this.logger.warn(
-          `${this.dexKey}-${this.network}: Restricting due to error count=${
-            errorsData.count + 1
-          } within ${BEBOP_RESTRICT_CHECK_INTERVAL_MS / 1000 / 60} minutes`,
-        );
-        await this.dexHelper.cache.setex(
-          this.dexKey,
-          this.network,
-          BEBOP_RESTRICTED_CACHE_KEY,
-          BEBOP_RESTRICT_TTL_S,
-          'true',
-        );
-      } else {
-        this.logger.warn(
-          `${this.dexKey}-${this.network}: Error count increased`,
-        );
-        const data: RestrictData = {
-          count: errorsData.count + 1,
-          addedDatetimeMs: errorsData.addedDatetimeMs,
-        };
-        await this.dexHelper.cache.setex(
-          this.dexKey,
-          this.network,
-          BEBOP_ERRORS_CACHE_KEY,
-          ERRORS_TTL_S,
-          Utils.Serialize(data),
-        );
-      }
-    }
-  }
-
-  async isRestricted(): Promise<boolean> {
-    const result = await this.dexHelper.cache.get(
-      this.dexKey,
-      this.network,
-      BEBOP_RESTRICTED_CACHE_KEY,
-    );
-
-    return result === 'true';
   }
 
   async getCachedPrices(): Promise<BebopPricingResponse | null> {

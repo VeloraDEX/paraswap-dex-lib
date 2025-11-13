@@ -62,7 +62,13 @@ export class GenericRFQ extends ParaSwapLimitOrders {
     private config: RFQConfig,
   ) {
     super(network, dexKey, dexHelper);
-    this.rateFetcher = new RateFetcher(dexHelper, config, dexKey, this.logger);
+    this.rateFetcher = new RateFetcher(
+      dexHelper,
+      config,
+      dexKey,
+      this.logger,
+      this.setBlacklist.bind(this),
+    );
   }
 
   async initializePricing(blockNumber: number): Promise<void> {
@@ -453,19 +459,6 @@ export class GenericRFQ extends ParaSwapLimitOrders {
       connectorTokens: pair.connectorTokens,
       liquidityUSD: pair.liquidityUSD,
     }));
-  }
-
-  async isBlacklisted(userAddress: string): Promise<boolean> {
-    return this.rateFetcher.isBlackListed(userAddress);
-  }
-
-  async setBlacklist(userAddress: string): Promise<boolean> {
-    await this.dexHelper.cache.hset(
-      this.rateFetcher.blackListCacheKey,
-      userAddress.toLowerCase(),
-      'true',
-    );
-    return true;
   }
 
   releaseResources(): void {
