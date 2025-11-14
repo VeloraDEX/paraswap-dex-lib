@@ -2,7 +2,13 @@ import {
   InitializeStateOptions,
   StatefulEventSubscriber,
 } from '../../stateful-event-subscriber';
-import { DexParams, Pool, PoolManagerState, SubgraphPool } from './types';
+import {
+  DexParams,
+  Pool,
+  PoolManagerState,
+  SubgraphConnectorPool,
+  SubgraphPool,
+} from './types';
 import { Address, Log, Logger } from '../../types';
 import UniswapV4StateViewABI from '../../abi/uniswap-v4/state-view.abi.json';
 import UniswapV4PoolManagerABI from '../../abi/uniswap-v4/pool-manager.abi.json';
@@ -20,6 +26,18 @@ import {
 import { FactoryState } from '../uniswap-v3/types';
 import { UniswapV4Pool } from './uniswap-v4-pool';
 import { UniswapV4PoolsList } from './config';
+import { PoolState, TickInfo } from './types';
+import { BytesLike } from 'ethers/lib/utils';
+import { MultiResult } from '../../lib/multi-wrapper';
+import { extractSuccessAndValue } from '../../lib/decoders';
+import { NumberAsString } from '@paraswap/core';
+import UniswapV4StateMulticallABI from '../../abi/uniswap-v4/state-multicall.abi.json';
+import {
+  TICK_BITMAP_BUFFER,
+  TICK_BITMAP_BUFFER_BY_CHAIN,
+  TICK_BITMAP_TO_USE,
+  TICK_BITMAP_TO_USE_BY_CHAIN,
+} from './constants';
 
 export class UniswapV4PoolManager extends StatefulEventSubscriber<PoolManagerState> {
   handlers: {
@@ -35,6 +53,8 @@ export class UniswapV4PoolManager extends StatefulEventSubscriber<PoolManagerSta
   stateViewIface: Interface;
 
   poolManagerIface: Interface;
+
+  stateMulticallIface: Interface;
 
   private wethAddress: string;
 
@@ -59,6 +79,7 @@ export class UniswapV4PoolManager extends StatefulEventSubscriber<PoolManagerSta
 
     this.stateViewIface = new Interface(UniswapV4StateViewABI);
     this.poolManagerIface = new Interface(UniswapV4PoolManagerABI);
+    this.stateMulticallIface = new Interface(UniswapV4StateMulticallABI);
     this.addressesSubscribed = [this.config.poolManager];
 
     this.wethAddress =
@@ -369,5 +390,119 @@ export class UniswapV4PoolManager extends StatefulEventSubscriber<PoolManagerSta
 
   private isPoolWithUnconventionalFees(fee: string | number): boolean {
     return +fee % 100 !== 0;
+  }
+
+  private getBitmapRange() {
+    const networkId = this.dexHelper.config.data.network;
+
+    const tickBitMapToUse =
+      TICK_BITMAP_TO_USE_BY_CHAIN[networkId] ?? TICK_BITMAP_TO_USE;
+    const tickBitMapBuffer =
+      TICK_BITMAP_BUFFER_BY_CHAIN[networkId] ?? TICK_BITMAP_BUFFER;
+
+    return tickBitMapToUse + tickBitMapBuffer;
+  }
+
+  async generateMultiplePoolStates(
+    pools: SubgraphConnectorPool[],
+    blockNumber: number,
+  ): Promise<(PoolState | null)[]> {
+    const poolStates: (PoolState | null)[] = [];
+
+    if (pools.length === 0) {
+      return [];
+    }
+
+    const multicallTargets = pools.map(pool => {
+      const poolKey = {
+        currency0: pool.token0.address,
+        currency1: pool.token1.address,
+        fee: pool.fee,
+        tickSpacing: parseInt(pool.tickSpacing),
+        hooks: pool.hooks,
+      };
+
+      const callData = this.stateMulticallIface.encodeFunctionData(
+        'getFullStateWithRelativeBitmaps',
+        [
+          this.config.poolManager,
+          poolKey,
+          this.getBitmapRange(),
+          this.getBitmapRange(),
+        ],
+      );
+
+      return {
+        target: this.config.stateMulticall,
+        callData,
+        decodeFunction: (result: MultiResult<BytesLike> | BytesLike) => {
+          const [, toDecode] = extractSuccessAndValue(result);
+          return this.stateMulticallIface.decodeFunctionResult(
+            'getFullStateWithRelativeBitmaps',
+            toDecode,
+          );
+        },
+      };
+    });
+
+    const results = await this.dexHelper.multiWrapper.tryAggregate<any>(
+      false,
+      multicallTargets,
+      blockNumber,
+      50, // state multicall is heavy, use smaller batches
+      false,
+    );
+
+    pools.forEach((pool, index) => {
+      try {
+        const stateResult = results[index].returnData[0];
+
+        const ticksResults: Record<NumberAsString, TickInfo> = {};
+        stateResult.ticks.forEach((tick: any) => {
+          if (tick.value.liquidityGross > 0n) {
+            ticksResults[tick.index.toString()] = {
+              liquidityGross: BigInt(tick.value.liquidityGross),
+              liquidityNet: BigInt(tick.value.liquidityNet),
+            };
+          }
+        });
+
+        const tickBitMapResults: Record<NumberAsString, bigint> = {};
+        stateResult.tickBitmap.forEach((bitmap: any) => {
+          tickBitMapResults[bitmap.index.toString()] = BigInt(bitmap.value);
+        });
+
+        const poolState: PoolState = {
+          id: pool.id,
+          token0: pool.token0.address.toLowerCase(),
+          token1: pool.token1.address.toLowerCase(),
+          fee: pool.fee,
+          hooks: pool.hooks,
+          feeGrowthGlobal0X128: BigInt(stateResult.feeGrowthGlobal0X128),
+          feeGrowthGlobal1X128: BigInt(stateResult.feeGrowthGlobal1X128),
+          liquidity: BigInt(stateResult.liquidity),
+          slot0: {
+            sqrtPriceX96: BigInt(stateResult.slot0.sqrtPriceX96),
+            tick: BigInt(stateResult.slot0.tick),
+            protocolFee: BigInt(stateResult.slot0.protocolFee),
+            lpFee: BigInt(stateResult.slot0.lpFee),
+          },
+          tickSpacing: parseInt(pool.tickSpacing),
+          ticks: ticksResults,
+          tickBitmap: tickBitMapResults,
+          isValid: true,
+        };
+
+        poolStates.push(poolState);
+      } catch (error) {
+        this.logger.error(
+          `Failed to generate state for pool ${pool.id}: ${error}`,
+        );
+
+        poolStates.push(null);
+      }
+    });
+
+    return poolStates;
   }
 }

@@ -71,6 +71,7 @@ import {
   poolGetPathForTokenInOut,
 } from './utils';
 import {
+  apiUrl,
   DirectMethods,
   DirectMethodsV6,
   MIN_USD_LIQUIDITY_TO_FETCH,
@@ -1617,55 +1618,53 @@ export class BalancerV2
   }
 
   async getTopPoolsForToken(
-    tokenAddress: Address,
+    _tokenAddress: Address,
     count: number,
   ): Promise<PoolLiquidity[]> {
+    const tokenAddress = this.dexHelper.config
+      .wrapETH(_tokenAddress)
+      .toLowerCase();
+
     const poolsWithToken = this.eventPools.allPools.filter(pool =>
       pool.mainTokens.some(mainToken =>
         isSameAddress(mainToken.address, tokenAddress),
       ),
     );
 
-    const variables = {
-      poolIds: poolsWithToken.map(pool => pool.id),
-      count,
-    };
-
-    const query = `query ($poolIds: [String!]!, $count: Int) {
-      pools (first: $count, orderBy: totalLiquidity, orderDirection: desc,
-        where: {
-          and: [
-            { 
-              or: [
-                { isInRecoveryMode: false }
-                { isInRecoveryMode: null }
-              ]
-            },
-            {
-              id_in: $poolIds,
-              swapEnabled: true,
-              totalLiquidity_gt: ${MIN_USD_LIQUIDITY_TO_FETCH.toString()}
-            }
-          ]
-      }) {
-        address
-        totalLiquidity
-        tokens {
+    const query = `query MyQuery($tokenAddress: String!, $count: Int!) {
+      poolGetPools(
+        orderBy: totalLiquidity
+        orderDirection: desc
+        first: $count
+        where: {tokensIn: [$tokenAddress], protocolVersionIn: [2]}
+      ) {
+        id
+        poolTokens {
           address
-          decimals
+        }
+        dynamicData {
+          totalLiquidity
         }
       }
     }`;
+
+    const variables = {
+      tokenAddress: tokenAddress.toLowerCase(),
+      count,
+    };
+
     const { data } = await this.dexHelper.httpRequest.querySubgraph<{
       data: {
-        pools: {
-          address: string;
-          totalLiquidity: string;
-          tokens: { address: string; decimals: number }[];
+        poolGetPools: {
+          id: string;
+          poolTokens: { address: string }[];
+          dynamicData: {
+            totalLiquidity: string;
+          };
         }[];
       };
     }>(
-      this.subgraphURL,
+      apiUrl,
       {
         query,
         variables,
@@ -1673,25 +1672,37 @@ export class BalancerV2
       { timeout: SUBGRAPH_TIMEOUT },
     );
 
-    if (!(data && data.pools))
+    if (!(data && data.poolGetPools))
       throw new Error(
-        `Error_${this.dexKey}_Subgraph: couldn't fetch the pools from the subgraph`,
+        `Error_${this.dexKey}_API: couldn't fetch the pools from Balancer API`,
       );
 
-    return _.map(data.pools, pool => {
-      const subgraphPool = poolsWithToken.find(poolWithToken =>
-        isSameAddress(poolWithToken.address, pool.address),
-      )!;
+    const results: PoolLiquidity[] = [];
 
-      return {
+    for (const pool of data.poolGetPools) {
+      const poolAddress = pool.id.slice(0, 42);
+
+      const eventPool = poolsWithToken.find(p =>
+        isSameAddress(p.address, poolAddress),
+      );
+
+      if (!eventPool) continue;
+
+      const liquidityUSD = parseFloat(pool.dynamicData.totalLiquidity);
+
+      if (liquidityUSD < MIN_USD_LIQUIDITY_TO_FETCH) continue;
+
+      results.push({
         exchange: this.dexKey,
-        address: pool.address.toLowerCase(),
-        connectorTokens: subgraphPool.mainTokens.filter(
+        address: poolAddress.toLowerCase(),
+        connectorTokens: eventPool.mainTokens.filter(
           token => !isSameAddress(tokenAddress, token.address),
         ),
-        liquidityUSD: parseFloat(pool.totalLiquidity),
-      };
-    });
+        liquidityUSD,
+      });
+    }
+
+    return results;
   }
 
   private get poolAddressMap(): SubgraphPoolAddressDictionary {

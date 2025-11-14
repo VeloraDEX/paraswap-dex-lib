@@ -76,6 +76,9 @@ export type SubgraphConnectorPool = {
     address: string;
     decimals: string;
   };
+  fee: string;
+  tickSpacing: string;
+  hooks: string;
 };
 
 export type SubgraphTick = {

@@ -107,6 +107,9 @@ export async function queryAvailablePoolsForToken(
         address: id
         decimals
       }
+      fee: feeTier
+      tickSpacing
+      hooks
     }
     pools1: pools(
       where: {
@@ -130,6 +133,9 @@ export async function queryAvailablePoolsForToken(
         address: id
         decimals
       }
+      fee: feeTier
+      tickSpacing
+      hooks
     }
   }
 `;

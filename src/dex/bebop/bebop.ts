@@ -616,16 +616,22 @@ export class Bebop extends SimpleExchange implements IDex<BebopData> {
         continue;
       }
 
+      const quoteToken = {
+        address: quote,
+        decimals: this.tokensMap[quote.toLowerCase()].decimals,
+      };
+
+      const quoteTokenUsd = await this.dexHelper.getTokenUSDPrice(
+        quoteToken,
+        BigInt(10 ** quoteToken.decimals),
+      );
+
       if (isBase) {
         const liquidityInQuote = this.getMaxLiquidity(pairData.bids);
         token = {
           address: quote,
           decimals: this.tokensMap[quote.toLowerCase()].decimals,
         };
-        const quoteTokenUsd = await this.dexHelper.getTokenUSDPrice(
-          token,
-          BigInt(Math.round(liquidityInQuote)),
-        );
         liquidityUSD = liquidityInQuote * quoteTokenUsd;
       } else if (isQuote) {
         const liquidityInBase = this.getMaxLiquidity(pairData.asks);
@@ -633,11 +639,7 @@ export class Bebop extends SimpleExchange implements IDex<BebopData> {
           address: base,
           decimals: this.tokensMap[base.toLowerCase()].decimals,
         };
-        const baseTokenUsd = await this.dexHelper.getTokenUSDPrice(
-          token,
-          BigInt(Math.round(liquidityInBase)),
-        );
-        liquidityUSD = liquidityInBase * baseTokenUsd;
+        liquidityUSD = liquidityInBase * quoteTokenUsd;
       }
 
       if (liquidityUSD) {
@@ -645,7 +647,11 @@ export class Bebop extends SimpleExchange implements IDex<BebopData> {
         const address = token.address.toLowerCase();
 
         if (connectorPools[address]) {
-          connectorPools[address].liquidityUSD += liquidityUSD;
+          // liquidity can be used only for one pair
+          connectorPools[address].liquidityUSD = Math.max(
+            liquidityUSD,
+            connectorPools[address].liquidityUSD,
+          );
         } else {
           connectorPools[address] = {
             exchange: this.dexKey,
@@ -654,7 +660,6 @@ export class Bebop extends SimpleExchange implements IDex<BebopData> {
               {
                 address: address,
                 decimals: this.tokensMap[address].decimals,
-                symbol: this.tokensMap[address].ticker,
               },
             ],
             liquidityUSD,
