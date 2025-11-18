@@ -1,7 +1,7 @@
 import { SimpleExchange } from '../simple-exchange';
 import { Context, IDex } from '../idex';
 import { SparkParams, SparkData, SparkSDaiPoolState } from './types';
-import { Network, SwapSide } from '../../constants';
+import { Network, SwapSide, UNLIMITED_USD_LIQUIDITY } from '../../constants';
 import { getDexKeysWithNetwork } from '../../utils';
 import { Adapters, SDaiConfig } from './config';
 import {
@@ -91,15 +91,21 @@ export class Spark
     await this.eventPool.initialize(blockNumber);
   }
 
+  getPoolIdentifier(): string {
+    return `${this.dexKey}_${this.sdaiAddress}`;
+  }
+
   async getPoolIdentifiers(
     srcToken: Token,
     destToken: Token,
     side: SwapSide,
     blockNumber: number,
   ): Promise<string[]> {
-    return this.isAppropriatePair(srcToken, destToken)
-      ? [`${this.dexKey}_${this.sdaiAddress}`]
-      : [];
+    if (!this.isAppropriatePair(srcToken, destToken)) {
+      return [];
+    }
+
+    return [this.getPoolIdentifier()];
   }
 
   async getPricesVolume(
@@ -141,6 +147,7 @@ export class Spark
         exchange: this.dexKey,
         data: { exchange: `${this.sdaiAddress}` },
         poolAddresses: [`${this.sdaiAddress}`],
+        poolIdentifiers: [this.getPoolIdentifier()],
       },
     ];
   }
@@ -154,7 +161,12 @@ export class Spark
     tokenAddress: Address,
     limit: number,
   ): Promise<PoolLiquidity[]> {
-    if (!this.isDai(tokenAddress) && !this.isSDai(tokenAddress)) return [];
+    const token = tokenAddress.toLowerCase();
+
+    const isDai = this.isDai(token);
+    const isSDai = this.isSDai(token);
+
+    if (!isDai && !isSDai) return [];
 
     return [
       {
@@ -163,12 +175,10 @@ export class Spark
         connectorTokens: [
           {
             decimals: 18,
-            address: this.isDai(tokenAddress)
-              ? this.sdaiAddress
-              : this.daiAddress,
+            address: isSDai ? this.daiAddress : this.sdaiAddress,
           },
         ],
-        liquidityUSD: 1000000000, // Just returning a big number so this DEX will be preferred
+        liquidityUSD: UNLIMITED_USD_LIQUIDITY,
       },
     ];
   }

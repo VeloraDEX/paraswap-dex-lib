@@ -203,8 +203,8 @@ describe('UniswapV3', () => {
 
         const poolPrices = prices?.filter(
           price =>
-            price.poolIdentifier &&
-            price.poolIdentifier.toLowerCase() ===
+            price.poolIdentifiers![0] &&
+            price.poolIdentifiers![0].toLowerCase() ===
               'UniswapV3_0x6b175474e89094c44da98b954eedeac495271d0f_0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48_10000'.toLowerCase(),
         );
 
@@ -219,7 +219,8 @@ describe('UniswapV3', () => {
         let falseChecksCounter = 0;
         await Promise.all(
           poolPrices!.map(async price => {
-            const fee = uniswapV3.eventPools[price.poolIdentifier!]!.feeCode;
+            const fee =
+              uniswapV3.eventPools[price.poolIdentifiers![0]]!.feeCode;
             const res = await checkOnChainPricing(
               dexHelper,
               uniswapV3,
@@ -312,7 +313,7 @@ describe('UniswapV3', () => {
               price.prices,
               TokenA.address,
               TokenB.address,
-              uniswapV3.eventPools[price.poolIdentifier!]!.feeCode,
+              uniswapV3.eventPools[price.poolIdentifiers![0]]!.feeCode,
               amounts,
             ),
           ),
@@ -356,8 +357,8 @@ describe('UniswapV3', () => {
 
         const poolPrices = prices?.filter(
           price =>
-            price.poolIdentifier &&
-            price.poolIdentifier.toLowerCase() ===
+            price.poolIdentifiers![0] &&
+            price.poolIdentifiers![0].toLowerCase() ===
               'UniswapV3_0x6b175474e89094c44da98b954eedeac495271d0f_0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48_10000'.toLowerCase(),
         );
 
@@ -372,7 +373,8 @@ describe('UniswapV3', () => {
         let falseChecksCounter = 0;
         await Promise.all(
           poolPrices!.map(async price => {
-            const fee = uniswapV3.eventPools[price.poolIdentifier!]!.feeCode;
+            const fee =
+              uniswapV3.eventPools[price.poolIdentifiers![0]]!.feeCode;
             const res = await checkOnChainPricing(
               dexHelper,
               uniswapV3,
@@ -425,8 +427,8 @@ describe('UniswapV3', () => {
 
         const poolPrices = prices?.filter(
           price =>
-            price.poolIdentifier &&
-            price.poolIdentifier.toLowerCase() ===
+            price.poolIdentifiers![0] &&
+            price.poolIdentifiers![0].toLowerCase() ===
               'UniswapV3_0x6b175474e89094c44da98b954eedeac495271d0f_0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48_10000'.toLowerCase(),
         );
 
@@ -441,7 +443,8 @@ describe('UniswapV3', () => {
         let falseChecksCounter = 0;
         await Promise.all(
           poolPrices!.map(async price => {
-            const fee = uniswapV3.eventPools[price.poolIdentifier!]!.feeCode;
+            const fee =
+              uniswapV3.eventPools[price.poolIdentifiers![0]]!.feeCode;
             const res = await checkOnChainPricing(
               dexHelper,
               uniswapV3,
@@ -500,8 +503,8 @@ describe('UniswapV3', () => {
 
         const poolPrices = prices?.filter(
           price =>
-            price.poolIdentifier &&
-            price.poolIdentifier.toLowerCase() ===
+            price.poolIdentifiers![0] &&
+            price.poolIdentifiers![0].toLowerCase() ===
               'UniswapV3_0x6b175474e89094c44da98b954eedeac495271d0f_0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48_10000'.toLowerCase(),
         );
 
@@ -516,7 +519,8 @@ describe('UniswapV3', () => {
         let falseChecksCounter = 0;
         await Promise.all(
           poolPrices!.map(async price => {
-            const fee = uniswapV3.eventPools[price.poolIdentifier!]!.feeCode;
+            const fee =
+              uniswapV3.eventPools[price.poolIdentifiers![0]]!.feeCode;
             const res = await checkOnChainPricing(
               dexHelper,
               uniswapV3,
@@ -582,7 +586,7 @@ describe('UniswapV3', () => {
       let falseChecksCounter = 0;
       await Promise.all(
         poolPrices!.map(async price => {
-          const fee = uniswapV3.eventPools[price.poolIdentifier!]!.feeCode;
+          const fee = uniswapV3.eventPools[price.poolIdentifiers![0]]!.feeCode;
           const res = await checkOnChainPricing(
             dexHelper,
             uniswapV3,
@@ -636,7 +640,7 @@ describe('UniswapV3', () => {
       let falseChecksCounter = 0;
       await Promise.all(
         poolPrices!.map(async price => {
-          const fee = uniswapV3.eventPools[price.poolIdentifier!]!.feeCode;
+          const fee = uniswapV3.eventPools[price.poolIdentifiers![0]]!.feeCode;
           const res = await checkOnChainPricing(
             dexHelper,
             uniswapV3,
@@ -754,7 +758,7 @@ describe('UniswapV3', () => {
       let falseChecksCounter = 0;
       await Promise.all(
         poolPrices!.map(async price => {
-          const fee = uniswapV3.eventPools[price.poolIdentifier!]!.feeCode;
+          const fee = uniswapV3.eventPools[price.poolIdentifiers![0]]!.feeCode;
           const res = await checkOnChainPricing(
             dexHelper,
             uniswapV3,
@@ -872,7 +876,7 @@ describe('UniswapV3', () => {
       let falseChecksCounter = 0;
       await Promise.all(
         poolPrices!.map(async price => {
-          const fee = uniswapV3.eventPools[price.poolIdentifier!]!.feeCode;
+          const fee = uniswapV3.eventPools[price.poolIdentifiers![0]]!.feeCode;
           const res = await checkOnChainPricing(
             dexHelper,
             uniswapV3,
@@ -963,7 +967,7 @@ describe('RamsesV2', () => {
     let falseChecksCounter = 0;
     await Promise.all(
       poolPrices!.map(async price => {
-        const fee = uniswapV3.eventPools[price.poolIdentifier!]!.feeCode;
+        const fee = uniswapV3.eventPools[price.poolIdentifiers![0]]!.feeCode;
         const res = await checkOnChainPricing(
           dexHelper,
           uniswapV3,
@@ -1021,7 +1025,7 @@ describe('RamsesV2', () => {
     let falseChecksCounter = 0;
     await Promise.all(
       poolPrices!.map(async price => {
-        const fee = uniswapV3.eventPools[price.poolIdentifier!]!.feeCode;
+        const fee = uniswapV3.eventPools[price.poolIdentifiers![0]]!.feeCode;
         const res = await checkOnChainPricing(
           dexHelper,
           uniswapV3,
@@ -1100,7 +1104,7 @@ describe('PharaohV2', () => {
     let falseChecksCounter = 0;
     await Promise.all(
       poolPrices!.map(async price => {
-        const fee = uniswapV3.eventPools[price.poolIdentifier!]!.feeCode;
+        const fee = uniswapV3.eventPools[price.poolIdentifiers![0]]!.feeCode;
         const res = await checkOnChainPricing(
           dexHelper,
           uniswapV3,
@@ -1158,7 +1162,7 @@ describe('PharaohV2', () => {
     let falseChecksCounter = 0;
     await Promise.all(
       poolPrices!.map(async price => {
-        const fee = uniswapV3.eventPools[price.poolIdentifier!]!.feeCode;
+        const fee = uniswapV3.eventPools[price.poolIdentifiers![0]]!.feeCode;
         const res = await checkOnChainPricing(
           dexHelper,
           uniswapV3,
@@ -1238,7 +1242,7 @@ describe('ChronosV3', () => {
     let falseChecksCounter = 0;
     await Promise.all(
       poolPrices!.map(async price => {
-        const fee = uniswapV3.eventPools[price.poolIdentifier!]!.feeCode;
+        const fee = uniswapV3.eventPools[price.poolIdentifiers![0]]!.feeCode;
         const res = await checkOnChainPricing(
           dexHelper,
           uniswapV3,
@@ -1287,7 +1291,7 @@ describe('ChronosV3', () => {
     let falseChecksCounter = 0;
     await Promise.all(
       poolPrices!.map(async price => {
-        const fee = uniswapV3.eventPools[price.poolIdentifier!]!.feeCode;
+        const fee = uniswapV3.eventPools[price.poolIdentifiers![0]]!.feeCode;
         const res = await checkOnChainPricing(
           dexHelper,
           uniswapV3,
@@ -1375,7 +1379,8 @@ describe('SushiSwapV3', () => {
       let falseChecksCounter = 0;
       await Promise.all(
         poolPrices!.map(async price => {
-          const fee = sushiSwapV3.eventPools[price.poolIdentifier!]!.feeCode;
+          const fee =
+            sushiSwapV3.eventPools[price.poolIdentifiers![0]]!.feeCode;
           const res = await checkOnChainPricing(
             dexHelper,
             sushiSwapV3,
@@ -1430,7 +1435,8 @@ describe('SushiSwapV3', () => {
       let falseChecksCounter = 0;
       await Promise.all(
         poolPrices!.map(async price => {
-          const fee = sushiSwapV3.eventPools[price.poolIdentifier!]!.feeCode;
+          const fee =
+            sushiSwapV3.eventPools[price.poolIdentifiers![0]]!.feeCode;
           const res = await checkOnChainPricing(
             dexHelper,
             sushiSwapV3,
@@ -1516,7 +1522,8 @@ describe('SushiSwapV3', () => {
       let falseChecksCounter = 0;
       await Promise.all(
         poolPrices!.map(async price => {
-          const fee = sushiSwapV3.eventPools[price.poolIdentifier!]!.feeCode;
+          const fee =
+            sushiSwapV3.eventPools[price.poolIdentifiers![0]]!.feeCode;
           const res = await checkOnChainPricing(
             dexHelper,
             sushiSwapV3,
@@ -1591,7 +1598,8 @@ describe('SushiSwapV3', () => {
       let falseChecksCounter = 0;
       await Promise.all(
         poolPrices!.map(async price => {
-          const fee = sushiSwapV3.eventPools[price.poolIdentifier!]!.feeCode;
+          const fee =
+            sushiSwapV3.eventPools[price.poolIdentifiers![0]]!.feeCode;
           const res = await checkOnChainPricing(
             dexHelper,
             sushiSwapV3,
@@ -1646,7 +1654,8 @@ describe('SushiSwapV3', () => {
       let falseChecksCounter = 0;
       await Promise.all(
         poolPrices!.map(async price => {
-          const fee = sushiSwapV3.eventPools[price.poolIdentifier!]!.feeCode;
+          const fee =
+            sushiSwapV3.eventPools[price.poolIdentifiers![0]]!.feeCode;
           const res = await checkOnChainPricing(
             dexHelper,
             sushiSwapV3,
@@ -1733,7 +1742,7 @@ describe('Retro', () => {
       let falseChecksCounter = 0;
       await Promise.all(
         poolPrices!.map(async price => {
-          const fee = retro.eventPools[price.poolIdentifier!]!.feeCode;
+          const fee = retro.eventPools[price.poolIdentifiers![0]]!.feeCode;
           const res = await checkOnChainPricing(
             dexHelper,
             retro,
@@ -1788,7 +1797,7 @@ describe('Retro', () => {
       let falseChecksCounter = 0;
       await Promise.all(
         poolPrices!.map(async price => {
-          const fee = retro.eventPools[price.poolIdentifier!]!.feeCode;
+          const fee = retro.eventPools[price.poolIdentifiers![0]]!.feeCode;
           const res = await checkOnChainPricing(
             dexHelper,
             retro,
@@ -1927,7 +1936,7 @@ describe('BaseswapV3', () => {
       let falseChecksCounter = 0;
       await Promise.all(
         poolPrices!.map(async price => {
-          const fee = baseswapV3.eventPools[price.poolIdentifier!]!.feeCode;
+          const fee = baseswapV3.eventPools[price.poolIdentifiers![0]]!.feeCode;
           const res = await checkOnChainPricing(
             dexHelper,
             baseswapV3,
@@ -1988,7 +1997,7 @@ describe('BaseswapV3', () => {
       let falseChecksCounter = 0;
       await Promise.all(
         poolPrices!.map(async price => {
-          const fee = baseswapV3.eventPools[price.poolIdentifier!]!.feeCode;
+          const fee = baseswapV3.eventPools[price.poolIdentifiers![0]]!.feeCode;
           const res = await checkOnChainPricing(
             dexHelper,
             baseswapV3,
@@ -2052,7 +2061,7 @@ describe('BaseswapV3', () => {
       let falseChecksCounter = 0;
       await Promise.all(
         poolPrices!.map(async price => {
-          const fee = baseswapV3.eventPools[price.poolIdentifier!]!.feeCode;
+          const fee = baseswapV3.eventPools[price.poolIdentifiers![0]]!.feeCode;
           const res = await checkOnChainPricing(
             dexHelper,
             baseswapV3,
@@ -2116,7 +2125,7 @@ describe('BaseswapV3', () => {
       let falseChecksCounter = 0;
       await Promise.all(
         poolPrices!.map(async price => {
-          const fee = baseswapV3.eventPools[price.poolIdentifier!]!.feeCode;
+          const fee = baseswapV3.eventPools[price.poolIdentifiers![0]]!.feeCode;
           const res = await checkOnChainPricing(
             dexHelper,
             baseswapV3,
@@ -2210,7 +2219,7 @@ describe('SpookySwapV3', () => {
       let falseChecksCounter = 0;
       await Promise.all(
         poolPrices!.map(async price => {
-          const fee = baseswapV3.eventPools[price.poolIdentifier!]!.feeCode;
+          const fee = baseswapV3.eventPools[price.poolIdentifiers![0]]!.feeCode;
           const res = await checkOnChainPricing(
             dexHelper,
             baseswapV3,
@@ -2271,7 +2280,7 @@ describe('SpookySwapV3', () => {
       let falseChecksCounter = 0;
       await Promise.all(
         poolPrices!.map(async price => {
-          const fee = baseswapV3.eventPools[price.poolIdentifier!]!.feeCode;
+          const fee = baseswapV3.eventPools[price.poolIdentifiers![0]]!.feeCode;
           const res = await checkOnChainPricing(
             dexHelper,
             baseswapV3,
@@ -2338,7 +2347,7 @@ describe('SpookySwapV3', () => {
       let falseChecksCounter = 0;
       await Promise.all(
         poolPrices!.map(async price => {
-          const fee = baseswapV3.eventPools[price.poolIdentifier!]!.feeCode;
+          const fee = baseswapV3.eventPools[price.poolIdentifiers![0]]!.feeCode;
           const res = await checkOnChainPricing(
             dexHelper,
             baseswapV3,
@@ -2409,7 +2418,7 @@ describe('SpookySwapV3', () => {
       let falseChecksCounter = 0;
       await Promise.all(
         poolPrices!.map(async price => {
-          const fee = baseswapV3.eventPools[price.poolIdentifier!]!.feeCode;
+          const fee = baseswapV3.eventPools[price.poolIdentifiers![0]]!.feeCode;
           const res = await checkOnChainPricing(
             dexHelper,
             baseswapV3,
@@ -2450,10 +2459,10 @@ describe('Slipstream', () => {
 
       const network = Network.OPTIMISM;
       const dexHelper = new DummyDexHelper(network);
-      const TokenASymbol = 'PSTAKE';
+      const TokenASymbol = 'USDC';
       const TokenA = Tokens[network][TokenASymbol];
 
-      const TokenBSymbol = 'USDC';
+      const TokenBSymbol = 'WETH';
       const TokenB = Tokens[network][TokenBSymbol];
 
       beforeEach(async () => {
@@ -2462,7 +2471,7 @@ describe('Slipstream', () => {
       });
 
       it('getPoolIdentifiers and getPricesVolume SELL', async () => {
-        const amounts = [0n, BI_POWS[18], BI_POWS[18] * 2n];
+        const amounts = [0n, BI_POWS[6], BI_POWS[6] * 2n];
 
         const pools = await slipstream.getPoolIdentifiers(
           TokenA,
@@ -2497,7 +2506,7 @@ describe('Slipstream', () => {
         await Promise.all(
           poolPrices!.map(async price => {
             const tickSpacing =
-              slipstream.eventPools[price.poolIdentifier!]!.tickSpacing!;
+              slipstream.eventPools[price.poolIdentifiers![0]]!.tickSpacing!;
             const res = await checkOnChainPricing(
               dexHelper,
               slipstream,
@@ -2554,7 +2563,7 @@ describe('Slipstream', () => {
         await Promise.all(
           poolPrices!.map(async price => {
             const tickSpacing =
-              slipstream.eventPools[price.poolIdentifier!]!.tickSpacing!;
+              slipstream.eventPools[price.poolIdentifiers![0]]!.tickSpacing!;
             const res = await checkOnChainPricing(
               dexHelper,
               slipstream,
@@ -2643,7 +2652,7 @@ describe('Slipstream', () => {
         await Promise.all(
           poolPrices!.map(async price => {
             const tickSpacing =
-              slipstream.eventPools[price.poolIdentifier!]!.tickSpacing!;
+              slipstream.eventPools[price.poolIdentifiers![0]]!.tickSpacing!;
             const res = await checkOnChainPricing(
               dexHelper,
               slipstream,
@@ -2700,7 +2709,7 @@ describe('Slipstream', () => {
         await Promise.all(
           poolPrices!.map(async price => {
             const tickSpacing =
-              slipstream.eventPools[price.poolIdentifier!]!.tickSpacing!;
+              slipstream.eventPools[price.poolIdentifiers![0]]!.tickSpacing!;
             const res = await checkOnChainPricing(
               dexHelper,
               slipstream,
@@ -2788,7 +2797,7 @@ describe('Slipstream', () => {
         await Promise.all(
           poolPrices!.map(async price => {
             const tickSpacing =
-              slipstream.eventPools[price.poolIdentifier!]!.tickSpacing!;
+              slipstream.eventPools[price.poolIdentifiers![0]]!.tickSpacing!;
             const res = await checkOnChainPricing(
               dexHelper,
               slipstream,
@@ -2845,7 +2854,7 @@ describe('Slipstream', () => {
         await Promise.all(
           poolPrices!.map(async price => {
             const tickSpacing =
-              slipstream.eventPools[price.poolIdentifier!]!.tickSpacing!;
+              slipstream.eventPools[price.poolIdentifiers![0]]!.tickSpacing!;
             const res = await checkOnChainPricing(
               dexHelper,
               slipstream,
@@ -2936,7 +2945,7 @@ describe('PangolinV3', () => {
     let falseChecksCounter = 0;
     await Promise.all(
       poolPrices!.map(async price => {
-        const fee = uniswapV3.eventPools[price.poolIdentifier!]!.feeCode;
+        const fee = uniswapV3.eventPools[price.poolIdentifiers![0]]!.feeCode;
         const res = await checkOnChainPricing(
           dexHelper,
           uniswapV3,
@@ -2994,7 +3003,7 @@ describe('PangolinV3', () => {
     let falseChecksCounter = 0;
     await Promise.all(
       poolPrices!.map(async price => {
-        const fee = uniswapV3.eventPools[price.poolIdentifier!]!.feeCode;
+        const fee = uniswapV3.eventPools[price.poolIdentifiers![0]]!.feeCode;
         const res = await checkOnChainPricing(
           dexHelper,
           uniswapV3,

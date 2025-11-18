@@ -267,11 +267,11 @@ describe('SolidlyV3', function () {
       await Promise.all(
         poolPrices!.map(async price => {
           const tickSpacing =
-            solidlyV3.eventPools[price.poolIdentifier!]!.tickSpacing;
+            solidlyV3.eventPools[price.poolIdentifiers![0]]!.tickSpacing;
           const res = await checkOnChainPricing(
             dexHelper,
             blockNumber,
-            solidlyV3.eventPools[price.poolIdentifier!]!.poolAddress,
+            solidlyV3.eventPools[price.poolIdentifiers![0]]!.poolAddress,
             price.prices,
             WETH.address,
             USDC.address,
@@ -314,11 +314,11 @@ describe('SolidlyV3', function () {
       await Promise.all(
         poolPrices!.map(async price => {
           const tickSpacing =
-            solidlyV3.eventPools[price.poolIdentifier!]!.tickSpacing;
+            solidlyV3.eventPools[price.poolIdentifiers![0]]!.tickSpacing;
           const res = await checkOnChainPricing(
             dexHelper,
             blockNumber,
-            solidlyV3.eventPools[price.poolIdentifier!]!.poolAddress,
+            solidlyV3.eventPools[price.poolIdentifiers![0]]!.poolAddress,
             price.prices,
             WETH.address,
             USDC.address,

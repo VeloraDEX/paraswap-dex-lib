@@ -9,7 +9,7 @@ import {
   NumberAsString,
   DexExchangeParam,
 } from '../../types';
-import { SwapSide, Network } from '../../constants';
+import { SwapSide, Network, UNLIMITED_USD_LIQUIDITY } from '../../constants';
 import * as CALLDATA_GAS_COST from '../../calldata-gas-cost';
 import { getDexKeysWithNetwork } from '../../utils';
 import { Context, IDex } from '../../dex/idex';
@@ -245,24 +245,21 @@ export class ConcentratorArusd
   ): Promise<PoolLiquidity[]> {
     if (!this.is_rUSD(tokenAddress) && !this.is_arUSD(tokenAddress)) return [];
 
+    const isArUSD = this.is_arUSD(tokenAddress);
+
     return [
       {
         exchange: this.dexKey,
-        address: this.config.arUSDAddress,
-        connectorTokens: this.is_rUSD(tokenAddress)
-          ? [
-              {
-                decimals: 18,
-                address: this.config.arUSDAddress,
-              },
-            ]
-          : [
-              {
-                decimals: 18,
-                address: this.config.rUSDAddress,
-              },
-            ],
-        liquidityUSD: 1000000000, // Just returning a big number so this DEX will be preferred
+        address: this.config.arUSD5115Address,
+        connectorTokens: [
+          {
+            decimals: 18,
+            address: isArUSD
+              ? this.config.rUSDAddress
+              : this.config.arUSDAddress,
+          },
+        ],
+        liquidityUSD: UNLIMITED_USD_LIQUIDITY,
       },
     ];
   }

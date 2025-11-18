@@ -31,7 +31,7 @@ export type DexalotData = {
 };
 
 export type DexParams = {
-  mainnetRFQAddress: string;
+  dexalotRouterAddress: string;
 };
 
 export enum ClobSide {

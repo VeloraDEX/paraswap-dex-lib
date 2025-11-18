@@ -104,7 +104,7 @@ export class SwaapV2 extends SimpleExchange implements IDex<SwaapV2Data> {
     protected routerInterface = new Interface(routerAbi),
   ) {
     super(dexHelper, dexKey);
-    this.logger = dexHelper.getLogger(dexKey);
+    this.logger = dexHelper.getLogger(`${dexKey}-${network}`);
     const token = dexHelper.config.data.swaapV2AuthToken;
     assert(
       token !== undefined,

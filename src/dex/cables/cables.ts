@@ -75,7 +75,7 @@ export class Cables extends SimpleExchange implements IDex<any> {
     protected rfqInterface = new Interface(mainnetRFQAbi),
   ) {
     super(dexHelper, dexKey);
-    this.logger = dexHelper.getLogger(dexKey);
+    this.logger = dexHelper.getLogger(`${dexKey}-${network}`);
 
     this.rateFetcher = new CablesRateFetcher(
       this.dexHelper,
@@ -601,6 +601,7 @@ export class Cables extends SimpleExchange implements IDex<any> {
           exchange: this.dexKey,
           gasCost: CABLES_GAS_COST,
           poolAddresses: [this.mainnetRFQAddress],
+          poolIdentifiers: pools,
           data: {},
         },
       ];

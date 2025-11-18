@@ -1,40 +1,36 @@
-import { Logger } from 'log4js';
 import { DeepReadonly } from 'ts-essentials';
-import { IDexHelper } from '../../../dex-helper/idex-helper';
-import { EkuboContracts } from '../types';
-import {
-  FullRangePool,
-  FullRangePoolState,
-  quote as quoteFullRangePool,
-} from './full-range';
-import { IEkuboPool, Quote } from './iface';
-import { PoolKey } from './utils';
+import { FullRangePool, FullRangePoolState } from './full-range';
+import { PoolKeyed, Quote } from './pool';
 
-const GAS_COST_OF_UPDATING_ORACLE_SNAPSHOT = 10_000;
+const BASE_GAS_COST_OF_ONE_ORACLE_SWAP = 32_000;
 
 export class OraclePool extends FullRangePool {
-  public constructor(
-    parentName: string,
-    dexHelper: IDexHelper,
-    logger: Logger,
-    contracts: EkuboContracts,
-    key: PoolKey,
-  ) {
-    super(parentName, dexHelper, logger, contracts, key, quote);
-  }
-}
-
-function quote(
-  this: IEkuboPool,
-  amount: bigint,
-  isToken1: boolean,
-  state: DeepReadonly<FullRangePoolState.Object>,
-): Quote {
-  const fullRangeQuote = quoteFullRangePool.bind(this)(amount, isToken1, state);
-
-  if (fullRangeQuote.calculatedAmount !== 0n) {
-    fullRangeQuote.gasConsumed += GAS_COST_OF_UPDATING_ORACLE_SNAPSHOT;
+  protected override _quote(
+    amount: bigint,
+    isToken1: boolean,
+    state: DeepReadonly<FullRangePoolState.Object>,
+    sqrtRatioLimit?: bigint,
+  ): Quote {
+    return this.quoteOracle(amount, isToken1, state, sqrtRatioLimit);
   }
 
-  return fullRangeQuote;
+  public quoteOracle(
+    this: PoolKeyed,
+    amount: bigint,
+    isToken1: boolean,
+    state: DeepReadonly<FullRangePoolState.Object>,
+    sqrtRatioLimit?: bigint,
+  ): Quote {
+    const fullRangeQuote = FullRangePool.prototype.quoteFullRange.call(
+      this,
+      amount,
+      isToken1,
+      state,
+      sqrtRatioLimit,
+    );
+
+    fullRangeQuote.gasConsumed = BASE_GAS_COST_OF_ONE_ORACLE_SWAP;
+
+    return fullRangeQuote;
+  }
 }

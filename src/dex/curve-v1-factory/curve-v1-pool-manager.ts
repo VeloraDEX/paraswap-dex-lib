@@ -5,6 +5,8 @@ import { IDexHelper } from '../../dex-helper';
 import { TaskScheduler } from '../../lib/task-scheduler';
 import {
   CURVE_API_URL,
+  CURVE_API_BY_NETWORK,
+  CURVE_API_SLUGS_BY_NETWORK,
   LIQUIDITY_FETCH_TIMEOUT_MS,
   LIQUIDITY_UPDATE_PERIOD_MS,
   MAX_ALLOWED_STATE_DELAY_FACTOR,
@@ -354,11 +356,22 @@ export class CurveV1FactoryPoolManager {
     let URL: string = '';
     try {
       let someFailed = false;
+
+      const network = NETWORK_ID_TO_NAME[this.dexHelper.config.data.network];
+      const baseUrl =
+        CURVE_API_BY_NETWORK[this.dexHelper.config.data.network] ??
+        CURVE_API_URL;
+
+      const allowedSlugs =
+        CURVE_API_SLUGS_BY_NETWORK[this.dexHelper.config.data.network] || [];
+      const slugs =
+        allowedSlugs.length > 0
+          ? allowedSlugs
+          : Array.from(this.allCurveLiquidityApiSlugs);
+
       const responses = await Promise.all(
-        Array.from(this.allCurveLiquidityApiSlugs).map(async slug => {
-          URL = `${CURVE_API_URL}/${
-            NETWORK_ID_TO_NAME[this.dexHelper.config.data.network]
-          }${slug}`;
+        slugs.map(async slug => {
+          URL = `${baseUrl}/${network}${slug}`;
 
           return this.dexHelper.httpRequest.get<{
             success: boolean;
@@ -374,7 +387,7 @@ export class CurveV1FactoryPoolManager {
       );
       const addressToLiquidity: Record<string, number> = {};
       for (const data of responses) {
-        if (!data.success) {
+        if (!data.success || !Array.isArray(data.data.poolData)) {
           someFailed = true;
           break;
         }

@@ -231,6 +231,8 @@ export type PoolPrices<T> = {
   poolIdentifiers?: Array<string>;
 };
 
+export type ConnectorToken = Token & { liquidityUSD?: number };
+
 export type PoolLiquidity = {
   poolIdentifier?: string;
   exchange: string;
@@ -239,7 +241,7 @@ export type PoolLiquidity = {
   // but in case available liquidity is different,
   // then PoolLiquidity.liquidityUSD is the liquidity for token => connectorToken swaps
   // and PoolLiquidity.connectorTokens.liquidityUSD is the liquidity for connectorToken => token swaps
-  connectorTokens: (Token & { liquidityUSD?: number })[];
+  connectorTokens: ConnectorToken[];
   liquidityUSD: number;
 };
 
@@ -266,7 +268,7 @@ export type DexConfigMap<DexParams> = {
 
 export type TxObject = {
   from: Address;
-  to?: Address; // undefined in case of contract deployment
+  to: Address;
   value: string;
   data: string;
   gasPrice?: string;
@@ -320,7 +322,6 @@ export type Config = {
   dexalotAuthToken?: string;
   bebopAuthName?: string;
   bebopAuthToken?: string;
-  idleDaoAuthToken?: string;
   forceRpcFallbackDexs: string[];
   apiKeyTheGraph: string;
   lidoReferralAddress?: Address;

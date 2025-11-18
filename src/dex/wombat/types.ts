@@ -29,6 +29,7 @@ export type PoolParams = {
   paused: boolean;
   ampFactor: bigint;
   haircutRate: bigint;
+  withdrawalHaircutRate: bigint;
   startCovRatio: bigint;
   endCovRatio: bigint;
 };

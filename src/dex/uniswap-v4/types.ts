@@ -76,6 +76,9 @@ export type SubgraphConnectorPool = {
     address: string;
     decimals: string;
   };
+  fee: string;
+  tickSpacing: string;
+  hooks: string;
 };
 
 export type SubgraphTick = {
@@ -95,9 +98,7 @@ export type SubgraphPool = {
   token1: {
     address: string;
   };
-  tick: string;
   tickSpacing: string;
-  ticks: SubgraphTick[];
 };
 
 export type DexParams = {
@@ -107,6 +108,7 @@ export type DexParams = {
   subgraphURL: string;
   stateView: string;
   skipPoolsWithUnconventionalFees?: boolean;
+  stateMulticall: string;
 };
 
 export type PoolKey = {

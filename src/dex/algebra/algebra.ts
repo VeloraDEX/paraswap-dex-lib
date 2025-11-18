@@ -924,7 +924,12 @@ export class Algebra extends SimpleExchange implements IDex<AlgebraData> {
 
     const res = await this._querySubgraph(
       `query ($token: Bytes!, $count: Int) {
-                pools0: pools(first: $count, orderBy: totalValueLockedUSD, orderDirection: desc, where: {token0: $token}) {
+              pools0: pools(
+                first: $count,
+                orderBy: totalValueLockedUSD,
+                orderDirection: desc,
+                where: { token0: $token, totalValueLockedUSD_gt: 0 }
+              ) {
                 id
                 token0 {
                   id
@@ -936,7 +941,12 @@ export class Algebra extends SimpleExchange implements IDex<AlgebraData> {
                 }
                 totalValueLockedUSD
               }
-              pools1: pools(first: $count, orderBy: totalValueLockedUSD, orderDirection: desc, where: {token1: $token}) {
+              pools1: pools(
+                first: $count,
+                orderBy: totalValueLockedUSD,
+                orderDirection: desc,
+                where: { token1: $token, totalValueLockedUSD_gt: 0 }
+              ) {
                 id
                 token0 {
                   id

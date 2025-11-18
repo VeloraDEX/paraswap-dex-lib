@@ -2,7 +2,13 @@ import {
   InitializeStateOptions,
   StatefulEventSubscriber,
 } from '../../stateful-event-subscriber';
-import { DexParams, Pool, PoolManagerState, SubgraphPool } from './types';
+import {
+  DexParams,
+  Pool,
+  PoolManagerState,
+  SubgraphConnectorPool,
+  SubgraphPool,
+} from './types';
 import { Address, Log, Logger } from '../../types';
 import UniswapV4StateViewABI from '../../abi/uniswap-v4/state-view.abi.json';
 import UniswapV4PoolManagerABI from '../../abi/uniswap-v4/pool-manager.abi.json';
@@ -13,9 +19,25 @@ import { LogDescription } from '@ethersproject/abi/lib.esm';
 import { queryOnePageForAllAvailablePoolsFromSubgraph } from './subgraph';
 import { isETHAddress } from '../../utils';
 import { NULL_ADDRESS } from '../../constants';
-import { POOL_CACHE_REFRESH_INTERVAL } from './constants';
+import {
+  POOL_CACHE_REFRESH_INTERVAL,
+  POOL_CACHE_STORE_INTERVAL,
+} from './constants';
 import { FactoryState } from '../uniswap-v3/types';
 import { UniswapV4Pool } from './uniswap-v4-pool';
+import { UniswapV4PoolsList } from './config';
+import { PoolState, TickInfo } from './types';
+import { BytesLike } from 'ethers/lib/utils';
+import { MultiResult } from '../../lib/multi-wrapper';
+import { extractSuccessAndValue } from '../../lib/decoders';
+import { NumberAsString } from '@paraswap/core';
+import UniswapV4StateMulticallABI from '../../abi/uniswap-v4/state-multicall.abi.json';
+import {
+  TICK_BITMAP_BUFFER,
+  TICK_BITMAP_BUFFER_BY_CHAIN,
+  TICK_BITMAP_TO_USE,
+  TICK_BITMAP_TO_USE_BY_CHAIN,
+} from './constants';
 
 export class UniswapV4PoolManager extends StatefulEventSubscriber<PoolManagerState> {
   handlers: {
@@ -31,6 +53,8 @@ export class UniswapV4PoolManager extends StatefulEventSubscriber<PoolManagerSta
   stateViewIface: Interface;
 
   poolManagerIface: Interface;
+
+  stateMulticallIface: Interface;
 
   private wethAddress: string;
 
@@ -55,6 +79,7 @@ export class UniswapV4PoolManager extends StatefulEventSubscriber<PoolManagerSta
 
     this.stateViewIface = new Interface(UniswapV4StateViewABI);
     this.poolManagerIface = new Interface(UniswapV4PoolManagerABI);
+    this.stateMulticallIface = new Interface(UniswapV4StateMulticallABI);
     this.addressesSubscribed = [this.config.poolManager];
 
     this.wethAddress =
@@ -124,8 +149,6 @@ export class UniswapV4PoolManager extends StatefulEventSubscriber<PoolManagerSta
       subgraphPool.token1.address.toLowerCase(),
       subgraphPool.fee,
       subgraphPool.hooks,
-      0n,
-      subgraphPool.tick,
       subgraphPool.tickSpacing,
     );
 
@@ -167,18 +190,6 @@ export class UniswapV4PoolManager extends StatefulEventSubscriber<PoolManagerSta
 
     return this.pools
       .filter(pool => {
-        // TODO: temporary, should be used for tests only
-        const token0 = pool.token0.address.toLowerCase();
-        const token1 = pool.token1.address.toLowerCase();
-
-        // force weth pools
-        // return token0 !== NULL_ADDRESS && token1 !== NULL_ADDRESS;
-        // force eth pools
-        // return token0 === NULL_ADDRESS || token1 === NULL_ADDRESS;
-        // all pools
-        return true;
-      })
-      .filter(pool => {
         const token0 = pool.token0.address;
         const token1 = pool.token1.address;
 
@@ -206,60 +217,97 @@ export class UniswapV4PoolManager extends StatefulEventSubscriber<PoolManagerSta
   private async queryAllAvailablePools(
     blockNumber: number,
   ): Promise<SubgraphPool[]> {
-    const cachedPools = await this.dexHelper.cache.getAndCacheLocally(
+    const staticPoolsList = UniswapV4PoolsList[this.network];
+
+    if (staticPoolsList) {
+      return staticPoolsList;
+    }
+
+    const cachedPoolsRaw = await this.dexHelper.cache.getAndCacheLocally(
       this.parentName,
       this.network,
       this.poolsCacheKey,
       POOL_CACHE_REFRESH_INTERVAL,
     );
 
-    if (cachedPools) {
-      const pools = JSON.parse(cachedPools);
-      return pools;
+    let cachedPools: SubgraphPool[] = [];
+
+    if (cachedPoolsRaw) {
+      cachedPools = JSON.parse(cachedPoolsRaw);
+
+      const poolsTTL = await this.dexHelper.cache.ttl(
+        this.parentName,
+        this.network,
+        this.poolsCacheKey,
+      );
+
+      if (
+        cachedPools.length &&
+        poolsTTL > POOL_CACHE_STORE_INTERVAL - POOL_CACHE_REFRESH_INTERVAL
+      ) {
+        return cachedPools;
+      }
+
+      this.logger.info(`Pools cache TTL is ${poolsTTL}, refreshing`);
     }
 
-    const defaultPerPageLimit = 1000;
     let pools: SubgraphPool[] = [];
-    let curPage = 0;
 
-    let currentSubgraphPools: SubgraphPool[] =
-      await queryOnePageForAllAvailablePoolsFromSubgraph(
-        this.dexHelper,
-        this.logger,
-        this.parentName,
-        this.config.subgraphURL,
-        blockNumber,
-        curPage * defaultPerPageLimit,
-        defaultPerPageLimit,
-      );
-    pools = pools.concat(currentSubgraphPools);
+    try {
+      const defaultPerPageLimit = 1000;
+      let curPage = 0;
 
-    while (currentSubgraphPools.length === defaultPerPageLimit) {
-      curPage++;
-      currentSubgraphPools = await queryOnePageForAllAvailablePoolsFromSubgraph(
-        this.dexHelper,
-        this.logger,
-        this.parentName,
-        this.config.subgraphURL,
-        blockNumber,
-        curPage * defaultPerPageLimit,
-        defaultPerPageLimit,
-      );
-
+      let currentSubgraphPools: SubgraphPool[] =
+        await queryOnePageForAllAvailablePoolsFromSubgraph(
+          this.dexHelper,
+          this.logger,
+          this.parentName,
+          this.config.subgraphURL,
+          blockNumber,
+          curPage * defaultPerPageLimit,
+          defaultPerPageLimit,
+        );
       pools = pools.concat(currentSubgraphPools);
-    }
 
-    if (this.config.skipPoolsWithUnconventionalFees) {
-      pools = pools.filter(
-        pool => !this.isPoolWithUnconventionalFees(pool.fee),
+      while (currentSubgraphPools.length === defaultPerPageLimit) {
+        curPage++;
+        currentSubgraphPools =
+          await queryOnePageForAllAvailablePoolsFromSubgraph(
+            this.dexHelper,
+            this.logger,
+            this.parentName,
+            this.config.subgraphURL,
+            blockNumber,
+            curPage * defaultPerPageLimit,
+            defaultPerPageLimit,
+          );
+
+        pools = pools.concat(currentSubgraphPools);
+      }
+
+      if (this.config.skipPoolsWithUnconventionalFees) {
+        pools = pools.filter(
+          pool => !this.isPoolWithUnconventionalFees(pool.fee),
+        );
+      }
+    } catch (error) {
+      this.logger.error(
+        `Failed to fetch pools from subgraph for ${this.parentName}: ${error}, using cached pools...`,
+      );
+
+      // cachedPools + already fetched pools
+      pools = cachedPools.concat(
+        pools.filter(p => !cachedPools.find(cp => cp.id === p.id)),
       );
     }
 
+    // always refresh pools in cache, even when subgraph queries failed
+    // so next time we can use previously cached pools
     this.dexHelper.cache.setexAndCacheLocally(
       this.parentName,
       this.network,
       this.poolsCacheKey,
-      POOL_CACHE_REFRESH_INTERVAL,
+      POOL_CACHE_STORE_INTERVAL,
       JSON.stringify(pools),
     );
 
@@ -287,6 +335,14 @@ export class UniswapV4PoolManager extends StatefulEventSubscriber<PoolManagerSta
     }
 
     if (
+      UniswapV4PoolsList[this.network] &&
+      !UniswapV4PoolsList[this.network].some(p => p.id === id)
+    ) {
+      this.logger.warn(`Pool ${id} is not in the static pools list, skipping.`);
+      return {};
+    }
+
+    if (
       this.config.skipPoolsWithUnconventionalFees &&
       this.isPoolWithUnconventionalFees(fee)
     ) {
@@ -308,9 +364,7 @@ export class UniswapV4PoolManager extends StatefulEventSubscriber<PoolManagerSta
       token1: {
         address: currency1.toLowerCase(),
       },
-      tick: tick.toString(),
       tickSpacing: tickSpacing.toString(),
-      ticks: [],
     });
 
     const eventPool = new UniswapV4Pool(
@@ -325,8 +379,6 @@ export class UniswapV4PoolManager extends StatefulEventSubscriber<PoolManagerSta
       currency1.toLowerCase(),
       fee,
       hooks,
-      sqrtPriceX96,
-      tick.toString(),
       tickSpacing.toString(),
     );
     await eventPool.initialize(log.blockNumber);
@@ -338,5 +390,119 @@ export class UniswapV4PoolManager extends StatefulEventSubscriber<PoolManagerSta
 
   private isPoolWithUnconventionalFees(fee: string | number): boolean {
     return +fee % 100 !== 0;
+  }
+
+  private getBitmapRange() {
+    const networkId = this.dexHelper.config.data.network;
+
+    const tickBitMapToUse =
+      TICK_BITMAP_TO_USE_BY_CHAIN[networkId] ?? TICK_BITMAP_TO_USE;
+    const tickBitMapBuffer =
+      TICK_BITMAP_BUFFER_BY_CHAIN[networkId] ?? TICK_BITMAP_BUFFER;
+
+    return tickBitMapToUse + tickBitMapBuffer;
+  }
+
+  async generateMultiplePoolStates(
+    pools: SubgraphConnectorPool[],
+    blockNumber: number,
+  ): Promise<(PoolState | null)[]> {
+    const poolStates: (PoolState | null)[] = [];
+
+    if (pools.length === 0) {
+      return [];
+    }
+
+    const multicallTargets = pools.map(pool => {
+      const poolKey = {
+        currency0: pool.token0.address,
+        currency1: pool.token1.address,
+        fee: pool.fee,
+        tickSpacing: parseInt(pool.tickSpacing),
+        hooks: pool.hooks,
+      };
+
+      const callData = this.stateMulticallIface.encodeFunctionData(
+        'getFullStateWithRelativeBitmaps',
+        [
+          this.config.poolManager,
+          poolKey,
+          this.getBitmapRange(),
+          this.getBitmapRange(),
+        ],
+      );
+
+      return {
+        target: this.config.stateMulticall,
+        callData,
+        decodeFunction: (result: MultiResult<BytesLike> | BytesLike) => {
+          const [, toDecode] = extractSuccessAndValue(result);
+          return this.stateMulticallIface.decodeFunctionResult(
+            'getFullStateWithRelativeBitmaps',
+            toDecode,
+          );
+        },
+      };
+    });
+
+    const results = await this.dexHelper.multiWrapper.tryAggregate<any>(
+      false,
+      multicallTargets,
+      blockNumber,
+      50, // state multicall is heavy, use smaller batches
+      false,
+    );
+
+    pools.forEach((pool, index) => {
+      try {
+        const stateResult = results[index].returnData[0];
+
+        const ticksResults: Record<NumberAsString, TickInfo> = {};
+        stateResult.ticks.forEach((tick: any) => {
+          if (tick.value.liquidityGross > 0n) {
+            ticksResults[tick.index.toString()] = {
+              liquidityGross: BigInt(tick.value.liquidityGross),
+              liquidityNet: BigInt(tick.value.liquidityNet),
+            };
+          }
+        });
+
+        const tickBitMapResults: Record<NumberAsString, bigint> = {};
+        stateResult.tickBitmap.forEach((bitmap: any) => {
+          tickBitMapResults[bitmap.index.toString()] = BigInt(bitmap.value);
+        });
+
+        const poolState: PoolState = {
+          id: pool.id,
+          token0: pool.token0.address.toLowerCase(),
+          token1: pool.token1.address.toLowerCase(),
+          fee: pool.fee,
+          hooks: pool.hooks,
+          feeGrowthGlobal0X128: BigInt(stateResult.feeGrowthGlobal0X128),
+          feeGrowthGlobal1X128: BigInt(stateResult.feeGrowthGlobal1X128),
+          liquidity: BigInt(stateResult.liquidity),
+          slot0: {
+            sqrtPriceX96: BigInt(stateResult.slot0.sqrtPriceX96),
+            tick: BigInt(stateResult.slot0.tick),
+            protocolFee: BigInt(stateResult.slot0.protocolFee),
+            lpFee: BigInt(stateResult.slot0.lpFee),
+          },
+          tickSpacing: parseInt(pool.tickSpacing),
+          ticks: ticksResults,
+          tickBitmap: tickBitMapResults,
+          isValid: true,
+        };
+
+        poolStates.push(poolState);
+      } catch (error) {
+        this.logger.error(
+          `Failed to generate state for pool ${pool.id}: ${error}`,
+        );
+
+        poolStates.push(null);
+      }
+    });
+
+    return poolStates;
   }
 }

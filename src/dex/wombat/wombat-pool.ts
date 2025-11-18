@@ -16,9 +16,10 @@ import { IDexHelper } from '../../dex-helper';
 import PoolV2ABI from '../../abi/wombat/pool-v2.json';
 import PoolV3ABI from '../../abi/wombat/pool-v3.json';
 import AssetABI from '../../abi/wombat/asset.json';
-import { convertUint256ToInt256, toWad, WAD, wdiv, wmul } from './utils';
 import { BlockHeader } from 'web3-eth';
 import { AssetState, PoolState } from './types';
+import { uint120ToBigInt } from './utils';
+import { uint256ToBigInt } from '../../lib/decoders';
 
 const CLEAR_RPC_CALL_COUNT_INTERVAL = 1000 * 60 * 5; // 5 minutes
 
@@ -46,6 +47,7 @@ export class WombatPool extends StatefulEventSubscriber<PoolState> {
       paused: false,
       ampFactor: 0n,
       haircutRate: 0n,
+      withdrawalHaircutRate: 0n,
       startCovRatio: 0n,
       endCovRatio: 0n,
     },
@@ -70,6 +72,8 @@ export class WombatPool extends StatefulEventSubscriber<PoolState> {
     // admin-actions handlers
     this.handlers['SetAmpFactor'] = this.handleSetAmpFactor.bind(this);
     this.handlers['SetHaircutRate'] = this.handleSetHaircutRate.bind(this);
+    this.handlers['SetWithdrawalHaircutRate'] =
+      this.handleSetWithdrawalHaircutRate.bind(this);
     this.handlers['AssetAdded'] = this.handleAssetAdded.bind(this);
     this.handlers['AssetRemoved'] = this.handleAssetRemoved.bind(this);
     this.handlers['FillPool'] = this.handleFillPool.bind(this);
@@ -78,7 +82,7 @@ export class WombatPool extends StatefulEventSubscriber<PoolState> {
     this.handlers['PausedAsset'] = this.handlePausedAsset.bind(this);
     this.handlers['UnpausedAsset'] = this.handleUnpausedAsset.bind(this);
 
-    this.eventRefetched = ['Deposit', 'Withdraw'];
+    this.eventRefetched = ['Deposit', 'Withdraw', 'TransferTipBucket'];
 
     setInterval(() => {
       this.rpcCallCount = 0;
@@ -183,6 +187,7 @@ export class WombatPool extends StatefulEventSubscriber<PoolState> {
       );
     }
     let multiCallInputs: MultiCallInput[] = [];
+    const isV3Pool = this.poolInterface === WombatPool.poolV3Interface;
 
     // 1.A generate pool params requests
     // paused
@@ -200,6 +205,14 @@ export class WombatPool extends StatefulEventSubscriber<PoolState> {
       target: this.poolAddress,
       callData: this.poolInterface.encodeFunctionData('haircutRate'),
     });
+    if (isV3Pool) {
+      multiCallInputs.push({
+        target: this.poolAddress,
+        callData: this.poolInterface.encodeFunctionData(
+          'withdrawalHaircutRate',
+        ),
+      });
+    }
     // startCovRatio
     multiCallInputs.push({
       target: this.poolAddress,
@@ -240,6 +253,14 @@ export class WombatPool extends StatefulEventSubscriber<PoolState> {
         returnData[i++],
       )[0],
     );
+    const withdrawalHaircutRate = isV3Pool
+      ? BigInt(
+          this.poolInterface.decodeFunctionResult(
+            'withdrawalHaircutRate',
+            returnData[i++],
+          )[0],
+        )
+      : 0n;
     const startCovRatio = BigInt(
       this.poolInterface.decodeFunctionResult(
         'startCovRatio',
@@ -262,6 +283,7 @@ export class WombatPool extends StatefulEventSubscriber<PoolState> {
         paused,
         ampFactor,
         haircutRate,
+        withdrawalHaircutRate,
         startCovRatio,
         endCovRatio,
       },
@@ -308,15 +330,29 @@ export class WombatPool extends StatefulEventSubscriber<PoolState> {
     return poolState;
   }
 
+  async getOrGenerateState(blockNumber: number): Promise<Readonly<PoolState>> {
+    let state = this.getState(blockNumber);
+    if (!state) {
+      state = await this.generateState(blockNumber);
+      this.setState(state, blockNumber);
+      this.logger.info(
+        `Empty state, generated state for pool ${this.poolAddress} at block ${blockNumber}`,
+      );
+    }
+
+    return {
+      ...state,
+      underlyingAddresses: Array.from(state.underlyingAddresses),
+    };
+  }
+
   handleSwap(
     event: any,
     state: DeepReadonly<PoolState>,
     log: Readonly<Log>,
   ): AsyncOrSync<DeepReadonly<PoolState> | null> {
     const fromTokenAddress = event.args.fromToken.toString().toLowerCase();
-    const fromAmount = BigInt(event.args.fromAmount.toString());
     const toTokenAddress = event.args.toToken.toString().toLowerCase();
-    const toAmount = BigInt(event.args.toAmount.toString());
 
     if (
       !state.underlyingAddresses.includes(fromTokenAddress) ||
@@ -325,53 +361,20 @@ export class WombatPool extends StatefulEventSubscriber<PoolState> {
       return null;
     }
 
-    let idealToAmount;
-    const fromAmountInt256 = convertUint256ToInt256(fromAmount);
-    if (fromAmountInt256 > 0) {
-      idealToAmount = wdiv(toAmount, WAD - state.params.haircutRate);
-    } else {
-      this.logger.warn(
-        `pool ${this.poolAddress} swap from a negative amount ${fromAmountInt256} at block ${log.blockNumber} should not happen`,
-      );
-      const haircut = wmul(-fromAmount, state.params.haircutRate);
-      idealToAmount = toAmount + haircut;
-    }
-
-    const fromAmountInWad = toWad(
-      fromAmount,
-      BigInt(state.asset[fromTokenAddress].underlyingTokenDecimals),
+    return this.refreshAssetStates(
+      state,
+      [fromTokenAddress, toTokenAddress],
+      log.blockNumber,
     );
-    const toAmountInWad = toWad(
-      idealToAmount,
-      BigInt(state.asset[toTokenAddress].underlyingTokenDecimals),
-    );
-
-    return {
-      ...state,
-      asset: {
-        ...state.asset,
-        [fromTokenAddress]: {
-          ...state.asset[fromTokenAddress],
-          cash: state.asset[fromTokenAddress].cash + fromAmountInWad,
-        },
-        [toTokenAddress]: {
-          ...state.asset[toTokenAddress],
-          cash: state.asset[toTokenAddress].cash - toAmountInWad,
-        },
-      },
-    };
   }
 
   handleSwapV2(
     event: any,
     state: DeepReadonly<PoolState>,
-    _log: Readonly<Log>,
+    log: Readonly<Log>,
   ): AsyncOrSync<DeepReadonly<PoolState> | null> {
     const fromTokenAddress = event.args.fromToken.toString().toLowerCase();
-    const fromAmount = BigInt(event.args.fromAmount.toString());
     const toTokenAddress = event.args.toToken.toString().toLowerCase();
-    const toAmount = BigInt(event.args.toAmount.toString());
-    const toTokenFee = BigInt(event.args.toTokenFee.toString());
 
     if (
       !state.underlyingAddresses.includes(fromTokenAddress) ||
@@ -380,29 +383,11 @@ export class WombatPool extends StatefulEventSubscriber<PoolState> {
       return null;
     }
 
-    const fromAmountInWad = toWad(
-      fromAmount,
-      BigInt(state.asset[fromTokenAddress].underlyingTokenDecimals),
+    return this.refreshAssetStates(
+      state,
+      [fromTokenAddress, toTokenAddress],
+      log.blockNumber,
     );
-    const toAmountInWad = toWad(
-      toAmount + toTokenFee,
-      BigInt(state.asset[toTokenAddress].underlyingTokenDecimals),
-    );
-
-    return {
-      ...state,
-      asset: {
-        ...state.asset,
-        [fromTokenAddress]: {
-          ...state.asset[fromTokenAddress],
-          cash: state.asset[fromTokenAddress].cash + fromAmountInWad,
-        },
-        [toTokenAddress]: {
-          ...state.asset[toTokenAddress],
-          cash: state.asset[toTokenAddress].cash - toAmountInWad,
-        },
-      },
-    };
   }
 
   handleSetAmpFactor(
@@ -433,6 +418,22 @@ export class WombatPool extends StatefulEventSubscriber<PoolState> {
       params: {
         ...state.params,
         haircutRate,
+      },
+    };
+  }
+
+  handleSetWithdrawalHaircutRate(
+    event: any,
+    state: DeepReadonly<PoolState>,
+    _log: Readonly<Log>,
+  ): AsyncOrSync<DeepReadonly<PoolState> | null> {
+    const withdrawalHaircutRate = BigInt(event.args.value.toString());
+
+    return {
+      ...state,
+      params: {
+        ...state.params,
+        withdrawalHaircutRate,
       },
     };
   }
@@ -488,14 +489,15 @@ export class WombatPool extends StatefulEventSubscriber<PoolState> {
       return null;
     }
 
+    const { [token]: _, ...remainingAssets } = state.asset;
+
     return {
       ...state,
       underlyingAddresses: state.underlyingAddresses.filter(
         underlyingAddress => underlyingAddress !== token,
       ),
       asset: {
-        ...state.asset,
-        [token]: undefined,
+        ...remainingAssets,
       },
     };
   }
@@ -503,24 +505,14 @@ export class WombatPool extends StatefulEventSubscriber<PoolState> {
   async handleFillPool(
     event: any,
     state: DeepReadonly<PoolState>,
-    _log: Readonly<Log>,
+    log: Readonly<Log>,
   ): Promise<DeepReadonly<PoolState> | null> {
     const token = event.args.token.toString().toLowerCase();
-    const amount = BigInt(event.args.amount.toString());
     if (!state.underlyingAddresses.includes(token)) {
       return null;
     }
 
-    return {
-      ...state,
-      asset: {
-        ...state.asset,
-        [token]: {
-          ...state.asset[token],
-          cash: state.asset[token].cash + amount,
-        },
-      },
-    };
+    return this.refreshAssetStates(state, [token], log.blockNumber);
   }
 
   async handlePaused(
@@ -556,7 +548,7 @@ export class WombatPool extends StatefulEventSubscriber<PoolState> {
     state: DeepReadonly<PoolState>,
     _log: Readonly<Log>,
   ): Promise<DeepReadonly<PoolState> | null> {
-    const token = event.args.token.toString();
+    const token = event.args.token.toString().toLowerCase();
     if (!state.underlyingAddresses.includes(token)) {
       return null;
     }
@@ -578,7 +570,7 @@ export class WombatPool extends StatefulEventSubscriber<PoolState> {
     state: DeepReadonly<PoolState>,
     _log: Readonly<Log>,
   ): Promise<DeepReadonly<PoolState> | null> {
-    const token = event.args.token.toString();
+    const token = event.args.token.toString().toLowerCase();
     if (!state.underlyingAddresses.includes(token)) {
       return null;
     }
@@ -589,10 +581,110 @@ export class WombatPool extends StatefulEventSubscriber<PoolState> {
         ...state.asset,
         [token]: {
           ...state.asset[token],
-          paused: true,
+          paused: false,
         },
       },
     };
+  }
+
+  private async refreshAssetStates(
+    state: DeepReadonly<PoolState>,
+    tokens: Address[],
+    blockNumber: number,
+  ): Promise<DeepReadonly<PoolState>> {
+    const uniqueTokens = Array.from(
+      new Set(
+        tokens
+          .map(token => token.toLowerCase())
+          .filter(token => !!state.asset[token]),
+      ),
+    );
+
+    if (!uniqueTokens.length) {
+      return state;
+    }
+
+    const assetAddresses = uniqueTokens.map(
+      token => state.asset[token].address,
+    );
+
+    const balances = await this.fetchAssetBalances(assetAddresses, blockNumber);
+
+    const updatedAssets = { ...state.asset };
+    uniqueTokens.forEach((token, index) => {
+      const existingAsset = state.asset[token];
+      const { cash, liability, relativePrice } = balances[index];
+
+      updatedAssets[token] = {
+        ...existingAsset,
+        cash,
+        liability,
+        relativePrice,
+      };
+    });
+
+    return {
+      ...state,
+      asset: updatedAssets,
+    };
+  }
+
+  private async fetchAssetBalances(
+    assets: Address[],
+    blockNumber: number,
+  ): Promise<{ cash: bigint; liability: bigint; relativePrice?: bigint }[]> {
+    const multiCallInputs: MultiCallInput[] = [];
+    const methods = ['cash', 'liability', 'getRelativePrice'] as const;
+
+    for (const asset of assets) {
+      for (const method of methods) {
+        multiCallInputs.push({
+          target: asset,
+          callData: WombatPool.assetInterface.encodeFunctionData(method),
+        });
+      }
+    }
+
+    const returnData = await this.dexHelper.multiContract.methods
+      .tryAggregate(false, multiCallInputs)
+      .call({}, blockNumber);
+
+    const balances: {
+      cash: bigint;
+      liability: bigint;
+      relativePrice?: bigint;
+    }[] = [];
+
+    for (let i = 0; i < assets.length * methods.length; i += methods.length) {
+      const cash = returnData[i].success
+        ? BigInt(
+            WombatPool.assetInterface.decodeFunctionResult(
+              'cash',
+              returnData[i].returnData,
+            )[0],
+          )
+        : 0n;
+      const liability = returnData[i + 1].success
+        ? BigInt(
+            WombatPool.assetInterface.decodeFunctionResult(
+              'liability',
+              returnData[i + 1].returnData,
+            )[0],
+          )
+        : 0n;
+      const relativePrice = returnData[i + 2].success
+        ? BigInt(
+            WombatPool.assetInterface.decodeFunctionResult(
+              'getRelativePrice',
+              returnData[i + 2].returnData,
+            )[0],
+          )
+        : undefined;
+
+      balances.push({ cash, liability, relativePrice });
+    }
+
+    return balances;
   }
 
   private async getAssetState(

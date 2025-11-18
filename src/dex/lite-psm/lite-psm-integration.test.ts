@@ -88,6 +88,10 @@ describe('LitePsm', function () {
     const dexHelper = new DummyDexHelper(network);
     const litePsm = new LitePsm(network, dexKey, dexHelper);
 
+    if (litePsm.updatePoolState) {
+      await litePsm.updatePoolState();
+    }
+
     const poolLiquidity = await litePsm.getTopPoolsForToken(TokenA.address, 10);
     console.log(
       `${TokenASymbol} Top Pools:`,

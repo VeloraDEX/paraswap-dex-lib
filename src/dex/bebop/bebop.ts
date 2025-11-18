@@ -88,7 +88,7 @@ export class Bebop extends SimpleExchange implements IDex<BebopData> {
     protected settlementInterface = new Interface(settlementABI),
   ) {
     super(dexHelper, dexKey);
-    this.logger = dexHelper.getLogger(dexKey);
+    this.logger = dexHelper.getLogger(`${dexKey}-${network}`);
     this.tokensCacheKey = `tokens`;
     this.pricesCacheKey = `prices`;
     this.tokensAddrCacheKey = `tokens_addr`;
@@ -179,13 +179,8 @@ export class Bebop extends SimpleExchange implements IDex<BebopData> {
     srcToken: Token,
     destToken: Token,
     side: SwapSide,
-  ): Promise<RoutingInstruction[]> {
-    // Gaurd against same token and wrapping/unwrapping
-    const tokensSet = new Set([
-      srcToken.address.toLowerCase(),
-      destToken.address.toLowerCase(),
-    ]);
-    if (tokensSet.size < 2) {
+  ): Promise<RoutingInstruction[][]> {
+    if (srcToken.address.toLowerCase() === destToken.address.toLowerCase()) {
       return [];
     }
 
@@ -193,19 +188,22 @@ export class Bebop extends SimpleExchange implements IDex<BebopData> {
     if (!prices) {
       throw new Error('No prices available');
     }
+
+    const instructions = [];
+
     const directBook =
       prices[
         `${srcToken.address.toLowerCase()}/${destToken.address.toLowerCase()}`
       ];
     if (directBook) {
-      return [
+      instructions.push([
         {
           pair: `${srcToken.address.toLowerCase()}/${destToken.address.toLowerCase()}`,
           side,
           book: directBook,
           targetQuote: side == SwapSide.BUY,
         },
-      ];
+      ]);
     }
 
     const inverseBook =
@@ -214,14 +212,14 @@ export class Bebop extends SimpleExchange implements IDex<BebopData> {
       ];
     if (inverseBook) {
       const invertedBook = this.invertBook(inverseBook);
-      return [
+      instructions.push([
         {
           pair: `${srcToken.address.toLowerCase()}/${destToken.address.toLowerCase()}`,
           side,
           book: invertedBook,
           targetQuote: side == SwapSide.BUY,
         },
-      ];
+      ]);
     }
 
     for (const middleToken of BebopConfig['Bebop'][this.network].middleTokens) {
@@ -235,7 +233,7 @@ export class Bebop extends SimpleExchange implements IDex<BebopData> {
         ];
       if (baseMiddle && quoteMiddle) {
         if (side == SwapSide.SELL) {
-          return [
+          instructions.push([
             {
               pair: `${srcToken.address.toLowerCase()}/${middleToken.toLowerCase()}`,
               side: side,
@@ -248,9 +246,9 @@ export class Bebop extends SimpleExchange implements IDex<BebopData> {
               book: this.invertBook(quoteMiddle),
               targetQuote: false,
             },
-          ];
+          ]);
         } else {
-          return [
+          instructions.push([
             {
               pair: `${middleToken.toLowerCase()}/${destToken.address.toLowerCase()}`,
               side: side,
@@ -263,12 +261,12 @@ export class Bebop extends SimpleExchange implements IDex<BebopData> {
               book: baseMiddle,
               targetQuote: true,
             },
-          ];
+          ]);
         }
       }
     }
 
-    return [];
+    return instructions;
   }
 
   // Returns list of pool identifiers that can be used
@@ -418,17 +416,53 @@ export class Bebop extends SimpleExchange implements IDex<BebopData> {
         side,
       );
 
-      if (!instructions) {
+      if (!instructions || instructions.length === 0) {
         return null;
       }
 
-      const outputs = this.calculateOutput(
-        instructions,
-        srcToken,
-        destToken,
-        amounts,
-        side,
+      const outputs = instructions.map(instructionSet =>
+        this.calculateOutput(
+          instructionSet,
+          srcToken,
+          destToken,
+          amounts,
+          side,
+        ),
       );
+
+      // Select output with biggest average diff compared to first output
+      let finalOutput = outputs[0];
+
+      if (outputs.length > 1) {
+        const firstOutput = outputs[0];
+
+        // Calculate average differences for each output compared to first output
+        const avgDiffs = outputs.map((output, i) => {
+          if (i === 0) return 0n; // First output has 0 diff with itself
+
+          let totalDiff = 0n;
+          for (let k = 0; k < output.length; k++) {
+            totalDiff += output[k] - firstOutput[k];
+          }
+
+          return (
+            (totalDiff / BigInt(output.length)) *
+            (side === SwapSide.SELL ? 1n : -1n)
+          );
+        });
+
+        let maxDiffIndex = 0;
+        let maxDiff = avgDiffs[0];
+
+        for (let i = 1; i < avgDiffs.length; i++) {
+          if (avgDiffs[i] > maxDiff) {
+            maxDiff = avgDiffs[i];
+            maxDiffIndex = i;
+          }
+        }
+
+        finalOutput = outputs[maxDiffIndex];
+      }
 
       // Up to 3bps deviation is expected in the output compared to the on-chain result
       // On SwapSide.Sell, outputs compared  to quoting are coming out: -0.1 bips -> USDC, -1 bips Alt -> Alt.
@@ -440,7 +474,7 @@ export class Bebop extends SimpleExchange implements IDex<BebopData> {
 
       return [
         {
-          prices: outputs,
+          prices: finalOutput,
           unit: BigInt(outDecimals),
           data: {},
           poolIdentifiers: [
@@ -552,9 +586,10 @@ export class Bebop extends SimpleExchange implements IDex<BebopData> {
   // Returns list of top pools based on liquidity. Max
   // limit number pools should be returned.
   async getTopPoolsForToken(
-    tokenAddress: Address,
+    _tokenAddress: Address,
     limit: number,
   ): Promise<PoolLiquidity[]> {
+    const tokenAddress = _tokenAddress.toLowerCase();
     const prices = await this.getCachedPrices();
 
     if (!prices) {
@@ -567,51 +602,52 @@ export class Bebop extends SimpleExchange implements IDex<BebopData> {
     for (const [pair, pairData] of Object.entries(prices)) {
       let liquidityUSD = 0;
       let token;
-      const [base, quote] = pair.split('/');
+      const [base, quote] = pair.split('/').map(t => t.toLowerCase());
 
-      const isBase = base.toLowerCase() == tokenAddress.toLowerCase();
-      const isQuote = quote.toLowerCase() == tokenAddress.toLowerCase();
+      const isBase = base == tokenAddress;
+      const isQuote = quote == tokenAddress;
 
       // There is pricing for token is not enabled at the moment
-      if (
-        !(
-          quote.toLowerCase() in this.tokensMap &&
-          base.toLowerCase() in this.tokensMap
-        )
-      ) {
+      if (!(quote in this.tokensMap && base in this.tokensMap)) {
         continue;
       }
+
+      const quoteToken = {
+        address: quote,
+        decimals: this.tokensMap[quote].decimals,
+      };
+
+      const quoteTokenUsd = await this.dexHelper.getTokenUSDPrice(
+        quoteToken,
+        BigInt(10 ** quoteToken.decimals),
+      );
 
       if (isBase) {
         const liquidityInQuote = this.getMaxLiquidity(pairData.bids);
         token = {
           address: quote,
-          decimals: this.tokensMap[quote.toLowerCase()].decimals,
+          decimals: this.tokensMap[quote].decimals,
         };
-        const quoteTokenUsd = await this.dexHelper.getTokenUSDPrice(
-          token,
-          BigInt(Math.round(liquidityInQuote)),
-        );
         liquidityUSD = liquidityInQuote * quoteTokenUsd;
       } else if (isQuote) {
         const liquidityInBase = this.getMaxLiquidity(pairData.asks);
         token = {
           address: base,
-          decimals: this.tokensMap[base.toLowerCase()].decimals,
+          decimals: this.tokensMap[base].decimals,
         };
-        const baseTokenUsd = await this.dexHelper.getTokenUSDPrice(
-          token,
-          BigInt(Math.round(liquidityInBase)),
-        );
-        liquidityUSD = liquidityInBase * baseTokenUsd;
+        liquidityUSD = liquidityInBase * quoteTokenUsd;
       }
 
       if (liquidityUSD) {
         assert(token, 'Token not found');
-        const address = token.address.toLowerCase();
+        const address = token.address;
 
         if (connectorPools[address]) {
-          connectorPools[address].liquidityUSD += liquidityUSD;
+          // liquidity can be used only for one pair
+          connectorPools[address].liquidityUSD = Math.max(
+            liquidityUSD,
+            connectorPools[address].liquidityUSD,
+          );
         } else {
           connectorPools[address] = {
             exchange: this.dexKey,
@@ -620,7 +656,6 @@ export class Bebop extends SimpleExchange implements IDex<BebopData> {
               {
                 address: address,
                 decimals: this.tokensMap[address].decimals,
-                symbol: this.tokensMap[address].ticker,
               },
             ],
             liquidityUSD,
@@ -713,12 +748,13 @@ export class Bebop extends SimpleExchange implements IDex<BebopData> {
       buy_amounts: isBuy ? optimalSwapExchange.destAmount : undefined,
       taker_address: utils.getAddress(options.executionContractAddress),
       receiver_address: utils.getAddress(options.recipient),
-      origin_address: utils.getAddress(options.txOrigin),
+      origin_address: utils.getAddress(options.userAddress),
       gasless: false,
       skip_validation: true,
       source: this.bebopAuthName,
     };
 
+    let requestId: string | undefined;
     let quoteId: string | undefined;
 
     try {
@@ -736,6 +772,9 @@ export class Bebop extends SimpleExchange implements IDex<BebopData> {
         throw new Error('Failed to get quote');
       }
 
+      this.logger.info(`Bebop quote response: ${JSON.stringify(response)}`);
+
+      requestId = response.requestId ?? response.error?.requestId;
       quoteId = response.quoteId;
 
       if (
@@ -806,9 +845,7 @@ export class Bebop extends SimpleExchange implements IDex<BebopData> {
         { deadline: BigInt(response.expiry) },
       ];
     } catch (e: any) {
-      const message = `${this.dexKey}-${this.network} ${
-        quoteId ? `quoteId: ${quoteId}` : ''
-      }: ${e}`;
+      const message = `requestId: ${requestId}, quoteId: ${quoteId}, error: ${e}`;
 
       this.logger.error(message);
       if (!e?.isSlippageError) {

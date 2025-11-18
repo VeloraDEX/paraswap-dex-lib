@@ -95,7 +95,7 @@ export class Hashflow extends SimpleExchange implements IDex<HashflowData> {
     protected routerInterface = new Interface(routerAbi),
   ) {
     super(dexHelper, dexKey);
-    this.logger = dexHelper.getLogger(dexKey);
+    this.logger = dexHelper.getLogger(`${dexKey}-${network}`);
     const token = dexHelper.config.data.hashFlowAuthToken;
     assert(
       token !== undefined,
@@ -582,6 +582,8 @@ export class Hashflow extends SimpleExchange implements IDex<HashflowData> {
 
       quoteId = rfq.rfqId;
 
+      this.logger.info(`Received quote: ${JSON.stringify(rfq)}`);
+
       if (rfq.status !== 'success') {
         throw new RfqError(
           `Failed to fetch RFQ for ${this.getPairName(
@@ -989,42 +991,54 @@ export class Hashflow extends SimpleExchange implements IDex<HashflowData> {
     data: HashflowData,
     side: SwapSide,
   ): DexExchangeParam {
-    const { quoteData, signature } = data;
+    try {
+      const { quoteData, signature } = data;
 
-    assert(
-      quoteData !== undefined,
-      `${this.dexKey}-${this.network}: quoteData undefined`,
-    );
+      assert(
+        quoteData !== undefined,
+        `${this.dexKey}-${this.network}: quoteData undefined`,
+      );
 
-    // Encode here the transaction arguments
-    const exchangeData = this.routerInterface.encodeFunctionData('tradeRFQT', [
-      [
-        quoteData.pool,
-        quoteData.externalAccount ?? NULL_ADDRESS,
-        quoteData.trader,
-        quoteData.effectiveTrader ?? quoteData.trader,
-        quoteData.baseToken,
-        quoteData.quoteToken,
-        quoteData.baseTokenAmount,
-        quoteData.baseTokenAmount,
-        quoteData.quoteTokenAmount,
-        quoteData.quoteExpiry,
-        quoteData.nonce ?? 0,
-        quoteData.txid,
-        signature,
-      ],
-    ]);
+      // Encode here the transaction arguments
+      const sig = signature?.startsWith('0x') ? signature : `0x${signature}`;
+      const exchangeData = this.routerInterface.encodeFunctionData(
+        'tradeRFQT',
+        [
+          [
+            quoteData.pool,
+            quoteData.externalAccount ?? NULL_ADDRESS,
+            quoteData.trader,
+            quoteData.effectiveTrader ?? quoteData.trader,
+            quoteData.baseToken,
+            quoteData.quoteToken,
+            quoteData.baseTokenAmount,
+            quoteData.baseTokenAmount,
+            quoteData.quoteTokenAmount,
+            quoteData.quoteExpiry,
+            quoteData.nonce ?? 0,
+            quoteData.txid,
+            sig,
+          ],
+        ],
+      );
 
-    return {
-      needWrapNative: this.needWrapNative,
-      dexFuncHasRecipient: true,
-      exchangeData,
-      targetExchange: this.routerAddress,
-      returnAmountPos: undefined,
-      specialDexFlag: SpecialDex.SWAP_ON_HASHFLOW,
-      // cannot modify amount due to signature checks
-      specialDexSupportsInsertFromAmount: false,
-    };
+      return {
+        needWrapNative: this.needWrapNative,
+        dexFuncHasRecipient: true,
+        exchangeData,
+        targetExchange: this.routerAddress,
+        returnAmountPos: undefined,
+        specialDexFlag: SpecialDex.SWAP_ON_HASHFLOW,
+        // cannot modify amount due to signature checks
+        specialDexSupportsInsertFromAmount: false,
+      };
+    } catch (error) {
+      this.logger.error(
+        `Failed to build with ${JSON.stringify(data)}: `,
+        error,
+      );
+      throw error;
+    }
   }
 
   extractQuoteToken = (pair: {

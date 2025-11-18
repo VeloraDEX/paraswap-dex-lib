@@ -11,4 +11,9 @@ export type DexParams = {
   oldToNewFunctionName: string;
   newToOldFunctionName?: string;
   converterIface: Interface;
+  converterFee?: boolean;
+};
+
+export type SkyConverterPoolState = {
+  fee: bigint;
 };

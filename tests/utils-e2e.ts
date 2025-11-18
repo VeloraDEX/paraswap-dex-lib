@@ -44,7 +44,7 @@ import AUGUSTUS_V6_ABI from '../src/abi/augustus-v6/ABI.json';
 import { Interface } from '@ethersproject/abi';
 import { BigNumber } from 'ethers';
 
-const AUGUSTUS_V6_INTERFACE = new Interface(AUGUSTUS_V6_ABI);
+export const AUGUSTUS_V6_INTERFACE = new Interface(AUGUSTUS_V6_ABI);
 
 export const testingEndpoint = process.env.E2E_TEST_ENDPOINT;
 
@@ -308,12 +308,12 @@ export async function testE2E(
     swapSide === SwapSide.SELL
       ? decodedOutput.receivedAmount
       : decodedOutput.spentAmount;
-  const amountDiff = expectedAmount.lt(simulatedAmount)
-    ? expectedAmount.div(simulatedAmount)
-    : simulatedAmount.div(expectedAmount);
+  const amountDiff = expectedAmount.gt(simulatedAmount)
+    ? expectedAmount.sub(simulatedAmount)
+    : simulatedAmount.sub(expectedAmount);
   const paraswapShare = decodedOutput.paraswapShare?.toNumber() ?? 0;
 
-  expect(amountDiff.toNumber()).toBeLessThanOrEqual(1);
+  expect(amountDiff.toBigInt()).toBeLessThanOrEqual(10n); // 10 wei max allowed difference
   expect(paraswapShare).toEqual(0);
 }
 
@@ -407,17 +407,6 @@ export async function testPriceRoute(priceRoute: OptimalRate) {
   // assert simulation status
   expect(simulation.status).toEqual(true);
 }
-
-export const getEnv = (envName: string, optional: boolean = false): string => {
-  if (!process.env[envName]) {
-    if (optional) {
-      return '';
-    }
-    throw new Error(`Missing ${envName}`);
-  }
-
-  return process.env[envName]!;
-};
 
 export const testGasEstimation = async (
   network: Network,

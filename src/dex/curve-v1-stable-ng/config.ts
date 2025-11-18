@@ -200,6 +200,27 @@ const CurveV1StableNgConfig: DexConfigMap<DexParams> = {
       },
       customPools: {},
     },
+    [Network.PLASMA]: {
+      factories: [
+        {
+          address: '0x8271e06e5887fe5ba05234f5315c19f3ec90e8ad',
+          isStableNg: true,
+        },
+      ],
+      router: '0xff5cb29241f002ffed2eaa224e3e996d24a6e8d1',
+      stateUpdatePeriodMs: 2 * 1000,
+      disabledPools: new Set([]),
+      disabledImplementations: new Set([]),
+      factoryPoolImplementations: {
+        '0xfc687efafed297b765edecf8179c32195597c2df': {
+          name: ImplementationNames.FACTORY_STABLE_NG,
+          address: '0xfc687efafed297b765edecf8179c32195597c2df',
+          liquidityApiSlug: '/factory-stable-ng',
+          isStoreRateSupported: true,
+        },
+      },
+      customPools: {},
+    },
     [Network.GNOSIS]: {
       factories: [
         {

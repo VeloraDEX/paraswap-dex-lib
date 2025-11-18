@@ -93,13 +93,19 @@ export class AaveGsm extends SimpleExchange implements IDex<AaveGsmData> {
   }
 
   async initializePricing(blockNumber: number) {
-    await this.initializePoolPricing(
-      this.eventPools[this.config.GSM_USDT],
-      blockNumber,
-    );
-    await this.initializePoolPricing(
-      this.eventPools[this.config.GSM_USDC],
-      blockNumber,
+    await this.initializeEventPools(blockNumber);
+  }
+
+  private async initializeEventPools(blockNumber: number, subscribe = true) {
+    await Promise.all(
+      Object.values(this.eventPools).map(async pool => {
+        if (subscribe) {
+          await pool.initialize(blockNumber);
+        } else {
+          const state = await pool.generateState(blockNumber);
+          pool.setState(state, blockNumber);
+        }
+      }),
     );
   }
 
@@ -405,74 +411,99 @@ export class AaveGsm extends SimpleExchange implements IDex<AaveGsmData> {
     };
   }
 
+  async updatePoolState(): Promise<void> {
+    const blockNumber = await this.dexHelper.web3Provider.eth.getBlockNumber();
+
+    await this.initializeEventPools(blockNumber, false);
+  }
+
   async getTopPoolsForToken(
     tokenAddress: Address,
     limit: number,
   ): Promise<PoolLiquidity[]> {
-    tokenAddress = tokenAddress.toLowerCase();
+    const { GHO, waEthUSDT, waEthUSDC, GSM_USDT, GSM_USDC } = this.config;
+    const address = tokenAddress.toLowerCase();
 
-    if (tokenAddress === this.config.GHO) {
-      const usdtState = this.eventPools[this.config.GSM_USDT].getStaleState();
-      const usdcState = this.eventPools[this.config.GSM_USDC].getStaleState();
+    const isGHO = address === GHO;
+    const isWaEthUSDT = address === waEthUSDT;
+    const isWaEthUSDC = address === waEthUSDC;
 
-      return [
-        {
-          exchange: this.dexKey,
-          address: this.config.GSM_USDT,
-          connectorTokens: [
-            {
-              decimals: 6,
-              address: this.config.waEthUSDT,
-            },
-          ],
-          liquidityUSD: usdtState
-            ? +formatUnits(usdtState.underlyingLiquidity, 6)
-            : 1000000000,
-        },
-        {
-          exchange: this.dexKey,
-          address: this.config.GSM_USDC,
-          connectorTokens: [
-            {
-              decimals: 6,
-              address: this.config.waEthUSDC,
-            },
-          ],
-          liquidityUSD: usdcState
-            ? +formatUnits(usdcState.underlyingLiquidity, 6)
-            : 1000000000,
-        },
-      ];
-    } else if (tokenAddress === this.config.waEthUSDC) {
-      return [
-        {
-          exchange: this.dexKey,
-          address: this.config.GSM_USDC,
-          connectorTokens: [
-            {
-              decimals: 18,
-              address: this.config.GHO,
-            },
-          ],
-          liquidityUSD: 1000000000, // Just returning a big number so this DEX will be preferred
-        },
-      ];
-    } else if (tokenAddress === this.config.waEthUSDT) {
-      return [
-        {
-          exchange: this.dexKey,
-          address: this.config.GSM_USDT,
-          connectorTokens: [
-            {
-              decimals: 18,
-              address: this.config.GHO,
-            },
-          ],
-          liquidityUSD: 1000000000, // Just returning a big number so this DEX will be preferred
-        },
-      ];
-    } else {
+    if (!isGHO && !isWaEthUSDT && !isWaEthUSDC) {
       return [];
     }
+
+    const usdtState = this.eventPools[GSM_USDT]?.getStaleState();
+    const usdcState = this.eventPools[GSM_USDC]?.getStaleState();
+
+    if (!usdcState || !usdtState) return [];
+
+    const usdtLiquidity = +formatUnits(usdtState.underlyingLiquidity, 6);
+    const usdcLiquidity = +formatUnits(usdcState.underlyingLiquidity, 6);
+
+    const usdtRemainingCapacity = +formatUnits(
+      usdtState.exposureCap > usdtState.underlyingLiquidity
+        ? usdtState.exposureCap - usdtState.underlyingLiquidity
+        : 0n,
+      6,
+    );
+    const usdcRemainingCapacity = +formatUnits(
+      usdcState.exposureCap > usdcState.underlyingLiquidity
+        ? usdcState.exposureCap - usdcState.underlyingLiquidity
+        : 0n,
+      6,
+    );
+
+    if (isWaEthUSDC) {
+      return [
+        {
+          exchange: this.dexKey,
+          address: GSM_USDC,
+          connectorTokens: [
+            { decimals: 18, address: GHO, liquidityUSD: usdcLiquidity },
+          ],
+          liquidityUSD: usdcRemainingCapacity,
+        },
+      ];
+    }
+
+    if (isWaEthUSDT) {
+      return [
+        {
+          exchange: this.dexKey,
+          address: GSM_USDT,
+          connectorTokens: [
+            { decimals: 18, address: GHO, liquidityUSD: usdtLiquidity },
+          ],
+          liquidityUSD: usdtRemainingCapacity,
+        },
+      ];
+    }
+
+    return [
+      {
+        exchange: this.dexKey,
+        address: GSM_USDT,
+        connectorTokens: [
+          {
+            decimals: 6,
+            address: waEthUSDT,
+            liquidityUSD: usdtRemainingCapacity,
+          },
+        ],
+        liquidityUSD: usdtLiquidity,
+      },
+      {
+        exchange: this.dexKey,
+        address: GSM_USDC,
+        connectorTokens: [
+          {
+            decimals: 6,
+            address: waEthUSDC,
+            liquidityUSD: usdcRemainingCapacity,
+          },
+        ],
+        liquidityUSD: usdcLiquidity,
+      },
+    ];
   }
 }

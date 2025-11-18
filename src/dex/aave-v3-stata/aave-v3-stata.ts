@@ -10,7 +10,7 @@ import {
   NumberAsString,
   DexExchangeParam,
 } from '../../types';
-import { SwapSide, Network } from '../../constants';
+import { SwapSide, Network, UNLIMITED_USD_LIQUIDITY } from '../../constants';
 import * as CALLDATA_GAS_COST from '../../calldata-gas-cost';
 import { Utils, getBigIntPow, getDexKeysWithNetwork } from '../../utils';
 import { Context, IDex } from '../../dex/idex';
@@ -274,6 +274,7 @@ export class AaveV3Stata
           exchange: stataToken.address,
         },
         poolAddresses: [stataAddressLower],
+        poolIdentifiers: [this._getPoolIdentifier(srcToken, destToken)],
       },
     ];
   }
@@ -431,49 +432,53 @@ export class AaveV3Stata
     };
   }
 
-  async updatePoolState(): Promise<void> {}
+  async updatePoolState(): Promise<void> {
+    await this.initializeTokens();
+  }
 
   async getTopPoolsForToken(
     tokenAddress: Address,
     limit: number,
   ): Promise<PoolLiquidity[]> {
-    // only for stata <=> underlying/aToken
-    await this.initializeTokens();
-
     const tokenType = getTokenType(this.network, tokenAddress);
 
     if (tokenType === TokenType.UNKNOWN) {
       return [];
     }
 
-    const stata = getTokenFromAddress(this.network, tokenAddress);
+    const tokenInfo = getTokenFromAddress(this.network, tokenAddress);
+    if (!tokenInfo) {
+      return [];
+    }
 
     if (tokenType === TokenType.STATA_TOKEN) {
       return [
         {
-          liquidityUSD: 1e11,
+          liquidityUSD: UNLIMITED_USD_LIQUIDITY,
           exchange: this.dexKey,
-          address: stata.address,
+          address: tokenInfo.address,
           connectorTokens: [
-            { address: stata.underlying, decimals: stata.decimals },
-            { address: stata.underlyingAToken, decimals: stata.decimals },
-          ],
-        },
-      ];
-    } else {
-      return [
-        {
-          liquidityUSD: 1e11,
-          exchange: this.dexKey,
-          address: stata.address,
-          connectorTokens: [
-            { address: stata.address, decimals: stata.decimals },
+            { address: tokenInfo.underlying, decimals: tokenInfo.decimals },
+            {
+              address: tokenInfo.underlyingAToken,
+              decimals: tokenInfo.decimals,
+            },
           ],
         },
       ];
     }
-  }
 
+    return [
+      {
+        liquidityUSD: UNLIMITED_USD_LIQUIDITY,
+        exchange: this.dexKey,
+        address: tokenInfo.address,
+        connectorTokens: [
+          { address: tokenInfo.address, decimals: tokenInfo.decimals },
+        ],
+      },
+    ];
+  }
   // TODO: Move to pool implementation when migrating to event based
   previewRedeem(shares: bigint, rate: bigint) {
     return this._convertToAssets(shares, rate, Rounding.DOWN);

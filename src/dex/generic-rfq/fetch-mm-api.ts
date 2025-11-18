@@ -34,8 +34,12 @@ const AugustusAddress = {
   1: '0xdef171fe48cf0115b1d80b88dc8eab59176fee57',
 };
 
-const getEnv = (envName: string): string => {
+export const getEnv = (envName: string, optional: boolean = false): string => {
   if (!process.env[envName]) {
+    if (optional) {
+      return '';
+    }
+
     throw new Error(`Missing ${envName}`);
   }
 

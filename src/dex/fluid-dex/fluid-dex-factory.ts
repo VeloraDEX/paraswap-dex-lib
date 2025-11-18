@@ -1,34 +1,35 @@
 import { Interface } from '@ethersproject/abi';
-import { BytesLike } from 'ethers/lib/utils';
 import { DeepReadonly } from 'ts-essentials';
 import { Log, Logger } from '../../types';
 import { catchParseLogError } from '../../utils';
 import { StatefulEventSubscriber } from '../../stateful-event-subscriber';
-import { IDexHelper } from '../../dex-helper/idex-helper';
+import { IDexHelper } from '../../dex-helper';
 import ResolverABI from '../../abi/fluid-dex/resolver.abi.json';
 import DexFactoryABI from '../../abi/fluid-dex/dexFactory.abi.json';
-import { CommonAddresses, Pool } from './types';
-import { MultiResult } from '../../lib/multi-wrapper';
+import { CommonAddresses, Pool, PoolWithDecimals } from './types';
+import { MultiCallParams } from '../../lib/multi-wrapper';
 import { Address } from '../../types';
-import { generalDecoder } from '../../lib/decoders';
+import { uint256DecodeToNumber } from '../../lib/decoders';
 import { Contract } from 'ethers';
+import { ETHER_ADDRESS } from '../../constants';
 
-type OnPoolCreatedCallback = (pools: readonly Pool[]) => void;
+type OnPoolCreatedCallback = (pools: readonly PoolWithDecimals[]) => void;
 
-export class FluidDexFactory extends StatefulEventSubscriber<Pool[]> {
+export class FluidDexFactory extends StatefulEventSubscriber<
+  PoolWithDecimals[]
+> {
   handlers: {
     [event: string]: (
       event: any,
-      state: DeepReadonly<Pool[]>,
+      state: DeepReadonly<PoolWithDecimals[]>,
       log: Readonly<Log>,
-    ) => Promise<DeepReadonly<Pool[]> | null>;
+    ) => Promise<DeepReadonly<PoolWithDecimals[]> | null>;
   } = {};
 
   logDecoder: (log: Log) => any;
 
   addressesSubscribed: Address[];
   protected dexFactoryIface = new Interface(DexFactoryABI);
-  protected resolverIface = new Interface(ResolverABI);
 
   constructor(
     readonly parentName: string,
@@ -50,11 +51,7 @@ export class FluidDexFactory extends StatefulEventSubscriber<Pool[]> {
   /**
    * Handle a trade rate change on the pool.
    */
-  async handleDexDeployed(
-    event: any,
-    state: DeepReadonly<Pool[]>,
-    log: Readonly<Log>,
-  ): Promise<DeepReadonly<Pool[]> | null> {
+  async handleDexDeployed(): Promise<DeepReadonly<PoolWithDecimals[]> | null> {
     const blockNumber_ = await this.dexHelper.provider.getBlockNumber();
 
     const pools = await this.getStateOrGenerate(blockNumber_, false);
@@ -63,21 +60,6 @@ export class FluidDexFactory extends StatefulEventSubscriber<Pool[]> {
 
     return pools;
   }
-
-  decodePool = (result: MultiResult<BytesLike> | BytesLike): Pool => {
-    return generalDecoder(
-      result,
-      ['tuple(address pool, address token0, address token1, uint256 fee)'],
-      undefined,
-      decoded => {
-        return {
-          address: decoded[0].toLowerCase(),
-          token0: decoded[1].toLowerCase(),
-          token1: decoded[2].toLowerCase(),
-        };
-      },
-    );
-  };
 
   /**
    * The function is called every time any of the subscribed
@@ -89,9 +71,9 @@ export class FluidDexFactory extends StatefulEventSubscriber<Pool[]> {
    * @returns Updates state of the event subscriber after the log
    */
   async processLog(
-    state: DeepReadonly<Pool[]>,
+    state: DeepReadonly<PoolWithDecimals[]>,
     log: Readonly<Log>,
-  ): Promise<DeepReadonly<Pool[]> | null> {
+  ): Promise<DeepReadonly<PoolWithDecimals[]> | null> {
     try {
       let event;
       try {
@@ -112,7 +94,7 @@ export class FluidDexFactory extends StatefulEventSubscriber<Pool[]> {
   async getStateOrGenerate(
     blockNumber: number,
     readonly: boolean = false,
-  ): Promise<DeepReadonly<Pool[]>> {
+  ): Promise<DeepReadonly<PoolWithDecimals[]>> {
     let state = this.getState(blockNumber);
     if (!state) {
       state = await this.generateState(blockNumber);
@@ -130,7 +112,9 @@ export class FluidDexFactory extends StatefulEventSubscriber<Pool[]> {
    * should be generated
    * @returns state of the event subscriber at blocknumber
    */
-  async generateState(blockNumber: number): Promise<DeepReadonly<Pool[]>> {
+  async generateState(
+    blockNumber: number,
+  ): Promise<DeepReadonly<PoolWithDecimals[]>> {
     const resolverContract = new Contract(
       this.commonAddresses.resolver,
       ResolverABI,
@@ -141,11 +125,47 @@ export class FluidDexFactory extends StatefulEventSubscriber<Pool[]> {
     });
 
     const pools: Pool[] = rawResult.map((result: any) => ({
-      address: result[0],
-      token0: result[1],
-      token1: result[2],
+      address: result[0].toLowerCase(),
+      token0: result[1].toLowerCase(),
+      token1: result[2].toLowerCase(),
     }));
 
-    return pools;
+    const tokens = Array.from(
+      new Set(
+        pools
+          .map(({ token0, token1 }) => [token0, token1])
+          .flat()
+          .filter(token => token !== ETHER_ADDRESS),
+      ),
+    );
+
+    const multiCallData: MultiCallParams<number>[] = tokens.map(token => ({
+      target: token,
+      callData: '0x313ce567', // decimals()
+      decodeFunction: uint256DecodeToNumber,
+    }));
+
+    const decimalsMulticallResults =
+      await this.dexHelper.multiWrapper.tryAggregate(
+        true,
+        multiCallData,
+        blockNumber,
+      );
+
+    const tokenToDecimals = tokens.reduce<Record<string, number>>(
+      (map, token, i) => {
+        map[token] = decimalsMulticallResults[i].returnData;
+        return map;
+      },
+      {
+        [ETHER_ADDRESS]: 18,
+      },
+    );
+
+    return pools.map(pool => ({
+      ...pool,
+      token0Decimals: tokenToDecimals[pool.token0],
+      token1Decimals: tokenToDecimals[pool.token1],
+    }));
   }
 }

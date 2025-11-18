@@ -148,6 +148,17 @@ export const SolidlyConfig: DexConfigMap<DexParams> = {
       feeCode: 0, // dynamic fees
     },
   },
+  Blackhole: {
+    [Network.AVALANCHE]: {
+      // RPC pool tracker is used
+      factoryAddress: '0xfE926062Fb99CA5653080d6C14fE945Ad68c265C',
+      router: '0xCaD684775d7879E63f5d319dAcC8086EeCC01B01',
+      initCode:
+        '0x87b2d661db12ce27ece6305198fcb950a2522c8e43e3b90e93256b71a6db5899',
+      poolGasCost: 180 * 1000,
+      feeCode: 0, // dynamic fees
+    },
+  },
 };
 
 export const Adapters: Record<number, AdapterMappings> = {
@@ -164,7 +175,7 @@ export const Adapters: Record<number, AdapterMappings> = {
     [SwapSide.SELL]: [{ name: 'Adapter04', index: 1 }], // solidly
   },
   [Network.AVALANCHE]: {
-    [SwapSide.SELL]: [{ name: 'AvalancheAdapter02', index: 3 }], // solisnek (deprecated)
+    [SwapSide.SELL]: [{ name: 'AvalancheAdapter02', index: 3 }], // solisnek (deprecated) + blackhole
   },
   [Network.ARBITRUM]: {
     [SwapSide.SELL]: [{ name: 'ArbitrumAdapter02', index: 1 }], // chronos, ramses
