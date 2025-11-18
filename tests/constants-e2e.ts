@@ -568,6 +568,11 @@ export const Tokens: {
       address: '0x07D1718fF05a8C53C8F05aDAEd57C0d672945f9a',
       decimals: 18,
     },
+    ETH0: {
+      address: '0x734eec7930bc84eC5732022B9EB949A81fB89AbE',
+      decimals: 18,
+      symbol: 'ETH0',
+    },
     USD0: {
       address: '0x73A15FeD60Bf67631dC6cd7Bc5B6e8da8190aCF5',
       decimals: 18,
