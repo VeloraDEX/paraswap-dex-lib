@@ -25,7 +25,7 @@ export const Adapters: {
 };
 
 export const ClearConfig: DexConfigMap<DexParams> = {
-  Clear: {
+  clear: {
     // Arbitrum Sepolia (Testnet)
     // NOTE: Using Network.SEPOLIA as Network.ARBITRUM_SEPOLIA doesn't exist in ParaSwap constants
     // TODO: Add proper Arbitrum Sepolia constant or use ARBITRUM for mainnet

@@ -238,76 +238,97 @@ export class Clear extends SimpleExchange implements IDex<ClearData> {
         return null;
       }
 
-      // Extract vault address from pool identifier
-      // Format: "clear_<vaultAddress>_<srcToken>_<destToken>"
-      const vaultAddress = poolIdentifiers[0].split('_')[1];
-
       // Create ClearSwap contract instance
       const clearSwap = new this.dexHelper.web3Provider.eth.Contract(
         clearSwapAbi as any,
         this.config.swapAddress,
       );
 
-      // Calculate prices for each amount using previewSwap
-      const prices: bigint[] = [];
+      const unitAmount = BigInt(10) ** BigInt(srcToken.decimals);
+      const poolPrices: PoolPrices<ClearData>[] = [];
 
-      for (const amount of amounts) {
+      // Get prices for ALL vaults, not just the first one
+      for (const poolIdentifier of poolIdentifiers) {
+        // Extract vault address from pool identifier
+        // Format: "clear_<vaultAddress>_<srcToken>_<destToken>"
+        const vaultAddress = poolIdentifier.split('_')[1];
+
         try {
-          const result = await clearSwap.methods
-            .previewSwap(
-              vaultAddress,
-              srcToken.address,
-              destToken.address,
-              amount.toString(),
-            )
-            .call({}, blockNumber);
+          // Calculate prices for each amount using previewSwap
+          const prices: bigint[] = [];
 
-          prices.push(BigInt(result.amountOut));
+          for (const amount of amounts) {
+            try {
+              const result = await clearSwap.methods
+                .previewSwap(
+                  vaultAddress,
+                  srcToken.address,
+                  destToken.address,
+                  amount.toString(),
+                )
+                .call({}, blockNumber);
+
+              prices.push(BigInt(result.amountOut));
+            } catch (error) {
+              this.logger.error(
+                `Failed to preview swap for amount ${amount} in vault ${vaultAddress}:`,
+                error,
+              );
+              prices.push(0n);
+            }
+          }
+
+          // Skip vault if all prices failed
+          if (prices.every((p) => p === 0n)) {
+            this.logger.warn(
+              `All prices returned 0 for ${srcToken.symbol}-${destToken.symbol} in vault ${vaultAddress}`,
+            );
+            continue;
+          }
+
+          // Calculate unit price (for 1 token)
+          let unit: bigint;
+          try {
+            const unitResult = await clearSwap.methods
+              .previewSwap(
+                vaultAddress,
+                srcToken.address,
+                destToken.address,
+                unitAmount.toString(),
+              )
+              .call({}, blockNumber);
+
+            unit = BigInt(unitResult.amountOut);
+          } catch (error) {
+            this.logger.error(`Failed to get unit price for vault ${vaultAddress}:`, error);
+            unit = prices[0] || 0n;
+          }
+
+          poolPrices.push({
+            prices,
+            unit,
+            data: {
+              vault: vaultAddress,
+              router: this.config.swapAddress,
+            },
+            poolIdentifiers: [poolIdentifier],
+            exchange: this.dexKey,
+            gasCost: this.config.poolGasCost || CLEAR_GAS_COST,
+            poolAddresses: [vaultAddress],
+          });
         } catch (error) {
-          this.logger.error(`Failed to preview swap for amount ${amount}:`, error);
-          prices.push(0n);
+          this.logger.error(`Error pricing vault ${vaultAddress}:`, error);
+          continue;
         }
       }
 
-      // Check if all prices failed
-      if (prices.every((p) => p === 0n)) {
-        this.logger.warn(`All prices returned 0 for ${srcToken.symbol}-${destToken.symbol}`);
+      // Return null if no vaults could be priced
+      if (poolPrices.length === 0) {
+        this.logger.warn(`No vaults could be priced for ${srcToken.symbol}-${destToken.symbol}`);
         return null;
       }
 
-      // Calculate unit price (for 1 token)
-      const unitAmount = BigInt(10) ** BigInt(srcToken.decimals);
-      let unit: bigint;
-      try {
-        const unitResult = await clearSwap.methods
-          .previewSwap(
-            vaultAddress,
-            srcToken.address,
-            destToken.address,
-            unitAmount.toString(),
-          )
-          .call({}, blockNumber);
-
-        unit = BigInt(unitResult.amountOut);
-      } catch (error) {
-        this.logger.error('Failed to get unit price:', error);
-        unit = prices[0] || 0n;
-      }
-
-      return [
-        {
-          prices,
-          unit,
-          data: {
-            vault: vaultAddress,
-            router: this.config.swapAddress,
-          },
-          poolIdentifiers: [poolIdentifiers[0]],
-          exchange: this.dexKey,
-          gasCost: this.config.poolGasCost || CLEAR_GAS_COST,
-          poolAddresses: [vaultAddress],
-        },
-      ];
+      return poolPrices;
     } catch (error) {
       this.logger.error('Error in getPricesVolume:', error);
       return null;
