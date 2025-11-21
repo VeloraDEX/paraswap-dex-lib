@@ -27,6 +27,7 @@ export enum SpecialDex {
   BUY_ON_SOLIDLY_V3 = 11,
   SWAP_ON_DEXALOT = 12,
   SWAP_ON_HASHFLOW = 13,
+  SWAP_ON_NATIVE = 14,
 }
 
 export enum Executors {

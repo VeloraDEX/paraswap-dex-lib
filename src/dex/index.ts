@@ -78,6 +78,7 @@ import { Wombat } from './wombat/wombat';
 import { Swell } from './swell/swell';
 import { PharaohV1 } from './solidly/forks-override/pharaohV1';
 import { EtherFi } from './etherfi';
+import { Native } from './native/native';
 import { Spark } from './spark/spark';
 import { SparkPsm } from './spark/spark-psm';
 import { VelodromeSlipstream } from './uniswap-v3/forks/velodrome-slipstream/velodrome-slipstream';
@@ -184,6 +185,7 @@ const Dexes = [
   WstETH,
   ERC4626,
   Hashflow,
+  Native,
   Infusion,
   MaverickV1,
   MaverickV2,

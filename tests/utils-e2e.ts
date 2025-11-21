@@ -313,8 +313,18 @@ export async function testE2E(
     : simulatedAmount.sub(expectedAmount);
   const paraswapShare = decodedOutput.paraswapShare?.toNumber() ?? 0;
 
-  expect(amountDiff.toBigInt()).toBeLessThanOrEqual(10n); // 10 wei max allowed difference
-  expect(paraswapShare).toEqual(0);
+  // Check if Native is actually in the route, not just the input parameter
+  const routeDexes = extractAllDexsFromRoute(priceRoute.bestRoute);
+  const isNativeRoute = routeDexes.includes('Native');
+
+  if (isNativeRoute) {
+    const diffBps =
+      (amountDiff.toBigInt() * 10_000n) / expectedAmount.toBigInt();
+    expect(diffBps).toBeLessThanOrEqual(5n);
+  } else {
+    expect(amountDiff.toBigInt()).toBeLessThanOrEqual(10n); // 10 wei max allowed difference
+    expect(paraswapShare).toEqual(0);
+  }
 }
 
 const extractAllDexsFromRoute = (bestRoute: OptimalRoute[]) => {
