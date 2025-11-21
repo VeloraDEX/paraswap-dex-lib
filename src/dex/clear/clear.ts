@@ -61,7 +61,7 @@ export class Clear extends SimpleExchange implements IDex<ClearData> {
 
   // Cache for vaults to reduce GraphQL calls
   private vaultsCache: Map<string, ClearVault[]> = new Map();
-  private vaultsCacheTimestamp = 0;
+  private vaultsCacheTimestamp: Map<string, number> = new Map();
   private readonly CACHE_TTL = 60 * 1000; // 1 minute
 
   constructor(
@@ -118,9 +118,10 @@ export class Clear extends SimpleExchange implements IDex<ClearData> {
     const cacheKey = `${this.network}`;
 
     // Return cached vaults if still valid
+    const lastTimestamp = this.vaultsCacheTimestamp.get(cacheKey) || 0;
     if (
       this.vaultsCache.has(cacheKey) &&
-      now - this.vaultsCacheTimestamp < this.CACHE_TTL
+      now - lastTimestamp < this.CACHE_TTL
     ) {
       return this.vaultsCache.get(cacheKey)!;
     }
@@ -146,7 +147,7 @@ export class Clear extends SimpleExchange implements IDex<ClearData> {
 
     // Update cache
     this.vaultsCache.set(cacheKey, vaults);
-    this.vaultsCacheTimestamp = now;
+    this.vaultsCacheTimestamp.set(cacheKey, now);
 
     this.logger.info(`Fetched ${vaults.length} Clear vaults from GraphQL`);
 
@@ -301,7 +302,13 @@ export class Clear extends SimpleExchange implements IDex<ClearData> {
             unit = BigInt(unitResult.amountOut);
           } catch (error) {
             this.logger.error(`Failed to get unit price for vault ${vaultAddress}:`, error);
-            unit = prices[0] || 0n;
+            // Fallback: calculate unit price from first amount's price
+            // unit = (prices[0] * unitAmount) / amounts[0]
+            if (prices[0] && amounts[0]) {
+              unit = (prices[0] * unitAmount) / amounts[0];
+            } else {
+              unit = 0n;
+            }
           }
 
           poolPrices.push({
