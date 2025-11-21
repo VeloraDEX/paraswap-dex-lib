@@ -117,6 +117,7 @@ import { Blackhole } from './solidly/forks-override/blackhole';
 import { BlackholeCL } from './algebra-integral/forks/blackhole-cl';
 import { BunniV2 } from './bunni-v2/bunni-v2';
 import { Cap } from './cap/cap';
+import { Clear } from './clear/clear'; // TODO: Enable after configuration is complete
 
 const LegacyDexes = [
   CurveV2,
@@ -227,6 +228,7 @@ const Dexes = [
   BlackholeCL,
   BunniV2,
   Cap,
+  // Clear, // TODO: Uncomment after configuration is complete and tests pass
 ];
 
 export type LegacyDexConstructor = new (dexHelper: IDexHelper) => IDexTxBuilder<
