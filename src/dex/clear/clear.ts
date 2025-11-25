@@ -399,7 +399,7 @@ export class Clear extends SimpleExchange implements IDex<ClearData> {
     }
 
     const swapData = this.clearSwapIface.encodeFunctionData('swap', [
-      NULL_ADDRESS, // receiver
+      this.augustusAddress, // receiver - Augustus will forward tokens to user
       data.vault,
       srcToken,
       destToken,
