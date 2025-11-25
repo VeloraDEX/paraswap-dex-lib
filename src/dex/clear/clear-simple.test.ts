@@ -16,7 +16,7 @@ import { Token } from '../../types';
 
 jest.setTimeout(50 * 1000);
 
-const network = Network.SEPOLIA; // Arbitrum Sepolia
+const network = Network.ARBITRUM_SEPOLIA;
 const dexKey = 'clear';
 
 // Test tokens from the vault we discovered

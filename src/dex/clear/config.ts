@@ -27,9 +27,7 @@ export const Adapters: {
 export const ClearConfig: DexConfigMap<DexParams> = {
   clear: {
     // Arbitrum Sepolia (Testnet)
-    // NOTE: Using Network.SEPOLIA as Network.ARBITRUM_SEPOLIA doesn't exist in ParaSwap constants
-    // TODO: Add proper Arbitrum Sepolia constant or use ARBITRUM for mainnet
-    [Network.SEPOLIA]: {
+    [Network.ARBITRUM_SEPOLIA]: {
       factoryAddress: '0x6f73CCe0210Fe9e1B8c650739C06E8a400d09E68',
       swapAddress: '0x5B69f9D067077c3FBb22Bd732d2c34A9731fC162', // ClearSwap proxy
       oracleAddress: '0x50c2584E2f32533e9307df9eE0Beb229fC20f517', // ClearOracle proxy
