@@ -227,6 +227,12 @@ export class Clear extends SimpleExchange implements IDex<ClearData> {
     try {
       if (!this.config) return null;
 
+      // Clear only supports SELL side (exact input)
+      // previewSwap returns amountOut for given amountIn, not the reverse
+      if (side === SwapSide.BUY) {
+        return null;
+      }
+
       // Get pool identifiers
       const poolIdentifiers = limitPools || await this.getPoolIdentifiers(
         srcToken,
@@ -344,6 +350,7 @@ export class Clear extends SimpleExchange implements IDex<ClearData> {
 
   /**
    * Generate calldata for executing a swap via ClearSwap
+   * Only supports SELL side (exact input)
    */
   getAdapterParam(
     srcToken: string,
@@ -353,6 +360,10 @@ export class Clear extends SimpleExchange implements IDex<ClearData> {
     data: ClearData,
     side: SwapSide,
   ): AdapterExchangeParam {
+    if (side === SwapSide.BUY) {
+      throw new Error('Clear does not support BUY side swaps');
+    }
+
     // Encode ClearSwap.swap() call
     const payload = this.clearSwapIface.encodeFunctionData('swap', [
       NULL_ADDRESS, // receiver (filled by Augustus)
@@ -373,6 +384,7 @@ export class Clear extends SimpleExchange implements IDex<ClearData> {
 
   /**
    * Generate simple (direct) swap params
+   * Only supports SELL side (exact input)
    */
   async getSimpleParam(
     srcToken: string,
@@ -382,6 +394,10 @@ export class Clear extends SimpleExchange implements IDex<ClearData> {
     data: ClearData,
     side: SwapSide,
   ): Promise<SimpleExchangeParam> {
+    if (side === SwapSide.BUY) {
+      throw new Error('Clear does not support BUY side swaps');
+    }
+
     const swapData = this.clearSwapIface.encodeFunctionData('swap', [
       NULL_ADDRESS, // receiver
       data.vault,
