@@ -30,6 +30,12 @@ export const normalizeTokenAddress = (address: string): string => {
     : address.toLowerCase();
 };
 
+export const denormalizeTokenAddress = (address: string): string => {
+  return address.toLowerCase() === NULL_ADDRESS
+    ? ETHER_ADDRESS
+    : address.toLowerCase();
+};
+
 export const isStablePair = (
   network: Network,
   normalizedSrcTokenAddress: string,

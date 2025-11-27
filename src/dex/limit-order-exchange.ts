@@ -15,6 +15,7 @@ export abstract class LimitOrderExchange<
   constructor(dexHelper: IDexHelper, name: string) {
     super(dexHelper, name, {
       blacklistedTTL: 'none',
+      enablePairRestriction: true,
     });
   }
 

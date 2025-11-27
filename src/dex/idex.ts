@@ -153,6 +153,12 @@ export interface IDexWithRestriction {
   getRestrictedCacheKey(): string;
 }
 
+export interface IDexWithPairRestriction {
+  hasPairRestriction(): this is IDexWithPairRestriction;
+  isRestrictedPair(token0: string, token1: string): Promise<boolean>;
+  getRestrictedPairCacheKey(token0: string, token1: string): string;
+}
+
 export interface IDexPricing<ExchangeData> {
   readonly dexKey: string;
   // This is true if the the DEX is simply
@@ -224,6 +230,7 @@ export interface IDexPricing<ExchangeData> {
   addMasterPool?(poolKey: string, blockNumber: number): AsyncOrSync<boolean>;
 
   hasDexRestriction?(): this is IDexWithRestriction;
+  hasPairRestriction?(): this is IDexWithPairRestriction;
   hasBlacklist?(): this is IDexWithBlacklist;
 
   // can be used to define what min usd value can be traded (e.g. on RFQ)

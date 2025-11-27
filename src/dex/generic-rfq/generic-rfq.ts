@@ -323,7 +323,7 @@ export class GenericRFQ extends ParaSwapLimitOrders {
     };
   }
 
-  async preProcessTransaction?(
+  async preProcessTransaction(
     optimalSwapExchange: OptimalSwapExchange<ParaSwapLimitOrdersData>,
     srcToken: Token,
     destToken: Token,
@@ -351,98 +351,113 @@ export class GenericRFQ extends ParaSwapLimitOrders {
       );
     }
 
-    const isSell = side === SwapSide.SELL;
+    try {
+      const isSell = side === SwapSide.SELL;
 
-    const order = await this.rateFetcher.getFirmRate(
-      srcToken,
-      destToken,
-      isSell
-        ? overOrder(optimalSwapExchange.srcAmount, OVERORDER_BPS)
-        : overOrder(optimalSwapExchange.destAmount, 1),
-      side,
-      options.executionContractAddress,
-      options.userAddress,
-      options.partner,
-      options.special,
-    );
-
-    const expiryAsBigInt = BigInt(order.order.expiry);
-    const minDeadline = expiryAsBigInt > 0 ? expiryAsBigInt : BI_MAX_UINT256;
-
-    const makerAssetAmount = BigInt(order.order.makerAmount);
-    const takerAssetAmount = BigInt(order.order.takerAmount);
-
-    const srcAmount = BigInt(optimalSwapExchange.srcAmount);
-    const destAmount = BigInt(optimalSwapExchange.destAmount);
-
-    const slippageFactor = options.slippageFactor;
-
-    if (side === SwapSide.SELL) {
-      const makerAssetAmountFilled =
-        takerAssetAmount > srcAmount
-          ? (makerAssetAmount * srcAmount) / takerAssetAmount
-          : makerAssetAmount;
-
-      const requiredAmountWithSlippage = new BigNumber(destAmount.toString())
-        .multipliedBy(slippageFactor)
-        .toFixed(0);
-
-      if (makerAssetAmountFilled < BigInt(requiredAmountWithSlippage)) {
-        throw new SlippageCheckError(
-          this.dexKey,
-          this.network,
-          side,
-          requiredAmountWithSlippage,
-          makerAssetAmountFilled.toString(),
-          slippageFactor,
-        );
-      }
-    } else {
-      if (makerAssetAmount < destAmount) {
-        throw new SlippageCheckError(
-          this.dexKey,
-          this.network,
-          side,
-          destAmount.toString(),
-          makerAssetAmount.toString(),
-          slippageFactor,
-          true,
-        );
-      }
-
-      const requiredAmountWithSlippage = new BigNumber(srcAmount.toString())
-        .multipliedBy(slippageFactor)
-        .toFixed(0);
-
-      if (takerAssetAmount > BigInt(requiredAmountWithSlippage)) {
-        throw new SlippageCheckError(
-          this.dexKey,
-          this.network,
-          side,
-          requiredAmountWithSlippage,
-          takerAssetAmount.toString(),
-          slippageFactor,
-        );
-      }
-    }
-
-    let isApproved = false;
-
-    // isApproved is only used in direct method and available only for v6, then no need to check approve for v5
-    // because it's either done in getSimpleParam or approve call in the adapter smart contract
-    if (options.version === ParaSwapVersion.V6 && options.isDirectMethod) {
-      isApproved = await this.dexHelper.augustusApprovals.hasApproval(
+      const order = await this.rateFetcher.getFirmRate(
+        srcToken,
+        destToken,
+        isSell
+          ? overOrder(optimalSwapExchange.srcAmount, OVERORDER_BPS)
+          : overOrder(optimalSwapExchange.destAmount, 1),
+        side,
         options.executionContractAddress,
-        // ETH always need to be wrapped for RFQ
-        this.dexHelper.config.wrapETH(srcToken).address,
-        this.augustusRFQAddress,
+        options.userAddress,
+        options.partner,
+        options.special,
       );
-    }
 
-    return [
-      { ...optimalSwapExchange, data: { orderInfos: [order], isApproved } },
-      { deadline: minDeadline },
-    ];
+      const expiryAsBigInt = BigInt(order.order.expiry);
+      const minDeadline = expiryAsBigInt > 0 ? expiryAsBigInt : BI_MAX_UINT256;
+
+      const makerAssetAmount = BigInt(order.order.makerAmount);
+      const takerAssetAmount = BigInt(order.order.takerAmount);
+
+      const srcAmount = BigInt(optimalSwapExchange.srcAmount);
+      const destAmount = BigInt(optimalSwapExchange.destAmount);
+
+      const slippageFactor = options.slippageFactor;
+
+      if (side === SwapSide.SELL) {
+        const makerAssetAmountFilled =
+          takerAssetAmount > srcAmount
+            ? (makerAssetAmount * srcAmount) / takerAssetAmount
+            : makerAssetAmount;
+
+        const requiredAmountWithSlippage = new BigNumber(destAmount.toString())
+          .multipliedBy(slippageFactor)
+          .toFixed(0);
+
+        if (makerAssetAmountFilled < BigInt(requiredAmountWithSlippage)) {
+          throw new SlippageCheckError(
+            this.dexKey,
+            this.network,
+            side,
+            requiredAmountWithSlippage,
+            makerAssetAmountFilled.toString(),
+            slippageFactor,
+          );
+        }
+      } else {
+        if (makerAssetAmount < destAmount) {
+          throw new SlippageCheckError(
+            this.dexKey,
+            this.network,
+            side,
+            destAmount.toString(),
+            makerAssetAmount.toString(),
+            slippageFactor,
+            true,
+          );
+        }
+
+        const requiredAmountWithSlippage = new BigNumber(srcAmount.toString())
+          .multipliedBy(slippageFactor)
+          .toFixed(0);
+
+        if (takerAssetAmount > BigInt(requiredAmountWithSlippage)) {
+          throw new SlippageCheckError(
+            this.dexKey,
+            this.network,
+            side,
+            requiredAmountWithSlippage,
+            takerAssetAmount.toString(),
+            slippageFactor,
+          );
+        }
+      }
+
+      let isApproved = false;
+
+      // isApproved is only used in direct method and available only for v6, then no need to check approve for v5
+      // because it's either done in getSimpleParam or approve call in the adapter smart contract
+      if (options.version === ParaSwapVersion.V6 && options.isDirectMethod) {
+        isApproved = await this.dexHelper.augustusApprovals.hasApproval(
+          options.executionContractAddress,
+          // ETH always need to be wrapped for RFQ
+          this.dexHelper.config.wrapETH(srcToken).address,
+          this.augustusRFQAddress,
+        );
+      }
+
+      return [
+        { ...optimalSwapExchange, data: { orderInfos: [order], isApproved } },
+        { deadline: minDeadline },
+      ];
+    } catch (e) {
+      if (e instanceof SlippageCheckError) {
+        this.logger.warn(
+          `${this.dexKey}-${this.network}: failed to build transaction on side ${side} with too strict slippage. Skipping restriction`,
+        );
+      } else {
+        this.logger.warn(
+          `${this.dexKey}-${this.network}: protocol is restricted for pair ${srcToken.address} -> ${destToken.address}`,
+        );
+        await this.restrictPair(srcToken.address, destToken.address);
+      }
+
+      throw e;
+    }
   }
 
   async getTopPoolsForToken(

@@ -2,18 +2,24 @@ import { SimpleExchange } from './simple-exchange';
 import { IDexHelper } from '../dex-helper';
 import { Utils } from '../utils';
 import { Logger } from '../types';
-import { IDexWithBlacklist, IDexWithRestriction } from './idex';
+import {
+  IDexWithBlacklist,
+  IDexWithPairRestriction,
+  IDexWithRestriction,
+} from './idex';
 
 const ERRORS_CACHE_KEY = 'errors';
 const RESTRICT_CHECK_INTERVAL_MS = 1000 * 60 * 3; // 3 min
 const RESTRICT_COUNT_THRESHOLD = 3;
-const RESTRICT_TTL_S = 10 * 60; // 10 min;
+const RESTRICT_TTL_S = 10 * 60; // 10 min
+const RESTRICT_PAIR_TTL_S = 15 * 60; // 15 min
 
 const RESTRICTED_CACHE_VALUE = 'restricted';
 const BLACKLISTED_CACHE_VALUE = 'blacklisted';
 
 const DEFAULT_BLACKLISTED_TTL_S = 180 * 60; // 3 hours
 const DEFAULT_ENABLE_DEX_RESTRICTION = false;
+const DEFAULT_ENABLE_PAIR_RESTRICTION = false;
 
 type RestrictData = {
   count: number;
@@ -25,21 +31,25 @@ type CACHE_TTL = number | 'none';
 type DexRestrictionOptions = {
   blacklistedTTL?: CACHE_TTL;
   enableDexRestriction?: boolean;
+  enablePairRestriction?: boolean;
   restrictCheckIntervalMs?: number;
   restrictCountThreshold?: number;
   restrictTtlS?: number;
+  restrictPairTtlS?: number;
 };
 
 export class SimpleExchangeWithRestrictions
   extends SimpleExchange
-  implements IDexWithRestriction, IDexWithBlacklist
+  implements IDexWithRestriction, IDexWithPairRestriction, IDexWithBlacklist
 {
   protected readonly blacklistedTTL: CACHE_TTL;
   protected readonly enableDexRestriction: boolean;
+  protected readonly enablePairRestriction: boolean;
 
   protected restrictCheckIntervalMs: number;
   protected restrictCountThreshold: number;
   protected restrictTtlS: number;
+  protected restrictPairTtlS: number;
 
   protected logger: Logger;
 
@@ -54,16 +64,22 @@ export class SimpleExchangeWithRestrictions
     this.blacklistedTTL = options.blacklistedTTL ?? DEFAULT_BLACKLISTED_TTL_S;
     this.enableDexRestriction =
       options.enableDexRestriction ?? DEFAULT_ENABLE_DEX_RESTRICTION;
-
+    this.enablePairRestriction =
+      options.enablePairRestriction ?? DEFAULT_ENABLE_PAIR_RESTRICTION;
     this.restrictCheckIntervalMs =
       options.restrictCheckIntervalMs ?? RESTRICT_CHECK_INTERVAL_MS;
     this.restrictCountThreshold =
       options.restrictCountThreshold ?? RESTRICT_COUNT_THRESHOLD;
     this.restrictTtlS = options.restrictTtlS ?? RESTRICT_TTL_S;
+    this.restrictPairTtlS = options.restrictPairTtlS ?? RESTRICT_PAIR_TTL_S;
   }
 
   public hasDexRestriction(): this is IDexWithRestriction {
     return this.enableDexRestriction;
+  }
+
+  public hasPairRestriction(): this is IDexWithPairRestriction {
+    return this.enablePairRestriction;
   }
 
   public hasBlacklist(): this is IDexWithBlacklist {
@@ -126,6 +142,17 @@ export class SimpleExchangeWithRestrictions
     }_blacklisted_${address.toLowerCase()}`;
   }
 
+  public getRestrictedPairCacheKey(token0: string, token1: string): string {
+    const pair = [
+      this.dexHelper.config.wrapETH(token0).toLowerCase(),
+      this.dexHelper.config.wrapETH(token1).toLowerCase(),
+    ]
+      .sort()
+      .join('_');
+
+    return `${this.network}_${this.dexKey}_restricted_pair_${pair}`;
+  }
+
   public getRestrictedCacheKey(): string {
     return `${this.network}_${this.dexKey}_restricted`;
   }
@@ -136,6 +163,26 @@ export class SimpleExchangeWithRestrictions
     );
 
     return cached !== null;
+  }
+
+  async isRestrictedPair(token0: string, token1: string): Promise<boolean> {
+    const cached = await this.dexHelper.cache.rawget(
+      this.getRestrictedPairCacheKey(token0, token1),
+    );
+
+    return cached !== null;
+  }
+
+  protected async restrictPair(
+    token0: string,
+    token1: string,
+    ttl = this.restrictPairTtlS,
+  ) {
+    const key = this.getRestrictedPairCacheKey(token0, token1);
+
+    return this.dexHelper.cache
+      .rawset(key, RESTRICTED_CACHE_VALUE, ttl)
+      .then(() => true);
   }
 
   protected async restrict() {
