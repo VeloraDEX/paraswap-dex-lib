@@ -11,7 +11,7 @@ import {
 } from '../../types';
 import { IDex } from '../idex';
 import { SimpleExchange } from '../simple-exchange';
-import { ClearConfig, Adapters } from './config';
+import { ClearConfig, ClearAdapters } from './config';
 import { ClearData, DexParams } from './types';
 import { Network, NULL_ADDRESS, SwapSide } from '../../constants';
 import * as CALLDATA_GAS_COST from '../../calldata-gas-cost';
@@ -49,7 +49,9 @@ export class Clear extends SimpleExchange implements IDex<ClearData> {
   static dexKeys = ['clear'];
   logger: Logger;
   protected config: DexParams;
-  protected adapters: { [side: string]: { name: string; index: number }[] };
+  protected adapters: {
+    [side in SwapSide]?: { name: string; index: number }[];
+  };
 
   readonly hasConstantPriceLargeAmounts = false;
   readonly isFeeOnTransferSupported = false;
@@ -69,12 +71,12 @@ export class Clear extends SimpleExchange implements IDex<ClearData> {
     readonly network: Network,
     readonly dexKey: string,
     readonly dexHelper: IDexHelper,
-    adapters?: { [side: string]: { name: string; index: number }[] },
+    adapters?: { [side in SwapSide]?: { name: string; index: number }[] },
     logger?: Logger,
   ) {
     super(dexHelper, dexKey);
     this.config = ClearConfig[dexKey][network];
-    this.adapters = adapters || Adapters[network] || {};
+    this.adapters = adapters || ClearAdapters[network] || {};
     this.logger = logger || dexHelper.getLogger(dexKey);
   }
 
@@ -83,12 +85,12 @@ export class Clear extends SimpleExchange implements IDex<ClearData> {
   }
 
   /**
-   * Query GraphQL endpoint for data
+   * Query Clear API (GraphQL endpoint) for data
    */
-  private async queryGraphQL(query: string): Promise<any> {
+  private async queryClearAPI<T>(query: string): Promise<T> {
     if (!this.config?.subgraphURL) {
       throw new Error(
-        `GraphQL endpoint not configured for ${this.dexKey} on ${this.network}`,
+        `Clear API endpoint not configured for ${this.dexKey} on ${this.network}`,
       );
     }
 
@@ -99,37 +101,42 @@ export class Clear extends SimpleExchange implements IDex<ClearData> {
         body: JSON.stringify({ query }),
       });
 
-      const json: any = await response.json();
-
-      if (json.errors) {
-        this.logger.error('GraphQL errors:', json.errors);
-        throw new Error(`GraphQL query failed: ${JSON.stringify(json.errors)}`);
+      if (!response.ok) {
+        throw new Error(
+          `Clear API returned ${response.status}: ${response.statusText}`,
+        );
       }
 
-      return json.data;
+      const json = (await response.json()) as { data?: T; errors?: unknown[] };
+
+      if (json.errors) {
+        this.logger.error('Clear API errors:', json.errors);
+        throw new Error(
+          `Clear API query failed: ${JSON.stringify(json.errors)}`,
+        );
+      }
+
+      return json.data as T;
     } catch (error) {
-      this.logger.error('Failed to query GraphQL:', error);
+      this.logger.error('Failed to query Clear API:', error);
       throw error;
     }
   }
 
   /**
-   * Get all vaults from GraphQL (with caching)
+   * Get all vaults from Clear API (with caching)
    */
   private async getAllVaults(): Promise<ClearVault[]> {
     const now = Date.now();
     const cacheKey = `${this.network}`;
 
     // Return cached vaults if still valid
-    const lastTimestamp = this.vaultsCacheTimestamp.get(cacheKey) || 0;
-    if (
-      this.vaultsCache.has(cacheKey) &&
-      now - lastTimestamp < this.CACHE_TTL
-    ) {
+    const cachedAt = this.vaultsCacheTimestamp.get(cacheKey) || 0;
+    if (this.vaultsCache.has(cacheKey) && now - cachedAt < this.CACHE_TTL) {
       return this.vaultsCache.get(cacheKey)!;
     }
 
-    // Query GraphQL for vaults
+    // Query Clear API for vaults
     const query = `
       query {
         clearVaults {
@@ -145,14 +152,14 @@ export class Clear extends SimpleExchange implements IDex<ClearData> {
       }
     `;
 
-    const data = await this.queryGraphQL(query);
+    const data = await this.queryClearAPI<{ clearVaults: ClearVault[] }>(query);
     const vaults = data.clearVaults || [];
 
     // Update cache
     this.vaultsCache.set(cacheKey, vaults);
     this.vaultsCacheTimestamp.set(cacheKey, now);
 
-    this.logger.info(`Fetched ${vaults.length} Clear vaults from GraphQL`);
+    this.logger.info(`Fetched ${vaults.length} Clear vaults from API`);
 
     return vaults;
   }
@@ -186,7 +193,7 @@ export class Clear extends SimpleExchange implements IDex<ClearData> {
     blockNumber: number,
   ): Promise<string[]> {
     if (!this.config) {
-      this.logger.warn(`No config for ${this.dexKey} on ${this.network}`);
+      this.logger.error(`No config for ${this.dexKey} on ${this.network}`);
       return [];
     }
 
@@ -215,6 +222,11 @@ export class Clear extends SimpleExchange implements IDex<ClearData> {
   /**
    * Get prices for swapping through Clear vaults
    * Uses ClearSwap.previewSwap() via multicall for efficient batched pricing
+   *
+   * @param limitPools - Optional list of pool identifiers to restrict pricing to.
+   *                     When provided, only these specific pools will be priced
+   *                     instead of discovering all available pools for the token pair.
+   *                     Format: "clear_<vaultAddress>_<srcToken>_<destToken>"
    */
   async getPricesVolume(
     srcToken: Token,
@@ -225,7 +237,12 @@ export class Clear extends SimpleExchange implements IDex<ClearData> {
     limitPools?: string[],
   ): Promise<null | ExchangePrices<ClearData>> {
     try {
-      if (!this.config) return null;
+      if (!this.config) {
+        this.logger.debug(
+          `No config available for ${this.dexKey} on network ${this.network}`,
+        );
+        return null;
+      }
 
       // Clear only supports SELL side (exact input)
       // previewSwap returns amountOut for given amountIn, not the reverse
@@ -239,6 +256,9 @@ export class Clear extends SimpleExchange implements IDex<ClearData> {
         (await this.getPoolIdentifiers(srcToken, destToken, side, blockNumber));
 
       if (poolIdentifiers.length === 0) {
+        this.logger.debug(
+          `No pools found for ${srcToken.symbol}-${destToken.symbol}`,
+        );
         return null;
       }
 
@@ -530,7 +550,20 @@ export class Clear extends SimpleExchange implements IDex<ClearData> {
         }
       `;
 
-      const data = await this.queryGraphQL(query);
+      interface VaultWithSupply {
+        id: string;
+        address: string;
+        totalSupply: string;
+        tokens: { address: string; symbol: string; decimals: string }[];
+      }
+
+      interface VaultTokenResult {
+        vault: VaultWithSupply;
+      }
+
+      const data = await this.queryClearAPI<{
+        clearVaultTokens: VaultTokenResult[];
+      }>(query);
       const vaultTokens = data.clearVaultTokens || [];
 
       if (vaultTokens.length === 0) {
@@ -538,7 +571,7 @@ export class Clear extends SimpleExchange implements IDex<ClearData> {
       }
 
       // Extract unique vaults and sort by totalSupply
-      const vaultsMap = new Map<string, any>();
+      const vaultsMap = new Map<string, VaultWithSupply>();
       for (const vt of vaultTokens) {
         if (vt.vault && !vaultsMap.has(vt.vault.address)) {
           vaultsMap.set(vt.vault.address, vt.vault);
@@ -559,10 +592,8 @@ export class Clear extends SimpleExchange implements IDex<ClearData> {
       for (const vault of vaults) {
         // Get all other tokens in this vault (connectors)
         const connectorTokens = vault.tokens
-          .filter(
-            (t: any) => t.address.toLowerCase() !== tokenAddress.toLowerCase(),
-          )
-          .map((t: any) => ({
+          .filter(t => t.address.toLowerCase() !== tokenAddress.toLowerCase())
+          .map(t => ({
             address: t.address,
             decimals: parseInt(t.decimals, 10),
           }));
