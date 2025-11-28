@@ -32,7 +32,8 @@ const GHO: Token = {
   symbol: 'GHO',
 };
 
-const VAULT_ADDRESS = '0x1cfb48224ef579a11b98126151584eecb0e47960';
+// ClearSwap contract address (proxy)
+const CLEAR_SWAP_ADDRESS = '0x5144E17c86d6e1B25F61a036024a65bC4775E37e';
 
 describe('Clear Simple Integration Test', function () {
   const dexHelper = new DummyDexHelper(network);
@@ -55,7 +56,8 @@ describe('Clear Simple Integration Test', function () {
       console.log('Pool identifiers:', poolIdentifiers);
 
       expect(poolIdentifiers.length).toBeGreaterThan(0);
-      expect(poolIdentifiers[0]).toContain(VAULT_ADDRESS.toLowerCase());
+      // Verify format: clear_<vault>_<srcToken>_<destToken>
+      expect(poolIdentifiers[0]).toContain('clear_');
       expect(poolIdentifiers[0]).toContain(USDC.address.toLowerCase());
       expect(poolIdentifiers[0]).toContain(GHO.address.toLowerCase());
     });
@@ -72,7 +74,9 @@ describe('Clear Simple Integration Test', function () {
 
       expect(poolIdentifiers.length).toBeGreaterThan(0);
 
-      console.log(`Found ${poolIdentifiers.length} Clear vault(s) for USDC-GHO`);
+      console.log(
+        `Found ${poolIdentifiers.length} Clear vault(s) for USDC-GHO`,
+      );
       console.log(`Vault: ${poolIdentifiers[0]}`);
     });
 
@@ -120,9 +124,7 @@ describe('Clear Simple Integration Test', function () {
       expect(poolPrices![0].prices[0]).toBeGreaterThan(0n);
 
       console.log(`1 USDC = ${poolPrices![0].prices[0]} GHO (raw)`);
-      console.log(
-        `1 USDC = ${Number(poolPrices![0].prices[0]) / 1e18} GHO`,
-      );
+      console.log(`1 USDC = ${Number(poolPrices![0].prices[0]) / 1e18} GHO`);
     });
 
     it('should get prices for GHO -> USDC swap', async function () {
@@ -144,9 +146,7 @@ describe('Clear Simple Integration Test', function () {
       expect(poolPrices![0].prices[0]).toBeGreaterThan(0n);
 
       console.log(`1 GHO = ${poolPrices![0].prices[0]} USDC (raw)`);
-      console.log(
-        `1 GHO = ${Number(poolPrices![0].prices[0]) / 1e6} USDC`,
-      );
+      console.log(`1 GHO = ${Number(poolPrices![0].prices[0]) / 1e6} USDC`);
     });
 
     it('should get prices for multiple amounts', async function () {
@@ -171,7 +171,9 @@ describe('Clear Simple Integration Test', function () {
       console.log('Prices for multiple amounts:');
       amounts.forEach((amt, i) => {
         console.log(
-          `  ${Number(amt) / 1e6} USDC = ${Number(poolPrices![0].prices[i]) / 1e18} GHO`,
+          `  ${Number(amt) / 1e6} USDC = ${
+            Number(poolPrices![0].prices[i]) / 1e18
+          } GHO`,
         );
       });
     });
@@ -179,9 +181,22 @@ describe('Clear Simple Integration Test', function () {
 
   describe('Calldata Generation', function () {
     it('should generate adapter params for swap', async function () {
+      // Get a real vault from GraphQL first
+      const poolIdentifiers = await clear.getPoolIdentifiers(
+        USDC,
+        GHO,
+        SwapSide.SELL,
+        0,
+      );
+
+      expect(poolIdentifiers.length).toBeGreaterThan(0);
+
+      // Extract vault address from pool identifier
+      const vaultAddress = poolIdentifiers[0].split('_')[1];
+
       const data = {
-        vault: VAULT_ADDRESS,
-        router: '0x5B69f9D067077c3FBb22Bd732d2c34A9731fC162', // ClearSwap address
+        vault: vaultAddress,
+        router: CLEAR_SWAP_ADDRESS,
       };
 
       const adapterParams = clear.getAdapterParam(
@@ -200,6 +215,7 @@ describe('Clear Simple Integration Test', function () {
 
       console.log('Adapter params generated successfully');
       console.log('Target exchange:', adapterParams.targetExchange);
+      console.log('Vault used:', vaultAddress);
       console.log('Payload length:', adapterParams.payload.length);
     });
   });

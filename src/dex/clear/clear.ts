@@ -19,6 +19,7 @@ import { getDexKeysWithNetwork } from '../../utils';
 import clearSwapAbi from '../../abi/clear/ClearSwap.json';
 import clearFactoryAbi from '../../abi/clear/ClearFactory.json';
 import { NumberAsString } from '@paraswap/core';
+import { MultiCallParams } from '../../lib/multi-wrapper';
 
 const CLEAR_GAS_COST = 150_000;
 
@@ -86,7 +87,9 @@ export class Clear extends SimpleExchange implements IDex<ClearData> {
    */
   private async queryGraphQL(query: string): Promise<any> {
     if (!this.config?.subgraphURL) {
-      throw new Error(`GraphQL endpoint not configured for ${this.dexKey} on ${this.network}`);
+      throw new Error(
+        `GraphQL endpoint not configured for ${this.dexKey} on ${this.network}`,
+      );
     }
 
     try {
@@ -163,10 +166,8 @@ export class Clear extends SimpleExchange implements IDex<ClearData> {
   ): Promise<ClearVault[]> {
     const allVaults = await this.getAllVaults();
 
-    return allVaults.filter((vault) => {
-      const tokenAddresses = vault.tokens.map((t) =>
-        t.address.toLowerCase(),
-      );
+    return allVaults.filter(vault => {
+      const tokenAddresses = vault.tokens.map(t => t.address.toLowerCase());
       return (
         tokenAddresses.includes(srcToken.toLowerCase()) &&
         tokenAddresses.includes(destToken.toLowerCase())
@@ -202,9 +203,8 @@ export class Clear extends SimpleExchange implements IDex<ClearData> {
         return [];
       }
 
-      return vaults.map(
-        (vault) =>
-          `${this.dexKey}_${vault.address}_${srcToken.address}_${destToken.address}`.toLowerCase(),
+      return vaults.map(vault =>
+        `${this.dexKey}_${vault.address}_${srcToken.address}_${destToken.address}`.toLowerCase(),
       );
     } catch (error) {
       this.logger.error('Error in getPoolIdentifiers:', error);
@@ -214,7 +214,7 @@ export class Clear extends SimpleExchange implements IDex<ClearData> {
 
   /**
    * Get prices for swapping through Clear vaults
-   * Uses ClearSwap.previewSwap() to get on-chain pricing
+   * Uses ClearSwap.previewSwap() via multicall for efficient batched pricing
    */
   async getPricesVolume(
     srcToken: Token,
@@ -234,110 +234,187 @@ export class Clear extends SimpleExchange implements IDex<ClearData> {
       }
 
       // Get pool identifiers
-      const poolIdentifiers = limitPools || await this.getPoolIdentifiers(
-        srcToken,
-        destToken,
-        side,
-        blockNumber,
-      );
+      const poolIdentifiers =
+        limitPools ||
+        (await this.getPoolIdentifiers(srcToken, destToken, side, blockNumber));
 
       if (poolIdentifiers.length === 0) {
         return null;
       }
 
-      // Create ClearSwap contract instance
-      const clearSwap = new this.dexHelper.web3Provider.eth.Contract(
-        clearSwapAbi as any,
-        this.config.swapAddress,
-      );
-
       const unitAmount = BigInt(10) ** BigInt(srcToken.decimals);
-      const poolPrices: PoolPrices<ClearData>[] = [];
 
-      // Get prices for ALL vaults, not just the first one
+      // Build multicall requests for all vaults and all amounts
+      // For each vault: N amounts + 1 unit price = N+1 calls
+      type CallInfo = {
+        vaultAddress: string;
+        poolIdentifier: string;
+        isUnit: boolean;
+        amountIndex: number;
+      };
+
+      const calls: MultiCallParams<{ amountOut: bigint; ious: bigint }>[] = [];
+      const callInfos: CallInfo[] = [];
+
       for (const poolIdentifier of poolIdentifiers) {
         // Extract vault address from pool identifier
         // Format: "clear_<vaultAddress>_<srcToken>_<destToken>"
         const vaultAddress = poolIdentifier.split('_')[1];
 
-        try {
-          // Calculate prices for each amount using previewSwap
-          const prices: bigint[] = [];
+        // Add calls for each amount
+        for (let i = 0; i < amounts.length; i++) {
+          const callData = this.clearSwapIface.encodeFunctionData(
+            'previewSwap',
+            [vaultAddress, srcToken.address, destToken.address, amounts[i]],
+          );
 
-          for (const amount of amounts) {
-            try {
-              const result = await clearSwap.methods
-                .previewSwap(
-                  vaultAddress,
-                  srcToken.address,
-                  destToken.address,
-                  amount.toString(),
-                )
-                .call({}, blockNumber);
-
-              prices.push(BigInt(result.amountOut));
-            } catch (error) {
-              this.logger.error(
-                `Failed to preview swap for amount ${amount} in vault ${vaultAddress}:`,
-                error,
+          calls.push({
+            target: this.config.swapAddress,
+            callData,
+            decodeFunction: (result: any) => {
+              const decoded = this.clearSwapIface.decodeFunctionResult(
+                'previewSwap',
+                result,
               );
-              prices.push(0n);
-            }
-          }
-
-          // Skip vault if all prices failed
-          if (prices.every((p) => p === 0n)) {
-            this.logger.warn(
-              `All prices returned 0 for ${srcToken.symbol}-${destToken.symbol} in vault ${vaultAddress}`,
-            );
-            continue;
-          }
-
-          // Calculate unit price (for 1 token)
-          let unit: bigint;
-          try {
-            const unitResult = await clearSwap.methods
-              .previewSwap(
-                vaultAddress,
-                srcToken.address,
-                destToken.address,
-                unitAmount.toString(),
-              )
-              .call({}, blockNumber);
-
-            unit = BigInt(unitResult.amountOut);
-          } catch (error) {
-            this.logger.error(`Failed to get unit price for vault ${vaultAddress}:`, error);
-            // Fallback: calculate unit price from first amount's price
-            // unit = (prices[0] * unitAmount) / amounts[0]
-            if (prices[0] && amounts[0]) {
-              unit = (prices[0] * unitAmount) / amounts[0];
-            } else {
-              unit = 0n;
-            }
-          }
-
-          poolPrices.push({
-            prices,
-            unit,
-            data: {
-              vault: vaultAddress,
-              router: this.config.swapAddress,
+              return {
+                amountOut: BigInt(decoded.amountOut.toString()),
+                ious: BigInt(decoded.ious.toString()),
+              };
             },
-            poolIdentifiers: [poolIdentifier],
-            exchange: this.dexKey,
-            gasCost: this.config.poolGasCost || CLEAR_GAS_COST,
-            poolAddresses: [vaultAddress],
           });
-        } catch (error) {
-          this.logger.error(`Error pricing vault ${vaultAddress}:`, error);
+
+          callInfos.push({
+            vaultAddress,
+            poolIdentifier,
+            isUnit: false,
+            amountIndex: i,
+          });
+        }
+
+        // Add call for unit price
+        const unitCallData = this.clearSwapIface.encodeFunctionData(
+          'previewSwap',
+          [vaultAddress, srcToken.address, destToken.address, unitAmount],
+        );
+
+        calls.push({
+          target: this.config.swapAddress,
+          callData: unitCallData,
+          decodeFunction: (result: any) => {
+            const decoded = this.clearSwapIface.decodeFunctionResult(
+              'previewSwap',
+              result,
+            );
+            return {
+              amountOut: BigInt(decoded.amountOut.toString()),
+              ious: BigInt(decoded.ious.toString()),
+            };
+          },
+        });
+
+        callInfos.push({
+          vaultAddress,
+          poolIdentifier,
+          isUnit: true,
+          amountIndex: -1,
+        });
+      }
+
+      // Execute all calls in a single multicall batch
+      const results = await this.dexHelper.multiWrapper.tryAggregate<{
+        amountOut: bigint;
+        ious: bigint;
+      }>(
+        false, // mandatory = false, allow partial failures
+        calls,
+        blockNumber,
+        this.dexHelper.multiWrapper.defaultBatchSize,
+        false, // reportFails = false, we handle failures ourselves
+      );
+
+      // Group results by vault
+      const vaultResults: Map<
+        string,
+        {
+          poolIdentifier: string;
+          prices: bigint[];
+          unit: bigint;
+        }
+      > = new Map();
+
+      for (let i = 0; i < results.length; i++) {
+        const result = results[i];
+        const info = callInfos[i];
+
+        if (!vaultResults.has(info.vaultAddress)) {
+          vaultResults.set(info.vaultAddress, {
+            poolIdentifier: info.poolIdentifier,
+            prices: new Array(amounts.length).fill(0n),
+            unit: 0n,
+          });
+        }
+
+        const vaultData = vaultResults.get(info.vaultAddress)!;
+
+        if (result.success) {
+          if (info.isUnit) {
+            vaultData.unit = result.returnData.amountOut;
+          } else {
+            vaultData.prices[info.amountIndex] = result.returnData.amountOut;
+          }
+        } else {
+          // Log failure but continue
+          if (info.isUnit) {
+            this.logger.debug(
+              `Failed to get unit price for vault ${info.vaultAddress}`,
+            );
+          } else {
+            this.logger.debug(
+              `Failed to preview swap for amount ${
+                amounts[info.amountIndex]
+              } in vault ${info.vaultAddress}`,
+            );
+          }
+        }
+      }
+
+      // Build pool prices from results
+      const poolPrices: PoolPrices<ClearData>[] = [];
+
+      for (const [vaultAddress, vaultData] of vaultResults) {
+        // Skip vault if all prices failed
+        if (vaultData.prices.every(p => p === 0n)) {
+          this.logger.warn(
+            `All prices returned 0 for ${srcToken.symbol}-${destToken.symbol} in vault ${vaultAddress}`,
+          );
           continue;
         }
+
+        // Fallback for unit price if it failed
+        let unit = vaultData.unit;
+        if (unit === 0n && vaultData.prices[0] && amounts[0]) {
+          unit = (vaultData.prices[0] * unitAmount) / amounts[0];
+        }
+
+        poolPrices.push({
+          prices: vaultData.prices,
+          unit,
+          data: {
+            vault: vaultAddress,
+            router: this.config.swapAddress,
+          },
+          poolIdentifiers: [vaultData.poolIdentifier],
+          exchange: this.dexKey,
+          gasCost: this.config.poolGasCost || CLEAR_GAS_COST,
+          poolAddresses: [vaultAddress],
+        });
       }
 
       // Return null if no vaults could be priced
       if (poolPrices.length === 0) {
-        this.logger.warn(`No vaults could be priced for ${srcToken.symbol}-${destToken.symbol}`);
+        this.logger.warn(
+          `No vaults could be priced for ${srcToken.symbol}-${destToken.symbol}`,
+        );
         return null;
       }
 
@@ -424,14 +501,89 @@ export class Clear extends SimpleExchange implements IDex<ClearData> {
 
   /**
    * Get top pools for a token
-   * TODO: Implement based on liquidity data from GraphQL
+   * Returns vaults containing this token, sorted by totalSupply (TVL proxy)
    */
   async getTopPoolsForToken(
     tokenAddress: Address,
     limit: number,
   ): Promise<PoolLiquidity[]> {
-    // For now, return empty
-    // Can be implemented later by querying vaults with this token and sorting by TVL
-    return [];
+    if (!this.config?.subgraphURL) {
+      return [];
+    }
+
+    try {
+      // Query vaults that contain this token, ordered by totalSupply
+      const query = `
+        query {
+          clearVaultTokens(where: { address_eq: "${tokenAddress.toLowerCase()}" }) {
+            vault {
+              id
+              address
+              totalSupply
+              tokens {
+                address
+                symbol
+                decimals
+              }
+            }
+          }
+        }
+      `;
+
+      const data = await this.queryGraphQL(query);
+      const vaultTokens = data.clearVaultTokens || [];
+
+      if (vaultTokens.length === 0) {
+        return [];
+      }
+
+      // Extract unique vaults and sort by totalSupply
+      const vaultsMap = new Map<string, any>();
+      for (const vt of vaultTokens) {
+        if (vt.vault && !vaultsMap.has(vt.vault.address)) {
+          vaultsMap.set(vt.vault.address, vt.vault);
+        }
+      }
+
+      const vaults = Array.from(vaultsMap.values())
+        .sort((a, b) => {
+          const supplyA = BigInt(a.totalSupply || '0');
+          const supplyB = BigInt(b.totalSupply || '0');
+          return supplyB > supplyA ? 1 : supplyB < supplyA ? -1 : 0;
+        })
+        .slice(0, limit);
+
+      // Convert to PoolLiquidity format
+      const poolLiquidities: PoolLiquidity[] = [];
+
+      for (const vault of vaults) {
+        // Get all other tokens in this vault (connectors)
+        const connectorTokens = vault.tokens
+          .filter(
+            (t: any) => t.address.toLowerCase() !== tokenAddress.toLowerCase(),
+          )
+          .map((t: any) => ({
+            address: t.address,
+            decimals: parseInt(t.decimals, 10),
+          }));
+
+        if (connectorTokens.length === 0) {
+          continue;
+        }
+
+        poolLiquidities.push({
+          exchange: this.dexKey,
+          address: vault.address,
+          connectorTokens,
+          // Use totalSupply as liquidity proxy (in USD would be better but not available)
+          liquidityUSD: Number(vault.totalSupply || 0) / 1e18,
+        });
+      }
+
+      return poolLiquidities;
+    } catch (error) {
+      this.logger.error('Error in getTopPoolsForToken:', error);
+      return [];
+    }
   }
 }

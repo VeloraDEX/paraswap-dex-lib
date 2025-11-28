@@ -28,10 +28,10 @@ export const ClearConfig: DexConfigMap<DexParams> = {
   clear: {
     // Arbitrum Sepolia (Testnet)
     [Network.ARBITRUM_SEPOLIA]: {
-      factoryAddress: '0x6f73CCe0210Fe9e1B8c650739C06E8a400d09E68',
-      swapAddress: '0x5B69f9D067077c3FBb22Bd732d2c34A9731fC162', // ClearSwap proxy
-      oracleAddress: '0x50c2584E2f32533e9307df9eE0Beb229fC20f517', // ClearOracle proxy
-      accessManagerAddress: '0x3C2Fd22Ad486293e1F59dA6e42B28EC8DC1D63C7',
+      factoryAddress: '0x514Ed620137c62484F426128317e5AA86edd7475',
+      swapAddress: '0x5144E17c86d6e1B25F61a036024a65bC4775E37e', // ClearSwap proxy
+      oracleAddress: '0x716A0b9E20Bd10b82840733De144fAb69bbAEda3', // ClearOracle proxy
+      accessManagerAddress: '0x2101BC8FaF1D12bEdc3a73e73BE418a8c3b18E1B',
       subgraphURL: 'https://api-arb-sepolia-clear.trevee.xyz/graphql',
       poolGasCost: 150 * 1000, // TODO: Get real gas estimate
       feeCode: 0, // TODO: Get actual fee (if any)
