@@ -62,9 +62,9 @@ export class Clear extends SimpleExchange implements IDex<ClearData> {
   readonly clearSwapIface = new Interface(clearSwapAbi);
   readonly clearFactoryIface = new Interface(clearFactoryAbi);
 
-  // Cache for vaults to reduce GraphQL calls
-  private vaultsCache: Map<string, ClearVault[]> = new Map();
-  private vaultsCacheTimestamp: Map<string, number> = new Map();
+  // Cache for vaults to reduce API calls
+  private vaultsCacheByNetwork: Map<string, ClearVault[]> = new Map();
+  private vaultsCacheLastFetchTime: Map<string, number> = new Map();
   private readonly CACHE_TTL = 60 * 1000; // 1 minute
 
   constructor(
@@ -131,9 +131,12 @@ export class Clear extends SimpleExchange implements IDex<ClearData> {
     const cacheKey = `${this.network}`;
 
     // Return cached vaults if still valid
-    const cachedAt = this.vaultsCacheTimestamp.get(cacheKey) || 0;
-    if (this.vaultsCache.has(cacheKey) && now - cachedAt < this.CACHE_TTL) {
-      return this.vaultsCache.get(cacheKey)!;
+    const cachedAt = this.vaultsCacheLastFetchTime.get(cacheKey) || 0;
+    if (
+      this.vaultsCacheByNetwork.has(cacheKey) &&
+      now - cachedAt < this.CACHE_TTL
+    ) {
+      return this.vaultsCacheByNetwork.get(cacheKey)!;
     }
 
     // Query Clear API for vaults
@@ -156,8 +159,8 @@ export class Clear extends SimpleExchange implements IDex<ClearData> {
     const vaults = data.clearVaults || [];
 
     // Update cache
-    this.vaultsCache.set(cacheKey, vaults);
-    this.vaultsCacheTimestamp.set(cacheKey, now);
+    this.vaultsCacheByNetwork.set(cacheKey, vaults);
+    this.vaultsCacheLastFetchTime.set(cacheKey, now);
 
     this.logger.info(`Fetched ${vaults.length} Clear vaults from API`);
 
