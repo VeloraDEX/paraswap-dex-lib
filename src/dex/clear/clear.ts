@@ -168,7 +168,7 @@ export class Clear extends SimpleExchange implements IDex<ClearData> {
 
     // Update cache
     this.vaultsCacheByNetwork.set(cacheKey, vaults);
-    this.vaultsCacheLastFetchTime.set(cacheKey, now);
+    this.vaultsCacheLastFetchTime.set(cacheKey, Date.now());
 
     this.logger.info(`Fetched ${vaults.length} Clear vaults from API`);
 
@@ -221,9 +221,9 @@ export class Clear extends SimpleExchange implements IDex<ClearData> {
       const vaultData = vaultResults.get(info.vaultAddress)!;
       if (info.isUnit) {
         vaultData.unit = result.returnData.amountOut;
-      } else {
-        vaultData.prices[info.amountIndex] = result.returnData.amountOut;
+        continue;
       }
+      vaultData.prices[info.amountIndex] = result.returnData.amountOut;
     }
 
     return vaultResults;
