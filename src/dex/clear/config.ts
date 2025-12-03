@@ -1,11 +1,11 @@
-import { DexParams } from './types';
+import { Adapter, DexParams } from './types';
 import { DexConfigMap } from '../../types';
 import { Network, SwapSide } from '../../constants';
 
 // TODO: Update adapter indices after getting them from ParaSwap team
 export const ClearAdaptersConfig: {
   [chainId: number]: {
-    [side in SwapSide]?: { name: string; index: number }[];
+    [side in SwapSide]?: Adapter[];
   };
 } = {
   // TODO: Add adapter configuration for each network Clear is deployed on

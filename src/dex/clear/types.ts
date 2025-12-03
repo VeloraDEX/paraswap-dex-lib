@@ -1,6 +1,14 @@
 import { Address } from '../../types';
 
 /**
+ * Adapter configuration for a specific swap side
+ */
+export interface Adapter {
+  name: string;
+  index: number;
+}
+
+/**
  * Clear swap data passed to Augustus
  */
 export type ClearData = {

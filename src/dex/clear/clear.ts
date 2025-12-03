@@ -12,7 +12,7 @@ import {
 import { IDex } from '../idex';
 import { SimpleExchange } from '../simple-exchange';
 import { ClearConfig, ClearAdaptersConfig } from './config';
-import { ClearData, DexParams } from './types';
+import { Adapter, ClearData, DexParams } from './types';
 import { Network, NULL_ADDRESS, SwapSide } from '../../constants';
 import * as CALLDATA_GAS_COST from '../../calldata-gas-cost';
 import { getDexKeysWithNetwork } from '../../utils';
@@ -50,7 +50,7 @@ export class Clear extends SimpleExchange implements IDex<ClearData> {
   logger: Logger;
   protected config: DexParams;
   protected adapters: {
-    [side in SwapSide]?: { name: string; index: number }[];
+    [side in SwapSide]?: Adapter[];
   };
 
   readonly hasConstantPriceLargeAmounts = false;
@@ -71,7 +71,7 @@ export class Clear extends SimpleExchange implements IDex<ClearData> {
     readonly network: Network,
     readonly dexKey: string,
     readonly dexHelper: IDexHelper,
-    adapters?: { [side in SwapSide]?: { name: string; index: number }[] },
+    adapters?: { [side in SwapSide]?: Adapter[] },
     logger?: Logger,
   ) {
     super(dexHelper, dexKey);
@@ -80,7 +80,7 @@ export class Clear extends SimpleExchange implements IDex<ClearData> {
     this.logger = logger || dexHelper.getLogger(dexKey);
   }
 
-  getAdapters(side: SwapSide): { name: string; index: number }[] | null {
+  getAdapters(side: SwapSide): Adapter[] | null {
     return this.adapters[side] ? this.adapters[side] : null;
   }
 
