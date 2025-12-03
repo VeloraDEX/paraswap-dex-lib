@@ -359,12 +359,7 @@ export class Executor03BytecodeBuilder extends ExecutorBytecodeBuilder<
           [swap.swapExchanges[swapExchangeIndex].srcAmount],
         );
 
-        const fromAmountIndex = exchangeData
-          .replace('0x', '')
-          .indexOf(fromAmount.replace('0x', ''));
-
-        fromAmountPos =
-          (fromAmountIndex !== -1 ? fromAmountIndex : exchangeData.length) / 2;
+        fromAmountPos = this.findAmountPosInCalldata(exchangeData, fromAmount);
       }
 
       const toAmount = ethers.utils.defaultAbiCoder.encode(
@@ -372,12 +367,7 @@ export class Executor03BytecodeBuilder extends ExecutorBytecodeBuilder<
         [swap.swapExchanges[swapExchangeIndex].destAmount],
       );
 
-      const toAmountIndex = exchangeData
-        .replace('0x', '')
-        .lastIndexOf(toAmount.replace('0x', ''));
-
-      toAmountPos =
-        (toAmountIndex !== -1 ? toAmountIndex : exchangeData.length) / 2;
+      toAmountPos = this.findAmountPosInCalldata(exchangeData, toAmount);
     }
 
     return this.buildCallData(
