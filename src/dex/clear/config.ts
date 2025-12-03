@@ -28,33 +28,26 @@ export const ClearAdaptersConfig: {
 
 export const ClearConfig: DexConfigMap<DexParams> = {
   clear: {
-    // Arbitrum Sepolia (Testnet)
-    [Network.ARBITRUM_SEPOLIA]: {
-      factoryAddress: '0x514Ed620137c62484F426128317e5AA86edd7475',
-      swapAddress: '0x5144E17c86d6e1B25F61a036024a65bC4775E37e', // ClearSwap proxy
-      oracleAddress: '0x716A0b9E20Bd10b82840733De144fAb69bbAEda3', // ClearOracle proxy
-      accessManagerAddress: '0x2101BC8FaF1D12bEdc3a73e73BE418a8c3b18E1B',
-      subgraphURL: 'https://api-arb-sepolia-clear.trevee.xyz/graphql',
-      poolGasCost: 150 * 1000, // TODO: Get real gas estimate
-      feeCode: 0, // TODO: Get actual fee (if any)
+    // Ethereum Mainnet
+    [Network.MAINNET]: {
+      factoryAddress: '0xcEAc924839ba0ef49613d8FF10609434939bEb5b',
+      swapAddress: '0xC12247E25bf2ec1a1d43eFa7b5f9e6b579B32F40', // ClearSwap proxy
+      oracleAddress: '0xA84933DEE05514258E4C2b54468389539567634F', // ClearOracle proxy
+      accessManagerAddress: '0x42d3E0D351cD3E8aE25b1632611d4411E8d801D9',
+      subgraphURL: 'https://api-eth-mainnet-clear.trevee.xyz/graphql',
+      poolGasCost: 150_000,
+      feeCode: 0,
     },
 
-    // TODO: Add mainnet configs when available
-    // [Network.ETHEREUM]: {
-    //   factoryAddress: '0x...', // TODO
-    //   swapAddress: '0x...', // TODO
-    //   oracleAddress: '0x...', // TODO
-    //   subgraphURL: '...', // TODO
-    //   poolGasCost: 150 * 1000,
-    //   feeCode: 0,
-    // },
-    // [Network.SONIC]: {
-    //   factoryAddress: '0x...', // TODO
-    //   swapAddress: '0x...', // TODO
-    //   oracleAddress: '0x...', // TODO
-    //   subgraphURL: '...', // TODO
-    //   poolGasCost: 150 * 1000,
-    //   feeCode: 0,
-    // },
+    // Arbitrum Sepolia (Testnet)
+    [Network.ARBITRUM_SEPOLIA]: {
+      factoryAddress: '0xd4CE4e5dd7F855A6D02510f7477EF439948338B1',
+      swapAddress: '0x799E139f31CE15760A73B22f2DA7f3e402037EaE', // ClearSwap proxy
+      oracleAddress: '0x5a1703857B441b205d1f2071766788F86889271f', // ClearOracle proxy
+      accessManagerAddress: '0x3Be1099f5DBC321A537fC57197a351193DaF0b5B',
+      subgraphURL: 'https://api-arb-sepolia-clear.trevee.xyz/graphql',
+      poolGasCost: 150_000,
+      feeCode: 0,
+    },
   },
 };
