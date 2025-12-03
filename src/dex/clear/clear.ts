@@ -1,14 +1,17 @@
 import { Interface } from '@ethersproject/abi';
 import { DeepReadonly } from 'ts-essentials';
-import { Log, Logger, Token, Address } from '../../types';
-import { IDexHelper } from '../../dex-helper/idex-helper';
 import {
+  Log,
+  Logger,
+  Token,
+  Address,
   PoolPrices,
   AdapterExchangeParam,
   SimpleExchangeParam,
   PoolLiquidity,
   ExchangePrices,
 } from '../../types';
+import { IDexHelper } from '../../dex-helper/idex-helper';
 import { IDex } from '../idex';
 import { SimpleExchange } from '../simple-exchange';
 import { ClearConfig, ClearAdaptersConfig } from './config';
@@ -17,7 +20,6 @@ import { Network, NULL_ADDRESS, SwapSide } from '../../constants';
 import * as CALLDATA_GAS_COST from '../../calldata-gas-cost';
 import { getDexKeysWithNetwork } from '../../utils';
 import clearSwapAbi from '../../abi/clear/ClearSwap.json';
-import clearFactoryAbi from '../../abi/clear/ClearFactory.json';
 import { NumberAsString } from '@paraswap/core';
 import { MultiCallParams } from '../../lib/multi-wrapper';
 
@@ -60,7 +62,6 @@ export class Clear extends SimpleExchange implements IDex<ClearData> {
     getDexKeysWithNetwork(ClearConfig);
 
   readonly clearSwapIface = new Interface(clearSwapAbi);
-  readonly clearFactoryIface = new Interface(clearFactoryAbi);
 
   // Cache for vaults to reduce API calls
   private vaultsCacheByNetwork: Map<string, ClearVault[]> = new Map();
