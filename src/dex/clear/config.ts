@@ -3,7 +3,7 @@ import { DexConfigMap } from '../../types';
 import { Network, SwapSide } from '../../constants';
 
 // TODO: Update adapter indices after getting them from ParaSwap team
-export const ClearAdapters: {
+export const ClearAdaptersConfig: {
   [chainId: number]: {
     [side in SwapSide]?: { name: string; index: number }[];
   };

@@ -11,7 +11,7 @@ import {
 } from '../../types';
 import { IDex } from '../idex';
 import { SimpleExchange } from '../simple-exchange';
-import { ClearConfig, ClearAdapters } from './config';
+import { ClearConfig, ClearAdaptersConfig } from './config';
 import { ClearData, DexParams } from './types';
 import { Network, NULL_ADDRESS, SwapSide } from '../../constants';
 import * as CALLDATA_GAS_COST from '../../calldata-gas-cost';
@@ -65,7 +65,7 @@ export class Clear extends SimpleExchange implements IDex<ClearData> {
   // Cache for vaults to reduce API calls
   private vaultsCacheByNetwork: Map<string, ClearVault[]> = new Map();
   private vaultsCacheLastFetchTime: Map<string, number> = new Map();
-  private readonly CACHE_TTL = 60 * 1000; // 1 minute
+  private readonly CACHE_TTL_IN_MILLISECONDS = 60 * 1000; // 1 minute
 
   constructor(
     readonly network: Network,
@@ -76,7 +76,7 @@ export class Clear extends SimpleExchange implements IDex<ClearData> {
   ) {
     super(dexHelper, dexKey);
     this.config = ClearConfig[dexKey][network];
-    this.adapters = adapters || ClearAdapters[network] || {};
+    this.adapters = adapters || ClearAdaptersConfig[network] || {};
     this.logger = logger || dexHelper.getLogger(dexKey);
   }
 
@@ -101,13 +101,20 @@ export class Clear extends SimpleExchange implements IDex<ClearData> {
         body: JSON.stringify({ query }),
       });
 
+      const responseText = await response.text();
+
       if (!response.ok) {
         throw new Error(
-          `Clear API returned ${response.status}: ${response.statusText}`,
+          `Clear API returned ${response.status}: ${responseText}`,
         );
       }
 
-      const json = (await response.json()) as { data?: T; errors?: unknown[] };
+      let json: { data?: T; errors?: unknown[] };
+      try {
+        json = JSON.parse(responseText);
+      } catch (parseError) {
+        throw new Error(`Failed to parse Clear API response: ${responseText}`);
+      }
 
       if (json.errors) {
         this.logger.error('Clear API errors:', json.errors);
@@ -134,7 +141,7 @@ export class Clear extends SimpleExchange implements IDex<ClearData> {
     const cachedAt = this.vaultsCacheLastFetchTime.get(cacheKey) || 0;
     if (
       this.vaultsCacheByNetwork.has(cacheKey) &&
-      now - cachedAt < this.CACHE_TTL
+      now - cachedAt < this.CACHE_TTL_IN_MILLISECONDS
     ) {
       return this.vaultsCacheByNetwork.get(cacheKey)!;
     }
@@ -165,6 +172,60 @@ export class Clear extends SimpleExchange implements IDex<ClearData> {
     this.logger.info(`Fetched ${vaults.length} Clear vaults from API`);
 
     return vaults;
+  }
+
+  /**
+   * Process multicall results and group by vault
+   * Extracted to reduce cyclomatic complexity in getPricesVolume
+   */
+  private processMulticallResults(
+    results: {
+      success: boolean;
+      returnData: { amountOut: bigint; ious: bigint };
+    }[],
+    callInfos: {
+      vaultAddress: string;
+      poolIdentifier: string;
+      isUnit: boolean;
+      amountIndex: number;
+    }[],
+    amountsLength: number,
+  ): Map<string, { poolIdentifier: string; prices: bigint[]; unit: bigint }> {
+    const vaultResults = new Map<
+      string,
+      { poolIdentifier: string; prices: bigint[]; unit: bigint }
+    >();
+
+    for (let i = 0; i < results.length; i++) {
+      const result = results[i];
+      const info = callInfos[i];
+
+      if (!vaultResults.has(info.vaultAddress)) {
+        vaultResults.set(info.vaultAddress, {
+          poolIdentifier: info.poolIdentifier,
+          prices: new Array(amountsLength).fill(0n),
+          unit: 0n,
+        });
+      }
+
+      if (!result.success) {
+        this.logger.error(
+          info.isUnit
+            ? `Failed to get unit price for vault ${info.vaultAddress}`
+            : `Failed to preview swap for amount index ${info.amountIndex} in vault ${info.vaultAddress}`,
+        );
+        continue;
+      }
+
+      const vaultData = vaultResults.get(info.vaultAddress)!;
+      if (info.isUnit) {
+        vaultData.unit = result.returnData.amountOut;
+      } else {
+        vaultData.prices[info.amountIndex] = result.returnData.amountOut;
+      }
+    }
+
+    return vaultResults;
   }
 
   /**
@@ -207,7 +268,7 @@ export class Clear extends SimpleExchange implements IDex<ClearData> {
       );
 
       if (vaults.length === 0) {
-        this.logger.debug(
+        this.logger.info(
           `No Clear vaults found for ${srcToken.symbol}-${destToken.symbol}`,
         );
         return [];
@@ -356,50 +417,11 @@ export class Clear extends SimpleExchange implements IDex<ClearData> {
       );
 
       // Group results by vault
-      const vaultResults: Map<
-        string,
-        {
-          poolIdentifier: string;
-          prices: bigint[];
-          unit: bigint;
-        }
-      > = new Map();
-
-      for (let i = 0; i < results.length; i++) {
-        const result = results[i];
-        const info = callInfos[i];
-
-        if (!vaultResults.has(info.vaultAddress)) {
-          vaultResults.set(info.vaultAddress, {
-            poolIdentifier: info.poolIdentifier,
-            prices: new Array(amounts.length).fill(0n),
-            unit: 0n,
-          });
-        }
-
-        const vaultData = vaultResults.get(info.vaultAddress)!;
-
-        if (result.success) {
-          if (info.isUnit) {
-            vaultData.unit = result.returnData.amountOut;
-          } else {
-            vaultData.prices[info.amountIndex] = result.returnData.amountOut;
-          }
-        } else {
-          // Log failure but continue
-          if (info.isUnit) {
-            this.logger.debug(
-              `Failed to get unit price for vault ${info.vaultAddress}`,
-            );
-          } else {
-            this.logger.debug(
-              `Failed to preview swap for amount ${
-                amounts[info.amountIndex]
-              } in vault ${info.vaultAddress}`,
-            );
-          }
-        }
-      }
+      const vaultResults = this.processMulticallResults(
+        results,
+        callInfos,
+        amounts.length,
+      );
 
       // Build pool prices from results
       const poolPrices: PoolPrices<ClearData>[] = [];
