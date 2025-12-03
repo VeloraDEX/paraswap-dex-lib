@@ -95,11 +95,13 @@ export class Clear extends SimpleExchange implements IDex<ClearData> {
       );
     }
 
+    const body = JSON.stringify({ query });
+
     try {
       const response = await fetch(this.config.subgraphURL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query }),
+        body,
       });
 
       const responseText = await response.text();
