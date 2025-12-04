@@ -163,7 +163,8 @@ class TokenStorageSlotsCache {
   private static async saveTokenStorageSlots(): Promise<void> {
     await fs.writeFile(
       TokenStorageSlotsCache.TOKEN_STORAGE_SLOTS_FILEPATH,
-      JSON.stringify(TokenStorageSlotsCache.TOKEN_STORAGE_SLOTS, null, 2),
+      JSON.stringify(TokenStorageSlotsCache.TOKEN_STORAGE_SLOTS, null, 2) +
+        '\n',
       { encoding: 'utf-8' },
     );
   }
