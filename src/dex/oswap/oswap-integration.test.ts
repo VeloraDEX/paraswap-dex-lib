@@ -68,7 +68,7 @@ async function checkOnChainPricing(
       expectedPrices.push((amount * rate) / getBigIntPow(36));
     } else {
       // SwapSide.BUY
-      expectedPrices.push((amount * getBigIntPow(36)) / rate);
+      expectedPrices.push((amount * getBigIntPow(36)) / rate + 3n);
     }
   }
   expect(prices).toEqual(expectedPrices);
@@ -115,10 +115,21 @@ async function testPricingOnNetwork(
   );
 
   expect(poolPrices).not.toBeNull();
+
+  // OSwap buy pricing includes a +3n offset
+  const validationPoolPrices =
+    side === SwapSide.BUY
+      ? poolPrices!.map(poolPrice => ({
+          ...poolPrice,
+          prices: poolPrice.prices.map(p => p - 3n),
+          unit: poolPrice.unit - 3n,
+        }))
+      : poolPrices!;
+
   if (oswap.hasConstantPriceLargeAmounts) {
-    checkConstantPoolPrices(poolPrices!, amounts, dexKey);
+    checkConstantPoolPrices(validationPoolPrices, amounts, dexKey);
   } else {
-    checkPoolPrices(poolPrices!, amounts, side, dexKey);
+    checkPoolPrices(validationPoolPrices, amounts, side, dexKey);
   }
 
   // Check that the prices calculated from onchain data match with the ones calculated from the stored state.
