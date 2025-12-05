@@ -7,14 +7,19 @@ import VelodromeSlipstreamMulticallABi from '../../abi/velodrome-slipstream/Velo
 import { AbiItem } from 'web3-utils';
 import { decodeStateMultiCallResultWithRelativeBitmaps as decodeStateMultiCallResultWithRelativeBitmapsForRamses } from './forks/ramses-v2/utils';
 import { decodeStateMultiCallResultWithRelativeBitmaps as decodeStateMultiCallResultWithRelativeBitmapsForVelodromeSlipstream } from './forks/velodrome-slipstream/utils';
+import { decodeStateMultiCallResultWithRelativeBitmaps as decodeStateMultiCallResultWithRelativeBitmapsForPharaohV3 } from './forks/pharaoh-v3/utils';
 import { RamsesV2EventPool } from './forks/ramses-v2/ramses-v2-pool';
 import { VelodromeSlipstreamEventPool } from './forks/velodrome-slipstream/velodrome-slipstream-pool';
 import { VelodromeSlipstreamFactory } from './forks/velodrome-slipstream/velodrome-slipstream-factory';
 import { PangolinV3EventPool } from './forks/pangolin-v3/pangolin-v3-pool';
+import { PharaohV3EventPool } from './forks/pharaoh-v3/pharaoh-v3-pool';
+import PharaohV3MulticallABI from '../../abi/pharaoh-v3/PharaohV3StateMulticall.abi.json';
+import { PharaohV3Factory } from './forks/pharaoh-v3/pharaoh-v3-factory';
 
 const SUPPORTED_FEES = [10000n, 3000n, 500n, 100n];
 const RAMSES_FORKS_FEES = [...SUPPORTED_FEES, 50n, 250n];
 const PANGOLIN_SUPPORTED_FEES = [8000n, 2500n, 500n, 100n];
+const PHARAOH_V3_SUPPORTED_FEES = [20000n, 10000n, 3000n, 500n, 250n, 100n];
 
 // Pools that will be initialized on app startup
 // They are added for testing
@@ -445,19 +450,51 @@ export const UniswapV3Config: DexConfigMap<DexParams> = {
       liquidityField: 'liquidity',
     },
   },
+  PharaohV3: {
+    [Network.AVALANCHE]: {
+      factory: '0xAE6E5c62328ade73ceefD42228528b70c8157D0d',
+      deployer: '0x6a4113ed0915bCf5E48e758e8f4cEBFFC07C66f9',
+      quoter: '0xAdAe75447D112cfC401C952744de3E6d32456465',
+      router: '0xc8B8fCbDb5C019D7802fFb0b39603395D7d3915c',
+      supportedFees: PHARAOH_V3_SUPPORTED_FEES,
+      tickSpacings: [1n, 5n, 10n, 50n, 100n, 200n],
+      tickSpacingsToFees: {
+        '1': 100n,
+        '5': 250n,
+        '10': 500n,
+        '50': 3000n,
+        '100': 10000n,
+        '200': 20000n,
+      },
+      stateMulticall: '0x08C32d5f0cA3355c041de74aB67467cB52A0ED4c',
+      stateMultiCallAbi: PharaohV3MulticallABI as AbiItem[],
+      eventPoolImplementation: PharaohV3EventPool,
+      factoryImplementation: PharaohV3Factory,
+      decodeStateMultiCallResultWithRelativeBitmaps:
+        decodeStateMultiCallResultWithRelativeBitmapsForPharaohV3,
+      uniswapMulticall: '0xf296bb0EAeAB6703d876b1BFe9d5693eF302B855',
+      chunksCount: 10,
+      initRetryFrequency: 10,
+      initHash:
+        '0xf0909675090b07c9cd0ac7eeb585c1c3133319afff4f3c82b6db8de548e77165',
+      subgraphURL:
+        'https://avalanchev2.kingdomsubgraph.com/subgraphs/name/pharaoh-v3-pruned',
+    },
+  },
   AerodromeSlipstream: {
     [Network.BASE]: {
-      factory: '0x5e7BB104d84c7CB9B682AaC2F3d509f5F406809A',
+      factory: '0xaDe65c38CD4849aDBA595a4323a8C7DdfE89716a',
       quoter: '0x254cF9E1E6e233aa1AC962CB9B05b2cfeAaE15b0',
-      router: '0x1b2b6cE813b99b840Fe632c63bcA5394938Ef01e',
+      router: '0xcbBb8035cAc7D4B3Ca7aBb74cF7BdF900215Ce0D',
       supportedFees: SUPPORTED_FEES,
-      tickSpacings: [1n, 10n, 50n, 100n, 200n, 2000n],
+      tickSpacings: [1n, 10n, 50n, 100n, 200n, 500n, 2000n],
       tickSpacingsToFees: {
         '1': 100n,
         '10': 500n,
         '50': 500n,
         '100': 500n,
         '200': 3000n,
+        '500': 10000n,
         '2000': 10000n,
       },
       stateMulticall: '0x736518161516c1cfBD5bf5e7049FCBDC9b933987',
@@ -469,7 +506,7 @@ export const UniswapV3Config: DexConfigMap<DexParams> = {
       uniswapMulticall: '0x091e99cb1C49331a94dD62755D168E941AbD0693',
       chunksCount: 10,
       initRetryFrequency: 10,
-      initHash: '0xeC8E5342B19977B4eF8892e02D8DAEcfa1315831', // pool implementation address from factory contract is used instead of initHash here
+      initHash: '0x942e97a4c6FdC38B4CD1c0298D37d81fDD8E5A16', // pool implementation address from factory contract is used instead of initHash here
       subgraphURL: 'GENunSHWLBXm59mBSgPzQ8metBEp9YDfdqwFr91Av1UM',
     },
   },

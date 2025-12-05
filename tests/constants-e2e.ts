@@ -1822,6 +1822,10 @@ export const Tokens: {
       address: `0x60a3e35cc302bfa44cb288bc5a4f316fdb1adb42`,
       decimals: 6,
     },
+    rETH: {
+      address: '0xB6fe221Fe9EeF5aBa221c348bA20A1Bf5e73624c',
+      decimals: 18,
+    },
   },
   [Network.PLASMA]: {
     XPL: { address: ETHER_ADDRESS, decimals: 18 },
