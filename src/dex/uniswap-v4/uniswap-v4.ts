@@ -15,7 +15,12 @@ import { getDexKeysWithNetwork, isETHAddress } from '../../utils';
 import { IDex } from '../idex';
 import { SimpleExchange } from '../simple-exchange';
 import { UniswapV4Config, UniswapV4PoolsList } from './config';
-import { Pool, PoolPairsInfo, UniswapV4Data } from './types';
+import {
+  Pool,
+  PoolPairsInfo,
+  SubgraphConnectorPool,
+  UniswapV4Data,
+} from './types';
 import { BytesLike } from 'ethers';
 import * as CALLDATA_GAS_COST from '../../calldata-gas-cost';
 import QuoterAbi from '../../abi/uniswap-v4/quoter.abi.json';
@@ -186,6 +191,7 @@ export class UniswapV4 extends SimpleExchange implements IDex<UniswapV4Data> {
 
       const fromAddress = from.address.toLowerCase();
       const poolCurrency0 = pool.key.currency0;
+      const hasHook = pool.key.hooks.toLowerCase() !== NULL_ADDRESS;
 
       const isFromEth = isETHAddress(fromAddress);
       const isFromWeth = fromAddress === this.wethAddress;
@@ -208,11 +214,13 @@ export class UniswapV4 extends SimpleExchange implements IDex<UniswapV4Data> {
       const poolState = (await eventPool?.getState(blockNumber)) || null;
 
       let prices: bigint[] | null;
-      if (poolState !== null && poolState.isValid) {
+      if (!hasHook && poolState !== null && poolState.isValid) {
         prices = this._getOutputs(pool, poolState, amounts, zeroForOne, side);
       } else {
         this.logger.warn(
-          `${this.dexKey}-${this.network}: pool ${poolId} state was not found...falling back to rpc`,
+          `${this.dexKey}-${this.network}: pool ${poolId} state ${
+            poolState?.isValid ? 'has hook' : 'was not found'
+          }...falling back to rpc`,
         );
         prices = await this.queryPriceFromRpc(
           zeroForOne,
@@ -332,14 +340,46 @@ export class UniswapV4 extends SimpleExchange implements IDex<UniswapV4Data> {
 
     const poolIds = UniswapV4PoolsList[this.network]?.map(p => p.id);
 
-    const { pools0, pools1 } = await queryAvailablePoolsForToken(
-      this.dexHelper,
-      this.logger,
-      this.dexKey,
-      UniswapV4Config[this.dexKey][this.network].subgraphURL,
-      tokenAddress,
-      limit,
-      poolIds,
+    const hooksToQuery = [
+      NULL_ADDRESS,
+      ...(UniswapV4Config[this.dexKey][this.network].supportedHooks ?? []),
+    ].map(hook => hook.toLowerCase());
+
+    const poolsResults = await Promise.all(
+      hooksToQuery.map(hook =>
+        queryAvailablePoolsForToken(
+          this.dexHelper,
+          this.logger,
+          this.dexKey,
+          UniswapV4Config[this.dexKey][this.network].subgraphURL,
+          tokenAddress,
+          limit,
+          poolIds,
+          hook,
+        ).catch(err => {
+          this.logger.error(
+            `Error_${this.dexKey}_Subgraph: couldn't fetch pools for hook ${hook}: ${err}`,
+          );
+          return { pools0: [], pools1: [] };
+        }),
+      ),
+    );
+
+    const pools0 = Object.values(
+      poolsResults
+        .flatMap(res => res.pools0)
+        .reduce<Record<string, SubgraphConnectorPool>>((acc, pool) => {
+          if (!acc[pool.id]) acc[pool.id] = pool;
+          return acc;
+        }, {}),
+    );
+    const pools1 = Object.values(
+      poolsResults
+        .flatMap(res => res.pools1)
+        .reduce<Record<string, SubgraphConnectorPool>>((acc, pool) => {
+          if (!acc[pool.id]) acc[pool.id] = pool;
+          return acc;
+        }, {}),
     );
 
     if (!(pools0 || pools1)) {

@@ -1,6 +1,7 @@
 import { DexConfigMap } from '../../types';
 import { Network } from '../../constants';
 import { DexParams, SubgraphPool } from './types';
+import { ARENA_HOOK } from './hooks';
 
 export const UniswapV4Config: DexConfigMap<DexParams> = {
   UniswapV4: {
@@ -53,6 +54,7 @@ export const UniswapV4Config: DexConfigMap<DexParams> = {
       router: '0x94b75331ae8d42c1b61065089b7d48fe14aa73b7',
       stateView: '0xc3c9e198c735a4b97e3e683f391ccbdd60b69286',
       stateMulticall: '0xf03feb5d6b26a68a773f1a77d7880fc5bdcc0581',
+      supportedHooks: [ARENA_HOOK.address],
     },
     [Network.BSC]: {
       poolManager: '0x28e2ea090877bf75740558f6bfb36a5ffee9e9df',

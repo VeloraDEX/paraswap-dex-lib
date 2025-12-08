@@ -59,6 +59,7 @@ export class UniswapV4PoolManager extends StatefulEventSubscriber<PoolManagerSta
   private wethAddress: string;
 
   private poolsCacheKey = 'pools_cache';
+  private supportedHooks: string[];
 
   constructor(
     readonly dexHelper: IDexHelper,
@@ -86,6 +87,12 @@ export class UniswapV4PoolManager extends StatefulEventSubscriber<PoolManagerSta
       this.dexHelper.config.data.wrappedNativeTokenAddress.toLowerCase();
 
     this.logDecoder = (log: Log) => this.poolManagerIface.parseLog(log);
+
+    this.supportedHooks = [
+      NULL_ADDRESS,
+      ...(this.config.supportedHooks?.map(hook => hook.toLowerCase()) ?? []),
+    ];
+    this.poolsCacheKey = `pools_cache_${this.supportedHooks.join('_')}`;
 
     // Add handlers
     this.handlers['Initialize'] = this.handleInitializeEvent.bind(this);
@@ -220,7 +227,9 @@ export class UniswapV4PoolManager extends StatefulEventSubscriber<PoolManagerSta
     const staticPoolsList = UniswapV4PoolsList[this.network];
 
     if (staticPoolsList) {
-      return staticPoolsList;
+      return staticPoolsList.filter(pool =>
+        this.isHookSupported(pool.hooks.toLowerCase()),
+      );
     }
 
     const cachedPoolsRaw = await this.dexHelper.cache.getAndCacheLocally(
@@ -255,23 +264,11 @@ export class UniswapV4PoolManager extends StatefulEventSubscriber<PoolManagerSta
 
     try {
       const defaultPerPageLimit = 1000;
-      let curPage = 0;
+      const hooksToQuery = this.supportedHooks;
 
-      let currentSubgraphPools: SubgraphPool[] =
-        await queryOnePageForAllAvailablePoolsFromSubgraph(
-          this.dexHelper,
-          this.logger,
-          this.parentName,
-          this.config.subgraphURL,
-          blockNumber,
-          curPage * defaultPerPageLimit,
-          defaultPerPageLimit,
-        );
-      pools = pools.concat(currentSubgraphPools);
-
-      while (currentSubgraphPools.length === defaultPerPageLimit) {
-        curPage++;
-        currentSubgraphPools =
+      for (const hook of hooksToQuery) {
+        let curPage = 0;
+        let currentSubgraphPools: SubgraphPool[] =
           await queryOnePageForAllAvailablePoolsFromSubgraph(
             this.dexHelper,
             this.logger,
@@ -280,9 +277,26 @@ export class UniswapV4PoolManager extends StatefulEventSubscriber<PoolManagerSta
             blockNumber,
             curPage * defaultPerPageLimit,
             defaultPerPageLimit,
+            hook,
           );
-
         pools = pools.concat(currentSubgraphPools);
+
+        while (currentSubgraphPools.length === defaultPerPageLimit) {
+          curPage++;
+          currentSubgraphPools =
+            await queryOnePageForAllAvailablePoolsFromSubgraph(
+              this.dexHelper,
+              this.logger,
+              this.parentName,
+              this.config.subgraphURL,
+              blockNumber,
+              curPage * defaultPerPageLimit,
+              defaultPerPageLimit,
+              hook,
+            );
+
+          pools = pools.concat(currentSubgraphPools);
+        }
       }
 
       if (this.config.skipPoolsWithUnconventionalFees) {
@@ -300,6 +314,15 @@ export class UniswapV4PoolManager extends StatefulEventSubscriber<PoolManagerSta
         pools.filter(p => !cachedPools.find(cp => cp.id === p.id)),
       );
     }
+
+    const dedupedPools: Record<string, SubgraphPool> = {};
+    pools.forEach(pool => {
+      if (!this.isHookSupported(pool.hooks.toLowerCase())) return;
+      if (!dedupedPools[pool.id]) {
+        dedupedPools[pool.id] = pool;
+      }
+    });
+    pools = Object.values(dedupedPools);
 
     // always refresh pools in cache, even when subgraph queries failed
     // so next time we can use previously cached pools
@@ -327,9 +350,10 @@ export class UniswapV4PoolManager extends StatefulEventSubscriber<PoolManagerSta
     const sqrtPriceX96 = BigInt(event.args.sqrtPriceX96);
     const tick = parseInt(event.args.tick);
 
-    if (hooks !== NULL_ADDRESS) {
+    const hooksLower = hooks.toLowerCase();
+    if (!this.isHookSupported(hooksLower)) {
       this.logger.warn(
-        `Pool ${id} has hooks ${hooks}, which is not supported yet. Skipping.`,
+        `Pool ${id} has hooks ${hooks}, which is not supported. Skipping.`,
       );
       return {};
     }
@@ -504,5 +528,9 @@ export class UniswapV4PoolManager extends StatefulEventSubscriber<PoolManagerSta
     });
 
     return poolStates;
+  }
+
+  private isHookSupported(hook: string): boolean {
+    return this.supportedHooks.includes(hook.toLowerCase());
   }
 }

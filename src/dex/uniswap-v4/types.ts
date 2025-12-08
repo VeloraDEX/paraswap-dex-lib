@@ -109,6 +109,7 @@ export type DexParams = {
   stateView: string;
   skipPoolsWithUnconventionalFees?: boolean;
   stateMulticall: string;
+  supportedHooks?: Address[];
 };
 
 export type PoolKey = {
