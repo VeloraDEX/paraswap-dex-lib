@@ -1,6 +1,6 @@
 import { ethers } from 'ethers';
 import { DexExchangeBuildParam } from '../types';
-import { OptimalRate } from '@paraswap/core';
+import { OptimalRate, OptimalRoute } from '@paraswap/core';
 import { isETHAddress } from '../utils';
 import { DepositWithdrawReturn } from '../dex/weth/types';
 import { Executors, Flag, SpecialDex } from './types';
@@ -40,7 +40,7 @@ export class Executor01BytecodeBuilder extends ExecutorBytecodeBuilder<
    * case 2: check destToken balance after swap
    */
   protected buildSimpleSwapFlags(
-    priceRoute: OptimalRate,
+    routes: OptimalRoute[],
     exchangeParams: DexExchangeBuildParam[],
     routeIndex: number,
     swapIndex: number,
@@ -48,8 +48,7 @@ export class Executor01BytecodeBuilder extends ExecutorBytecodeBuilder<
     exchangeParamIndex: number,
     maybeWethCallData?: DepositWithdrawReturn,
   ): { dexFlag: Flag; approveFlag: Flag } {
-    const { srcToken, destToken } =
-      priceRoute.bestRoute[routeIndex].swaps[swapIndex];
+    const { srcToken, destToken } = routes[routeIndex].swaps[swapIndex];
     const isEthSrc = isETHAddress(srcToken);
     const isEthDest = isETHAddress(destToken);
 
@@ -126,7 +125,7 @@ export class Executor01BytecodeBuilder extends ExecutorBytecodeBuilder<
    */
   // Executor01 doesn't support mega swap routes, flags are built for multi swap routes only here
   protected buildMultiMegaSwapFlags(
-    priceRoute: OptimalRate,
+    routes: OptimalRoute[],
     exchangeParams: DexExchangeBuildParam[],
     routeIndex: number,
     swapIndex: number,
@@ -135,7 +134,7 @@ export class Executor01BytecodeBuilder extends ExecutorBytecodeBuilder<
     maybeWethCallData?: DepositWithdrawReturn,
   ): { dexFlag: Flag; approveFlag: Flag } {
     // same as for Executor02 multi flags, except forceBalanceOfCheck
-    const swap = priceRoute.bestRoute[routeIndex].swaps[swapIndex];
+    const swap = routes[routeIndex].swaps[swapIndex];
     const { srcToken, destToken } = swap;
     const exchangeParam = exchangeParams[exchangeParamIndex];
     const {
@@ -148,8 +147,7 @@ export class Executor01BytecodeBuilder extends ExecutorBytecodeBuilder<
       preSwapUnwrapCalldata,
     } = exchangeParam;
 
-    const isLastSwap =
-      swapIndex === priceRoute.bestRoute[routeIndex].swaps.length - 1;
+    const isLastSwap = swapIndex === routes[routeIndex].swaps.length - 1;
     const isEthSrc = isETHAddress(srcToken);
     const isEthDest = isETHAddress(destToken);
 
@@ -226,21 +224,20 @@ export class Executor01BytecodeBuilder extends ExecutorBytecodeBuilder<
   protected buildSingleSwapCallData(
     params: SingleSwapCallDataParams<Executor01SingleSwapCallDataParams>,
   ): string {
-    const { priceRoute, index, exchangeParams, flags, maybeWethCallData } =
-      params;
+    const { routes, index, exchangeParams, flags, maybeWethCallData } = params;
 
     let swapCallData = '';
-    const swap = priceRoute.bestRoute[0].swaps[index];
+    const swap = routes[0].swaps[index];
     const curExchangeParam = exchangeParams[index];
 
     const dexCallData = this.buildDexCallData({
-      priceRoute,
+      routes,
       routeIndex: 0,
       swapIndex: index,
       swapExchangeIndex: 0,
       exchangeParams,
       exchangeParamIndex: index,
-      isLastSwap: index === priceRoute.bestRoute[0].swaps.length - 1,
+      isLastSwap: index === routes[0].swaps.length - 1,
       flag: flags.dexes[index],
     });
 
@@ -345,7 +342,7 @@ export class Executor01BytecodeBuilder extends ExecutorBytecodeBuilder<
     params: DexCallDataParams<Executor01DexCallDataParams>,
   ): string {
     const {
-      priceRoute,
+      routes,
       exchangeParamIndex,
       exchangeParams,
       routeIndex,
@@ -358,7 +355,7 @@ export class Executor01BytecodeBuilder extends ExecutorBytecodeBuilder<
     const checkDestTokenBalanceAfterSwap = flag % 3 === 2;
     const insertFromAmount = flag % 4 === 3 || flag % 4 === 2;
     const exchangeParam = exchangeParams[exchangeParamIndex];
-    const swap = priceRoute.bestRoute[routeIndex].swaps[swapIndex];
+    const swap = routes[routeIndex].swaps[swapIndex];
     let { exchangeData, specialDexFlag } = exchangeParam;
 
     const returnAmountPos =
@@ -424,8 +421,9 @@ export class Executor01BytecodeBuilder extends ExecutorBytecodeBuilder<
     maybeWethCallData?: DepositWithdrawReturn,
   ): string {
     const flags = this.buildFlags(
-      priceRoute,
+      priceRoute.bestRoute,
       exchangeParams,
+      priceRoute.srcToken,
       maybeWethCallData,
     );
 
@@ -434,7 +432,7 @@ export class Executor01BytecodeBuilder extends ExecutorBytecodeBuilder<
         hexConcat([
           acc,
           this.buildSingleSwapCallData({
-            priceRoute,
+            routes: priceRoute.bestRoute,
             exchangeParams,
             index,
             flags,

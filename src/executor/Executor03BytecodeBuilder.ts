@@ -3,6 +3,7 @@ import { DexExchangeBuildParam } from '../types';
 import {
   Address,
   OptimalRate,
+  OptimalRoute,
   OptimalSwap,
   OptimalSwapExchange,
 } from '@paraswap/core';
@@ -52,7 +53,7 @@ export class Executor03BytecodeBuilder extends ExecutorBytecodeBuilder<
    * case 2: check destToken balance after swap
    */
   protected buildSimpleSwapFlags(
-    priceRoute: OptimalRate,
+    routes: OptimalRoute[],
     exchangeParams: DexExchangeBuildParam[],
     routeIndex: number,
     swapIndex: number,
@@ -60,12 +61,12 @@ export class Executor03BytecodeBuilder extends ExecutorBytecodeBuilder<
     exchangeParamIndex: number,
     maybeWethCallData?: DepositWithdrawReturn,
   ): { dexFlag: Flag; approveFlag: Flag } {
-    const { srcToken, destToken } = priceRoute.bestRoute[0].swaps[0];
+    const { srcToken, destToken } = routes[0].swaps[0];
     const isEthSrc = isETHAddress(srcToken);
     const isEthDest = isETHAddress(destToken);
 
     const exchangeParam = exchangeParams[exchangeParamIndex];
-    const swap = priceRoute.bestRoute[0].swaps[0];
+    const swap = routes[0].swaps[0];
 
     const {
       dexFuncHasRecipient,
@@ -129,7 +130,7 @@ export class Executor03BytecodeBuilder extends ExecutorBytecodeBuilder<
   }
 
   protected buildMultiMegaSwapFlags(
-    priceRoute: OptimalRate,
+    routes: OptimalRoute[],
     exchangeParams: DexExchangeBuildParam[],
     routeIndex: number,
     swapIndex: number,
@@ -147,7 +148,7 @@ export class Executor03BytecodeBuilder extends ExecutorBytecodeBuilder<
     params: SingleSwapCallDataParams<Executor03SingleSwapCallDataParams>,
   ): string {
     const {
-      priceRoute,
+      routes,
       exchangeParams,
       index,
       flags,
@@ -162,7 +163,7 @@ export class Executor03BytecodeBuilder extends ExecutorBytecodeBuilder<
     const curExchangeParam = exchangeParams[index];
 
     const dexCallData = this.buildDexCallData({
-      priceRoute,
+      routes,
       routeIndex: 0,
       swapIndex: 0,
       swapExchangeIndex,
@@ -295,7 +296,7 @@ export class Executor03BytecodeBuilder extends ExecutorBytecodeBuilder<
     params: DexCallDataParams<Executor03DexCallDataParams>,
   ): string {
     const {
-      priceRoute,
+      routes,
       routeIndex,
       swapIndex,
       exchangeParams,
@@ -311,7 +312,7 @@ export class Executor03BytecodeBuilder extends ExecutorBytecodeBuilder<
     const insertAmount = flag % 4 !== 0 && flag % 4 !== 1;
 
     const exchangeParam = exchangeParams[exchangeParamIndex];
-    const swap = priceRoute.bestRoute[routeIndex].swaps[swapIndex];
+    const swap = routes[routeIndex].swaps[swapIndex];
     let { exchangeData, specialDexFlag } = exchangeParam;
 
     exchangeData = this.addTokenAddressToCallData(
@@ -424,8 +425,9 @@ export class Executor03BytecodeBuilder extends ExecutorBytecodeBuilder<
     };
 
     const flags = this.buildFlags(
-      priceRoute,
+      priceRoute.bestRoute,
       orderedExchangeParams.map(e => e.exchangeParam),
+      priceRoute.srcToken,
       maybeWethCallData,
     );
 
@@ -434,7 +436,7 @@ export class Executor03BytecodeBuilder extends ExecutorBytecodeBuilder<
         hexConcat([
           acc,
           this.buildSingleSwapCallData({
-            priceRoute,
+            routes: priceRoute.bestRoute,
             exchangeParams: orderedExchangeParams.map(e => e.exchangeParam),
             swapExchangeIndex: ep.swapExchange.swapExchangeIndex,
             index,

@@ -6,8 +6,8 @@ import { ethers } from 'ethers';
 import {
   Address,
   OptimalRate,
+  OptimalRoute,
   OptimalSwap,
-  OptimalSwapExchange,
 } from '@paraswap/core';
 import { DepositWithdrawReturn } from '../dex/weth/types';
 import { isETHAddress } from '../utils';
@@ -36,7 +36,7 @@ const MAX_UINT48 = BI_MAX_UINT48.toString();
 const MAX_UINT160 = BI_MAX_UINT160.toString();
 
 export type SingleSwapCallDataParams<T> = {
-  priceRoute: OptimalRate;
+  routes: OptimalRoute[];
   exchangeParams: DexExchangeBuildParam[];
   index: number;
   flags: { approves: Flag[]; dexes: Flag[]; wrap: Flag };
@@ -45,7 +45,7 @@ export type SingleSwapCallDataParams<T> = {
 } & T;
 
 export type DexCallDataParams<T> = {
-  priceRoute: OptimalRate;
+  routes: OptimalRoute[];
   routeIndex: number;
   swapIndex: number;
   swapExchangeIndex: number;
@@ -66,7 +66,7 @@ export abstract class ExecutorBytecodeBuilder<S = {}, D = {}> {
   }
 
   protected buildSimpleSwapFlags(
-    priceRoute: OptimalRate,
+    routes: OptimalRoute[],
     exchangeParams: DexExchangeBuildParam[],
     routeIndex: number,
     swapIndex: number,
@@ -85,7 +85,7 @@ export abstract class ExecutorBytecodeBuilder<S = {}, D = {}> {
   }
 
   protected buildMultiMegaSwapFlags(
-    priceRoute: OptimalRate,
+    routes: OptimalRoute[],
     exchangeParams: DexExchangeBuildParam[],
     routeIndex: number,
     swapIndex: number,
@@ -379,12 +379,13 @@ export abstract class ExecutorBytecodeBuilder<S = {}, D = {}> {
   }
 
   protected buildFlags(
-    priceRoute: OptimalRate,
+    routes: OptimalRoute[],
     exchangeParams: DexExchangeBuildParam[],
+    srcToken: string,
     maybeWethCallData?: DepositWithdrawReturn,
   ): { approves: Flag[]; dexes: Flag[]; wrap: Flag } {
-    const isMegaSwap = priceRoute.bestRoute.length > 1;
-    const isMultiSwap = !isMegaSwap && priceRoute.bestRoute[0].swaps.length > 1;
+    const isMegaSwap = routes.length > 1;
+    const isMultiSwap = !isMegaSwap && routes[0].swaps.length > 1;
 
     const buildFlagsMethod =
       isMultiSwap || isMegaSwap
@@ -397,11 +398,11 @@ export abstract class ExecutorBytecodeBuilder<S = {}, D = {}> {
       approves: [],
     };
 
-    priceRoute.bestRoute.map((route, routeIndex) => {
+    routes.map((route, routeIndex) => {
       route.swaps.map((swap, swapIndex) => {
         swap.swapExchanges.map((swapExchange, swapExchangeIndex) => {
           const { dexFlag, approveFlag } = buildFlagsMethod(
-            priceRoute,
+            routes,
             exchangeParams,
             routeIndex,
             swapIndex,
@@ -421,7 +422,7 @@ export abstract class ExecutorBytecodeBuilder<S = {}, D = {}> {
     return {
       ...flags,
       wrap:
-        isETHAddress(priceRoute.srcToken) && maybeWethCallData?.deposit
+        isETHAddress(srcToken) && maybeWethCallData?.deposit
           ? Flag.SEND_ETH_EQUAL_TO_FROM_AMOUNT_DONT_CHECK_BALANCE_AFTER_SWAP // 9
           : Flag.INSERT_FROM_AMOUNT_CHECK_ETH_BALANCE_AFTER_SWAP, // 7
     };
