@@ -166,7 +166,7 @@ export class Executor02BytecodeBuilder extends ExecutorBytecodeBuilder<
     const exchangeParam = exchangeParams[exchangeParamIndex];
 
     const { srcToken, destToken } = swap;
-    const applyVerticalBranching = this.doesSwapNeedToApplyVerticalBranching(
+    const applyVerticalBranching = this.doesSwapNeedToBeAsVerticalBranch(
       priceRoute,
       routeIndex,
       swap,
@@ -329,7 +329,7 @@ export class Executor02BytecodeBuilder extends ExecutorBytecodeBuilder<
         ? exchangeParam.returnAmountPos
         : DEFAULT_RETURN_AMOUNT_POS;
 
-    const applyVerticalBranching = this.doesSwapNeedToApplyVerticalBranching(
+    const applyVerticalBranching = this.doesSwapNeedToBeAsVerticalBranch(
       priceRoute,
       routeIndex,
       swap,
@@ -401,7 +401,7 @@ export class Executor02BytecodeBuilder extends ExecutorBytecodeBuilder<
     );
   }
 
-  private addMultiSwapMetadata(
+  private wrapAsVerticalBranch(
     priceRoute: OptimalRate,
     exchangeParams: DexExchangeBuildParam[],
     callData: string,
@@ -494,7 +494,7 @@ export class Executor02BytecodeBuilder extends ExecutorBytecodeBuilder<
         'bytes',
       ],
       [
-        ZEROS_20_BYTES, // bytes20(0)
+        ZEROS_20_BYTES, // zero address. go to vertical branch, so no call is made
         hexZeroPad(hexlify(hexDataLength(verticalBranchingData)), 4), // dex calldata length
         hexZeroPad(hexlify(fromAmountPos), 2), // fromAmountPos
         hexZeroPad(hexlify(destTokenPos), 2), // destTokenPos
@@ -515,8 +515,6 @@ export class Executor02BytecodeBuilder extends ExecutorBytecodeBuilder<
     flag: Flag,
     isRoot = false,
   ) {
-    const data = this.packVerticalBranchingData(swapCallData);
-
     const destTokenAddrLowered = swap.destToken.toLowerCase();
     const isEthDest = isETHAddress(destTokenAddrLowered);
 
@@ -554,6 +552,9 @@ export class Executor02BytecodeBuilder extends ExecutorBytecodeBuilder<
         );
       }
     }
+
+    // 'bytes28', 'bytes4', 'bytes32', 'bytes32', 'bytes'
+    const data = this.packVerticalBranchingData(swapCallData);
 
     if (
       isEthDest &&
@@ -596,8 +597,8 @@ export class Executor02BytecodeBuilder extends ExecutorBytecodeBuilder<
     prevBranchWasWrapped = false,
     unwrapToSwapMap: { [key: string]: boolean },
     maybeWethCallData?: DepositWithdrawReturn,
-    addMultiSwapMetadata?: boolean,
-    applyVerticalBranching?: boolean,
+    hasMultipleSwapExchanges?: boolean,
+    isMultiOrMegaSwap?: boolean,
   ): string {
     const isSimpleSwap =
       priceRoute.bestRoute.length === 1 &&
@@ -739,12 +740,13 @@ export class Executor02BytecodeBuilder extends ExecutorBytecodeBuilder<
         ]);
       }
 
+      const needUnwrap = isMultiOrMegaSwap && hasMultipleSwapExchanges;
       // unwrap after last swap
       if (
         maybeWethCallData &&
         maybeWethCallData.withdraw &&
-        ((!applyVerticalBranching && isETHAddress(swap.destToken)) ||
-          (applyVerticalBranching &&
+        ((!needUnwrap && isETHAddress(swap.destToken)) ||
+          (needUnwrap &&
             isETHAddress(swap.destToken) &&
             this.anyDexOnSwapDoesntNeedWrapNative(
               priceRoute,
@@ -871,8 +873,9 @@ export class Executor02BytecodeBuilder extends ExecutorBytecodeBuilder<
       ]);
     }
 
-    if (addMultiSwapMetadata) {
-      return this.addMultiSwapMetadata(
+    // if swap has multiple exchanges, then each exchange is executed as part of vertical branching
+    if (hasMultipleSwapExchanges) {
+      return this.wrapAsVerticalBranch(
         priceRoute,
         exchangeParams,
         swapExchangeCallData,
@@ -1146,7 +1149,7 @@ export class Executor02BytecodeBuilder extends ExecutorBytecodeBuilder<
       .every(t => t === false);
   }
 
-  private doesSwapNeedToApplyVerticalBranching(
+  private doesSwapNeedToBeAsVerticalBranch(
     priceRoute: OptimalRate,
     routeIndex: number,
     swap: OptimalSwap,
@@ -1245,7 +1248,7 @@ export class Executor02BytecodeBuilder extends ExecutorBytecodeBuilder<
 
     const { swapExchanges } = swap;
 
-    const applyVerticalBranching = this.doesSwapNeedToApplyVerticalBranching(
+    const applyVerticalBranching = this.doesSwapNeedToBeAsVerticalBranch(
       priceRoute,
       routeIndex,
       swap,
@@ -1277,7 +1280,7 @@ export class Executor02BytecodeBuilder extends ExecutorBytecodeBuilder<
             unwrapToSwapMap,
             maybeWethCallData,
             swap.swapExchanges.length > 1,
-            applyVerticalBranching,
+            isMultiSwap || isMegaSwap,
           ),
         ]);
       },
@@ -1362,17 +1365,8 @@ export class Executor02BytecodeBuilder extends ExecutorBytecodeBuilder<
       '0x',
     );
 
-    const routeDoesntNeedToAddMultiSwapMetadata =
-      route.swaps.length === 1 &&
-      route.swaps[0].swapExchanges.length !== 1 &&
-      !this.doesSwapNeedToApplyVerticalBranching(
-        priceRoute,
-        routeIndex,
-        route.swaps[0],
-      );
-
-    if (isMegaSwap && !routeDoesntNeedToAddMultiSwapMetadata) {
-      return this.addMultiSwapMetadata(
+    if (isMegaSwap) {
+      return this.wrapAsVerticalBranch(
         priceRoute,
         exchangeParams,
         callData,
@@ -1481,6 +1475,8 @@ export class Executor02BytecodeBuilder extends ExecutorBytecodeBuilder<
       '0x',
     );
 
+    // hack to do wrap/unwrap before the priceRoute execution
+    // first make wrap/unwrap, then execute mega swap as vertical branch
     if (isMegaSwap && (needWrapEth || needUnwrapEth)) {
       const lastPriceRoute =
         priceRoute.bestRoute[priceRoute.bestRoute.length - 1];
@@ -1555,7 +1551,7 @@ export class Executor02BytecodeBuilder extends ExecutorBytecodeBuilder<
     }
 
     if (((needWrapEth || needUnwrapEth) && isMegaSwap) || isMultiSwap) {
-      swapsCalldata = this.addMultiSwapMetadata(
+      swapsCalldata = this.wrapAsVerticalBranch(
         priceRoute,
         exchangeParams,
         swapsCalldata,
