@@ -1,30 +1,36 @@
 import { Address } from '../../types';
 
-/**
- * Adapter configuration for a specific swap side
- */
-export interface Adapter {
-  name: string;
-  index: number;
-}
-
-/**
- * Clear swap data passed to Augustus
- */
 export type ClearData = {
-  vault: Address; // Address of the Clear vault
-  router: Address; // Address of ClearSwap contract
+  vault: Address;
+  router: Address;
 };
 
-/**
- * Clear DEX configuration parameters
- */
 export interface DexParams {
-  subgraphURL?: string; // GraphQL endpoint for the Squid indexer
-  factoryAddress: Address; // ClearFactory - manages vaults
-  swapAddress: Address; // ClearSwap - executes swaps
-  oracleAddress: Address; // ClearOracle - provides pricing
-  accessManagerAddress?: Address; // ClearAccessManager - manages permissions
-  poolGasCost?: number; // Estimated gas cost for a swap
-  feeCode: number; // Fee in basis points (if any)
+  subgraphURL?: string;
+  factoryAddress: Address;
+  swapAddress: Address;
+  oracleAddress: Address;
+  accessManagerAddress?: Address;
+  poolGasCost?: number;
+  feeCode: number;
+}
+
+export interface ClearVaultToken {
+  id: string;
+  address: string;
+  symbol: string;
+  decimals: string;
+}
+
+export interface ClearVault {
+  id: string;
+  address: string;
+  tokens: ClearVaultToken[];
+}
+
+export interface PreviewSwapCallInfo {
+  vaultAddress: string;
+  poolIdentifier: string;
+  isUnit: boolean;
+  amountIndex: number;
 }
