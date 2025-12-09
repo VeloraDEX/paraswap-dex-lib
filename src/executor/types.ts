@@ -1,3 +1,5 @@
+import { OptimalSwap } from '@paraswap/core';
+
 export enum Flag {
   SEND_ETH_EQUAL_TO_FROM_AMOUNT_PLUS_INSERT_FROM_AMOUNT_DONT_CHECK_BALANCE_AFTER_SWAP = 18, // // (flag 18 mod 4) = case 2: sendEth equal to fromAmount + insert fromAmount, (flag 18 mod 3) = case 0: don't check balance after swap
   SEND_ETH_EQUAL_TO_FROM_AMOUNT_PLUS_INSERT_FROM_AMOUNT_CHECK_SRC_TOKEN_BALANCE_AFTER_SWAP = 14, // (flag 14 mod 4) = case 2: sendEth equal to fromAmount + insert fromAmount, (flag 14 mod 3) = case 2: case 2: check "srcToken" balance after swap
@@ -43,3 +45,15 @@ export enum RouteExecutionType {
   VERTICAL_BRANCH_HORIZONTAL_SEQUENCE = 4, // multiSwap, megaSwap
   NESTED_VERTICAL_BRANCH_HORIZONTAL_SEQUENCE = 5, // megaSwap
 }
+
+export type RouteSwaps =
+  | {
+      type: 'single-route';
+      percent: number;
+      swaps: OptimalSwap[];
+    }
+  | {
+      type: 'multi-route';
+      percent: number;
+      swaps: (OptimalSwap[] | OptimalSwap[][])[];
+    };

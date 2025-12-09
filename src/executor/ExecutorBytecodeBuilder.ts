@@ -23,7 +23,7 @@ import {
   ZEROS_4_BYTES,
   DISABLED_MAX_UNIT_APPROVAL_TOKENS,
 } from './constants';
-import { Executors, Flag, SpecialDex } from './types';
+import { Executors, Flag, SpecialDex, RouteSwaps } from './types';
 import { MAX_UINT, Network, PERMIT2_ADDRESS } from '../constants';
 import { DexExchangeBuildParam, DexExchangeParam } from '../types';
 import { BI_MAX_UINT160, BI_MAX_UINT48 } from '../bigint-constants';
@@ -105,6 +105,7 @@ export abstract class ExecutorBytecodeBuilder<S = {}, D = {}> {
 
   public abstract buildByteCode(
     priceRoute: OptimalRate,
+    routes: RouteSwaps[],
     exchangeParams: DexExchangeBuildParam[],
     sender: string,
     maybeWethCallData?: DepositWithdrawReturn,

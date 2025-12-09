@@ -9,7 +9,7 @@ import {
   DexExchangeBuildParam,
   DexExchangeParamWithBooleanNeedWrapNative,
 } from '../types';
-import { Executors, Flag, SpecialDex } from './types';
+import { Executors, Flag, RouteSwaps, SpecialDex } from './types';
 import { isETHAddress } from '../utils';
 import { DepositWithdrawReturn } from '../dex/weth/types';
 import {
@@ -1436,6 +1436,7 @@ export class Executor02BytecodeBuilder extends ExecutorBytecodeBuilder<
 
   public buildByteCode(
     priceRoute: OptimalRate,
+    routes: RouteSwaps[],
     exchangeParams: DexExchangeBuildParam[],
     sender: string,
     maybeWethCallData?: DepositWithdrawReturn,

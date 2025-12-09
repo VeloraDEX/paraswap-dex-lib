@@ -9,7 +9,7 @@ import {
 } from '@paraswap/core';
 import { isETHAddress } from '../utils';
 import { DepositWithdrawReturn } from '../dex/weth/types';
-import { Executors, Flag, SpecialDex } from './types';
+import { Executors, Flag, RouteSwaps, SpecialDex } from './types';
 import { BYTES_96_LENGTH } from './constants';
 import {
   DexCallDataParams,
@@ -398,10 +398,15 @@ export class Executor03BytecodeBuilder extends ExecutorBytecodeBuilder<
 
   public buildByteCode(
     priceRoute: OptimalRate,
+    routes: RouteSwaps[],
     exchangeParams: DexExchangeBuildParam[],
     sender: string,
     maybeWethCallData?: DepositWithdrawReturn,
   ): string {
+    if (routes.some(route => route.type !== 'single-route')) {
+      throw new Error(`Executor01BytecodeBuilder doesn't support multi-route`);
+    }
+
     const swap = priceRoute.bestRoute[0].swaps[0];
 
     // as path are executed in parallel, we can sort them in correct order

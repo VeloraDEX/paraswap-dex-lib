@@ -3,7 +3,7 @@ import { OptimalRate } from '@paraswap/core';
 import { isETHAddress } from '../utils';
 import { DepositWithdrawReturn } from '../dex/weth/types';
 import { WethConfig } from '../dex/weth/config';
-import { Executors } from './types';
+import { Executors, RouteSwaps } from './types';
 import { ExecutorBytecodeBuilder } from './ExecutorBytecodeBuilder';
 import { Network } from '../constants';
 
@@ -50,6 +50,7 @@ export class WETHBytecodeBuilder extends ExecutorBytecodeBuilder {
 
   public buildByteCode(
     priceRoute: OptimalRate,
+    routes: RouteSwaps[],
     exchangeParams: DexExchangeBuildParam[],
     sender: string,
     maybeWethCallData?: DepositWithdrawReturn,

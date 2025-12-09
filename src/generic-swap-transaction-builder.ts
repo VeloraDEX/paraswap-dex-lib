@@ -33,7 +33,14 @@ import ERC20ABI from './abi/erc20.json';
 import { ExecutorDetector } from './executor/ExecutorDetector';
 import { ExecutorBytecodeBuilder } from './executor/ExecutorBytecodeBuilder';
 import { IDexTxBuilder } from './dex/idex';
-import { ContractMethod, ParaSwapVersion, SwapSide } from '@paraswap/core';
+import {
+  ContractMethod,
+  OptimalRoute,
+  ParaSwapVersion,
+  SwapSide,
+} from '@paraswap/core';
+import { mergeMultiPriceRoutes } from './executor/utils';
+import { RouteSwaps } from './executor/types';
 
 const {
   utils: { hexlify, hexConcat, hexZeroPad },
@@ -216,8 +223,41 @@ export class GenericSwapTransactionBuilder {
       maybeWethCallData,
     );
 
+    const singleRoutes: OptimalRoute[] = [];
+    const multiRoutes: OptimalRoute[] = [];
+
+    priceRoute.bestRoute.forEach(route => {
+      const isMultiRoute = route.swaps.some(swap => swap.isMergedSwap);
+      if (isMultiRoute) {
+        multiRoutes.push(route);
+      } else {
+        singleRoutes.push(route);
+      }
+    });
+
+    const routes: RouteSwaps[] = [];
+
+    if (singleRoutes.length > 0) {
+      singleRoutes.forEach(route => {
+        routes.push({
+          type: 'single-route',
+          percent: route.percent,
+          swaps: route.swaps,
+        });
+      });
+    }
+
+    if (multiRoutes.length > 0) {
+      routes.push({
+        type: 'multi-route',
+        percent: multiRoutes.reduce((acc, r) => acc + r.percent, 0), // TODO-multi: how save it is to sum percents, considering that these routes are splitted from merged swaps
+        swaps: mergeMultiPriceRoutes(multiRoutes),
+      });
+    }
+
     return bytecodeBuilder.buildByteCode(
       priceRoute,
+      routes,
       buildExchangeParams,
       userAddress,
       maybeWethCallData,
