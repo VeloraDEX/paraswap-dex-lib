@@ -39,8 +39,17 @@ import {
   ParaSwapVersion,
   SwapSide,
 } from '@paraswap/core';
-import { mergeMultiPriceRoutes } from './executor/utils';
-import { RouteSwaps } from './executor/types';
+import {
+  getOriginalRouteSwapIndex,
+  isSameSwap,
+  mergeMultiPriceRoutes,
+} from './executor/utils';
+import {
+  BuildSwap,
+  BuildSwapExchange,
+  RouteBuildSwaps,
+  RouteSwaps,
+} from './executor/types';
 
 const {
   utils: { hexlify, hexConcat, hexZeroPad },
@@ -118,111 +127,7 @@ export class GenericSwapTransactionBuilder {
     );
   }
 
-  protected async buildCalls(
-    priceRoute: OptimalRate,
-    minMaxAmount: string,
-    bytecodeBuilder: ExecutorBytecodeBuilder,
-    userAddress: string,
-  ): Promise<string> {
-    const side = priceRoute.side;
-    const rawDexParams = await Promise.all(
-      priceRoute.bestRoute.flatMap((route, routeIndex) =>
-        route.swaps.flatMap((swap, swapIndex) =>
-          swap.swapExchanges.map(async se => {
-            const dex = this.dexAdapterService.getTxBuilderDexByKey(
-              se.exchange,
-            );
-
-            const executorAddress = bytecodeBuilder.getAddress();
-            const {
-              srcToken,
-              destToken,
-              srcAmount,
-              destAmount,
-              recipient,
-              wethDeposit,
-              wethWithdraw,
-            } = this.getDexCallsParams(
-              priceRoute,
-              routeIndex,
-              swap,
-              swapIndex,
-              se,
-              minMaxAmount,
-              dex,
-              executorAddress,
-            );
-
-            let dexParams = await dex.getDexParam!(
-              srcToken,
-              destToken,
-              side === SwapSide.BUY ? se.srcAmount : srcAmount, // in other case we would not be able to make insert from amount on Ex3
-              destAmount,
-              recipient,
-              se.data,
-              side,
-              {
-                isGlobalSrcToken:
-                  priceRoute.srcToken.toLowerCase() === srcToken.toLowerCase(),
-                isGlobalDestToken:
-                  priceRoute.destToken.toLowerCase() ===
-                  destToken.toLowerCase(),
-              },
-              executorAddress,
-            );
-
-            if (typeof dexParams.needWrapNative === 'function') {
-              dexParams.needWrapNative = dexParams.needWrapNative(
-                priceRoute,
-                swap,
-                se,
-              );
-            }
-
-            return {
-              dexParams: <DexExchangeParamWithBooleanNeedWrapNative>dexParams,
-              wethDeposit,
-              wethWithdraw,
-            };
-          }),
-        ),
-      ),
-    );
-
-    const { exchangeParams, srcAmountWethToDeposit, destAmountWethToWithdraw } =
-      await rawDexParams.reduce<{
-        exchangeParams: DexExchangeParamWithBooleanNeedWrapNative[];
-        srcAmountWethToDeposit: bigint;
-        destAmountWethToWithdraw: bigint;
-      }>(
-        (acc, se) => {
-          acc.srcAmountWethToDeposit += BigInt(se.wethDeposit);
-          acc.destAmountWethToWithdraw += BigInt(se.wethWithdraw);
-          acc.exchangeParams.push(se.dexParams);
-          return acc;
-        },
-        {
-          exchangeParams: [],
-          srcAmountWethToDeposit: 0n,
-          destAmountWethToWithdraw: 0n,
-        },
-      );
-
-    const maybeWethCallData = this.getDepositWithdrawWethCallData(
-      srcAmountWethToDeposit,
-      destAmountWethToWithdraw,
-      side,
-      priceRoute,
-      exchangeParams,
-    );
-
-    const buildExchangeParams = await this.addDexExchangeApproveParams(
-      bytecodeBuilder,
-      priceRoute,
-      exchangeParams,
-      maybeWethCallData,
-    );
-
+  buildRouteSwaps(priceRoute: OptimalRate): RouteSwaps[] {
     const singleRoutes: OptimalRoute[] = [];
     const multiRoutes: OptimalRoute[] = [];
 
@@ -250,10 +155,189 @@ export class GenericSwapTransactionBuilder {
     if (multiRoutes.length > 0) {
       routes.push({
         type: 'multi-route',
-        percent: multiRoutes.reduce((acc, r) => acc + r.percent, 0), // TODO-multi: how save it is to sum percents, considering that these routes are splitted from merged swaps
-        swaps: mergeMultiPriceRoutes(multiRoutes),
+        // TODO-multi: how save it is to sum percents, considering that these routes are splitted from merged swaps
+        percent: multiRoutes.reduce((acc, r) => acc + r.percent, 0),
+        swaps: mergeMultiPriceRoutes(multiRoutes).map(route => {
+          if (priceRoute.mergedSwaps?.length === 0) {
+            throw new Error('Merged swaps are missing in price route');
+          }
+
+          if (route.every(swaps => Array.isArray(swaps))) {
+            // swaps from multi-route should not be modified
+            return route;
+          }
+
+          // swaps from single-route should be replaced from priceRoute.mergedSwaps
+          return route.map(swap => {
+            const mergedSwap = priceRoute.mergedSwaps?.find(merSwap =>
+              isSameSwap(merSwap, swap),
+            );
+
+            if (!mergedSwap) {
+              throw new Error(
+                `Merged swap not found for ${swap.srcToken} -> ${swap.destToken}`,
+              );
+            }
+
+            return mergedSwap;
+          });
+        }),
       });
     }
+
+    return routes;
+  }
+
+  buildSwapExchange = async (
+    priceRoute: OptimalRate,
+    swap: OptimalSwap,
+    se: OptimalSwapExchange<any>,
+    minMaxAmount: string,
+    side: SwapSide,
+    bytecodeBuilder: ExecutorBytecodeBuilder,
+  ): Promise<BuildSwapExchange<any>> => {
+    const { swapIndex, routeIndex } = getOriginalRouteSwapIndex(
+      priceRoute,
+      swap,
+    )!;
+
+    const dex = this.dexAdapterService.getTxBuilderDexByKey(se.exchange);
+    const executorAddress = bytecodeBuilder.getAddress();
+
+    const {
+      srcToken,
+      destToken,
+      srcAmount,
+      destAmount,
+      recipient,
+      wethDeposit,
+      wethWithdraw,
+    } = this.getDexCallsParams(
+      priceRoute,
+      routeIndex,
+      swap,
+      swapIndex,
+      se,
+      minMaxAmount,
+      dex,
+      executorAddress,
+    );
+
+    let dexParams = await dex.getDexParam!(
+      srcToken,
+      destToken,
+      side === SwapSide.BUY ? se.srcAmount : srcAmount, // in other case we would not be able to make insert from amount on Ex3
+      destAmount,
+      recipient,
+      se.data,
+      side,
+      {
+        isGlobalSrcToken:
+          priceRoute.srcToken.toLowerCase() === srcToken.toLowerCase(),
+        isGlobalDestToken:
+          priceRoute.destToken.toLowerCase() === destToken.toLowerCase(),
+      },
+      executorAddress,
+    );
+
+    if (typeof dexParams.needWrapNative === 'function') {
+      dexParams.needWrapNative = dexParams.needWrapNative(priceRoute, swap, se);
+    }
+
+    return {
+      ...se,
+      dexParams: <DexExchangeParamWithBooleanNeedWrapNative>dexParams,
+      wethDeposit,
+      wethWithdraw,
+    };
+  };
+
+  protected async buildCalls(
+    priceRoute: OptimalRate,
+    minMaxAmount: string,
+    bytecodeBuilder: ExecutorBytecodeBuilder,
+    userAddress: string,
+  ): Promise<string> {
+    const side = priceRoute.side;
+    const routes = this.buildRouteSwaps(priceRoute);
+
+    const buildSwap = async (swap: OptimalSwap): Promise<BuildSwap> => ({
+      ...swap,
+      swapExchanges: await Promise.all(
+        swap.swapExchanges.map(se =>
+          this.buildSwapExchange(
+            priceRoute,
+            swap,
+            se,
+            minMaxAmount,
+            side,
+            bytecodeBuilder,
+          ),
+        ),
+      ),
+    });
+
+    const buildSwaps = async (
+      routeSwaps: RouteSwaps['swaps'],
+    ): Promise<(BuildSwap | BuildSwap[] | BuildSwap[][])[]> =>
+      Promise.all(
+        routeSwaps.map(async swaps => {
+          if (Array.isArray(swaps)) {
+            return Promise.all(
+              swaps.map(async innerRouteSwaps =>
+                Array.isArray(innerRouteSwaps)
+                  ? Promise.all(innerRouteSwaps.map(buildSwap))
+                  : buildSwap(innerRouteSwaps),
+              ),
+            ) as Promise<BuildSwap[] | BuildSwap[][]>;
+          }
+          return buildSwap(swaps);
+        }),
+      );
+
+    const routesWithBuild: RouteBuildSwaps[] = (await Promise.all(
+      routes.map(async route => ({
+        ...route,
+        swaps: await buildSwaps(route.swaps), // TODO-multi: refactor
+      })),
+    )) as RouteBuildSwaps[];
+
+    const allBuildSwaps = routesWithBuild
+      .flatMap(route => route.swaps as unknown as BuildSwap[])
+      .flat(3) as BuildSwap[];
+
+    const flatSwapExchanges = allBuildSwaps.flatMap(swap => swap.swapExchanges);
+
+    const { srcAmountWethToDeposit, destAmountWethToWithdraw } =
+      flatSwapExchanges.reduce(
+        (acc, se) => {
+          acc.srcAmountWethToDeposit += se.wethDeposit;
+          acc.destAmountWethToWithdraw += se.wethWithdraw;
+          return acc;
+        },
+        {
+          srcAmountWethToDeposit: 0n,
+          destAmountWethToWithdraw: 0n,
+        },
+      );
+
+    // TODO-multi: can exchange params order be affected by this update for single-route routes??
+    const exchangeParams = flatSwapExchanges.map(se => se.dexParams);
+
+    const maybeWethCallData = this.getDepositWithdrawWethCallData(
+      srcAmountWethToDeposit,
+      destAmountWethToWithdraw,
+      side,
+      priceRoute,
+      exchangeParams,
+    );
+
+    const buildExchangeParams = await this.addDexExchangeApproveParams(
+      bytecodeBuilder,
+      priceRoute,
+      exchangeParams,
+      maybeWethCallData,
+    );
 
     return bytecodeBuilder.buildByteCode(
       priceRoute,

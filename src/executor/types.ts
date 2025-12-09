@@ -1,4 +1,5 @@
-import { OptimalSwap } from '@paraswap/core';
+import { OptimalSwap, OptimalSwapExchange } from '@paraswap/core';
+import { DexExchangeParamWithBooleanNeedWrapNative } from '../types';
 
 export enum Flag {
   SEND_ETH_EQUAL_TO_FROM_AMOUNT_PLUS_INSERT_FROM_AMOUNT_DONT_CHECK_BALANCE_AFTER_SWAP = 18, // // (flag 18 mod 4) = case 2: sendEth equal to fromAmount + insert fromAmount, (flag 18 mod 3) = case 0: don't check balance after swap
@@ -46,14 +47,27 @@ export enum RouteExecutionType {
   NESTED_VERTICAL_BRANCH_HORIZONTAL_SEQUENCE = 5, // megaSwap
 }
 
-export type RouteSwaps =
+export type GenericRouteSwaps<TSwap> =
   | {
       type: 'single-route';
       percent: number;
-      swaps: OptimalSwap[];
+      swaps: TSwap[];
     }
   | {
       type: 'multi-route';
       percent: number;
-      swaps: (OptimalSwap[] | OptimalSwap[][])[];
+      swaps: (TSwap[] | TSwap[][])[];
     };
+
+export type RouteSwaps = GenericRouteSwaps<OptimalSwap>;
+export type RouteBuildSwaps = GenericRouteSwaps<BuildSwap>;
+
+export type BuildSwapExchange<T> = OptimalSwapExchange<T> & {
+  dexParams: DexExchangeParamWithBooleanNeedWrapNative;
+  wethDeposit: bigint;
+  wethWithdraw: bigint;
+};
+
+export type BuildSwap = OptimalSwap & {
+  swapExchanges: BuildSwapExchange<any>[];
+};

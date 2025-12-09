@@ -1,6 +1,11 @@
 import { FunctionFragment, Interface } from '@ethersproject/abi';
 import { RETURN_AMOUNT_POS_0, RETURN_AMOUNT_POS_32 } from './constants';
-import { OptimalSwap, OptimalRoute, OptimalSwapExchange } from '@paraswap/core';
+import {
+  OptimalSwap,
+  OptimalRoute,
+  OptimalSwapExchange,
+  OptimalRate,
+} from '@paraswap/core';
 
 export const extractReturnAmountPosition = (
   iface: Interface,
@@ -197,4 +202,27 @@ export function mergeMultiPriceRoutes(routes: OptimalRoute[]): MultiRouteSwaps {
 
   // Combine prefix, middle, and suffix
   return [...result, ...suffixResult];
+}
+
+// for the merged swaps in multi-route, it returns the first appearance
+// but should be fine
+export function getOriginalRouteSwapIndex(
+  priceRoute: OptimalRate,
+  swapToFind: OptimalSwap,
+): { routeIndex: number; swapIndex: number } | null {
+  for (
+    let routeIndex = 0;
+    routeIndex < priceRoute.bestRoute.length;
+    routeIndex++
+  ) {
+    const route = priceRoute.bestRoute[routeIndex];
+    for (let swapIndex = 0; swapIndex < route.swaps.length; swapIndex++) {
+      const swap = route.swaps[swapIndex];
+      if (isSameSwap(swap, swapToFind)) {
+        return { routeIndex, swapIndex };
+      }
+    }
+  }
+
+  return null;
 }
