@@ -5,10 +5,10 @@ import { Network } from '../../constants';
 export const ClearConfig: DexConfigMap<DexParams> = {
   clear: {
     [Network.MAINNET]: {
-      factoryAddress: '0xcEAc924839ba0ef49613d8FF10609434939bEb5b',
-      swapAddress: '0xC12247E25bf2ec1a1d43eFa7b5f9e6b579B32F40',
-      oracleAddress: '0xA84933DEE05514258E4C2b54468389539567634F',
-      accessManagerAddress: '0x42d3E0D351cD3E8aE25b1632611d4411E8d801D9',
+      factoryAddress: '0x8bF266ED803e474AE7Bf09ADB5ba2566c489223d',
+      swapAddress: '0xeb5AD3D93E59eFcbC6934caD2B48EB33BAf29745',
+      oracleAddress: '0x049ad7Ff0c6BdbaB86baf4b1A5a5cA975e234FCA',
+      accessManagerAddress: '0x20a22791923E69f0f27166B59A12aF01cA4E4AF8',
       subgraphURL: 'https://api-eth-mainnet-clear.trevee.xyz/graphql',
       poolGasCost: 150_000,
       feeCode: 0,
