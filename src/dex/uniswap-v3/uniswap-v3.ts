@@ -419,6 +419,7 @@ export class UniswapV3
       this.cacheStateKey,
       this.config.initHash,
       tickSpacing,
+      this.config.deployer,
     );
   }
 
@@ -1364,7 +1365,7 @@ export class UniswapV3
       .slice(0, limit);
   }
 
-  private async _getPoolBalances(
+  protected async _getPoolBalances(
     pools: [pool: string, token0: string, token1: string][],
   ): Promise<[balanceToken0: bigint | null, balanceToken1: bigint | null][]> {
     const callData: MultiCallParams<bigint>[] = pools
@@ -1498,7 +1499,7 @@ export class UniswapV3
     }
   }
 
-  private async _querySubgraph(
+  protected async _querySubgraph(
     query: string,
     variables: Object,
     timeout = 30000,

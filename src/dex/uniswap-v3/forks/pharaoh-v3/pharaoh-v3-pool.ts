@@ -1,7 +1,6 @@
-import { UniswapV3EventPool } from '../../uniswap-v3-pool';
-import { Interface } from 'ethers/lib/utils';
-import VelodromeSlipstreamPoolABI from '../../../../abi/velodrome-slipstream/VelodromeSlipstreamPool.abi.json';
-import VelodromeSlipstreamFactoryABI from '../../../../abi/velodrome-slipstream/VelodromeSlipstreamFactory.abi.json';
+import { ethers } from 'ethers';
+import { VelodromeSlipstreamEventPool } from '../velodrome-slipstream/velodrome-slipstream-pool';
+import { Address } from '@paraswap/core';
 import { MultiCallParams } from '../../../../lib/multi-wrapper';
 import {
   DecodedStateMultiCallResultWithRelativeBitmaps,
@@ -9,34 +8,20 @@ import {
 } from '../../types';
 import { uint24ToBigInt, uint256ToBigInt } from '../../../../lib/decoders';
 import { decodeStateMultiCallResultWithRelativeBitmaps } from './utils';
-import { Address, BlockHeader, Log } from '../../../../types';
-import { assert, DeepReadonly } from 'ts-essentials';
+import { Interface } from '@ethersproject/abi';
+import PharaohV3PoolABI from '../../../../abi/pharaoh-v3/PharaohV3Pool.abi.json';
+import PharaohV3FactoryABI from '../../../../abi/pharaoh-v3/PharaohV3Factory.abi.json';
+import { assert } from 'ts-essentials';
 import { _reduceTickBitmap, _reduceTicks } from '../../contract-math/utils';
-import { bigIntify } from '../../../../utils';
 import { TickBitMap } from '../../contract-math/TickBitMap';
-import { ethers } from 'ethers';
+import { bigIntify } from '../../../../utils';
 
-export class VelodromeSlipstreamEventPool extends UniswapV3EventPool {
-  public readonly poolIface = new Interface(VelodromeSlipstreamPoolABI);
-  public readonly factoryIface = new Interface(VelodromeSlipstreamFactoryABI);
+const PHARAOH_V3_POOL_INIT_CODE_HASH =
+  '0x892f127ed4b26ca352056c8fb54585a3268f76f97fdd84d5836ef4bda8d8c685';
 
-  protected async processBlockLogs(
-    state: DeepReadonly<PoolState>,
-    logs: Readonly<Log>[],
-    blockHeader: Readonly<BlockHeader>,
-  ): Promise<DeepReadonly<PoolState> | null> {
-    const newState = await super.processBlockLogs(state, logs, blockHeader);
-    const fee = await this.getCurrentFee(blockHeader.number);
-
-    if (newState && newState.fee !== fee) {
-      const state = { ...newState };
-      state.fee = fee;
-
-      return state;
-    }
-
-    return newState;
-  }
+export class PharaohV3EventPool extends VelodromeSlipstreamEventPool {
+  public readonly poolIface = new Interface(PharaohV3PoolABI);
+  public readonly factoryIface = new Interface(PharaohV3FactoryABI);
 
   protected async getCurrentFee(blockNumber: number): Promise<bigint> {
     try {
@@ -44,10 +29,8 @@ export class VelodromeSlipstreamEventPool extends UniswapV3EventPool {
         false,
         [
           {
-            target: this.factoryAddress,
-            callData: this.factoryIface.encodeFunctionData('getSwapFee', [
-              this.poolAddress,
-            ]),
+            target: this.poolAddress,
+            callData: this.poolIface.encodeFunctionData('fee', []),
             decodeFunction: uint24ToBigInt,
           },
         ],
@@ -59,7 +42,7 @@ export class VelodromeSlipstreamEventPool extends UniswapV3EventPool {
       }
     } catch (error) {
       this.logger.error(
-        `VelodromeSlipstream: Failed to fetch fee for pool ${this.poolAddress}:`,
+        `PharaohV3: Failed to fetch fee for pool ${this.poolAddress}:`,
         error,
       );
     }
@@ -86,10 +69,8 @@ export class VelodromeSlipstreamEventPool extends UniswapV3EventPool {
           decodeFunction: uint256ToBigInt,
         },
         {
-          target: this.factoryAddress,
-          callData: this.factoryIface.encodeFunctionData('getSwapFee', [
-            this.poolAddress,
-          ]),
+          target: this.poolAddress,
+          callData: this.poolIface.encodeFunctionData('fee', []),
           decodeFunction: uint24ToBigInt,
         },
         {
@@ -130,9 +111,6 @@ export class VelodromeSlipstreamEventPool extends UniswapV3EventPool {
         false,
       );
 
-    // Quite ugly solution, but this is the one that fits to current flow.
-    // I think UniswapV3 callbacks subscriptions are complexified for no reason.
-    // Need to be revisited later
     assert(resState.success, 'Pool does not exist');
 
     const [balance0, balance1, fee, _state] = [
@@ -183,7 +161,7 @@ export class VelodromeSlipstreamEventPool extends UniswapV3EventPool {
         observationIndex: +_state.slot0.observationIndex,
         observationCardinality: +_state.slot0.observationCardinality,
         observationCardinalityNext: +_state.slot0.observationCardinalityNext,
-        feeProtocol: this.feeCode,
+        feeProtocol: bigIntify(_state.slot0.feeProtocol),
       },
       liquidity: bigIntify(_state.liquidity),
       tickSpacing,
@@ -210,37 +188,12 @@ export class VelodromeSlipstreamEventPool extends UniswapV3EventPool {
     implementation: string,
     salt: string,
   ) {
-    const creationCode = [
-      '0x3d602d80600a3d3981f3363d3d373d3d3d363d73', // https://github.com/OpenZeppelin/openzeppelin-contracts/blob/master/contracts/proxy/Clones.sol#L110
-      implementation.replace(/0x/, '').toLowerCase(),
-      '5af43d82803e903d91602b57fd5bf3', // https://github.com/OpenZeppelin/openzeppelin-contracts/blob/master/contracts/proxy/Clones.sol#L108
-    ].join('');
-
-    return ethers.utils.getCreate2Address(
-      factory,
+    const address = ethers.utils.getCreate2Address(
+      this.deployer ?? '',
       salt,
-      ethers.utils.keccak256(creationCode),
+      PHARAOH_V3_POOL_INIT_CODE_HASH,
     ) as Address;
-  }
 
-  protected _computePoolAddress(
-    token0: Address,
-    token1: Address,
-    fee: bigint,
-  ): Address {
-    if (token0 > token1) [token0, token1] = [token1, token0];
-
-    const encodedKey = ethers.utils.keccak256(
-      ethers.utils.defaultAbiCoder.encode(
-        ['address', 'address', 'int24'],
-        [token0, token1, BigInt.asUintN(24, this.tickSpacing!)],
-      ),
-    );
-
-    return this.predictDeterministicAddress(
-      this.factoryAddress,
-      this.poolInitCodeHash, // actually this is pool implementation address
-      encodedKey,
-    );
+    return address;
   }
 }

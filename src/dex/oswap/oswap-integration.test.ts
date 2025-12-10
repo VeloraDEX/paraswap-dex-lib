@@ -288,4 +288,152 @@ describe('OSwap', function () {
       }
     });
   });
+
+  describe('Sonic', () => {
+    const network = Network.SONIC;
+    const dexHelper = new DummyDexHelper(network);
+
+    const tokens = Tokens[network];
+
+    const srcTokenSymbol = 'WS';
+    const destTokenSymbol = 'OS';
+
+    const amountsForSell = [
+      0n,
+      1n * BI_POWS[tokens[srcTokenSymbol].decimals],
+      2n * BI_POWS[tokens[srcTokenSymbol].decimals],
+      3n * BI_POWS[tokens[srcTokenSymbol].decimals],
+      4n * BI_POWS[tokens[srcTokenSymbol].decimals],
+      5n * BI_POWS[tokens[srcTokenSymbol].decimals],
+      6n * BI_POWS[tokens[srcTokenSymbol].decimals],
+      7n * BI_POWS[tokens[srcTokenSymbol].decimals],
+      8n * BI_POWS[tokens[srcTokenSymbol].decimals],
+      9n * BI_POWS[tokens[srcTokenSymbol].decimals],
+      10n * BI_POWS[tokens[srcTokenSymbol].decimals],
+    ];
+
+    const amountsForBuy = [
+      0n,
+      1n * BI_POWS[tokens[destTokenSymbol].decimals],
+      2n * BI_POWS[tokens[destTokenSymbol].decimals],
+      3n * BI_POWS[tokens[destTokenSymbol].decimals],
+      4n * BI_POWS[tokens[destTokenSymbol].decimals],
+      5n * BI_POWS[tokens[destTokenSymbol].decimals],
+      6n * BI_POWS[tokens[destTokenSymbol].decimals],
+      7n * BI_POWS[tokens[destTokenSymbol].decimals],
+      8n * BI_POWS[tokens[destTokenSymbol].decimals],
+      9n * BI_POWS[tokens[destTokenSymbol].decimals],
+      10n * BI_POWS[tokens[destTokenSymbol].decimals],
+    ];
+
+    // Return a blockNumber to use for the tests.
+    // Check that the pool has enough liquidity to run the tests at the current blockNumber.
+    // If not, fallback to a known blockNumber in the past with
+    // high enough liquidity - the on-chain queries will just be a bit slower to execute.
+    async function getBlockNumberForTesting(oswap: OSwap): Promise<number> {
+      const DEFAULT_BLOCK_NUMBER = 41000000;
+
+      blockNumber = await dexHelper.web3Provider.eth.getBlockNumber();
+      const srcToken = Tokens[network][srcTokenSymbol];
+      const destToken = Tokens[network][destTokenSymbol];
+
+      // Get the pool and its state for the given test pair.
+      const pool = oswap.getPoolByTokenPair(srcToken, destToken);
+      if (!pool)
+        throw new Error(
+          `No pool found for pair ${srcTokenSymbol}-${destTokenSymbol}`,
+        );
+
+      const eventPool = oswap.eventPools[pool.id];
+      const state = await eventPool.getStateOrGenerate(blockNumber, true);
+
+      const minBalance =
+        state.balance0 < state.balance1 ? state.balance0 : state.balance1;
+      const maxAmount = [...amountsForSell, ...amountsForBuy].reduce(
+        (max, amount) => (amount > max ? amount : max),
+      );
+      const hasEnoughLiquidity = BigInt(minBalance) > maxAmount;
+
+      if (!hasEnoughLiquidity) {
+        return DEFAULT_BLOCK_NUMBER;
+      }
+      return blockNumber;
+    }
+
+    beforeAll(async () => {
+      oswap = new OSwap(network, dexKey, dexHelper);
+
+      blockNumber = await getBlockNumberForTesting(oswap);
+    });
+
+    it('getPoolIdentifiers and getPricesVolume SELL', async function () {
+      await testPricingOnNetwork(
+        oswap,
+        network,
+        dexKey,
+        blockNumber,
+        srcTokenSymbol,
+        destTokenSymbol,
+        SwapSide.SELL,
+        amountsForSell,
+      );
+    });
+
+    it('getPoolIdentifiers and getPricesVolume BUY', async function () {
+      await testPricingOnNetwork(
+        oswap,
+        network,
+        dexKey,
+        blockNumber,
+        srcTokenSymbol,
+        destTokenSymbol,
+        SwapSide.BUY,
+        amountsForBuy,
+      );
+    });
+
+    it(`getTopPoolsForToken ${srcTokenSymbol}`, async function () {
+      // We have to check without calling initializePricing, because
+      // pool-tracker is not calling that function
+      const newOSwap = new OSwap(network, dexKey, dexHelper);
+      await newOSwap.updatePoolState?.();
+
+      const poolLiquidity = await newOSwap.getTopPoolsForToken(
+        tokens[srcTokenSymbol].address,
+        10,
+      );
+
+      console.log(`${srcTokenSymbol} top pools:`, poolLiquidity);
+
+      if (!newOSwap.hasConstantPriceLargeAmounts) {
+        checkPoolsLiquidity(
+          poolLiquidity,
+          Tokens[network][srcTokenSymbol].address,
+          dexKey,
+        );
+      }
+    });
+
+    it(`getTopPoolsForToken ${destTokenSymbol}`, async function () {
+      // We have to check without calling initializePricing, because
+      // pool-tracker is not calling that function
+      const newOSwap = new OSwap(network, dexKey, dexHelper);
+      await newOSwap.updatePoolState?.();
+
+      const poolLiquidity = await newOSwap.getTopPoolsForToken(
+        tokens[destTokenSymbol].address,
+        10,
+      );
+
+      console.log(`${destTokenSymbol} top pools:`, poolLiquidity);
+
+      if (!newOSwap.hasConstantPriceLargeAmounts) {
+        checkPoolsLiquidity(
+          poolLiquidity,
+          Tokens[network][destTokenSymbol].address,
+          dexKey,
+        );
+      }
+    });
+  });
 });

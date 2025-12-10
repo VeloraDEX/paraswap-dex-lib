@@ -88,4 +88,23 @@ describe('Oswap E2E', () => {
       tokenBAmount,
     );
   });
+
+  describe('Sonic', () => {
+    const network = Network.SONIC;
+
+    const tokenASymbol: string = 'WS';
+    const tokenBSymbol: string = 'OS';
+
+    const tokenAAmount: string = '1000000000000000000';
+    const tokenBAmount: string = '1000000000000000000';
+
+    testForNetwork(
+      network,
+      dexKey,
+      tokenASymbol,
+      tokenBSymbol,
+      tokenAAmount,
+      tokenBAmount,
+    );
+  });
 });

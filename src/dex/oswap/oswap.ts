@@ -154,7 +154,7 @@ export class OSwap extends SimpleExchange implements IDex<OSwapData> {
     const price =
       side === SwapSide.SELL
         ? (amount * rate) / getBigIntPow(36)
-        : (amount * getBigIntPow(36)) / rate;
+        : (amount * getBigIntPow(36)) / rate + 3n;
 
     if (
       checkLiquidity &&
