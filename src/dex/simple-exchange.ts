@@ -30,8 +30,17 @@ import { NeedWrapNativeFunc } from './idex';
  * Here we decide to go with a high enough default so that the local deadline rarely supersedes the global router deadline.
  */
 export const FRIENDLY_LOCAL_DEADLINE = 7 * 24 * 60 * 60;
+
+const currentDateRoundToDay = () => {
+  const now = new Date();
+  now.setUTCHours(0, 0, 0, 0);
+  return now;
+};
+
+const today = currentDateRoundToDay().getTime();
+
 export const getLocalDeadlineAsFriendlyPlaceholder = () =>
-  String(Math.floor(new Date().getTime() / 1000) + FRIENDLY_LOCAL_DEADLINE);
+  String(Math.floor(today / 1000) + FRIENDLY_LOCAL_DEADLINE);
 
 export class SimpleExchange {
   simpleSwapHelper: Interface;
