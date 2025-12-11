@@ -388,8 +388,8 @@ export class DummyDexHelper implements IDexHelper {
       return logger;
     };
     // For testing use only full parts like 1, 2, 3 ETH, not 0.1 ETH etc
-    this.getTokenUSDPrice = async (token, amount) =>
-      Number(amount / BigInt(10 ** token.decimals));
+    this.getTokenUSDPrice = async (token, amount: bigint) =>
+      Number(amount / 10n ** BigInt(token.decimals));
 
     // For testing use only full parts like 1, 2, 3 ETH, not 0.1 ETH etc
     this.getUsdTokenAmounts = async (tokenAmounts: [string, bigint | null][]) =>
