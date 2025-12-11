@@ -188,14 +188,77 @@ export class GenericSwapTransactionBuilder {
     return routes;
   }
 
-  buildSwapExchange = async (
+  async addRouteBuildSwaps(
+    priceRoute: OptimalRate,
+    routes: RouteSwaps[],
+    minMaxAmount: string,
+    side: SwapSide,
+    bytecodeBuilder: ExecutorBytecodeBuilder,
+  ): Promise<RouteBuildSwaps[]> {
+    const buildSwap = async (swap: OptimalSwap): Promise<BuildSwap> => ({
+      ...swap,
+      swapExchanges: await Promise.all(
+        swap.swapExchanges.map(se =>
+          this.buildSwapExchange(
+            priceRoute,
+            swap,
+            se,
+            minMaxAmount,
+            side,
+            bytecodeBuilder,
+          ),
+        ),
+      ),
+    });
+
+    const buildSingleRouteSwaps = (
+      swaps: OptimalSwap[],
+    ): Promise<BuildSwap[]> => Promise.all(swaps.map(buildSwap));
+
+    const isNestedSwaps = (
+      swaps: OptimalSwap[] | OptimalSwap[][],
+    ): swaps is OptimalSwap[][] => Array.isArray(swaps[0]);
+
+    const buildMultiRouteSwaps = (
+      swaps: (OptimalSwap[] | OptimalSwap[][])[],
+    ): Promise<(BuildSwap[] | BuildSwap[][])[]> =>
+      Promise.all(
+        swaps.map((innerSwaps): Promise<BuildSwap[] | BuildSwap[][]> => {
+          if (isNestedSwaps(innerSwaps)) {
+            return Promise.all(
+              innerSwaps.map(s => Promise.all(s.map(buildSwap))),
+            );
+          }
+          return Promise.all(innerSwaps.map(buildSwap));
+        }),
+      );
+
+    const routesWithBuild: RouteBuildSwaps[] = await Promise.all(
+      routes.map(async (route): Promise<RouteBuildSwaps> => {
+        if (route.type === 'single-route') {
+          return {
+            ...route,
+            swaps: await buildSingleRouteSwaps(route.swaps),
+          };
+        }
+        return {
+          ...route,
+          swaps: await buildMultiRouteSwaps(route.swaps),
+        };
+      }),
+    );
+
+    return routesWithBuild;
+  }
+
+  async buildSwapExchange(
     priceRoute: OptimalRate,
     swap: OptimalSwap,
     se: OptimalSwapExchange<any>,
     minMaxAmount: string,
     side: SwapSide,
     bytecodeBuilder: ExecutorBytecodeBuilder,
-  ): Promise<BuildSwapExchange<any>> => {
+  ): Promise<BuildSwapExchange<any>> {
     const { swapIndex, routeIndex } = getOriginalRouteSwapIndex(
       priceRoute,
       swap,
@@ -250,7 +313,7 @@ export class GenericSwapTransactionBuilder {
       wethDeposit,
       wethWithdraw,
     };
-  };
+  }
 
   protected async buildCalls(
     priceRoute: OptimalRate,
@@ -259,52 +322,20 @@ export class GenericSwapTransactionBuilder {
     userAddress: string,
   ): Promise<string> {
     const side = priceRoute.side;
+    // TODO-multi: refactor
     const routes = this.buildRouteSwaps(priceRoute);
 
-    const buildSwap = async (swap: OptimalSwap): Promise<BuildSwap> => ({
-      ...swap,
-      swapExchanges: await Promise.all(
-        swap.swapExchanges.map(se =>
-          this.buildSwapExchange(
-            priceRoute,
-            swap,
-            se,
-            minMaxAmount,
-            side,
-            bytecodeBuilder,
-          ),
-        ),
-      ),
-    });
+    const routesWithBuild = await this.addRouteBuildSwaps(
+      priceRoute,
+      routes,
+      minMaxAmount,
+      side,
+      bytecodeBuilder,
+    );
 
-    const buildSwaps = async (
-      routeSwaps: RouteSwaps['swaps'],
-    ): Promise<(BuildSwap | BuildSwap[] | BuildSwap[][])[]> =>
-      Promise.all(
-        routeSwaps.map(async swaps => {
-          if (Array.isArray(swaps)) {
-            return Promise.all(
-              swaps.map(async innerRouteSwaps =>
-                Array.isArray(innerRouteSwaps)
-                  ? Promise.all(innerRouteSwaps.map(buildSwap))
-                  : buildSwap(innerRouteSwaps),
-              ),
-            ) as Promise<BuildSwap[] | BuildSwap[][]>;
-          }
-          return buildSwap(swaps);
-        }),
-      );
+    const allBuildSwaps = routesWithBuild.map(route => route.swaps).flat(3);
 
-    const routesWithBuild: RouteBuildSwaps[] = (await Promise.all(
-      routes.map(async route => ({
-        ...route,
-        swaps: await buildSwaps(route.swaps), // TODO-multi: refactor
-      })),
-    )) as RouteBuildSwaps[];
-
-    const allBuildSwaps = routesWithBuild
-      .flatMap(route => route.swaps as unknown as BuildSwap[])
-      .flat(3) as BuildSwap[];
+    await this.addDexExchangeApproveParams(bytecodeBuilder, allBuildSwaps);
 
     const flatSwapExchanges = allBuildSwaps.flatMap(swap => swap.swapExchanges);
 
@@ -332,17 +363,10 @@ export class GenericSwapTransactionBuilder {
       exchangeParams,
     );
 
-    const buildExchangeParams = await this.addDexExchangeApproveParams(
-      bytecodeBuilder,
-      priceRoute,
-      exchangeParams,
-      maybeWethCallData,
-    );
-
     return bytecodeBuilder.buildByteCode(
       priceRoute,
       routes,
-      buildExchangeParams,
+      exchangeParams,
       userAddress,
       maybeWethCallData,
     );
@@ -842,42 +866,36 @@ export class GenericSwapTransactionBuilder {
 
   private async addDexExchangeApproveParams(
     bytecodeBuilder: ExecutorBytecodeBuilder,
-    priceRoute: OptimalRate,
-    dexExchangeParams: DexExchangeParamWithBooleanNeedWrapNative[],
-    maybeWethCallData?: DepositWithdrawReturn,
-  ): Promise<DexExchangeBuildParam[]> {
+    swaps: BuildSwap[],
+  ): Promise<BuildSwap[]> {
     const spender = bytecodeBuilder.getAddress();
     const tokenTargetMapping: {
       params: [token: Address, target: Address, permit2: boolean];
-      exchangeParamIndex: number;
+      swapIndex: number;
+      swapExchangeIndex?: number;
     }[] = [];
 
-    let currentExchangeParamIndex = 0;
+    swaps.forEach((swap, swapI) => {
+      swap.swapExchanges.forEach((se, seI) => {
+        const curExchangeParam = se.dexParams;
+        const approveParams = bytecodeBuilder.getApprovalTokenAndTarget(
+          swap,
+          curExchangeParam,
+        );
 
-    priceRoute.bestRoute.flatMap(route =>
-      route.swaps.flatMap(swap =>
-        swap.swapExchanges.map(async se => {
-          const curExchangeParam = dexExchangeParams[currentExchangeParamIndex];
-          const approveParams = bytecodeBuilder.getApprovalTokenAndTarget(
-            swap,
-            curExchangeParam,
-          );
-
-          if (approveParams) {
-            tokenTargetMapping.push({
-              params: [
-                approveParams.token,
-                approveParams.target,
-                !!curExchangeParam.permit2Approval,
-              ],
-              exchangeParamIndex: currentExchangeParamIndex,
-            });
-          }
-
-          currentExchangeParamIndex++;
-        }),
-      ),
-    );
+        if (approveParams) {
+          tokenTargetMapping.push({
+            params: [
+              approveParams.token,
+              approveParams.target,
+              !!curExchangeParam.permit2Approval,
+            ],
+            swapIndex: swapI,
+            swapExchangeIndex: seI,
+          });
+        }
+      });
+    });
 
     const approvals =
       await this.dexAdapterService.dexHelper.augustusApprovals.hasApprovals(
@@ -885,23 +903,23 @@ export class GenericSwapTransactionBuilder {
         tokenTargetMapping.map(t => t.params),
       );
 
-    const dexExchangeBuildParams: DexExchangeBuildParam[] = [
-      ...dexExchangeParams,
-    ];
-
     approvals.forEach((alreadyApproved, index) => {
       if (!alreadyApproved) {
         const [token, target] = tokenTargetMapping[index].params;
-        const exchangeParamIndex = tokenTargetMapping[index].exchangeParamIndex;
-        const curExchangeParam = dexExchangeParams[exchangeParamIndex];
-        dexExchangeBuildParams[exchangeParamIndex] = {
-          ...curExchangeParam,
-          approveData: { token, target },
-        };
+        const swapIndex = tokenTargetMapping[index].swapIndex;
+        const swapExchangeIndex = tokenTargetMapping[index].swapExchangeIndex;
+        if (swapIndex !== undefined && swapExchangeIndex !== undefined) {
+          swaps[swapIndex].swapExchanges[
+            swapExchangeIndex
+          ].dexParams.approveData = {
+            token,
+            target,
+          };
+        }
       }
     });
 
-    return dexExchangeBuildParams;
+    return swaps;
   }
 
   private hasAnyRouteWithEthAndDifferentNeedWrapNative(
