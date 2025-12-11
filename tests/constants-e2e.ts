@@ -1219,6 +1219,10 @@ export const Tokens: {
       address: '0x564a341df6c126f90cf3ecb92120fd7190acb401',
       decimals: 6,
     },
+    WLBOND: {
+      address: '0xd1cb926c6b917ecceda162a432a4d242e777bdc7',
+      decimals: 18,
+    },
   },
   [Network.ARBITRUM]: {
     SEN: {

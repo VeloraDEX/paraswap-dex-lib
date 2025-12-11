@@ -39,6 +39,7 @@ import _ from 'lodash';
 import { UNISWAPV4_EFFICIENCY_FACTOR } from './constants';
 import { PoolsRegistryHashKey } from '../uniswap-v3/uniswap-v3';
 import { calculateTotalPoolLiquidity } from './liquidity';
+import { IBaseHook } from './hooks/types';
 
 export class UniswapV4 extends SimpleExchange implements IDex<UniswapV4Data> {
   readonly hasConstantPriceLargeAmounts = false;
@@ -55,6 +56,7 @@ export class UniswapV4 extends SimpleExchange implements IDex<UniswapV4Data> {
     getDexKeysWithNetwork(UniswapV4Config);
 
   private wethAddress: string;
+  private supportedHooks: IBaseHook[] = [];
 
   constructor(
     protected network: Network,
@@ -71,11 +73,18 @@ export class UniswapV4 extends SimpleExchange implements IDex<UniswapV4Data> {
     this.wethAddress =
       this.dexHelper.config.data.wrappedNativeTokenAddress.toLowerCase();
 
+    const dexConfig = UniswapV4Config[dexKey][network];
+    this.supportedHooks =
+      dexConfig.supportedHooks?.map(
+        HookCtor => new HookCtor(this.dexHelper, network, this.logger),
+      ) ?? [];
+
     this.poolManager = new UniswapV4PoolManager(
       dexHelper,
       dexKey,
       network,
-      UniswapV4Config[dexKey][network],
+      dexConfig,
+      this.supportedHooks,
       this.logger,
       this.cacheStateKey,
     );
@@ -83,6 +92,12 @@ export class UniswapV4 extends SimpleExchange implements IDex<UniswapV4Data> {
 
   async initializePricing(blockNumber: number) {
     await this.poolManager.initialize(blockNumber);
+
+    await Promise.all(
+      this.supportedHooks.map(async hook => {
+        await hook.initialize(blockNumber);
+      }),
+    );
   }
 
   async addMasterPool(poolKey: string, blockNumber: number): Promise<boolean> {
@@ -129,20 +144,22 @@ export class UniswapV4 extends SimpleExchange implements IDex<UniswapV4Data> {
     return eventPools.map(eventPool => eventPool!.poolId);
   }
 
-  protected _getOutputs(
+  protected async _getOutputs(
     pool: Pool,
     state: DeepReadonly<PoolState>,
     amounts: bigint[],
     zeroForOne: boolean,
     side: SwapSide,
-  ): bigint[] | null {
+    hook?: IBaseHook,
+  ): Promise<bigint[] | null> {
     try {
-      const outputsResult = uniswapV4PoolMath.queryOutputs(
+      const outputsResult = await uniswapV4PoolMath.queryOutputs(
         pool,
         state,
         amounts,
         zeroForOne,
         side,
+        hook,
       );
 
       if (
@@ -209,7 +226,14 @@ export class UniswapV4 extends SimpleExchange implements IDex<UniswapV4Data> {
 
       let prices: bigint[] | null;
       if (poolState !== null && poolState.isValid) {
-        prices = this._getOutputs(pool, poolState, amounts, zeroForOne, side);
+        prices = await this._getOutputs(
+          pool,
+          poolState,
+          amounts,
+          zeroForOne,
+          side,
+          eventPool?.hook,
+        );
       } else {
         this.logger.warn(
           `${this.dexKey}-${this.network}: pool ${poolId} state was not found...falling back to rpc`,
@@ -332,6 +356,10 @@ export class UniswapV4 extends SimpleExchange implements IDex<UniswapV4Data> {
 
     const poolIds = UniswapV4PoolsList[this.network]?.map(p => p.id);
 
+    const hooksToQuery = this.supportedHooks
+      .map(hook => hook.address.toLowerCase())
+      .concat(NULL_ADDRESS);
+
     const { pools0, pools1 } = await queryAvailablePoolsForToken(
       this.dexHelper,
       this.logger,
@@ -340,6 +368,7 @@ export class UniswapV4 extends SimpleExchange implements IDex<UniswapV4Data> {
       tokenAddress,
       limit,
       poolIds,
+      hooksToQuery,
     );
 
     if (!(pools0 || pools1)) {

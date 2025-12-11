@@ -18,6 +18,8 @@ import {
 } from '../constants';
 import { LPFeeLibrary } from './LPFeeLibrary';
 import { Logger } from 'log4js';
+import { IBaseHook } from '../hooks/types';
+import { NULL_ADDRESS } from '../../../constants';
 
 type StepComputations = {
   sqrtPriceStartX96: bigint;
@@ -39,68 +41,108 @@ type SwapParams = {
 };
 
 class UniswapV4PoolMath {
-  public queryOutputs(
+  public async queryOutputs(
     pool: Pool,
     poolState: DeepReadonly<PoolState>,
     amounts: bigint[],
     zeroForOne: boolean,
     side: SwapSide,
-  ): bigint[] | null {
+    hook?: IBaseHook,
+  ): Promise<bigint[]> {
     const isSell = side === SwapSide.SELL;
 
     if (isSell) {
-      return amounts.map(amount => {
-        if (amount === 0n) {
-          return 0n;
-        }
+      return Promise.all(
+        amounts.map(async amount => {
+          if (amount === 0n) {
+            return 0n;
+          }
 
-        const amountSpecified = -amount;
-        const [amount0, amount1] = this._swap(poolState, {
-          zeroForOne,
-          amountSpecified,
-          tickSpacing: BigInt(pool.key.tickSpacing),
-          sqrtPriceLimitX96: zeroForOne
+          const sqrtPriceLimitX96 = zeroForOne
             ? TickMath.MIN_SQRT_PRICE + 1n
-            : TickMath.MAX_SQRT_PRICE - 1n,
-          lpFeeOverride: 0n,
-        } as SwapParams);
+            : TickMath.MAX_SQRT_PRICE - 1n;
 
-        const amountSpecifiedActual =
-          zeroForOne === amountSpecified < 0n ? amount0 : amount1;
+          const amountSpecified = -amount;
+          const [amount0, amount1] = this._swap(poolState, {
+            zeroForOne,
+            amountSpecified,
+            tickSpacing: BigInt(pool.key.tickSpacing),
+            sqrtPriceLimitX96,
+            lpFeeOverride: 0n,
+          } as SwapParams);
 
-        if (amountSpecifiedActual !== amountSpecified) {
-          return 0n;
-        }
+          const amountSpecifiedActual =
+            zeroForOne === amountSpecified < 0n ? amount0 : amount1;
 
-        return zeroForOne ? amount1 : amount0;
-      });
+          if (amountSpecifiedActual !== amountSpecified) {
+            return 0n;
+          }
+
+          let output = zeroForOne ? amount1 : amount0;
+
+          if (hook?.getHookPermissions().afterSwap) {
+            output = await hook.afterSwap!(
+              NULL_ADDRESS,
+              pool.key,
+              {
+                zeroForOne,
+                amountSpecified: amountSpecified.toString(),
+                sqrtPriceLimitX96: sqrtPriceLimitX96.toString(),
+              },
+              { amount0, amount1 },
+              '0x',
+            );
+          }
+
+          return output;
+        }),
+      );
     } else {
-      return amounts.map(amount => {
-        if (amount === 0n) {
-          return 0n;
-        }
+      return Promise.all(
+        amounts.map(async amount => {
+          if (amount === 0n) {
+            return 0n;
+          }
 
-        const amountSpecified = amount;
-
-        const [amount0, amount1] = this._swap(poolState, {
-          zeroForOne,
-          amountSpecified: amount,
-          tickSpacing: BigInt(pool.key.tickSpacing),
-          sqrtPriceLimitX96: zeroForOne
+          const sqrtPriceLimitX96 = zeroForOne
             ? TickMath.MIN_SQRT_PRICE + 1n
-            : TickMath.MAX_SQRT_PRICE - 1n,
-          lpFeeOverride: 0n,
-        } as SwapParams);
+            : TickMath.MAX_SQRT_PRICE - 1n;
 
-        const amountSpecifiedActual =
-          zeroForOne === amountSpecified < 0n ? amount0 : amount1;
+          const amountSpecified = amount;
+          const [amount0, amount1] = this._swap(poolState, {
+            zeroForOne,
+            amountSpecified: amount,
+            tickSpacing: BigInt(pool.key.tickSpacing),
+            sqrtPriceLimitX96,
+            lpFeeOverride: 0n,
+          } as SwapParams);
 
-        if (amountSpecifiedActual !== amountSpecified) {
-          return 0n;
-        }
+          const amountSpecifiedActual =
+            zeroForOne === amountSpecified < 0n ? amount0 : amount1;
 
-        return zeroForOne ? -amount0 : -amount1;
-      });
+          if (amountSpecifiedActual !== amountSpecified) {
+            return 0n;
+          }
+
+          let output = zeroForOne ? -amount0 : -amount1;
+
+          if (hook?.getHookPermissions().afterSwap) {
+            output = await hook.afterSwap!(
+              NULL_ADDRESS,
+              pool.key,
+              {
+                zeroForOne,
+                amountSpecified: amountSpecified.toString(),
+                sqrtPriceLimitX96: sqrtPriceLimitX96.toString(),
+              },
+              { amount0, amount1 },
+              '0x',
+            );
+          }
+
+          return output;
+        }),
+      );
     }
   }
 

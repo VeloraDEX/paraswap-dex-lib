@@ -8,6 +8,7 @@ import {
   PoolManagerState,
   SubgraphConnectorPool,
   SubgraphPool,
+  PoolKey,
 } from './types';
 import { Address, Log, Logger } from '../../types';
 import UniswapV4StateViewABI from '../../abi/uniswap-v4/state-view.abi.json';
@@ -38,6 +39,7 @@ import {
   TICK_BITMAP_TO_USE,
   TICK_BITMAP_TO_USE_BY_CHAIN,
 } from './constants';
+import { IBaseHook } from './hooks/types';
 
 export class UniswapV4PoolManager extends StatefulEventSubscriber<PoolManagerState> {
   handlers: {
@@ -59,12 +61,15 @@ export class UniswapV4PoolManager extends StatefulEventSubscriber<PoolManagerSta
   private wethAddress: string;
 
   private poolsCacheKey = 'pools_cache';
+  private supportedHookAddresses: string[];
+  private hookInstancesByAddress: Record<string, IBaseHook>;
 
   constructor(
     readonly dexHelper: IDexHelper,
     parentName: string,
     private readonly network: number,
     private readonly config: DexParams,
+    supportedHooks: IBaseHook[],
     protected logger: Logger,
     mapKey: string = '',
   ) {
@@ -86,6 +91,15 @@ export class UniswapV4PoolManager extends StatefulEventSubscriber<PoolManagerSta
       this.dexHelper.config.data.wrappedNativeTokenAddress.toLowerCase();
 
     this.logDecoder = (log: Log) => this.poolManagerIface.parseLog(log);
+
+    this.hookInstancesByAddress = Object.fromEntries(
+      supportedHooks.map(hook => [hook.address.toLowerCase(), hook]),
+    );
+
+    this.supportedHookAddresses = [
+      NULL_ADDRESS, // always include pools without hooks
+      ...Object.keys(this.hookInstancesByAddress),
+    ];
 
     // Add handlers
     this.handlers['Initialize'] = this.handleInitializeEvent.bind(this);
@@ -137,6 +151,14 @@ export class UniswapV4PoolManager extends StatefulEventSubscriber<PoolManagerSta
       return null;
     }
 
+    const poolKey: PoolKey = {
+      currency0: subgraphPool.token0.address.toLowerCase(),
+      currency1: subgraphPool.token1.address.toLowerCase(),
+      fee: subgraphPool.fee,
+      tickSpacing: parseInt(subgraphPool.tickSpacing),
+      hooks: subgraphPool.hooks,
+    };
+
     eventPool = new UniswapV4Pool(
       this.dexHelper,
       this.parentName,
@@ -145,11 +167,12 @@ export class UniswapV4PoolManager extends StatefulEventSubscriber<PoolManagerSta
       this.logger,
       this.mapKey,
       _poolId,
-      subgraphPool.token0.address.toLowerCase(),
-      subgraphPool.token1.address.toLowerCase(),
-      subgraphPool.fee,
-      subgraphPool.hooks,
-      subgraphPool.tickSpacing,
+      poolKey.currency0,
+      poolKey.currency1,
+      poolKey.fee,
+      poolKey.hooks,
+      poolKey.tickSpacing.toString(),
+      this.getHook(_poolId, poolKey),
     );
 
     await eventPool.initialize(blockNumber);
@@ -220,7 +243,9 @@ export class UniswapV4PoolManager extends StatefulEventSubscriber<PoolManagerSta
     const staticPoolsList = UniswapV4PoolsList[this.network];
 
     if (staticPoolsList) {
-      return staticPoolsList;
+      return staticPoolsList.filter(pool =>
+        this.isHookSupported(pool.hooks.toLowerCase()),
+      );
     }
 
     const cachedPoolsRaw = await this.dexHelper.cache.getAndCacheLocally(
@@ -245,6 +270,7 @@ export class UniswapV4PoolManager extends StatefulEventSubscriber<PoolManagerSta
         cachedPools.length &&
         poolsTTL > POOL_CACHE_STORE_INTERVAL - POOL_CACHE_REFRESH_INTERVAL
       ) {
+        this.registerHookPools(cachedPools);
         return cachedPools;
       }
 
@@ -255,6 +281,7 @@ export class UniswapV4PoolManager extends StatefulEventSubscriber<PoolManagerSta
 
     try {
       const defaultPerPageLimit = 1000;
+      const hooksToQuery = this.supportedHookAddresses;
       let curPage = 0;
 
       let currentSubgraphPools: SubgraphPool[] =
@@ -266,6 +293,7 @@ export class UniswapV4PoolManager extends StatefulEventSubscriber<PoolManagerSta
           blockNumber,
           curPage * defaultPerPageLimit,
           defaultPerPageLimit,
+          hooksToQuery,
         );
       pools = pools.concat(currentSubgraphPools);
 
@@ -280,6 +308,7 @@ export class UniswapV4PoolManager extends StatefulEventSubscriber<PoolManagerSta
             blockNumber,
             curPage * defaultPerPageLimit,
             defaultPerPageLimit,
+            hooksToQuery,
           );
 
         pools = pools.concat(currentSubgraphPools);
@@ -311,6 +340,8 @@ export class UniswapV4PoolManager extends StatefulEventSubscriber<PoolManagerSta
       JSON.stringify(pools),
     );
 
+    this.registerHookPools(pools);
+
     return pools;
   }
 
@@ -327,7 +358,7 @@ export class UniswapV4PoolManager extends StatefulEventSubscriber<PoolManagerSta
     const sqrtPriceX96 = BigInt(event.args.sqrtPriceX96);
     const tick = parseInt(event.args.tick);
 
-    if (hooks !== NULL_ADDRESS) {
+    if (!this.isHookSupported(hooks.toLowerCase())) {
       this.logger.warn(
         `Pool ${id} has hooks ${hooks}, which is not supported yet. Skipping.`,
       );
@@ -367,6 +398,14 @@ export class UniswapV4PoolManager extends StatefulEventSubscriber<PoolManagerSta
       tickSpacing: tickSpacing.toString(),
     });
 
+    const poolKey: PoolKey = {
+      currency0: currency0.toLowerCase(),
+      currency1: currency1.toLowerCase(),
+      fee: fee.toString(),
+      tickSpacing,
+      hooks,
+    };
+
     const eventPool = new UniswapV4Pool(
       this.dexHelper,
       this.parentName,
@@ -375,11 +414,12 @@ export class UniswapV4PoolManager extends StatefulEventSubscriber<PoolManagerSta
       this.logger,
       this.mapKey,
       id,
-      currency0.toLowerCase(),
-      currency1.toLowerCase(),
-      fee,
-      hooks,
-      tickSpacing.toString(),
+      poolKey.currency0,
+      poolKey.currency1,
+      poolKey.fee,
+      poolKey.hooks,
+      poolKey.tickSpacing.toString(),
+      this.getHook(id, poolKey),
     );
     await eventPool.initialize(log.blockNumber);
 
@@ -390,6 +430,30 @@ export class UniswapV4PoolManager extends StatefulEventSubscriber<PoolManagerSta
 
   private isPoolWithUnconventionalFees(fee: string | number): boolean {
     return +fee % 100 !== 0;
+  }
+
+  private registerHookPools(pools: SubgraphPool[]) {
+    for (const pool of pools) {
+      const poolKey: PoolKey = {
+        currency0: pool.token0.address.toLowerCase(),
+        currency1: pool.token1.address.toLowerCase(),
+        fee: pool.fee,
+        tickSpacing: parseInt(pool.tickSpacing),
+        hooks: pool.hooks,
+      };
+
+      this.getHook(pool.id, poolKey);
+    }
+  }
+
+  private getHook(poolId: string, poolKey: PoolKey): IBaseHook | undefined {
+    const hook = this.hookInstancesByAddress[poolKey.hooks.toLowerCase()];
+    if (!hook) {
+      return undefined;
+    }
+
+    hook.registerPool(poolId, poolKey);
+    return hook;
   }
 
   private getBitmapRange() {
@@ -504,5 +568,9 @@ export class UniswapV4PoolManager extends StatefulEventSubscriber<PoolManagerSta
     });
 
     return poolStates;
+  }
+
+  private isHookSupported(hook: string): boolean {
+    return this.supportedHookAddresses.includes(hook.toLowerCase());
   }
 }
