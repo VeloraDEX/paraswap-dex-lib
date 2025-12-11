@@ -127,6 +127,12 @@ export class GenericSwapTransactionBuilder {
     );
   }
 
+  hasMultiRoute(priceRoute: OptimalRate): boolean {
+    return priceRoute.bestRoute.some(route =>
+      route.swaps.some(swap => swap.isMergedSwap),
+    );
+  }
+
   buildRouteSwaps(priceRoute: OptimalRate): RouteSwaps[] {
     const singleRoutes: OptimalRoute[] = [];
     const multiRoutes: OptimalRoute[] = [];
@@ -394,8 +400,11 @@ export class GenericSwapTransactionBuilder {
     const executionContractAddress =
       this.getExecutionContractAddress(priceRoute);
 
-    const bytecodeBuilder =
-      this.executorDetector.getBytecodeBuilder(executorName);
+    const hasMultiRoute = this.hasMultiRoute(priceRoute);
+    const bytecodeBuilder = this.executorDetector.getBytecodeBuilder(
+      executorName,
+      hasMultiRoute,
+    );
     const bytecode = await this.buildCalls(
       priceRoute,
       minMaxAmount,
@@ -768,8 +777,11 @@ export class GenericSwapTransactionBuilder {
 
     const executorName =
       this.executorDetector.getExecutorByPriceRoute(priceRoute);
-    const bytecodeBuilder =
-      this.executorDetector.getBytecodeBuilder(executorName);
+    const hasMultiRoute = this.hasMultiRoute(priceRoute);
+    const bytecodeBuilder = this.executorDetector.getBytecodeBuilder(
+      executorName,
+      hasMultiRoute,
+    );
 
     return bytecodeBuilder.getAddress();
   }
