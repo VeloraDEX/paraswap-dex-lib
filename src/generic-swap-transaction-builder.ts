@@ -373,7 +373,7 @@ export class GenericSwapTransactionBuilder {
 
     return bytecodeBuilder.buildByteCode(
       priceRoute,
-      routes,
+      routesWithBuild,
       exchangeParams,
       userAddress,
       maybeWethCallData,
