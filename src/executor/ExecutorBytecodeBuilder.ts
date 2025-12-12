@@ -23,7 +23,15 @@ import {
   ZEROS_4_BYTES,
   DISABLED_MAX_UNIT_APPROVAL_TOKENS,
 } from './constants';
-import { Executors, Flag, SpecialDex, RouteSwaps } from './types';
+import {
+  BuildSwap,
+  BuildSwapExchange,
+  Executors,
+  Flag,
+  RouteSwaps,
+  SingleRouteBuildSwaps,
+  SpecialDex,
+} from './types';
 import { MAX_UINT, Network, PERMIT2_ADDRESS } from '../constants';
 import { DexExchangeBuildParam, DexExchangeParam } from '../types';
 import { BI_MAX_UINT160, BI_MAX_UINT48 } from '../bigint-constants';
@@ -37,32 +45,40 @@ const MAX_UINT160 = BI_MAX_UINT160.toString();
 
 export type SingleSwapCallDataParams<T> = {
   routes: OptimalRoute[];
-  exchangeParams: DexExchangeBuildParam[];
+  exchangeParams: DexExchangeBuildParam[]; // TODO-multi: to be removed after refactoring
   index: number;
-  flags: { approves: Flag[]; dexes: Flag[]; wrap: Flag };
+  flags: { approves: Flag[]; dexes: Flag[]; wrap: Flag }; // TODO-multi: to be removed after refactoring
   sender: string;
   maybeWethCallData?: DepositWithdrawReturn;
 } & T;
 
 export type DexCallDataParams<T> = {
-  routes: OptimalRoute[];
   routeIndex: number;
   swapIndex: number;
   swapExchangeIndex: number;
-  exchangeParams: DexExchangeBuildParam[];
-  exchangeParamIndex: number;
+
   isLastSwap: boolean;
   flag: Flag;
+
+  // TODO-multi: to be removed after refactoring
+  routes: OptimalRoute[];
+  exchangeParams: DexExchangeBuildParam[];
+  exchangeParamIndex: number;
 } & T;
 
 export type BuildSwapFlagsParams = {
-  routes: OptimalRoute[];
-  exchangeParams: DexExchangeBuildParam[];
+  singleRoutes: SingleRouteBuildSwaps<BuildSwap>[];
   routeIndex: number;
   swapIndex: number;
   swapExchangeIndex: number;
-  exchangeParamIndex: number;
   maybeWethCallData?: DepositWithdrawReturn;
+  swap: BuildSwap;
+  swapExchange: BuildSwapExchange<unknown>;
+
+  // TODO-multi: to be removed after refactoring
+  routes: OptimalRoute[];
+  exchangeParams: DexExchangeBuildParam[];
+  exchangeParamIndex: number;
 };
 
 export abstract class ExecutorBytecodeBuilder<S = {}, D = {}> {
@@ -375,6 +391,7 @@ export abstract class ExecutorBytecodeBuilder<S = {}, D = {}> {
 
   protected buildFlags(
     routes: OptimalRoute[],
+    singleRoutes: SingleRouteBuildSwaps<BuildSwap>[],
     exchangeParams: DexExchangeBuildParam[],
     srcToken: string,
     maybeWethCallData?: DepositWithdrawReturn,
@@ -393,18 +410,23 @@ export abstract class ExecutorBytecodeBuilder<S = {}, D = {}> {
       approves: [],
     };
 
-    routes.map((route, routeIndex) => {
+    singleRoutes.map((route, routeIndex) => {
       route.swaps.map((swap, swapIndex) => {
         swap.swapExchanges.map((swapExchange, swapExchangeIndex) => {
           const { dexFlag, approveFlag } = buildFlagsMethod({
+            singleRoutes,
             routes,
             exchangeParams,
             routeIndex,
             swapIndex,
             swapExchangeIndex,
-            exchangeParamIndex,
+            exchangeParamIndex, // TODO-multi: to be removed after refactoring
             maybeWethCallData,
+            swap,
+            swapExchange,
           });
+          swapExchange.build.dexFlag = dexFlag;
+          swapExchange.build.approveFlag = approveFlag;
 
           flags.dexes.push(dexFlag);
           flags.approves.push(approveFlag);

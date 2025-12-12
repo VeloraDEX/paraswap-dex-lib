@@ -38,7 +38,8 @@ export class ExecutorDetector {
     this.executor01BytecodeBuilder = new Executor01BytecodeBuilder(
       this.dexHelper,
     );
-    this.executor02BytecodeBuilder = new Executor02BytecodeBuilder(
+    // this.executor02BytecodeBuilder = new Executor02BytecodeBuilder(
+    this.executor02BytecodeBuilder = new Executor02BytecodeBuilderMultiRoute(
       this.dexHelper,
     );
     this.executor02MultiRouteBytecodeBuilder =

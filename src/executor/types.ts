@@ -12,6 +12,7 @@ export enum Flag {
   DONT_INSERT_FROM_AMOUNT_CHECK_ETH_BALANCE_AFTER_SWAP = 4, // (flag 4 mod 4) = case 0: don't insert fromAmount, (flag 4 mod 3) = case 1: check eth balance after swap
   INSERT_FROM_AMOUNT_DONT_CHECK_BALANCE_AFTER_SWAP = 3, // (flag 3 mod 4) = case 3: insert fromAmount, (flag 3 mod 3) = case 0: don't check balance after swap
   DONT_INSERT_FROM_AMOUNT_DONT_CHECK_BALANCE_AFTER_SWAP = 0, // (flag 0 mod 4) = case 0: don't insert fromAmount, (flag 0 mod 3) = case 0: don't check balance after swap
+  DEFAULT = -1,
 }
 
 export enum SpecialDex {
@@ -47,25 +48,33 @@ export enum RouteExecutionType {
   NESTED_VERTICAL_BRANCH_HORIZONTAL_SEQUENCE = 5, // megaSwap
 }
 
+export type SingleRouteBuildSwaps<TSwap> = {
+  type: 'single-route';
+  percent: number;
+  swaps: TSwap[];
+};
+
+export type MultiRouteBuildSwaps<TSwap> = {
+  type: 'multi-route';
+  percent: number;
+  swaps: (TSwap[] | TSwap[][])[];
+};
+
 export type GenericRouteSwaps<TSwap> =
-  | {
-      type: 'single-route';
-      percent: number;
-      swaps: TSwap[];
-    }
-  | {
-      type: 'multi-route';
-      percent: number;
-      swaps: (TSwap[] | TSwap[][])[];
-    };
+  | SingleRouteBuildSwaps<TSwap>
+  | MultiRouteBuildSwaps<TSwap>;
 
 export type RouteSwaps = GenericRouteSwaps<OptimalSwap>;
 export type RouteBuildSwaps = GenericRouteSwaps<BuildSwap>;
 
 export type BuildSwapExchange<T> = OptimalSwapExchange<T> & {
-  dexParams: DexExchangeBuildParam;
-  wethDeposit: bigint;
-  wethWithdraw: bigint;
+  build: {
+    dexParams: DexExchangeBuildParam;
+    wethDeposit: bigint;
+    wethWithdraw: bigint;
+    dexFlag: Flag;
+    approveFlag: Flag;
+  };
 };
 
 export type BuildSwap = Omit<OptimalSwap, 'swapExchanges'> & {

@@ -3,7 +3,7 @@ import { DexExchangeBuildParam } from '../types';
 import { OptimalRate, OptimalRoute } from '@paraswap/core';
 import { isETHAddress } from '../utils';
 import { DepositWithdrawReturn } from '../dex/weth/types';
-import { Executors, Flag, RouteSwaps, SpecialDex } from './types';
+import { Executors, Flag, RouteBuildSwaps, SpecialDex } from './types';
 import { BYTES_64_LENGTH, DEFAULT_RETURN_AMOUNT_POS } from './constants';
 import {
   BuildSwapFlagsParams,
@@ -423,7 +423,7 @@ export class Executor01BytecodeBuilder extends ExecutorBytecodeBuilder<
 
   public buildByteCode(
     priceRoute: OptimalRate,
-    routes: RouteSwaps[],
+    routes: RouteBuildSwaps[],
     exchangeParams: DexExchangeBuildParam[],
     sender: string,
     maybeWethCallData?: DepositWithdrawReturn,
@@ -432,8 +432,11 @@ export class Executor01BytecodeBuilder extends ExecutorBytecodeBuilder<
       throw new Error(`Executor01BytecodeBuilder doesn't support multi-route`);
     }
 
+    const _routes = routes.filter(r => r.type === 'single-route');
+
     const flags = this.buildFlags(
       priceRoute.bestRoute,
+      _routes,
       exchangeParams,
       priceRoute.srcToken,
       maybeWethCallData,

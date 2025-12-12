@@ -9,7 +9,7 @@ import {
   DexExchangeBuildParam,
   DexExchangeParamWithBooleanNeedWrapNative,
 } from '../types';
-import { Executors, Flag, RouteSwaps, SpecialDex } from './types';
+import { Executors, Flag, RouteBuildSwaps, SpecialDex } from './types';
 import { isETHAddress } from '../utils';
 import { DepositWithdrawReturn } from '../dex/weth/types';
 import {
@@ -1443,11 +1443,13 @@ export class Executor02BytecodeBuilder extends ExecutorBytecodeBuilder<
 
   public buildByteCode(
     priceRoute: OptimalRate,
-    routes: RouteSwaps[],
+    routes: RouteBuildSwaps[],
     exchangeParams: DexExchangeBuildParam[],
     sender: string,
     maybeWethCallData?: DepositWithdrawReturn,
   ): string {
+    const _routes = routes.filter(r => r.type === 'single-route');
+
     const isMegaSwap = priceRoute.bestRoute.length > 1;
     const isMultiSwap = !isMegaSwap && priceRoute.bestRoute[0].swaps.length > 1;
 
@@ -1469,6 +1471,7 @@ export class Executor02BytecodeBuilder extends ExecutorBytecodeBuilder<
 
     const flags = this.buildFlags(
       priceRoute.bestRoute,
+      _routes,
       exchangeParams,
       priceRoute.srcToken,
       maybeWethCallData,

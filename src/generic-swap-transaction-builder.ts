@@ -23,10 +23,7 @@ import {
 import { AbiCoder, Interface } from '@ethersproject/abi';
 import AugustusV6ABI from './abi/augustus-v6/ABI.json';
 import { isETHAddress, uuidToBytes16 } from './utils';
-import {
-  DepositWithdrawReturn,
-  IWethDepositorWithdrawer,
-} from './dex/weth/types';
+import { IWethDepositorWithdrawer } from './dex/weth/types';
 import { DexAdapterService } from './dex';
 import { Weth } from './dex/weth/weth';
 import ERC20ABI from './abi/erc20.json';
@@ -47,6 +44,7 @@ import {
 import {
   BuildSwap,
   BuildSwapExchange,
+  Flag,
   RouteBuildSwaps,
   RouteSwaps,
 } from './executor/types';
@@ -315,9 +313,13 @@ export class GenericSwapTransactionBuilder {
 
     return {
       ...se,
-      dexParams: <DexExchangeParamWithBooleanNeedWrapNative>dexParams,
-      wethDeposit,
-      wethWithdraw,
+      build: {
+        dexParams: <DexExchangeParamWithBooleanNeedWrapNative>dexParams,
+        wethDeposit,
+        wethWithdraw,
+        dexFlag: Flag.DEFAULT,
+        approveFlag: Flag.DEFAULT,
+      },
     };
   }
 
@@ -348,8 +350,8 @@ export class GenericSwapTransactionBuilder {
     const { srcAmountWethToDeposit, destAmountWethToWithdraw } =
       flatSwapExchanges.reduce(
         (acc, se) => {
-          acc.srcAmountWethToDeposit += se.wethDeposit;
-          acc.destAmountWethToWithdraw += se.wethWithdraw;
+          acc.srcAmountWethToDeposit += se.build.wethDeposit;
+          acc.destAmountWethToWithdraw += se.build.wethWithdraw;
           return acc;
         },
         {
@@ -359,7 +361,7 @@ export class GenericSwapTransactionBuilder {
       );
 
     // TODO-multi: can exchange params order be affected by this update for single-route routes??
-    const exchangeParams = flatSwapExchanges.map(se => se.dexParams);
+    const exchangeParams = flatSwapExchanges.map(se => se.build.dexParams);
 
     const maybeWethCallData = this.getDepositWithdrawWethCallData(
       srcAmountWethToDeposit,
@@ -889,7 +891,7 @@ export class GenericSwapTransactionBuilder {
 
     swaps.forEach((swap, swapI) => {
       swap.swapExchanges.forEach((se, seI) => {
-        const curExchangeParam = se.dexParams;
+        const curExchangeParam = se.build.dexParams;
         const approveParams = bytecodeBuilder.getApprovalTokenAndTarget(
           swap,
           curExchangeParam,
@@ -923,7 +925,7 @@ export class GenericSwapTransactionBuilder {
         if (swapIndex !== undefined && swapExchangeIndex !== undefined) {
           swaps[swapIndex].swapExchanges[
             swapExchangeIndex
-          ].dexParams.approveData = {
+          ].build.dexParams.approveData = {
             token,
             target,
           };
