@@ -55,6 +55,16 @@ export type DexCallDataParams<T> = {
   flag: Flag;
 } & T;
 
+export type BuildSwapFlagsParams = {
+  routes: OptimalRoute[];
+  exchangeParams: DexExchangeBuildParam[];
+  routeIndex: number;
+  swapIndex: number;
+  swapExchangeIndex: number;
+  exchangeParamIndex: number;
+  maybeWethCallData?: DepositWithdrawReturn;
+};
+
 export abstract class ExecutorBytecodeBuilder<S = {}, D = {}> {
   type!: Executors;
   erc20Interface: Interface;
@@ -65,15 +75,7 @@ export abstract class ExecutorBytecodeBuilder<S = {}, D = {}> {
     this.permit2Interface = new Interface(Permit2Abi);
   }
 
-  protected buildSimpleSwapFlags(
-    routes: OptimalRoute[],
-    exchangeParams: DexExchangeBuildParam[],
-    routeIndex: number,
-    swapIndex: number,
-    swapExchangeIndex: number,
-    exchangeParamIndex: number,
-    maybeWethCallData?: DepositWithdrawReturn,
-  ): {
+  protected buildSimpleSwapFlags(params: BuildSwapFlagsParams): {
     dexFlag: Flag;
     approveFlag: Flag;
   } {
@@ -84,15 +86,7 @@ export abstract class ExecutorBytecodeBuilder<S = {}, D = {}> {
     };
   }
 
-  protected buildMultiMegaSwapFlags(
-    routes: OptimalRoute[],
-    exchangeParams: DexExchangeBuildParam[],
-    routeIndex: number,
-    swapIndex: number,
-    swapExchangeIndex: number,
-    exchangeParamIndex: number,
-    maybeWethCallData?: DepositWithdrawReturn,
-  ): {
+  protected buildMultiMegaSwapFlags(params: BuildSwapFlagsParams): {
     dexFlag: Flag;
     approveFlag: Flag;
   } {
@@ -402,7 +396,7 @@ export abstract class ExecutorBytecodeBuilder<S = {}, D = {}> {
     routes.map((route, routeIndex) => {
       route.swaps.map((swap, swapIndex) => {
         swap.swapExchanges.map((swapExchange, swapExchangeIndex) => {
-          const { dexFlag, approveFlag } = buildFlagsMethod(
+          const { dexFlag, approveFlag } = buildFlagsMethod({
             routes,
             exchangeParams,
             routeIndex,
@@ -410,7 +404,7 @@ export abstract class ExecutorBytecodeBuilder<S = {}, D = {}> {
             swapExchangeIndex,
             exchangeParamIndex,
             maybeWethCallData,
-          );
+          });
 
           flags.dexes.push(dexFlag);
           flags.approves.push(approveFlag);

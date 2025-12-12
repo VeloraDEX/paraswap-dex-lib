@@ -12,6 +12,7 @@ import { DepositWithdrawReturn } from '../dex/weth/types';
 import { Executors, Flag, RouteSwaps, SpecialDex } from './types';
 import { BYTES_96_LENGTH } from './constants';
 import {
+  BuildSwapFlagsParams,
   DexCallDataParams,
   ExecutorBytecodeBuilder,
   SingleSwapCallDataParams,
@@ -52,15 +53,12 @@ export class Executor03BytecodeBuilder extends ExecutorBytecodeBuilder<
    * case 1: check eth balance after swap
    * case 2: check destToken balance after swap
    */
-  protected buildSimpleSwapFlags(
-    routes: OptimalRoute[],
-    exchangeParams: DexExchangeBuildParam[],
-    routeIndex: number,
-    swapIndex: number,
-    swapExchangeIndex: number,
-    exchangeParamIndex: number,
-    maybeWethCallData?: DepositWithdrawReturn,
-  ): { dexFlag: Flag; approveFlag: Flag } {
+  protected buildSimpleSwapFlags(params: BuildSwapFlagsParams): {
+    dexFlag: Flag;
+    approveFlag: Flag;
+  } {
+    const { routes, exchangeParams, exchangeParamIndex, maybeWethCallData } =
+      params;
     const { srcToken, destToken } = routes[0].swaps[0];
     const isEthSrc = isETHAddress(srcToken);
     const isEthDest = isETHAddress(destToken);
@@ -129,15 +127,10 @@ export class Executor03BytecodeBuilder extends ExecutorBytecodeBuilder<
     };
   }
 
-  protected buildMultiMegaSwapFlags(
-    routes: OptimalRoute[],
-    exchangeParams: DexExchangeBuildParam[],
-    routeIndex: number,
-    swapIndex: number,
-    swapExchangeIndex: number,
-    exchangeParamIndex: number,
-    maybeWethCallData?: DepositWithdrawReturn,
-  ): { dexFlag: Flag; approveFlag: Flag } {
+  protected buildMultiMegaSwapFlags(params: BuildSwapFlagsParams): {
+    dexFlag: Flag;
+    approveFlag: Flag;
+  } {
     return {
       dexFlag: Flag.DONT_INSERT_FROM_AMOUNT_DONT_CHECK_BALANCE_AFTER_SWAP, // 0
       approveFlag: Flag.DONT_INSERT_FROM_AMOUNT_DONT_CHECK_BALANCE_AFTER_SWAP, // 0

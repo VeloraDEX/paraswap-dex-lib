@@ -13,6 +13,7 @@ import { Executors, Flag, RouteSwaps, SpecialDex } from './types';
 import { isETHAddress } from '../utils';
 import { DepositWithdrawReturn } from '../dex/weth/types';
 import {
+  BuildSwapFlagsParams,
   DexCallDataParams,
   ExecutorBytecodeBuilder,
   SingleSwapCallDataParams,
@@ -69,15 +70,18 @@ export class Executor02BytecodeBuilderMultiRoute extends ExecutorBytecodeBuilder
    * case 1: check eth balance after swap
    * case 2: check destToken balance after swap
    */
-  protected buildSimpleSwapFlags(
-    routes: OptimalRoute[],
-    exchangeParams: DexExchangeBuildParam[],
-    routeIndex: number,
-    swapIndex: number,
-    swapExchangeIndex: number,
-    exchangeParamIndex: number,
-    maybeWethCallData?: DepositWithdrawReturn,
-  ): { dexFlag: Flag; approveFlag: Flag } {
+  protected buildSimpleSwapFlags(params: BuildSwapFlagsParams): {
+    dexFlag: Flag;
+    approveFlag: Flag;
+  } {
+    const {
+      routes,
+      exchangeParams,
+      routeIndex,
+      swapIndex,
+      exchangeParamIndex,
+      maybeWethCallData,
+    } = params;
     const { srcToken, destToken } = routes[routeIndex].swaps[swapIndex];
     const isEthSrc = isETHAddress(srcToken);
     const isEthDest = isETHAddress(destToken);
@@ -153,15 +157,18 @@ export class Executor02BytecodeBuilderMultiRoute extends ExecutorBytecodeBuilder
    * case 1: check eth balance after swap
    * case 2: check destToken balance after swap
    */
-  protected buildMultiMegaSwapFlags(
-    routes: OptimalRoute[],
-    exchangeParams: DexExchangeBuildParam[],
-    routeIndex: number,
-    swapIndex: number,
-    swapExchangeIndex: number,
-    exchangeParamIndex: number,
-    maybeWethCallData?: DepositWithdrawReturn,
-  ): { dexFlag: Flag; approveFlag: Flag } {
+  protected buildMultiMegaSwapFlags(params: BuildSwapFlagsParams): {
+    dexFlag: Flag;
+    approveFlag: Flag;
+  } {
+    const {
+      routes,
+      exchangeParams,
+      routeIndex,
+      swapIndex,
+      exchangeParamIndex,
+      maybeWethCallData,
+    } = params;
     const route = routes[routeIndex];
     const swap = route.swaps[swapIndex];
 
