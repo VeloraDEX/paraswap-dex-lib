@@ -17,6 +17,7 @@ import {
   ExecutorBytecodeBuilder,
   SingleSwapCallDataParams,
 } from './ExecutorBytecodeBuilder';
+import { getPriceRouteType } from './utils';
 
 const {
   utils: { hexlify, hexDataLength, hexConcat, hexZeroPad, solidityPack },
@@ -156,6 +157,7 @@ export class Executor03BytecodeBuilder extends ExecutorBytecodeBuilder<
     const curExchangeParam = exchangeParams[index];
 
     const dexCallData = this.buildDexCallData({
+      priceRouteType: params.priceRouteType,
       routes,
       routeIndex: 0,
       swapIndex: 0,
@@ -424,11 +426,14 @@ export class Executor03BytecodeBuilder extends ExecutorBytecodeBuilder<
       ),
     };
 
+    const priceRouteType = getPriceRouteType(priceRoute);
+
     const flags = this.buildFlags(
       priceRoute.bestRoute,
       _routes,
       orderedExchangeParams.map(e => e.exchangeParam),
       priceRoute.srcToken,
+      priceRouteType,
       maybeWethCallData,
     );
 
@@ -437,6 +442,7 @@ export class Executor03BytecodeBuilder extends ExecutorBytecodeBuilder<
         hexConcat([
           acc,
           this.buildSingleSwapCallData({
+            priceRouteType,
             routes: priceRoute.bestRoute,
             exchangeParams: orderedExchangeParams.map(e => e.exchangeParam),
             swapExchangeIndex: ep.swapExchange.swapExchangeIndex,

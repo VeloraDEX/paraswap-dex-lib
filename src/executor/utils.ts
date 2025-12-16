@@ -6,6 +6,7 @@ import {
   OptimalSwapExchange,
   OptimalRate,
 } from '@paraswap/core';
+import { PriceRouteType } from './ExecutorBytecodeBuilder';
 
 export const extractReturnAmountPosition = (
   iface: Interface,
@@ -225,4 +226,16 @@ export function getOriginalRouteSwapIndex(
   }
 
   return null;
+}
+
+export function getPriceRouteType(priceRoute: OptimalRate): PriceRouteType {
+  if (priceRoute.bestRoute.length > 1) {
+    return 'mega';
+  }
+
+  if (priceRoute.bestRoute[0].swaps.length > 1) {
+    return 'multi';
+  }
+
+  return 'simple';
 }

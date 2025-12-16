@@ -43,6 +43,8 @@ const {
 const MAX_UINT48 = BI_MAX_UINT48.toString();
 const MAX_UINT160 = BI_MAX_UINT160.toString();
 
+export type PriceRouteType = 'simple' | 'multi' | 'mega';
+
 export type SingleSwapCallDataParams<T> = {
   routes: OptimalRoute[];
   exchangeParams: DexExchangeBuildParam[]; // TODO-multi: to be removed after refactoring
@@ -50,6 +52,7 @@ export type SingleSwapCallDataParams<T> = {
   flags: { approves: Flag[]; dexes: Flag[]; wrap: Flag }; // TODO-multi: to be removed after refactoring
   sender: string;
   maybeWethCallData?: DepositWithdrawReturn;
+  priceRouteType: PriceRouteType;
 } & T;
 
 export type DexCallDataParams<T> = {
@@ -59,6 +62,8 @@ export type DexCallDataParams<T> = {
 
   isLastSwap: boolean;
   flag: Flag;
+
+  priceRouteType: PriceRouteType;
 
   // TODO-multi: to be removed after refactoring
   routes: OptimalRoute[];
@@ -74,6 +79,8 @@ export type BuildSwapFlagsParams = {
   maybeWethCallData?: DepositWithdrawReturn;
   swap: BuildSwap;
   swapExchange: BuildSwapExchange<unknown>;
+
+  priceRouteType: PriceRouteType;
 
   // TODO-multi: to be removed after refactoring
   routes: OptimalRoute[];
@@ -394,13 +401,11 @@ export abstract class ExecutorBytecodeBuilder<S = {}, D = {}> {
     singleRoutes: SingleRouteBuildSwaps<BuildSwap>[],
     exchangeParams: DexExchangeBuildParam[],
     srcToken: string,
+    priceRouteType: PriceRouteType,
     maybeWethCallData?: DepositWithdrawReturn,
   ): { approves: Flag[]; dexes: Flag[]; wrap: Flag } {
-    const isMegaSwap = routes.length > 1;
-    const isMultiSwap = !isMegaSwap && routes[0].swaps.length > 1;
-
     const buildFlagsMethod =
-      isMultiSwap || isMegaSwap
+      priceRouteType === 'multi' || priceRouteType === 'mega'
         ? this.buildMultiMegaSwapFlags.bind(this)
         : this.buildSimpleSwapFlags.bind(this);
 
@@ -414,6 +419,7 @@ export abstract class ExecutorBytecodeBuilder<S = {}, D = {}> {
       route.swaps.map((swap, swapIndex) => {
         swap.swapExchanges.map((swapExchange, swapExchangeIndex) => {
           const { dexFlag, approveFlag } = buildFlagsMethod({
+            priceRouteType,
             singleRoutes,
             routes,
             exchangeParams,

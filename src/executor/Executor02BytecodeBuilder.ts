@@ -16,6 +16,7 @@ import {
   BuildSwapFlagsParams,
   DexCallDataParams,
   ExecutorBytecodeBuilder,
+  PriceRouteType,
   SingleSwapCallDataParams,
 } from './ExecutorBytecodeBuilder';
 import {
@@ -28,6 +29,7 @@ import {
   ZEROS_4_BYTES,
   DEFAULT_RETURN_AMOUNT_POS,
 } from './constants';
+import { getPriceRouteType } from './utils';
 
 const {
   utils: { hexlify, hexDataLength, hexConcat, hexZeroPad, solidityPack },
@@ -594,6 +596,7 @@ export class Executor02BytecodeBuilder extends ExecutorBytecodeBuilder<
 
   private buildSingleSwapExchangeCallData(
     routes: OptimalRoute[],
+    priceRouteType: PriceRouteType,
     routeIndex: number,
     swapIndex: number,
     swapExchangeIndex: number,
@@ -631,6 +634,7 @@ export class Executor02BytecodeBuilder extends ExecutorBytecodeBuilder<
     const curExchangeParam = exchangeParams[exchangeParamIndex];
 
     const dexCallData = this.buildDexCallData({
+      priceRouteType,
       routes,
       routeIndex,
       swapIndex,
@@ -1244,6 +1248,7 @@ export class Executor02BytecodeBuilder extends ExecutorBytecodeBuilder<
       swap,
       srcToken,
       destToken,
+      priceRouteType,
     } = params;
     const isLastSwap = swapIndex === routes[routeIndex].swaps.length - 1;
     const isMegaSwap = routes.length > 1;
@@ -1272,6 +1277,7 @@ export class Executor02BytecodeBuilder extends ExecutorBytecodeBuilder<
           acc,
           this.buildSingleSwapExchangeCallData(
             routes,
+            priceRouteType,
             routeIndex,
             swapIndex,
             swapExchangeIndex,
@@ -1335,6 +1341,7 @@ export class Executor02BytecodeBuilder extends ExecutorBytecodeBuilder<
 
   protected buildSingleRouteCallData(
     routes: OptimalRoute[],
+    priceRouteType: PriceRouteType,
     exchangeParams: DexExchangeBuildParam[],
     route: OptimalRoute,
     routeIndex: number,
@@ -1356,6 +1363,7 @@ export class Executor02BytecodeBuilder extends ExecutorBytecodeBuilder<
         hexConcat([
           swapAcc,
           this.buildSingleSwapCallData({
+            priceRouteType,
             routes,
             exchangeParams,
             routeIndex,
@@ -1469,11 +1477,14 @@ export class Executor02BytecodeBuilder extends ExecutorBytecodeBuilder<
       priceRoute.destToken,
     );
 
+    const priceRouteType = getPriceRouteType(priceRoute);
+
     const flags = this.buildFlags(
       priceRoute.bestRoute,
       _routes,
       exchangeParams,
       priceRoute.srcToken,
+      priceRouteType,
       maybeWethCallData,
     );
 
@@ -1483,6 +1494,7 @@ export class Executor02BytecodeBuilder extends ExecutorBytecodeBuilder<
           routeAcc,
           this.buildSingleRouteCallData(
             priceRoute.bestRoute,
+            priceRouteType,
             exchangeParams,
             route,
             routeIndex,
