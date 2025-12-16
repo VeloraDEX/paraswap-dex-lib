@@ -119,6 +119,7 @@ import { Blackhole } from './solidly/forks-override/blackhole';
 import { BlackholeCL } from './algebra-integral/forks/blackhole-cl';
 import { BunniV2 } from './bunni-v2/bunni-v2';
 import { Cap } from './cap/cap';
+import { Eth0MintZap } from './usual/eth0-zapper';
 
 const LegacyDexes = [
   CurveV2,
@@ -222,6 +223,7 @@ const Dexes = [
   WrappedMM,
   UsualMUsd0,
   UsualPP,
+  Eth0MintZap,
   Ekubo,
   MiroMigrator,
   AaveV3PtRollOver,
