@@ -44,13 +44,20 @@ export type Executor02SingleSwapCallDataParams = {
   swap: BuildSwap;
   srcToken: string;
   destToken: string;
-  singleRoutes: SingleRouteBuildSwaps<BuildSwap>[];
+  swaps: BuildSwap[];
+  rootUnwrapEth: boolean;
+  rootWrapEth: boolean;
 };
 
 export type MultiRouteExecutor02DexCallDataParams = {
-  singleRoutes: SingleRouteBuildSwaps<BuildSwap>[];
+  rootUnwrapEth: boolean;
+  swap: BuildSwap;
   destToken: string;
 };
+
+// Disclaimer: Current encoding has a lot of complexity introduced to handle wraps/unwraps inside the route
+// but since RouteAdvisor release, we rely only on wrapped tokens inside the route and handle wraps/unwraps on dex level
+// so in theory we can simplify a lot of this logic in the future releases
 
 /**
  * Class to build bytecode for Executor02 - simpleSwap with N DEXs (VERTICAL_BRANCH), multiSwaps (VERTICAL_BRANCH_HORIZONTAL_SEQUENCE) and megaswaps (NESTED_VERTICAL_BRANCH_HORIZONTAL_SEQUENCE)
@@ -63,7 +70,7 @@ export class Executor02BytecodeBuilderMultiRoute extends ExecutorBytecodeBuilder
   /**
    * Executor02 Flags:
    * switch (flag % 4):
-   * case 0: don't instert fromAmount
+   * case 0: don't insert fromAmount
    * case 1: sendEth equal to fromAmount
    * case 2: sendEth equal to fromAmount + insert fromAmount
    * case 3: insert fromAmount
@@ -290,15 +297,13 @@ export class Executor02BytecodeBuilderMultiRoute extends ExecutorBytecodeBuilder
     params: DexCallDataParams<MultiRouteExecutor02DexCallDataParams>,
   ): string {
     const {
-      singleRoutes,
       swapExchangeIndex,
-      routeIndex,
-      swapIndex,
       destToken,
       priceRouteType,
+      swap,
+      rootUnwrapEth,
     } = params;
 
-    const swap = singleRoutes[routeIndex].swaps[swapIndex];
     const swapExchange = swap.swapExchanges[swapExchangeIndex];
     const flag = swapExchange.build.dexFlag;
 
@@ -308,8 +313,8 @@ export class Executor02BytecodeBuilderMultiRoute extends ExecutorBytecodeBuilder
       exchangeParam;
 
     const routeNeedsRootUnwrapEth = this.doesRouteNeedsRootUnwrapEth(
-      singleRoutes,
       destToken,
+      rootUnwrapEth,
     );
 
     const needUnwrap =
@@ -505,11 +510,11 @@ export class Executor02BytecodeBuilderMultiRoute extends ExecutorBytecodeBuilder
   }
 
   private buildVerticalBranchingCallData(
-    singleRoutes: SingleRouteBuildSwaps<BuildSwap>[],
     swap: BuildSwap,
     swapCallData: string,
     flag: Flag,
     isRoot = false,
+    singleRoutes: SingleRouteBuildSwaps<BuildSwap>[] = [],
   ) {
     const destTokenAddrLowered = swap.destToken.toLowerCase();
     const isEthDest = isETHAddress(destTokenAddrLowered);
@@ -568,7 +573,7 @@ export class Executor02BytecodeBuilderMultiRoute extends ExecutorBytecodeBuilder
   }
 
   private buildSingleSwapExchangeCallData(
-    singleRoutes: SingleRouteBuildSwaps<BuildSwap>[],
+    swaps: BuildSwap[],
     routeIndex: number,
     swapIndex: number,
     swapExchangeIndex: number,
@@ -579,21 +584,24 @@ export class Executor02BytecodeBuilderMultiRoute extends ExecutorBytecodeBuilder
     srcToken: string,
     destToken: string,
     priceRouteType: PriceRouteType,
+    rootUnwrapEth: boolean,
+    rootWrapEth: boolean,
     maybeWethCallData?: DepositWithdrawReturn,
-    hasMultipleSwapExchanges?: boolean,
   ): string {
-    const isSimpleSwap =
-      singleRoutes.length === 1 && singleRoutes[0].swaps.length === 1;
+    const isSimpleSwap = priceRouteType === 'simple';
+
     let swapExchangeCallData = '';
-    const swap = singleRoutes[routeIndex].swaps[swapIndex];
+    const swap = swaps[swapIndex];
+    const hasMultipleSwapExchanges = swap.swapExchanges.length > 1;
     const swapExchange = swap.swapExchanges[swapExchangeIndex];
 
     const curExchangeParam = swapExchange.build.dexParams;
     const approveFlag = swapExchange.build.approveFlag;
 
     const dexCallData = this.buildDexCallData({
+      swap,
       priceRouteType,
-      singleRoutes,
+      rootUnwrapEth,
       routeIndex,
       swapIndex,
       swapExchangeIndex,
@@ -617,7 +625,7 @@ export class Executor02BytecodeBuilderMultiRoute extends ExecutorBytecodeBuilder
       swapExchangeCallData = hexConcat([dexCallData]);
     }
 
-    const isLastSwap = swapIndex === singleRoutes[routeIndex].swaps.length - 1;
+    const isLastSwap = swapIndex === swaps.length - 1;
 
     if (curExchangeParam.transferSrcTokenBeforeSwap) {
       const transferCallData = this.buildTransferCallData(
@@ -671,7 +679,7 @@ export class Executor02BytecodeBuilderMultiRoute extends ExecutorBytecodeBuilder
         const isNotFirstSwap = swapIndex !== 0;
         let skipWrap = false;
         if (isNotFirstSwap) {
-          const prevSwap = singleRoutes[routeIndex].swaps[swapIndex - 1];
+          const prevSwap = swaps[swapIndex - 1];
 
           const anyDexOnSwapDoesntNeedWrapNative =
             this.anyDexOnSwapDoesntNeedWrapNative(prevSwap);
@@ -682,7 +690,7 @@ export class Executor02BytecodeBuilderMultiRoute extends ExecutorBytecodeBuilder
         if (
           maybeWethCallData &&
           maybeWethCallData.deposit &&
-          !this.doesRouteNeedsRootWrapEth(singleRoutes, srcToken) &&
+          !this.doesRouteNeedsRootWrapEth(srcToken, rootWrapEth) &&
           allowToAddWrap &&
           !addedWrapToSwapExchangeMap[
             `${routeIndex}_${swapIndex}_${swapExchangeIndex}`
@@ -722,11 +730,11 @@ export class Executor02BytecodeBuilderMultiRoute extends ExecutorBytecodeBuilder
 
         const customWethAddress = curExchangeParam.wethAddress;
 
-        const nextSwap = singleRoutes[routeIndex].swaps[swapIndex + 1];
+        const nextSwap = swaps[swapIndex + 1];
         const needUnwrapAll =
           isSimpleSwap ||
           (isLastSwap
-            ? !this.doesRouteNeedsRootUnwrapEth(singleRoutes, destToken)
+            ? !this.doesRouteNeedsRootUnwrapEth(destToken, rootUnwrapEth)
             : this.everyDexOnSwapNeedWrapNative(nextSwap) ||
               this.everyDexOnSwapDoesntNeedWrapNative(nextSwap));
 
@@ -766,7 +774,7 @@ export class Executor02BytecodeBuilderMultiRoute extends ExecutorBytecodeBuilder
       !curExchangeParam.needWrapNative &&
       !unwrapToSwapMap[swapIndex - 1]
     ) {
-      const prevSwap = singleRoutes[routeIndex].swaps[swapIndex - 1];
+      const prevSwap = swaps[swapIndex - 1];
       let eachDexOnPrevSwapReturnsWeth: boolean = false;
 
       if (prevSwap && !prevBranchWasWrapped) {
@@ -813,7 +821,7 @@ export class Executor02BytecodeBuilderMultiRoute extends ExecutorBytecodeBuilder
       isETHAddress(swap.destToken) &&
       isLastSwap &&
       // don't need to send eth without unwrapping, handling unwrap and sendEth in the end of root branch
-      !this.doesRouteNeedsRootUnwrapEth(singleRoutes, destToken)
+      !this.doesRouteNeedsRootUnwrapEth(destToken, rootUnwrapEth)
     ) {
       const finalSpecialFlagCalldata = this.buildFinalSpecialFlagCalldata();
       swapExchangeCallData = hexConcat([
@@ -935,23 +943,15 @@ export class Executor02BytecodeBuilderMultiRoute extends ExecutorBytecodeBuilder
   }
 
   private buildVerticalBranchingFlag(
-    singleRoutes: SingleRouteBuildSwaps<BuildSwap>[],
     swap: BuildSwap,
-    routeIndex: number,
-    swapIndex: number,
     destToken: string,
+    isLastSwap: boolean,
   ): Flag {
     let flag = Flag.INSERT_FROM_AMOUNT_CHECK_SRC_TOKEN_BALANCE_AFTER_SWAP; // 11
 
-    const isLastSwap = swapIndex === singleRoutes[routeIndex].swaps.length - 1;
-
     if (isLastSwap) {
       const isEthDest = isETHAddress(destToken);
-      const lastSwap =
-        singleRoutes[routeIndex].swaps[
-          singleRoutes[routeIndex].swaps.length - 1
-        ];
-      const lastSwapExchanges = lastSwap.swapExchanges;
+      const lastSwapExchanges = swap.swapExchanges;
       const anyDexLastSwapNeedUnwrap = lastSwapExchanges
         .map(
           se =>
@@ -991,12 +991,15 @@ export class Executor02BytecodeBuilderMultiRoute extends ExecutorBytecodeBuilder
       swap,
       srcToken,
       destToken,
-      singleRoutes,
       priceRouteType,
+      rootUnwrapEth,
+      rootWrapEth,
+      swaps,
     } = params;
-    const isLastSwap = swapIndex === singleRoutes[routeIndex].swaps.length - 1;
 
     const { swapExchanges } = swap;
+
+    const isLastSwap = swaps.length - 1 === swapIndex;
 
     const applyVerticalBranching = this.doesSwapNeedToBeAsVerticalBranch(
       priceRouteType,
@@ -1017,7 +1020,7 @@ export class Executor02BytecodeBuilderMultiRoute extends ExecutorBytecodeBuilder
         return hexConcat([
           acc,
           this.buildSingleSwapExchangeCallData(
-            singleRoutes,
+            swaps,
             routeIndex,
             swapIndex,
             swapExchangeIndex,
@@ -1028,8 +1031,9 @@ export class Executor02BytecodeBuilderMultiRoute extends ExecutorBytecodeBuilder
             srcToken,
             destToken,
             priceRouteType,
+            rootUnwrapEth,
+            rootWrapEth,
             maybeWethCallData,
-            swap.swapExchanges.length > 1,
           ),
         ]);
       },
@@ -1048,16 +1052,9 @@ export class Executor02BytecodeBuilderMultiRoute extends ExecutorBytecodeBuilder
 
     if (applyVerticalBranching) {
       const vertBranchingCallData = this.buildVerticalBranchingCallData(
-        singleRoutes,
         swap,
         swapCallData,
-        this.buildVerticalBranchingFlag(
-          singleRoutes,
-          swap,
-          routeIndex,
-          swapIndex,
-          destToken,
-        ),
+        this.buildVerticalBranchingFlag(swap, destToken, isLastSwap),
       );
 
       return needToAppendWrapCallData
@@ -1075,7 +1072,6 @@ export class Executor02BytecodeBuilderMultiRoute extends ExecutorBytecodeBuilder
   }
 
   protected buildSingleRouteCallData(
-    singleRoutes: SingleRouteBuildSwaps<BuildSwap>[],
     route: SingleRouteBuildSwaps<BuildSwap>,
     routeIndex: number,
     flags: { approves: Flag[]; dexes: Flag[]; wrap: Flag },
@@ -1083,6 +1079,8 @@ export class Executor02BytecodeBuilderMultiRoute extends ExecutorBytecodeBuilder
     srcToken: string,
     destToken: string,
     priceRouteType: PriceRouteType,
+    rootUnwrapEth: boolean,
+    rootWrapEth: boolean,
     maybeWethCallData?: DepositWithdrawReturn,
   ): string {
     const { swaps } = route;
@@ -1095,8 +1093,10 @@ export class Executor02BytecodeBuilderMultiRoute extends ExecutorBytecodeBuilder
         hexConcat([
           swapAcc,
           this.buildSingleSwapCallData({
+            swaps,
             priceRouteType,
-            singleRoutes,
+            rootUnwrapEth,
+            rootWrapEth,
             routeIndex,
             swapIndex,
             flags,
@@ -1133,35 +1133,28 @@ export class Executor02BytecodeBuilderMultiRoute extends ExecutorBytecodeBuilder
   }
 
   private doesRouteNeedsRootWrapEth(
-    singleRoutes: SingleRouteBuildSwaps<BuildSwap>[],
     srcToken: string,
+    rootWrapEth: boolean,
   ): boolean {
     if (!isETHAddress(srcToken)) {
       return false;
     }
 
-    return singleRoutes.every(route =>
-      this.eachDexOnSwapNeedsWrapNative(route.swaps[0]),
-    );
+    return rootWrapEth;
   }
 
+  // (check disclaimer above)
+  // this method is still used to prevent changes on the legacy encoding with wrap/unwrap
+  // imho, this method has incorrect naming and overall misleading logic
   private doesRouteNeedsRootUnwrapEth(
-    singleRoutes: SingleRouteBuildSwaps<BuildSwap>[],
     destToken: string,
+    rootUnwrapEth: boolean,
   ): boolean {
     if (!isETHAddress(destToken)) {
       return false;
     }
 
-    const res = singleRoutes.some(route => {
-      const lastSwap = route.swaps[route.swaps.length - 1];
-      const anyDexOnSwapNeedsWrapNative =
-        this.anyDexOnSwapNeedsWrapNative(lastSwap);
-
-      return anyDexOnSwapNeedsWrapNative;
-    });
-
-    return res;
+    return rootUnwrapEth;
   }
 
   public getAddress(): string {
@@ -1184,14 +1177,21 @@ export class Executor02BytecodeBuilderMultiRoute extends ExecutorBytecodeBuilder
       maybeWethCallData?.withdraw && isETHAddress(priceRoute.destToken);
     const needSendNativeEth = isETHAddress(priceRoute.destToken);
 
-    const routeNeedsRootWrapEth = this.doesRouteNeedsRootWrapEth(
-      _routes,
-      priceRoute.srcToken,
-    );
-    const routeNeedsRootUnwrapEth = this.doesRouteNeedsRootUnwrapEth(
-      _routes,
-      priceRoute.destToken,
-    );
+    const rootWrapEth = !isETHAddress(priceRoute.srcToken)
+      ? false
+      : _routes.every(route =>
+          this.eachDexOnSwapNeedsWrapNative(route.swaps[0]),
+        );
+
+    const rootUnwrapEth = !isETHAddress(priceRoute.destToken)
+      ? false
+      : _routes.some(route => {
+          const lastSwap = route.swaps[route.swaps.length - 1];
+          const anyDexOnSwapNeedsWrapNative =
+            this.anyDexOnSwapNeedsWrapNative(lastSwap);
+
+          return anyDexOnSwapNeedsWrapNative;
+        });
 
     const priceRouteType = getPriceRouteType(priceRoute);
 
@@ -1209,7 +1209,6 @@ export class Executor02BytecodeBuilderMultiRoute extends ExecutorBytecodeBuilder
         hexConcat([
           routeAcc,
           this.buildSingleRouteCallData(
-            _routes,
             route,
             routeIndex,
             flags,
@@ -1217,6 +1216,8 @@ export class Executor02BytecodeBuilderMultiRoute extends ExecutorBytecodeBuilder
             priceRoute.srcToken,
             priceRoute.destToken,
             priceRouteType,
+            rootUnwrapEth,
+            rootWrapEth,
             maybeWethCallData,
           ),
         ]),
@@ -1228,18 +1229,18 @@ export class Executor02BytecodeBuilderMultiRoute extends ExecutorBytecodeBuilder
     if (priceRouteType === 'mega' && (needWrapEth || needUnwrapEth)) {
       const lastRoute = _routes[_routes.length - 1];
       swapsCalldata = this.buildVerticalBranchingCallData(
-        _routes,
         lastRoute.swaps[lastRoute.swaps.length - 1],
         swapsCalldata,
         needWrapEth
           ? Flag.DONT_INSERT_FROM_AMOUNT_DONT_CHECK_BALANCE_AFTER_SWAP // 0
           : Flag.DONT_INSERT_FROM_AMOUNT_CHECK_SRC_TOKEN_BALANCE_AFTER_SWAP, // 8
         true, // isRoot branch
+        _routes,
       );
     }
 
     // ETH wrap
-    if (needWrapEth && routeNeedsRootWrapEth) {
+    if (needWrapEth && rootWrapEth) {
       let depositCallData = this.buildWrapEthCallData(
         this.dexHelper.config.data.wrappedNativeTokenAddress,
         maybeWethCallData.deposit!.calldata,
@@ -1275,7 +1276,7 @@ export class Executor02BytecodeBuilderMultiRoute extends ExecutorBytecodeBuilder
     // ETH unwrap, only for multiswaps and mega swaps
     if (
       needUnwrapEth &&
-      routeNeedsRootUnwrapEth &&
+      rootUnwrapEth &&
       (priceRouteType === 'multi' || priceRouteType === 'mega')
     ) {
       const withdrawCallData = this.buildUnwrapEthCallData(
@@ -1288,7 +1289,7 @@ export class Executor02BytecodeBuilderMultiRoute extends ExecutorBytecodeBuilder
     // Special flag (send native) calldata, only for multiswaps and mega swaps
     if (
       needSendNativeEth &&
-      routeNeedsRootUnwrapEth &&
+      rootUnwrapEth &&
       (priceRouteType === 'multi' || priceRouteType === 'mega')
     ) {
       const finalSpecialFlagCalldata = this.buildFinalSpecialFlagCalldata();
