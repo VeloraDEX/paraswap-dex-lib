@@ -164,7 +164,6 @@ export class Executor03BytecodeBuilder extends ExecutorBytecodeBuilder<
       swapExchangeIndex,
       exchangeParams,
       exchangeParamIndex: index,
-      isLastSwap: true,
       flag: flags.dexes[index],
       maybeWethCallData,
     });

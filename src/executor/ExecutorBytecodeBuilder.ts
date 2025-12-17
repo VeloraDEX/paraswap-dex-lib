@@ -60,7 +60,6 @@ export type DexCallDataParams<T> = {
   swapIndex: number;
   swapExchangeIndex: number;
 
-  isLastSwap: boolean;
   flag: Flag;
 
   priceRouteType: PriceRouteType;

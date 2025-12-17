@@ -246,7 +246,6 @@ export class Executor01BytecodeBuilder extends ExecutorBytecodeBuilder<
       swapExchangeIndex: 0,
       exchangeParams,
       exchangeParamIndex: index,
-      isLastSwap: index === routes[0].swaps.length - 1,
       flag: flags.dexes[index],
     });
 

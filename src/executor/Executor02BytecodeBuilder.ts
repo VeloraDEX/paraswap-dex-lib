@@ -641,7 +641,6 @@ export class Executor02BytecodeBuilder extends ExecutorBytecodeBuilder<
       swapExchangeIndex,
       exchangeParams,
       exchangeParamIndex,
-      isLastSwap: false,
       flag: flags.dexes[exchangeParamIndex],
       swapExchange,
       destToken,

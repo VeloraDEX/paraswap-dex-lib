@@ -602,14 +602,13 @@ export class Executor02BytecodeBuilderMultiRoute extends ExecutorBytecodeBuilder
       swap,
       priceRouteType,
       rootUnwrapEth,
-      routeIndex,
-      swapIndex,
       swapExchangeIndex,
-      isLastSwap: false,
       destToken,
 
       // TODO-multi to be removed after refactoring
       routes: [],
+      routeIndex,
+      swapIndex,
       exchangeParams: [],
       exchangeParamIndex: NOT_EXISTING_EXCHANGE_PARAM_INDEX,
       flag: Flag.DONT_INSERT_FROM_AMOUNT_DONT_CHECK_BALANCE_AFTER_SWAP,
