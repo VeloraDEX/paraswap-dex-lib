@@ -405,7 +405,7 @@ export class GenericSwapTransactionBuilder {
     const hasMultiRoute = this.hasMultiRoute(priceRoute);
     const bytecodeBuilder = this.executorDetector.getBytecodeBuilder(
       executorName,
-      hasMultiRoute,
+      true, // TODO-multi: temporary to test old routes on the new executor
     );
     const bytecode = await this.buildCalls(
       priceRoute,
