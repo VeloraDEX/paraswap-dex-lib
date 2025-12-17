@@ -57,7 +57,8 @@ export type SingleRouteBuildSwaps<TSwap> = {
 export type MultiRouteBuildSwaps<TSwap> = {
   type: 'multi-route';
   percent: number;
-  swaps: (TSwap[] | TSwap[][])[];
+  multiRoutePercents: number[];
+  swaps: (TSwap[] | MultiRouteSwap<TSwap>)[];
 };
 
 export type GenericRouteSwaps<TSwap> =
@@ -80,3 +81,5 @@ export type BuildSwapExchange<T> = OptimalSwapExchange<T> & {
 export type BuildSwap = Omit<OptimalSwap, 'swapExchanges'> & {
   swapExchanges: BuildSwapExchange<any>[];
 };
+
+export type MultiRouteSwap<TSwap> = TSwap[][];

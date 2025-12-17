@@ -71,7 +71,7 @@ export type DexCallDataParams<T> = {
 } & T;
 
 export type BuildSwapFlagsParams = {
-  singleRoutes: SingleRouteBuildSwaps<BuildSwap>[];
+  swaps: BuildSwap[];
   routeIndex: number;
   swapIndex: number;
   swapExchangeIndex: number;
@@ -419,7 +419,7 @@ export abstract class ExecutorBytecodeBuilder<S = {}, D = {}> {
         swap.swapExchanges.map((swapExchange, swapExchangeIndex) => {
           const { dexFlag, approveFlag } = buildFlagsMethod({
             priceRouteType,
-            singleRoutes,
+            swaps: route.swaps,
             routes,
             exchangeParams,
             routeIndex,

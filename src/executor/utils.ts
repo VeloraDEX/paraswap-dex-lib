@@ -7,6 +7,7 @@ import {
   OptimalRate,
 } from '@paraswap/core';
 import { PriceRouteType } from './ExecutorBytecodeBuilder';
+import { RouteBuildSwaps, BuildSwap, MultiRouteSwap } from './types';
 
 export const extractReturnAmountPosition = (
   iface: Interface,
@@ -238,4 +239,42 @@ export function getPriceRouteType(priceRoute: OptimalRate): PriceRouteType {
   }
 
   return 'simple';
+}
+
+export function getFirstRouteSwaps(routes: RouteBuildSwaps[]): BuildSwap[] {
+  return routes
+    .map(route => {
+      if (route.type === 'multi-route') {
+        if (route.swaps.every(s => Array.isArray(s))) {
+          return (route.swaps[0] as BuildSwap[][]).map(s => s[0]);
+        }
+
+        return route.swaps[0][0];
+      }
+
+      return route.swaps[0];
+    })
+    .flat();
+}
+
+export function getLastRouteSwaps(routes: RouteBuildSwaps[]): BuildSwap[] {
+  return routes
+    .map(route => {
+      if (route.type === 'multi-route') {
+        const lastRoute = route.swaps[route.swaps.length - 1];
+        if (lastRoute.every(s => Array.isArray(s))) {
+          return lastRoute.map(route => route[route.length - 1]);
+        }
+        return lastRoute[lastRoute.length - 1];
+      }
+
+      return route.swaps[route.swaps.length - 1];
+    })
+    .flat();
+}
+
+export function isMultiRouteSwap<TSwap>(
+  swaps: TSwap[] | TSwap[][],
+): swaps is MultiRouteSwap<TSwap> {
+  return swaps.every(s => Array.isArray(s));
 }

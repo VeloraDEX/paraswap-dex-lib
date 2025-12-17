@@ -1,12 +1,11 @@
 import { ethers } from 'ethers';
-import { OptimalRate } from '@paraswap/core';
+import { OptimalRate, OptimalRoute } from '@paraswap/core';
 import { DexExchangeBuildParam } from '../types';
 import {
   BuildSwap,
   Executors,
   Flag,
   RouteBuildSwaps,
-  SingleRouteBuildSwaps,
   SpecialDex,
 } from './types';
 import { isETHAddress } from '../utils';
@@ -29,7 +28,12 @@ import {
   DEFAULT_RETURN_AMOUNT_POS,
 } from './constants';
 import { Executor02DexCallDataParams } from './Executor02BytecodeBuilder';
-import { getPriceRouteType } from './utils';
+import {
+  getFirstRouteSwaps,
+  getLastRouteSwaps,
+  getPriceRouteType,
+  isMultiRouteSwap,
+} from './utils';
 
 const {
   utils: { hexlify, hexDataLength, hexConcat, hexZeroPad, solidityPack },
@@ -47,6 +51,7 @@ export type Executor02SingleSwapCallDataParams = {
   swaps: BuildSwap[];
   rootUnwrapEth: boolean;
   rootWrapEth: boolean;
+  isLastSwapOnTheRoute?: boolean;
 };
 
 export type MultiRouteExecutor02DexCallDataParams = {
@@ -166,17 +171,15 @@ export class Executor02BytecodeBuilderMultiRoute extends ExecutorBytecodeBuilder
     approveFlag: Flag;
   } {
     const {
-      singleRoutes,
+      swaps,
       swap,
       swapExchange,
       maybeWethCallData,
-      routeIndex,
       swapIndex,
       swapExchangeIndex,
       priceRouteType,
     } = params;
 
-    const route = singleRoutes[routeIndex];
     const exchangeParam = swapExchange.build.dexParams;
 
     const { srcToken, destToken } = swap;
@@ -185,9 +188,9 @@ export class Executor02BytecodeBuilderMultiRoute extends ExecutorBytecodeBuilder
       swap,
     );
 
-    const isHorizontalSequence = route.swaps.length > 1; // check if route is a multi-swap (horizontal sequence)
+    const isHorizontalSequence = swaps.length > 1; // check if route is a multi-swap (horizontal sequence)
     const isFirstSwap = swapIndex === 0;
-    const isLastSwap = !isFirstSwap && swapIndex === route.swaps.length - 1;
+    const isLastSwap = !isFirstSwap && swapIndex === swaps.length - 1;
 
     const {
       dexFuncHasRecipient,
@@ -233,7 +236,7 @@ export class Executor02BytecodeBuilderMultiRoute extends ExecutorBytecodeBuilder
     const isLastExchangeWithNeedWrapNative =
       this.isLastExchangeWithNeedWrapNative(swap, swapExchangeIndex);
 
-    //  for the first part, basically replicates the logic from `unwrap after last swap` in buildSingleSwapExchangeCallData
+    // for the first part, basically replicates the logic from `unwrap after last swap` in buildSingleSwapExchangeCallData
     const needCheckSrcTokenBalanceOf =
       (needUnwrap &&
         (!applyVerticalBranching ||
@@ -514,7 +517,7 @@ export class Executor02BytecodeBuilderMultiRoute extends ExecutorBytecodeBuilder
     swapCallData: string,
     flag: Flag,
     isRoot = false,
-    singleRoutes: SingleRouteBuildSwaps<BuildSwap>[] = [],
+    routes: RouteBuildSwaps[] = [],
   ) {
     const destTokenAddrLowered = swap.destToken.toLowerCase();
     const isEthDest = isETHAddress(destTokenAddrLowered);
@@ -529,13 +532,12 @@ export class Executor02BytecodeBuilderMultiRoute extends ExecutorBytecodeBuilder
         anyDexOnSwapDoesntNeedWrapNative =
           this.anyDexOnSwapDoesntNeedWrapNative(swap);
       } else {
-        anyDexOnSwapNeedsWrapNative = singleRoutes.some(route =>
-          this.anyDexOnSwapNeedsWrapNative(route.swaps[route.swaps.length - 1]),
+        const lastSwaps = getLastRouteSwaps(routes);
+        anyDexOnSwapNeedsWrapNative = lastSwaps.some(swap =>
+          this.anyDexOnSwapNeedsWrapNative(swap),
         );
-        anyDexOnSwapDoesntNeedWrapNative = singleRoutes.some(route =>
-          this.anyDexOnSwapDoesntNeedWrapNative(
-            route.swaps[route.swaps.length - 1],
-          ),
+        anyDexOnSwapDoesntNeedWrapNative = lastSwaps.some(swap =>
+          this.anyDexOnSwapDoesntNeedWrapNative(swap),
         );
       }
     }
@@ -561,6 +563,34 @@ export class Executor02BytecodeBuilderMultiRoute extends ExecutorBytecodeBuilder
 
       destTokenPos = destTokenAddrIndex / 2 - 40;
     }
+
+    const fromAmountPos = hexDataLength(data) - 64 - 28; // 64 (position), 28 (selector padding);
+
+    return this.packVerticalBranchingCallData(
+      data,
+      fromAmountPos,
+      destTokenPos < 0 ? 0 : destTokenPos,
+      flag,
+    );
+  }
+
+  private buildVerticalBranchingCallDataNoEthDest(
+    destToken: string,
+    swapCallData: string,
+    flag: Flag,
+  ) {
+    const destTokenAddrLowered = destToken.toLowerCase();
+
+    let destTokenPos: number;
+
+    // 'bytes28', 'bytes4', 'bytes32', 'bytes32', 'bytes'
+    const data = this.packVerticalBranchingData(swapCallData);
+
+    const destTokenAddrIndex = data
+      .replace('0x', '')
+      .indexOf(destTokenAddrLowered.toLowerCase().replace('0x', ''));
+
+    destTokenPos = destTokenAddrIndex / 2 - 40;
 
     const fromAmountPos = hexDataLength(data) - 64 - 28; // 64 (position), 28 (selector padding);
 
@@ -994,6 +1024,7 @@ export class Executor02BytecodeBuilderMultiRoute extends ExecutorBytecodeBuilder
       rootUnwrapEth,
       rootWrapEth,
       swaps,
+      isLastSwapOnTheRoute,
     } = params;
 
     const { swapExchanges } = swap;
@@ -1053,7 +1084,11 @@ export class Executor02BytecodeBuilderMultiRoute extends ExecutorBytecodeBuilder
       const vertBranchingCallData = this.buildVerticalBranchingCallData(
         swap,
         swapCallData,
-        this.buildVerticalBranchingFlag(swap, destToken, isLastSwap),
+        this.buildVerticalBranchingFlag(
+          swap,
+          destToken,
+          isLastSwapOnTheRoute ?? isLastSwap,
+        ),
       );
 
       return needToAppendWrapCallData
@@ -1070,8 +1105,8 @@ export class Executor02BytecodeBuilderMultiRoute extends ExecutorBytecodeBuilder
       : swapCallData;
   }
 
-  protected buildSingleRouteCallData(
-    route: SingleRouteBuildSwaps<BuildSwap>,
+  protected buildRouteCallData(
+    route: RouteBuildSwaps,
     routeIndex: number,
     flags: { approves: Flag[]; dexes: Flag[]; wrap: Flag },
     sender: string,
@@ -1082,48 +1117,157 @@ export class Executor02BytecodeBuilderMultiRoute extends ExecutorBytecodeBuilder
     rootWrapEth: boolean,
     maybeWethCallData?: DepositWithdrawReturn,
   ): string {
-    const { swaps } = route;
+    const buildSingleSwap = (
+      swaps: BuildSwap[],
+      swapIndex: number,
+      swap: BuildSwap,
+      wrapToSwapExchangeMap: { [key: string]: boolean },
+      wrapToSwapMap: { [key: string]: boolean },
+      unwrapToSwapMap: { [key: string]: boolean },
+      isLastSwapOnTheRoute?: boolean,
+    ) =>
+      this.buildSingleSwapCallData({
+        swaps,
+        priceRouteType,
+        rootUnwrapEth,
+        rootWrapEth,
+        routeIndex,
+        swapIndex,
+        flags,
+        sender,
+        wrapToSwapExchangeMap,
+        wrapToSwapMap,
+        unwrapToSwapMap,
+        maybeWethCallData,
+        swap,
+        index: 0,
+        srcToken,
+        destToken,
+        isLastSwapOnTheRoute,
 
-    const appendedWrapToSwapExchangeMap = {};
-    const addedWrapToSwapMap = {};
-    const unwrapToSwapMap = {};
-    const callData = swaps.reduce<string>(
-      (swapAcc, swap, swapIndex) =>
-        hexConcat([
-          swapAcc,
-          this.buildSingleSwapCallData({
-            swaps,
-            priceRouteType,
-            rootUnwrapEth,
-            rootWrapEth,
-            routeIndex,
-            swapIndex,
-            flags,
-            sender,
-            wrapToSwapExchangeMap: appendedWrapToSwapExchangeMap,
-            wrapToSwapMap: addedWrapToSwapMap,
-            unwrapToSwapMap,
-            maybeWethCallData,
-            swap,
-            index: 0,
-            srcToken,
+        // TODO-multi to be removed after refactoring
+        routes: [],
+        exchangeParams: [],
+      });
+
+    const wrapToSwapExchangeMap = {}; // routeIndex_swapIndex_swapExchangeIndex
+    const wrapToSwapMap = {}; // swapIndex
+    const unwrapToSwapMap = {}; // swapIndex
+
+    let callData = '';
+
+    if (route.type === 'single-route') {
+      callData = route.swaps.reduce<string>(
+        (swapAcc, swap, swapIndex) =>
+          hexConcat([
+            swapAcc,
+            buildSingleSwap(
+              route.swaps,
+              swapIndex,
+              swap,
+              wrapToSwapExchangeMap,
+              wrapToSwapMap,
+              unwrapToSwapMap,
+            ),
+          ]),
+        '0x',
+      );
+    } else {
+      route.swaps.forEach((multiRouteSwaps, routeSwapIndex) => {
+        if (isMultiRouteSwap(multiRouteSwaps)) {
+          let multiRoutesCalldata: string = '0x'; // TODO-multi: do we need this prefix?
+
+          multiRouteSwaps.forEach((swaps, multiRouteIndex) => {
+            const mrWrapToSwapExchangeMap = {}; // routeIndex_swapIndex_swapExchangeIndex
+            const mrWrapToSwapMap = {}; // swapIndex
+            const mrUnwrapToSwapMap = {}; // swapIndex
+
+            const multiRouteSwapsCalldata = swaps.reduce<string>(
+              (swapAcc, swap, swapIndex) =>
+                hexConcat([
+                  swapAcc,
+                  buildSingleSwap(
+                    swaps,
+                    swapIndex,
+                    swap,
+                    mrWrapToSwapExchangeMap,
+                    mrWrapToSwapMap,
+                    mrUnwrapToSwapMap,
+                  ),
+                ]),
+              '0x',
+            );
+
+            const multiRouteCalldata = this.wrapAsVerticalBranch(
+              multiRouteSwapsCalldata,
+              route.multiRoutePercents[multiRouteIndex],
+              swaps[0],
+              Object.values(mrWrapToSwapMap).includes(true) ||
+                Object.values(mrWrapToSwapExchangeMap).includes(true),
+              null,
+            );
+
+            multiRoutesCalldata = hexConcat([
+              multiRoutesCalldata,
+              multiRouteCalldata,
+            ]);
+          });
+
+          // should be the same for all routes in multi-route
+          const destToken = multiRouteSwaps[0].at(-1)!.destToken;
+
+          // TODO-multi: as ETH is not used as intermediate connector since RouteAdvisor release, trying to simplify here
+          const routeCalldata = this.buildVerticalBranchingCallDataNoEthDest(
             destToken,
+            multiRoutesCalldata,
+            Flag.INSERT_FROM_AMOUNT_CHECK_SRC_TOKEN_BALANCE_AFTER_SWAP,
+          );
 
-            // TODO-multi to be removed after refactoring
-            routes: [],
-            exchangeParams: [],
-          }),
-        ]),
-      '0x',
-    );
+          callData = hexConcat([callData, routeCalldata]);
+        } else {
+          callData += multiRouteSwaps.reduce<string>(
+            (swapAcc, swap, swapIndex) =>
+              hexConcat([
+                swapAcc,
+                buildSingleSwap(
+                  multiRouteSwaps,
+                  swapIndex,
+                  swap,
+                  wrapToSwapExchangeMap,
+                  wrapToSwapMap,
+                  unwrapToSwapMap,
+                  routeSwapIndex === route.swaps.length - 1 &&
+                    swapIndex === multiRouteSwaps.length - 1,
+                ),
+              ]),
+            '0x',
+          );
+        }
+      });
+    }
 
     if (priceRouteType === 'mega') {
+      let swap: BuildSwap;
+
+      if (route.type === 'single-route') {
+        swap = route.swaps[0];
+      } else {
+        // TODO-multi: as only swap.srcToken address is used (for srcToken != ETH), which is the same for multi-routes
+        // safe to use first route
+        const firstMultiRoute = route.swaps[0];
+        if (isMultiRouteSwap(firstMultiRoute)) {
+          swap = firstMultiRoute[0][0];
+        } else {
+          swap = firstMultiRoute[0];
+        }
+      }
+
       return this.wrapAsVerticalBranch(
         callData,
         route.percent,
-        route.swaps[0],
-        Object.values(addedWrapToSwapMap).includes(true) ||
-          Object.values(appendedWrapToSwapExchangeMap).includes(true),
+        swap,
+        Object.values(wrapToSwapMap).includes(true) ||
+          Object.values(wrapToSwapExchangeMap).includes(true),
         null,
       );
     }
@@ -1167,9 +1311,6 @@ export class Executor02BytecodeBuilderMultiRoute extends ExecutorBytecodeBuilder
     sender: string,
     maybeWethCallData?: DepositWithdrawReturn,
   ): string {
-    // TODO-multi: temporary to handle all cases for single-route after refactoring
-    const _routes = routes.filter(r => r.type === 'single-route');
-
     const needWrapEth =
       maybeWethCallData?.deposit && isETHAddress(priceRoute.srcToken);
     const needUnwrapEth =
@@ -1178,36 +1319,32 @@ export class Executor02BytecodeBuilderMultiRoute extends ExecutorBytecodeBuilder
 
     const rootWrapEth = !isETHAddress(priceRoute.srcToken)
       ? false
-      : _routes.every(route =>
-          this.eachDexOnSwapNeedsWrapNative(route.swaps[0]),
+      : getFirstRouteSwaps(routes).every(swap =>
+          this.eachDexOnSwapNeedsWrapNative(swap),
         );
 
     const rootUnwrapEth = !isETHAddress(priceRoute.destToken)
       ? false
-      : _routes.some(route => {
-          const lastSwap = route.swaps[route.swaps.length - 1];
-          const anyDexOnSwapNeedsWrapNative =
-            this.anyDexOnSwapNeedsWrapNative(lastSwap);
-
-          return anyDexOnSwapNeedsWrapNative;
-        });
+      : getLastRouteSwaps(routes).some(swap =>
+          this.anyDexOnSwapNeedsWrapNative(swap),
+        );
 
     const priceRouteType = getPriceRouteType(priceRoute);
 
     const flags = this.buildFlags(
       priceRoute.bestRoute,
-      _routes,
+      routes,
       exchangeParams,
       priceRoute.srcToken,
       priceRouteType,
       maybeWethCallData,
     );
 
-    let swapsCalldata = _routes.reduce<string>(
+    let swapsCalldata = routes.reduce<string>(
       (routeAcc, route, routeIndex) =>
         hexConcat([
           routeAcc,
-          this.buildSingleRouteCallData(
+          this.buildRouteCallData(
             route,
             routeIndex,
             flags,
@@ -1226,15 +1363,18 @@ export class Executor02BytecodeBuilderMultiRoute extends ExecutorBytecodeBuilder
     // hack to do wrap/unwrap before the priceRoute execution
     // first make wrap/unwrap, then execute mega swap as vertical branch
     if (priceRouteType === 'mega' && (needWrapEth || needUnwrapEth)) {
-      const lastRoute = _routes[_routes.length - 1];
+      // TODO-multi: would it work? test this case
+      const lastSwaps = getLastRouteSwaps(routes);
+      const lastSwap = lastSwaps[lastSwaps.length - 1];
+
       swapsCalldata = this.buildVerticalBranchingCallData(
-        lastRoute.swaps[lastRoute.swaps.length - 1],
+        lastSwap,
         swapsCalldata,
         needWrapEth
           ? Flag.DONT_INSERT_FROM_AMOUNT_DONT_CHECK_BALANCE_AFTER_SWAP // 0
           : Flag.DONT_INSERT_FROM_AMOUNT_CHECK_SRC_TOKEN_BALANCE_AFTER_SWAP, // 8
         true, // isRoot branch
-        _routes,
+        routes,
       );
     }
 
@@ -1299,10 +1439,12 @@ export class Executor02BytecodeBuilderMultiRoute extends ExecutorBytecodeBuilder
       ((needWrapEth || needUnwrapEth) && priceRouteType === 'mega') ||
       priceRouteType === 'multi'
     ) {
+      // TODO-multi: would it work? test this case
+      const firstSwaps = getFirstRouteSwaps(routes);
       swapsCalldata = this.wrapAsVerticalBranch(
         swapsCalldata,
         SWAP_EXCHANGE_100_PERCENTAGE,
-        _routes[0].swaps[0],
+        firstSwaps[0],
         false,
         null,
       );
@@ -1319,5 +1461,83 @@ export class Executor02BytecodeBuilderMultiRoute extends ExecutorBytecodeBuilder
         swapsCalldata, // calldata
       ],
     );
+  }
+
+  protected buildFlags(
+    routes: OptimalRoute[],
+    buildRoutes: RouteBuildSwaps[],
+    exchangeParams: DexExchangeBuildParam[],
+    srcToken: string,
+    priceRouteType: PriceRouteType,
+    maybeWethCallData?: DepositWithdrawReturn,
+  ): { approves: Flag[]; dexes: Flag[]; wrap: Flag } {
+    const buildFlagsMethod =
+      priceRouteType === 'multi' || priceRouteType === 'mega'
+        ? this.buildMultiMegaSwapFlags.bind(this)
+        : this.buildSimpleSwapFlags.bind(this);
+
+    let flags: { dexes: Flag[]; approves: Flag[] } = {
+      dexes: [],
+      approves: [],
+    };
+
+    const buildAndAssignFlags = (
+      swaps: BuildSwap[],
+      swap: BuildSwap,
+      swapIndex: number,
+    ) => {
+      swap.swapExchanges.map((swapExchange, swapExchangeIndex) => {
+        const { dexFlag, approveFlag } = buildFlagsMethod({
+          priceRouteType,
+          swaps,
+          routes,
+          exchangeParams,
+          routeIndex: 0, // not used on Ex02MultiRoute
+          swapIndex,
+          swapExchangeIndex,
+          exchangeParamIndex: 0, // TODO-multi: to be removed after refactoring
+          maybeWethCallData,
+          swap,
+          swapExchange,
+        });
+        swapExchange.build.dexFlag = dexFlag;
+        swapExchange.build.approveFlag = approveFlag;
+
+        flags.dexes.push(dexFlag);
+        flags.approves.push(approveFlag);
+      });
+    };
+
+    buildRoutes.forEach(route => {
+      if (route.type === 'single-route') {
+        route.swaps.map((swap, swapIndex) => {
+          buildAndAssignFlags(route.swaps, swap, swapIndex);
+        });
+      } else {
+        route.swaps.forEach(routeSwaps => {
+          const isMultiRoute = isMultiRouteSwap(routeSwaps);
+          if (!isMultiRoute) {
+            // TODO-multi: should swapIndex be the index of the current multi-route, or the total route
+            routeSwaps.forEach((swap, swapIndex) => {
+              buildAndAssignFlags(routeSwaps, swap, swapIndex);
+            });
+          } else {
+            routeSwaps.forEach(swaps => {
+              swaps.forEach((swap, swapIndex) => {
+                buildAndAssignFlags(swaps, swap, swapIndex);
+              });
+            });
+          }
+        });
+      }
+    });
+
+    return {
+      ...flags,
+      wrap:
+        isETHAddress(srcToken) && maybeWethCallData?.deposit
+          ? Flag.SEND_ETH_EQUAL_TO_FROM_AMOUNT_DONT_CHECK_BALANCE_AFTER_SWAP // 9
+          : Flag.INSERT_FROM_AMOUNT_CHECK_ETH_BALANCE_AFTER_SWAP, // 7
+    };
   }
 }

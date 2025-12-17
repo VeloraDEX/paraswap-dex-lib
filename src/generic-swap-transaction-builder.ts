@@ -131,13 +131,16 @@ export class GenericSwapTransactionBuilder {
     );
   }
 
-  buildRouteSwaps(priceRoute: OptimalRate): RouteSwaps[] {
+  buildRouteSwaps(
+    priceRoute: OptimalRate,
+    mergeToMultiRoute: boolean,
+  ): RouteSwaps[] {
     const singleRoutes: OptimalRoute[] = [];
     const multiRoutes: OptimalRoute[] = [];
 
     priceRoute.bestRoute.forEach(route => {
       const isMultiRoute = route.swaps.some(swap => swap.isMergedSwap);
-      if (isMultiRoute) {
+      if (isMultiRoute && mergeToMultiRoute) {
         multiRoutes.push(route);
       } else {
         singleRoutes.push(route);
@@ -159,6 +162,7 @@ export class GenericSwapTransactionBuilder {
     if (multiRoutes.length > 0) {
       routes.push({
         type: 'multi-route',
+        multiRoutePercents: multiRoutes.map(r => r.percent),
         // TODO-multi: how save it is to sum percents, considering that these routes are splitted from merged swaps
         percent: multiRoutes.reduce((acc, r) => acc + r.percent, 0),
         swaps: mergeMultiPriceRoutes(multiRoutes).map(route => {
@@ -328,10 +332,11 @@ export class GenericSwapTransactionBuilder {
     minMaxAmount: string,
     bytecodeBuilder: ExecutorBytecodeBuilder,
     userAddress: string,
+    mergeToMultiRoute = false,
   ): Promise<string> {
     const side = priceRoute.side;
     // TODO-multi: refactor
-    const routes = this.buildRouteSwaps(priceRoute);
+    const routes = this.buildRouteSwaps(priceRoute, mergeToMultiRoute);
 
     const routesWithBuild = await this.addRouteBuildSwaps(
       priceRoute,
@@ -402,16 +407,19 @@ export class GenericSwapTransactionBuilder {
     const executionContractAddress =
       this.getExecutionContractAddress(priceRoute);
 
+    const mergeToMultiRoute = true; // TODO-multi: temporary to test old/new routese
+
     const hasMultiRoute = this.hasMultiRoute(priceRoute);
     const bytecodeBuilder = this.executorDetector.getBytecodeBuilder(
       executorName,
-      true, // TODO-multi: temporary to test old routes on the new executor
+      mergeToMultiRoute && hasMultiRoute,
     );
     const bytecode = await this.buildCalls(
       priceRoute,
       minMaxAmount,
       bytecodeBuilder,
       userAddress,
+      mergeToMultiRoute,
     );
 
     const side = priceRoute.side;
