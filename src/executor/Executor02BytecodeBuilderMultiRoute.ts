@@ -1154,7 +1154,7 @@ export class Executor02BytecodeBuilderMultiRoute extends ExecutorBytecodeBuilder
     const wrapToSwapMap = {}; // swapIndex
     const unwrapToSwapMap = {}; // swapIndex
 
-    let callData = '';
+    let callData = '0x';
 
     if (route.type === 'single-route') {
       callData = route.swaps.reduce<string>(
@@ -1225,23 +1225,26 @@ export class Executor02BytecodeBuilderMultiRoute extends ExecutorBytecodeBuilder
 
           callData = hexConcat([callData, routeCalldata]);
         } else {
-          callData += multiRouteSwaps.reduce<string>(
-            (swapAcc, swap, swapIndex) =>
-              hexConcat([
-                swapAcc,
-                buildSingleSwap(
-                  multiRouteSwaps,
-                  swapIndex,
-                  swap,
-                  wrapToSwapExchangeMap,
-                  wrapToSwapMap,
-                  unwrapToSwapMap,
-                  routeSwapIndex === route.swaps.length - 1 &&
-                    swapIndex === multiRouteSwaps.length - 1,
-                ),
-              ]),
-            '0x',
-          );
+          callData = hexConcat([
+            callData,
+            multiRouteSwaps.reduce<string>(
+              (swapAcc, swap, swapIndex) =>
+                hexConcat([
+                  swapAcc,
+                  buildSingleSwap(
+                    multiRouteSwaps,
+                    swapIndex,
+                    swap,
+                    wrapToSwapExchangeMap,
+                    wrapToSwapMap,
+                    unwrapToSwapMap,
+                    routeSwapIndex === route.swaps.length - 1 &&
+                      swapIndex === multiRouteSwaps.length - 1,
+                  ),
+                ]),
+              '0x',
+            ),
+          ]);
         }
       });
     }
