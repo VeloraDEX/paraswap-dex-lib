@@ -1133,19 +1133,19 @@ export class Executor02BytecodeBuilderMultiRoute extends ExecutorBytecodeBuilder
         rootWrapEth,
         routeIndex,
         swapIndex,
-        flags,
-        sender,
         wrapToSwapExchangeMap,
         wrapToSwapMap,
         unwrapToSwapMap,
         maybeWethCallData,
         swap,
-        index: 0,
         srcToken,
         destToken,
         isLastSwapOnTheRoute,
 
         // TODO-multi to be removed after refactoring
+        sender,
+        index: 0,
+        flags,
         routes: [],
         exchangeParams: [],
       });
