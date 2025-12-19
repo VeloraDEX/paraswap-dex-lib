@@ -160,11 +160,18 @@ export class GenericSwapTransactionBuilder {
     }
 
     if (multiRoutes.length > 0) {
+      const percentSum = multiRoutes.reduce((acc, r) => acc + r.percent, 0);
+      // Scale multi-route percents to sum to 100%  (e.g. [16%, 64%] -> [20%, 80%])
+      // to get absolute percents for each multi-route to relative percent for whole multi-route part
+      // so in the end it results in correct percents (80% for the whole multi-route * [20%, 80%] = [16%, 64%])
+      const scaledPercents = multiRoutes.map(
+        r => (r.percent / percentSum) * 100,
+      );
+
       routes.push({
         type: 'multi-route',
-        multiRoutePercents: multiRoutes.map(r => r.percent),
-        // TODO-multi: how save it is to sum percents, considering that these routes are splitted from merged swaps
-        percent: multiRoutes.reduce((acc, r) => acc + r.percent, 0),
+        multiRoutePercents: scaledPercents,
+        percent: percentSum,
         swaps: mergeMultiPriceRoutes(multiRoutes).map(route => {
           if (priceRoute.mergedSwaps?.length === 0) {
             throw new Error('Merged swaps are missing in price route');
