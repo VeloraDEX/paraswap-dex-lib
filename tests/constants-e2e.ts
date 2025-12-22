@@ -5,6 +5,14 @@ export const Tokens: {
   [network: number]: { [symbol: string]: Token };
 } = {
   [Network.MAINNET]: {
+    NZDS: {
+      address: '0xda446fad08277b4d2591536f204e018f32b6831c',
+      decimals: 6,
+    },
+    TRYB: {
+      address: '0x2c537e5624e4af88a7ae4060c022609376c8d0eb',
+      decimals: 6,
+    },
     aEthLidowstETH: {
       address: '0xC035a7cf15375cE2706766804551791aD035E0C2',
       decimals: 18,
@@ -650,6 +658,10 @@ export const Tokens: {
     },
   },
   [Network.POLYGON]: {
+    NZDS: {
+      address: '0xFbBE4b730e1e77d02dC40fEdF9438E2802eab3B5',
+      decimals: 6,
+    },
     jGBP: {
       address: '0x767058f11800fba6a682e73a6e79ec5eb74fac8c',
       decimals: 18,
