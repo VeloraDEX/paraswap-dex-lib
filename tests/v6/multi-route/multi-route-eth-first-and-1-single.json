@@ -1,0 +1,576 @@
+{
+  "priceRoute": {
+    "blockNumber": 24074437,
+    "network": 1,
+    "srcToken": "0x6b175474e89094c44da98b954eedeac495271d0f",
+    "srcDecimals": 18,
+    "srcAmount": "100000000000000000000",
+    "destToken": "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "destDecimals": 18,
+    "destAmount": "33765100091558666",
+    "bestRoute": [
+      {
+        "percent": 20,
+        "swaps": [
+          {
+            "srcToken": "0x6b175474e89094c44da98b954eedeac495271d0f",
+            "srcDecimals": 18,
+            "destToken": "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+            "destDecimals": 18,
+            "swapExchanges": [
+              {
+                "exchange": "UniswapV3",
+                "srcAmount": "20000000000000000000",
+                "destAmount": "6761047831856304",
+                "percent": 100,
+                "poolAddresses": ["0x60594a405d53811d3bc4766596efd80fd545a270"],
+                "poolIdentifiers": [
+                  "UniswapV3_0x6b175474e89094c44da98b954eedeac495271d0f_0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2_500"
+                ],
+                "data": {
+                  "path": [
+                    {
+                      "tokenIn": "0x6b175474e89094c44da98b954eedeac495271d0f",
+                      "tokenOut": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+                      "fee": "500",
+                      "currentFee": "500"
+                    }
+                  ],
+                  "gasUSD": "0.039501"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "percent": 8,
+        "swaps": [
+          {
+            "isMergedSwap": true,
+            "srcToken": "0x6b175474e89094c44da98b954eedeac495271d0f",
+            "srcDecimals": 18,
+            "destToken": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+            "destDecimals": 6,
+            "swapExchanges": [
+              {
+                "exchange": "LitePsm",
+                "srcAmount": "8000000000000000000",
+                "destAmount": "8000000",
+                "percent": 100,
+                "poolAddresses": ["0xf6e72db5454dd049d0788e411b06cfaf16853042"],
+                "poolIdentifiers": [
+                  "litepsm_0xf6e72db5454dd049d0788e411b06cfaf16853042"
+                ],
+                "data": {
+                  "toll": "0",
+                  "psmAddress": "0xf6e72db5454dd049d0788e411b06cfaf16853042",
+                  "gemDecimals": 6,
+                  "gasUSD": "0.018120"
+                }
+              }
+            ]
+          },
+          {
+            "srcToken": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+            "srcDecimals": 6,
+            "destToken": "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+            "destDecimals": 18,
+            "swapExchanges": [
+              {
+                "exchange": "Ekubo",
+                "srcAmount": "8000000",
+                "destAmount": "2705007058296244",
+                "percent": 100,
+                "poolIdentifiers": [
+                  "ekubo_0x0000000000000000000000000000000000000000_0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48_0x0000000000000000000000000000000000000000_3689348814741910_4990"
+                ],
+                "data": {
+                  "poolKeyAbi": {
+                    "token0": "0x0000000000000000000000000000000000000000",
+                    "token1": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+                    "config": "0x0000000000000000000000000000000000000000000d1b71758e21960000137e"
+                  },
+                  "isToken1": true,
+                  "skipAhead": {
+                    "0": 0,
+                    "1000000": 0,
+                    "2000000": 0,
+                    "4000000": 0,
+                    "6000000": 0,
+                    "8000000": 0,
+                    "10000000": 0,
+                    "12000000": 0,
+                    "14000000": 0,
+                    "16000000": 0,
+                    "18000000": 0,
+                    "20000000": 0,
+                    "22000000": 0,
+                    "24000000": 0,
+                    "26000000": 0,
+                    "28000000": 0,
+                    "30000000": 0,
+                    "32000000": 0,
+                    "34000000": 0,
+                    "36000000": 0,
+                    "38000000": 0,
+                    "40000000": 0,
+                    "42000000": 0,
+                    "44000000": 0,
+                    "46000000": 0,
+                    "48000000": 0,
+                    "50000000": 0,
+                    "52000000": 0,
+                    "54000000": 0,
+                    "56000000": 0,
+                    "58000000": 0,
+                    "60000000": 0,
+                    "62000000": 0,
+                    "64000000": 0,
+                    "66000000": 0,
+                    "68000000": 0,
+                    "70000000": 0,
+                    "72000000": 0,
+                    "74000000": 0,
+                    "76000000": 0,
+                    "78000000": 0,
+                    "80000000": 0,
+                    "82000000": 0,
+                    "84000000": 0,
+                    "86000000": 0,
+                    "88000000": 0,
+                    "90000000": 0,
+                    "92000000": 0,
+                    "94000000": 0,
+                    "96000000": 0,
+                    "98000000": 0,
+                    "100000000": 0
+                  },
+                  "gasUSD": "0.013119"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "percent": 16,
+        "swaps": [
+          {
+            "isMergedSwap": true,
+            "srcToken": "0x6b175474e89094c44da98b954eedeac495271d0f",
+            "srcDecimals": 18,
+            "destToken": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+            "destDecimals": 6,
+            "swapExchanges": [
+              {
+                "exchange": "LitePsm",
+                "srcAmount": "16000000000000000000",
+                "destAmount": "16000000",
+                "percent": 100,
+                "poolAddresses": ["0xf6e72db5454dd049d0788e411b06cfaf16853042"],
+                "poolIdentifiers": [
+                  "litepsm_0xf6e72db5454dd049d0788e411b06cfaf16853042"
+                ],
+                "data": {
+                  "toll": "0",
+                  "psmAddress": "0xf6e72db5454dd049d0788e411b06cfaf16853042",
+                  "gemDecimals": 6,
+                  "gasUSD": "0.018120"
+                }
+              }
+            ]
+          },
+          {
+            "srcToken": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+            "srcDecimals": 6,
+            "destToken": "0xdac17f958d2ee523a2206206994597c13d831ec7",
+            "destDecimals": 6,
+            "swapExchanges": [
+              {
+                "exchange": "FluidDexLite",
+                "srcAmount": "16000000",
+                "destAmount": "16006884",
+                "percent": 100,
+                "poolAddresses": ["0xBbcb91440523216e2b87052A99F69c604A7b6e00"],
+                "poolIdentifiers": ["fluiddexlite_0x6dd161107ef07bb8"],
+                "data": {
+                  "exchange": "0xBbcb91440523216e2b87052A99F69c604A7b6e00",
+                  "dexKey": {
+                    "token0": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+                    "token1": "0xdac17f958d2ee523a2206206994597c13d831ec7",
+                    "salt": "0x0000000000000000000000000000000000000000000000000000000000000000"
+                  },
+                  "swap0To1": true,
+                  "gasUSD": "0.003624"
+                }
+              }
+            ]
+          },
+          {
+            "srcToken": "0xdac17f958d2ee523a2206206994597c13d831ec7",
+            "srcDecimals": 6,
+            "destToken": "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+            "destDecimals": 18,
+            "swapExchanges": [
+              {
+                "exchange": "Ekubo",
+                "srcAmount": "16006884",
+                "destAmount": "5411318831983014",
+                "percent": 100,
+                "poolIdentifiers": [
+                  "ekubo_0x0000000000000000000000000000000000000000_0xdac17f958d2ee523a2206206994597c13d831ec7_0x0000000000000000000000000000000000000000_3689348814741910_4990"
+                ],
+                "data": {
+                  "poolKeyAbi": {
+                    "token0": "0x0000000000000000000000000000000000000000",
+                    "token1": "0xdac17f958d2ee523a2206206994597c13d831ec7",
+                    "config": "0x0000000000000000000000000000000000000000000d1b71758e21960000137e"
+                  },
+                  "isToken1": true,
+                  "skipAhead": {
+                    "0": 0,
+                    "1000000": 0,
+                    "2000860": 0,
+                    "4001720": 0,
+                    "6002581": 0,
+                    "8003441": 0,
+                    "10004302": 0,
+                    "12005162": 0,
+                    "14006023": 0,
+                    "16006883": 0,
+                    "18007744": 0,
+                    "20008604": 0,
+                    "22009465": 0,
+                    "24010325": 0,
+                    "26011186": 0,
+                    "28012046": 0,
+                    "30012907": 0,
+                    "32013767": 0,
+                    "34014628": 0,
+                    "36015488": 0,
+                    "38016349": 0,
+                    "40017209": 0,
+                    "42018070": 0,
+                    "44018930": 0,
+                    "46019791": 0,
+                    "48020651": 0,
+                    "50021512": 0,
+                    "52022372": 0,
+                    "54023232": 0,
+                    "56024093": 0,
+                    "58024953": 0,
+                    "60025814": 0,
+                    "62026674": 0,
+                    "64027535": 0,
+                    "66028395": 0,
+                    "68029256": 0,
+                    "70030116": 0,
+                    "72030977": 0,
+                    "74031837": 0,
+                    "76032698": 0,
+                    "78033558": 0,
+                    "80034419": 0,
+                    "82035279": 0,
+                    "84036140": 0,
+                    "86037000": 0,
+                    "88037861": 0,
+                    "90038721": 0,
+                    "92039582": 0,
+                    "94040442": 0,
+                    "96041303": 0,
+                    "98042163": 0,
+                    "100043024": 0
+                  },
+                  "gasUSD": "0.013119"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "percent": 24,
+        "swaps": [
+          {
+            "isMergedSwap": true,
+            "srcToken": "0x6b175474e89094c44da98b954eedeac495271d0f",
+            "srcDecimals": 18,
+            "destToken": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+            "destDecimals": 6,
+            "swapExchanges": [
+              {
+                "exchange": "LitePsm",
+                "srcAmount": "24000000000000000000",
+                "destAmount": "24000000",
+                "percent": 100,
+                "poolAddresses": ["0xf6e72db5454dd049d0788e411b06cfaf16853042"],
+                "poolIdentifiers": [
+                  "litepsm_0xf6e72db5454dd049d0788e411b06cfaf16853042"
+                ],
+                "data": {
+                  "toll": "0",
+                  "psmAddress": "0xf6e72db5454dd049d0788e411b06cfaf16853042",
+                  "gemDecimals": 6,
+                  "gasUSD": "0.018120"
+                }
+              }
+            ]
+          },
+          {
+            "srcToken": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+            "srcDecimals": 6,
+            "destToken": "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599",
+            "destDecimals": 8,
+            "swapExchanges": [
+              {
+                "exchange": "UniswapV4",
+                "srcAmount": "24000000",
+                "destAmount": "27516",
+                "percent": 100,
+                "poolAddresses": ["0x000000000004444c5dc75cB358380D2e3dE08A90"],
+                "poolIdentifiers": [
+                  "0x3ea74c37fbb79dfcd6d760870f0f4e00cf4c3960b3259d0d43f211c0547394c1"
+                ],
+                "data": {
+                  "path": [
+                    {
+                      "pool": {
+                        "id": "0x3ea74c37fbb79dfcd6d760870f0f4e00cf4c3960b3259d0d43f211c0547394c1",
+                        "key": {
+                          "currency0": "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599",
+                          "currency1": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+                          "fee": "500",
+                          "tickSpacing": 10,
+                          "hooks": "0x0000000000000000000000000000000000000000"
+                        }
+                      },
+                      "tokenIn": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+                      "tokenOut": "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599",
+                      "zeroForOne": false
+                    }
+                  ],
+                  "gasUSD": "0.036239"
+                }
+              }
+            ]
+          },
+          {
+            "srcToken": "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599",
+            "srcDecimals": 8,
+            "destToken": "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+            "destDecimals": 18,
+            "swapExchanges": [
+              {
+                "exchange": "Ekubo",
+                "srcAmount": "27516",
+                "destAmount": "8117323992283353",
+                "percent": 100,
+                "poolIdentifiers": [
+                  "ekubo_0x0000000000000000000000000000000000000000_0x2260fac5e5542a773aa44fbcfedf7c193bc2c599_0x0000000000000000000000000000000000000000_9223372036854775_1000"
+                ],
+                "data": {
+                  "poolKeyAbi": {
+                    "token0": "0x0000000000000000000000000000000000000000",
+                    "token1": "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599",
+                    "config": "0x00000000000000000000000000000000000000000020c49ba5e353f7000003e8"
+                  },
+                  "isToken1": true,
+                  "skipAhead": {
+                    "0": 0,
+                    "2292": 0,
+                    "4585": 0,
+                    "6878": 0,
+                    "9171": 0,
+                    "11464": 0,
+                    "13757": 0,
+                    "16050": 0,
+                    "18343": 0,
+                    "20636": 0,
+                    "22929": 0,
+                    "25222": 0,
+                    "27515": 0,
+                    "29808": 0,
+                    "32101": 0,
+                    "34394": 0,
+                    "36687": 0,
+                    "38980": 0,
+                    "41273": 0,
+                    "43566": 0,
+                    "45859": 0,
+                    "48152": 0,
+                    "50445": 0,
+                    "52738": 0,
+                    "55031": 0,
+                    "57324": 0,
+                    "59617": 0,
+                    "61910": 0,
+                    "64203": 0,
+                    "66496": 0,
+                    "68789": 0,
+                    "71082": 0,
+                    "73375": 0,
+                    "75668": 0,
+                    "77961": 0,
+                    "80254": 0,
+                    "82547": 0,
+                    "84840": 0,
+                    "87133": 0,
+                    "89426": 0,
+                    "91719": 0,
+                    "94012": 0,
+                    "96305": 0,
+                    "98598": 0,
+                    "100891": 0,
+                    "103184": 0,
+                    "105477": 0,
+                    "107770": 0,
+                    "110063": 0,
+                    "112356": 0,
+                    "114649": 0,
+                    "100000000": 38
+                  },
+                  "gasUSD": "0.013119"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "percent": 32,
+        "swaps": [
+          {
+            "isMergedSwap": true,
+            "srcToken": "0x6b175474e89094c44da98b954eedeac495271d0f",
+            "srcDecimals": 18,
+            "destToken": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+            "destDecimals": 6,
+            "swapExchanges": [
+              {
+                "exchange": "LitePsm",
+                "srcAmount": "32000000000000000000",
+                "destAmount": "32000000",
+                "percent": 100,
+                "poolAddresses": ["0xf6e72db5454dd049d0788e411b06cfaf16853042"],
+                "poolIdentifiers": [
+                  "litepsm_0xf6e72db5454dd049d0788e411b06cfaf16853042"
+                ],
+                "data": {
+                  "toll": "0",
+                  "psmAddress": "0xf6e72db5454dd049d0788e411b06cfaf16853042",
+                  "gemDecimals": 6,
+                  "gasUSD": "0.018120"
+                }
+              }
+            ]
+          },
+          {
+            "srcToken": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+            "srcDecimals": 6,
+            "destToken": "0x45804880de22913dafe09f4980848ece6ecbaf78",
+            "destDecimals": 18,
+            "swapExchanges": [
+              {
+                "exchange": "UniswapV3",
+                "srcAmount": "32000000",
+                "destAmount": "7096717307766597",
+                "percent": 100,
+                "poolAddresses": ["0x5ae13baaef0620fdae1d355495dc51a17adb4082"],
+                "poolIdentifiers": [
+                  "UniswapV3_0x45804880de22913dafe09f4980848ece6ecbaf78_0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48_500"
+                ],
+                "data": {
+                  "path": [
+                    {
+                      "tokenIn": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+                      "tokenOut": "0x45804880de22913dafe09f4980848ece6ecbaf78",
+                      "fee": "500",
+                      "currentFee": "500"
+                    }
+                  ],
+                  "gasUSD": "0.039501"
+                }
+              }
+            ]
+          },
+          {
+            "srcToken": "0x45804880de22913dafe09f4980848ece6ecbaf78",
+            "srcDecimals": 18,
+            "destToken": "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+            "destDecimals": 18,
+            "swapExchanges": [
+              {
+                "exchange": "UniswapV2",
+                "srcAmount": "7096717307766597",
+                "destAmount": "10770402377139751",
+                "percent": 100,
+                "poolAddresses": ["0x9C4Fe5FFD9A9fC5678cFBd93Aa2D4FD684b67C4C"],
+                "poolIdentifiers": [
+                  "uniswapv2_0x45804880de22913dafe09f4980848ece6ecbaf78_0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+                ],
+                "data": {
+                  "router": "0xF9234CB08edb93c0d4a4d4c70cC3FfD070e78e07",
+                  "path": [
+                    "0x45804880de22913dafe09f4980848ece6ecbaf78",
+                    "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+                  ],
+                  "factory": "0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f",
+                  "initCode": "0x96e8ac4277198ff8b6f785478aa9a39f403cb768dd02cbee326c3e7da348845f",
+                  "feeFactor": 10000,
+                  "pools": [
+                    {
+                      "address": "0x9C4Fe5FFD9A9fC5678cFBd93Aa2D4FD684b67C4C",
+                      "fee": 30,
+                      "direction": true
+                    }
+                  ],
+                  "gasUSD": "0.028991"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "mergedSwaps": [
+      {
+        "srcToken": "0x6b175474e89094c44da98b954eedeac495271d0f",
+        "srcDecimals": 18,
+        "destToken": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+        "destDecimals": 6,
+        "swapExchanges": [
+          {
+            "exchange": "LitePsm",
+            "srcAmount": "80000000000000000000",
+            "destAmount": "80000000",
+            "percent": 100,
+            "poolAddresses": ["0xf6e72db5454dd049d0788e411b06cfaf16853042"],
+            "poolIdentifiers": [
+              "litepsm_0xf6e72db5454dd049d0788e411b06cfaf16853042"
+            ],
+            "data": {
+              "toll": "0",
+              "psmAddress": "0xf6e72db5454dd049d0788e411b06cfaf16853042",
+              "gemDecimals": 6,
+              "gasUSD": "0.018120"
+            }
+          }
+        ]
+      }
+    ],
+    "gasCostUSD": "0.236047",
+    "gasCost": "651358",
+    "side": "SELL",
+    "version": "6.2",
+    "contractAddress": "0x6a000f20005980200259b80c5102003040001068",
+    "tokenTransferProxy": "0x6a000f20005980200259b80c5102003040001068",
+    "contractMethod": "swapExactAmountIn",
+    "partnerFee": 0,
+    "srcUSD": "99.9347000000",
+    "destUSD": "99.8437386217",
+    "partner": "anon",
+    "maxImpactReached": false,
+    "hmac": "5e3b73fbf52b053b364c7835cc53b8b24f063b0c"
+  }
+}

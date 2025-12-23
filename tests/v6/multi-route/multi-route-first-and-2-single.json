@@ -1,0 +1,651 @@
+{
+  "error": "ESTIMATED_LOSS_GREATER_THAN_MAX_IMPACT",
+  "value": "32.10%",
+  "priceRoute": {
+    "blockNumber": 24048131,
+    "network": 1,
+    "srcToken": "0x9d39a5de30e57443bff2a8307a4256c8797a3497",
+    "srcDecimals": 18,
+    "srcAmount": "100000000000000000000000",
+    "destToken": "0x6b175474e89094c44da98b954eedeac495271d0f",
+    "destDecimals": 18,
+    "destAmount": "82164460239687428413764",
+    "bestRoute": [
+      {
+        "percent": 20,
+        "swaps": [
+          {
+            "srcToken": "0x9d39a5de30e57443bff2a8307a4256c8797a3497",
+            "srcDecimals": 18,
+            "destToken": "0x83f20f44975d03b1b09e64809b757c47f942beea",
+            "destDecimals": 18,
+            "swapExchanges": [
+              {
+                "exchange": "CurveV1StableNg",
+                "srcAmount": "20000000000000000000000",
+                "destAmount": "20690298561962306484365",
+                "percent": 100,
+                "poolAddresses": ["0x167478921b907422f8e88b43c4af2b8bea278d3a"],
+                "poolIdentifiers": [
+                  "CurveV1StableNg_0x167478921b907422f8e88b43c4af2b8bea278d3a_false"
+                ],
+                "data": {
+                  "path": [
+                    {
+                      "tokenIn": "0x9d39a5de30e57443bff2a8307a4256c8797a3497",
+                      "tokenOut": "0x83f20f44975d03b1b09e64809b757c47f942beea",
+                      "exchange": "0x167478921b907422f8e88b43c4af2b8bea278d3a",
+                      "i": 1,
+                      "j": 0,
+                      "underlyingSwap": false,
+                      "n_coins": 2
+                    }
+                  ],
+                  "gasUSD": "0.117120"
+                }
+              }
+            ]
+          },
+          {
+            "srcToken": "0x83f20f44975d03b1b09e64809b757c47f942beea",
+            "srcDecimals": 18,
+            "destToken": "0x6b175474e89094c44da98b954eedeac495271d0f",
+            "destDecimals": 18,
+            "swapExchanges": [
+              {
+                "exchange": "Spark",
+                "srcAmount": "20690298561962306484365",
+                "destAmount": "24202836784786327555450",
+                "percent": 100,
+                "poolAddresses": ["0x83F20F44975D03b1b09e64809B757c47f942BEeA"],
+                "poolIdentifiers": [
+                  "Spark_0x83F20F44975D03b1b09e64809B757c47f942BEeA"
+                ],
+                "data": {
+                  "exchange": "0x83F20F44975D03b1b09e64809B757c47f942BEeA",
+                  "gasUSD": "0.096624"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "percent": 8,
+        "swaps": [
+          {
+            "isMergedSwap": true,
+            "srcToken": "0x9d39a5de30e57443bff2a8307a4256c8797a3497",
+            "srcDecimals": 18,
+            "destToken": "0xdac17f958d2ee523a2206206994597c13d831ec7",
+            "destDecimals": 6,
+            "swapExchanges": [
+              {
+                "exchange": "FluidDex",
+                "srcAmount": "8000000000000000000000",
+                "destAmount": "9685055737",
+                "percent": 100,
+                "poolAddresses": ["0x1dd125c32e4b5086c63cc13b3ca02c4a2a61fa9b"],
+                "poolIdentifiers": [
+                  "FluidDex_0x1dd125c32e4b5086c63cc13b3ca02c4a2a61fa9b"
+                ],
+                "data": {
+                  "poolId": "FluidDex_0x1dd125c32e4b5086c63cc13b3ca02c4a2a61fa9b",
+                  "gasUSD": "0.090182"
+                }
+              }
+            ]
+          },
+          {
+            "srcToken": "0xdac17f958d2ee523a2206206994597c13d831ec7",
+            "srcDecimals": 6,
+            "destToken": "0x6b175474e89094c44da98b954eedeac495271d0f",
+            "destDecimals": 18,
+            "swapExchanges": [
+              {
+                "exchange": "UniswapV3",
+                "srcAmount": "9685055737",
+                "destAmount": "9681593674514282436013",
+                "percent": 100,
+                "poolAddresses": ["0x48da0965ab2d2cbf1c17c09cfb5cbe67ad5b1406"],
+                "poolIdentifiers": [
+                  "UniswapV3_0x6b175474e89094c44da98b954eedeac495271d0f_0xdac17f958d2ee523a2206206994597c13d831ec7_100"
+                ],
+                "data": {
+                  "path": [
+                    {
+                      "tokenIn": "0xdac17f958d2ee523a2206206994597c13d831ec7",
+                      "tokenOut": "0x6b175474e89094c44da98b954eedeac495271d0f",
+                      "fee": "100",
+                      "currentFee": "100"
+                    }
+                  ],
+                  "gasUSD": "0.063830"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "percent": 16,
+        "swaps": [
+          {
+            "isMergedSwap": true,
+            "srcToken": "0x9d39a5de30e57443bff2a8307a4256c8797a3497",
+            "srcDecimals": 18,
+            "destToken": "0xdac17f958d2ee523a2206206994597c13d831ec7",
+            "destDecimals": 6,
+            "swapExchanges": [
+              {
+                "exchange": "FluidDex",
+                "srcAmount": "16000000000000000000000",
+                "destAmount": "19370111474",
+                "percent": 100,
+                "poolAddresses": ["0x1dd125c32e4b5086c63cc13b3ca02c4a2a61fa9b"],
+                "poolIdentifiers": [
+                  "FluidDex_0x1dd125c32e4b5086c63cc13b3ca02c4a2a61fa9b"
+                ],
+                "data": {
+                  "poolId": "FluidDex_0x1dd125c32e4b5086c63cc13b3ca02c4a2a61fa9b",
+                  "gasUSD": "0.090182"
+                }
+              }
+            ]
+          },
+          {
+            "srcToken": "0xdac17f958d2ee523a2206206994597c13d831ec7",
+            "srcDecimals": 6,
+            "destToken": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+            "destDecimals": 6,
+            "swapExchanges": [
+              {
+                "exchange": "Ekubo",
+                "srcAmount": "19370111474",
+                "destAmount": "19363316635",
+                "percent": 100,
+                "poolIdentifiers": [
+                  "ekubo_0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48_0xdac17f958d2ee523a2206206994597c13d831ec7_0x0000000000000000000000000000000000000000_92233720368547_50"
+                ],
+                "data": {
+                  "poolKeyAbi": {
+                    "token0": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+                    "token1": "0xdac17f958d2ee523a2206206994597c13d831ec7",
+                    "config": "0x0000000000000000000000000000000000000000000053e2d6238da300000032"
+                  },
+                  "isToken1": true,
+                  "skipAhead": {
+                    "0": 0,
+                    "1000000": 0,
+                    "2421260606": 0,
+                    "4842521212": 0,
+                    "7263781818": 0,
+                    "9685042424": 0,
+                    "12106303031": 0,
+                    "14527563637": 0,
+                    "16948824243": 0,
+                    "19370084849": 0,
+                    "21791345455": 0,
+                    "24212606062": 0,
+                    "26633866668": 0,
+                    "29055127274": 0,
+                    "31476387880": 0,
+                    "33897648486": 0,
+                    "36318909093": 0,
+                    "38740169699": 0,
+                    "41161430305": 0,
+                    "43582690911": 0,
+                    "46003951517": 0,
+                    "48425212124": 0,
+                    "50846472730": 0,
+                    "53267733336": 0,
+                    "55688993942": 0,
+                    "58110254548": 0,
+                    "60531515155": 0,
+                    "62952775761": 0,
+                    "65374036367": 0,
+                    "67795296973": 0,
+                    "70216557579": 0,
+                    "72637818186": 0,
+                    "75059078792": 0,
+                    "77480339398": 0,
+                    "79901600004": 0,
+                    "82322860610": 0,
+                    "84744121217": 0,
+                    "87165381823": 0,
+                    "89586642429": 0,
+                    "92007903035": 0,
+                    "94429163641": 0,
+                    "96850424248": 0,
+                    "99271684854": 0,
+                    "101692945460": 0,
+                    "104114206066": 0,
+                    "106535466672": 0,
+                    "108956727279": 0,
+                    "111377987885": 0,
+                    "113799248491": 0,
+                    "116220509097": 0,
+                    "118641769703": 0,
+                    "121063030310": 0
+                  },
+                  "gasUSD": "0.021199"
+                }
+              }
+            ]
+          },
+          {
+            "srcToken": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+            "srcDecimals": 6,
+            "destToken": "0x6b175474e89094c44da98b954eedeac495271d0f",
+            "destDecimals": 18,
+            "swapExchanges": [
+              {
+                "exchange": "LitePsm",
+                "srcAmount": "19363316635",
+                "destAmount": "19363316638000000000000",
+                "percent": 100,
+                "poolAddresses": ["0xf6e72db5454dd049d0788e411b06cfaf16853042"],
+                "poolIdentifiers": [
+                  "litepsm_0xf6e72db5454dd049d0788e411b06cfaf16853042"
+                ],
+                "data": {
+                  "toll": "0",
+                  "psmAddress": "0xf6e72db5454dd049d0788e411b06cfaf16853042",
+                  "gemDecimals": 6,
+                  "gasUSD": "0.029280"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "percent": 24,
+        "swaps": [
+          {
+            "isMergedSwap": true,
+            "srcToken": "0x9d39a5de30e57443bff2a8307a4256c8797a3497",
+            "srcDecimals": 18,
+            "destToken": "0xdac17f958d2ee523a2206206994597c13d831ec7",
+            "destDecimals": 6,
+            "swapExchanges": [
+              {
+                "exchange": "FluidDex",
+                "srcAmount": "24000000000000000000000",
+                "destAmount": "29055167211",
+                "percent": 100,
+                "poolAddresses": ["0x1dd125c32e4b5086c63cc13b3ca02c4a2a61fa9b"],
+                "poolIdentifiers": [
+                  "FluidDex_0x1dd125c32e4b5086c63cc13b3ca02c4a2a61fa9b"
+                ],
+                "data": {
+                  "poolId": "FluidDex_0x1dd125c32e4b5086c63cc13b3ca02c4a2a61fa9b",
+                  "gasUSD": "0.090182"
+                }
+              }
+            ]
+          },
+          {
+            "srcToken": "0xdac17f958d2ee523a2206206994597c13d831ec7",
+            "srcDecimals": 6,
+            "destToken": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+            "destDecimals": 18,
+            "swapExchanges": [
+              {
+                "exchange": "PancakeswapV3",
+                "srcAmount": "2420295428",
+                "destAmount": "811155241734300999",
+                "percent": 8.33,
+                "poolAddresses": ["0x6ca298d2983ab03aa1da7679389d955a4efee15c"],
+                "poolIdentifiers": [
+                  "PancakeswapV3_0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2_0xdac17f958d2ee523a2206206994597c13d831ec7_500"
+                ],
+                "data": {
+                  "path": [
+                    {
+                      "tokenIn": "0xdac17f958d2ee523a2206206994597c13d831ec7",
+                      "tokenOut": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+                      "fee": "500"
+                    }
+                  ],
+                  "gasUSD": "0.063830"
+                }
+              },
+              {
+                "exchange": "UniswapV3",
+                "srcAmount": "7263791803",
+                "destAmount": "2433344659761116620",
+                "percent": 25,
+                "poolAddresses": ["0x11b815efb8f581194ae79006d24e0d814b7697f6"],
+                "poolIdentifiers": [
+                  "UniswapV3_0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2_0xdac17f958d2ee523a2206206994597c13d831ec7_500"
+                ],
+                "data": {
+                  "path": [
+                    {
+                      "tokenIn": "0xdac17f958d2ee523a2206206994597c13d831ec7",
+                      "tokenOut": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+                      "fee": "500",
+                      "currentFee": "500"
+                    }
+                  ],
+                  "gasUSD": "0.063830"
+                }
+              },
+              {
+                "exchange": "UniswapV3",
+                "srcAmount": "12107288177",
+                "destAmount": "4056639939610867630",
+                "percent": 41.67,
+                "poolAddresses": ["0xc7bbec68d12a0d1830360f8ec58fa599ba1b0e9b"],
+                "poolIdentifiers": [
+                  "UniswapV3_0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2_0xdac17f958d2ee523a2206206994597c13d831ec7_100"
+                ],
+                "data": {
+                  "path": [
+                    {
+                      "tokenIn": "0xdac17f958d2ee523a2206206994597c13d831ec7",
+                      "tokenOut": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+                      "fee": "100",
+                      "currentFee": "100"
+                    }
+                  ],
+                  "gasUSD": "0.063830"
+                }
+              },
+              {
+                "exchange": "UniswapV4",
+                "srcAmount": "7263791803",
+                "destAmount": "2433417098701790996",
+                "percent": 25,
+                "poolAddresses": ["0x000000000004444c5dc75cB358380D2e3dE08A90"],
+                "poolIdentifiers": [
+                  "0x72331fcb696b0151904c03584b66dc8365bc63f8a144d89a773384e3a579ca73"
+                ],
+                "data": {
+                  "path": [
+                    {
+                      "pool": {
+                        "id": "0x72331fcb696b0151904c03584b66dc8365bc63f8a144d89a773384e3a579ca73",
+                        "key": {
+                          "currency0": "0x0000000000000000000000000000000000000000",
+                          "currency1": "0xdac17f958d2ee523a2206206994597c13d831ec7",
+                          "fee": "500",
+                          "tickSpacing": 10,
+                          "hooks": "0x0000000000000000000000000000000000000000"
+                        }
+                      },
+                      "tokenIn": "0xdac17f958d2ee523a2206206994597c13d831ec7",
+                      "tokenOut": "0x0000000000000000000000000000000000000000",
+                      "zeroForOne": false
+                    }
+                  ],
+                  "gasUSD": "0.058560"
+                }
+              }
+            ]
+          },
+          {
+            "srcToken": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+            "srcDecimals": 18,
+            "destToken": "0x6b175474e89094c44da98b954eedeac495271d0f",
+            "destDecimals": 18,
+            "swapExchanges": [
+              {
+                "exchange": "RingV2",
+                "srcAmount": "1620803730478044695",
+                "destAmount": "4811842214069104541456",
+                "percent": 16.65,
+                "poolAddresses": ["0x68C498Df05982d635914ee0Ae6501C749A78B473"],
+                "poolIdentifiers": [
+                  "ringv2_0x8a6fe57c08c84e0f4ee97aae68a62e820a37d259_0xa250cc729bb3323e7933022a67b52200fe354767"
+                ],
+                "data": {
+                  "router": "0x39d1d8fcC5E6EEAf567Bce4e29B94fec956D3519",
+                  "path": [
+                    "0xa250cc729bb3323e7933022a67b52200fe354767",
+                    "0x8a6fe57c08c84e0f4ee97aae68a62e820a37d259"
+                  ],
+                  "factory": "0xeb2A625B704d73e82946D8d026E1F588Eed06416",
+                  "initCode": "0xa7ae6a5ec37f0c21bbdac560794258c4089b8ae3ffa6e3909b53c6091764a676",
+                  "feeFactor": 10000,
+                  "pools": [
+                    {
+                      "address": "0x68C498Df05982d635914ee0Ae6501C749A78B473",
+                      "fee": 30,
+                      "direction": false
+                    }
+                  ],
+                  "gasUSD": "0.046848"
+                }
+              },
+              {
+                "exchange": "SushiSwap",
+                "srcAmount": "1630538287417852771",
+                "destAmount": "4841779877171122507513",
+                "percent": 16.75,
+                "poolAddresses": ["0xC3D03e4F041Fd4cD388c549Ee2A29a9E5075882f"],
+                "poolIdentifiers": [
+                  "sushiswap_0x6b175474e89094c44da98b954eedeac495271d0f_0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+                ],
+                "data": {
+                  "router": "0xF9234CB08edb93c0d4a4d4c70cC3FfD070e78e07",
+                  "path": [
+                    "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+                    "0x6b175474e89094c44da98b954eedeac495271d0f"
+                  ],
+                  "factory": "0xC0AEe478e3658e2610c5F7A4A2E1777cE9e4f2Ac",
+                  "initCode": "0xe18a34eb0e04b04f7a0ac29a6e80748dca96319b42c54d679cb821dca90c6303",
+                  "feeFactor": 10000,
+                  "pools": [
+                    {
+                      "address": "0xC3D03e4F041Fd4cD388c549Ee2A29a9E5075882f",
+                      "fee": 30,
+                      "direction": false
+                    }
+                  ],
+                  "gasUSD": "0.052704"
+                }
+              },
+              {
+                "exchange": "UniswapV2",
+                "srcAmount": "2430718867870076638",
+                "destAmount": "7219395472079852322792",
+                "percent": 24.97,
+                "poolAddresses": ["0xA478c2975Ab1Ea89e8196811F51A7B7Ade33eB11"],
+                "poolIdentifiers": [
+                  "uniswapv2_0x6b175474e89094c44da98b954eedeac495271d0f_0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+                ],
+                "data": {
+                  "router": "0xF9234CB08edb93c0d4a4d4c70cC3FfD070e78e07",
+                  "path": [
+                    "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+                    "0x6b175474e89094c44da98b954eedeac495271d0f"
+                  ],
+                  "factory": "0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f",
+                  "initCode": "0x96e8ac4277198ff8b6f785478aa9a39f403cb768dd02cbee326c3e7da348845f",
+                  "feeFactor": 10000,
+                  "pools": [
+                    {
+                      "address": "0xA478c2975Ab1Ea89e8196811F51A7B7Ade33eB11",
+                      "fee": 30,
+                      "direction": false
+                    }
+                  ],
+                  "gasUSD": "0.046848"
+                }
+              },
+              {
+                "exchange": "UniswapV3",
+                "srcAmount": "1620803730478044695",
+                "destAmount": "4813619884301527521314",
+                "percent": 16.65,
+                "poolAddresses": ["0xc2e9f25be6257c210d7adf0d4cd6e3e881ba25f8"],
+                "poolIdentifiers": [
+                  "UniswapV3_0x6b175474e89094c44da98b954eedeac495271d0f_0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2_3000"
+                ],
+                "data": {
+                  "path": [
+                    {
+                      "tokenIn": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+                      "tokenOut": "0x6b175474e89094c44da98b954eedeac495271d0f",
+                      "fee": "3000",
+                      "currentFee": "3000"
+                    }
+                  ],
+                  "gasUSD": "0.063830"
+                }
+              },
+              {
+                "exchange": "UniswapV3",
+                "srcAmount": "2431692323564057446",
+                "destAmount": "7227038433694356575852",
+                "percent": 24.98,
+                "poolAddresses": ["0x60594a405d53811d3bc4766596efd80fd545a270"],
+                "poolIdentifiers": [
+                  "UniswapV3_0x6b175474e89094c44da98b954eedeac495271d0f_0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2_500"
+                ],
+                "data": {
+                  "path": [
+                    {
+                      "tokenIn": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+                      "tokenOut": "0x6b175474e89094c44da98b954eedeac495271d0f",
+                      "fee": "500",
+                      "currentFee": "500"
+                    }
+                  ],
+                  "gasUSD": "0.063830"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "percent": 32,
+        "swaps": [
+          {
+            "isMergedSwap": true,
+            "srcToken": "0x9d39a5de30e57443bff2a8307a4256c8797a3497",
+            "srcDecimals": 18,
+            "destToken": "0xdac17f958d2ee523a2206206994597c13d831ec7",
+            "destDecimals": 6,
+            "swapExchanges": [
+              {
+                "exchange": "FluidDex",
+                "srcAmount": "32000000000000000000000",
+                "destAmount": "38740222948",
+                "percent": 100,
+                "poolAddresses": ["0x1dd125c32e4b5086c63cc13b3ca02c4a2a61fa9b"],
+                "poolIdentifiers": [
+                  "FluidDex_0x1dd125c32e4b5086c63cc13b3ca02c4a2a61fa9b"
+                ],
+                "data": {
+                  "poolId": "FluidDex_0x1dd125c32e4b5086c63cc13b3ca02c4a2a61fa9b",
+                  "gasUSD": "0.090182"
+                }
+              }
+            ]
+          },
+          {
+            "srcToken": "0xdac17f958d2ee523a2206206994597c13d831ec7",
+            "srcDecimals": 6,
+            "destToken": "0x056fd409e1d7a124bd7017459dfea2f387b6d5cd",
+            "destDecimals": 2,
+            "swapExchanges": [
+              {
+                "exchange": "CurveV1",
+                "srcAmount": "38740222948",
+                "destAmount": "3871160",
+                "percent": 100,
+                "poolAddresses": ["0x4f062658eaaf2c1ccf8c8e36d6824cdf41167956"],
+                "poolIdentifiers": ["CurveV1_gusd"],
+                "data": {
+                  "exchange": "0x4f062658eaaf2c1ccf8c8e36d6824cdf41167956",
+                  "i": 3,
+                  "j": 0,
+                  "underlyingSwap": true,
+                  "deadline": 0,
+                  "gasUSD": "0.117120"
+                }
+              }
+            ]
+          },
+          {
+            "srcToken": "0x056fd409e1d7a124bd7017459dfea2f387b6d5cd",
+            "srcDecimals": 2,
+            "destToken": "0x6b175474e89094c44da98b954eedeac495271d0f",
+            "destDecimals": 18,
+            "swapExchanges": [
+              {
+                "exchange": "UniswapV2",
+                "srcAmount": "3871160",
+                "destAmount": "3037261070854953374",
+                "percent": 100,
+                "poolAddresses": ["0xF660129233C46D586f540922C1F85969c41C5d39"],
+                "poolIdentifiers": [
+                  "uniswapv2_0x056fd409e1d7a124bd7017459dfea2f387b6d5cd_0x6b175474e89094c44da98b954eedeac495271d0f"
+                ],
+                "data": {
+                  "router": "0xF9234CB08edb93c0d4a4d4c70cC3FfD070e78e07",
+                  "path": [
+                    "0x056fd409e1d7a124bd7017459dfea2f387b6d5cd",
+                    "0x6b175474e89094c44da98b954eedeac495271d0f"
+                  ],
+                  "factory": "0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f",
+                  "initCode": "0x96e8ac4277198ff8b6f785478aa9a39f403cb768dd02cbee326c3e7da348845f",
+                  "feeFactor": 10000,
+                  "pools": [
+                    {
+                      "address": "0xF660129233C46D586f540922C1F85969c41C5d39",
+                      "fee": 30,
+                      "direction": true
+                    }
+                  ],
+                  "gasUSD": "0.046848"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "mergedSwaps": [
+      {
+        "srcToken": "0x9d39a5de30e57443bff2a8307a4256c8797a3497",
+        "srcDecimals": 18,
+        "destToken": "0xdac17f958d2ee523a2206206994597c13d831ec7",
+        "destDecimals": 6,
+        "swapExchanges": [
+          {
+            "exchange": "FluidDex",
+            "srcAmount": "80000000000000000000000",
+            "destAmount": "96850557370",
+            "percent": 100,
+            "poolAddresses": ["0x1dd125c32e4b5086c63cc13b3ca02c4a2a61fa9b"],
+            "poolIdentifiers": [
+              "FluidDex_0x1dd125c32e4b5086c63cc13b3ca02c4a2a61fa9b"
+            ],
+            "data": {
+              "poolId": "FluidDex_0x1dd125c32e4b5086c63cc13b3ca02c4a2a61fa9b",
+              "gasUSD": "0.090182"
+            }
+          }
+        ]
+      }
+    ],
+    "gasCostUSD": "1.171319",
+    "gasCost": "2000210",
+    "side": "SELL",
+    "version": "6.2",
+    "contractAddress": "0x6a000f20005980200259b80c5102003040001068",
+    "tokenTransferProxy": "0x6a000f20005980200259b80c5102003040001068",
+    "contractMethod": "swapExactAmountIn",
+    "partnerFee": 0,
+    "srcUSD": "121000.0000000000",
+    "destUSD": "82164.4602396874",
+    "partner": "anon",
+    "maxImpactReached": true,
+    "hmac": "326cff4d015981f6234d737be585e8787f76bf6f"
+  }
+}
