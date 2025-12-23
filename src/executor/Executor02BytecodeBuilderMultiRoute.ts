@@ -1255,20 +1255,7 @@ export class Executor02BytecodeBuilderMultiRoute extends ExecutorBytecodeBuilder
     }
 
     if (priceRouteType === 'mega') {
-      let swap: BuildSwap;
-
-      if (route.type === 'single-route') {
-        swap = route.swaps[0];
-      } else {
-        // TODO-multi: as only swap.srcToken address is used (for srcToken != ETH), which is the same for multi-routes
-        // safe to use first route
-        const firstMultiRoute = route.swaps[0];
-        if (isMultiRouteSwap(firstMultiRoute)) {
-          swap = firstMultiRoute[0][0];
-        } else {
-          swap = firstMultiRoute[0];
-        }
-      }
+      const swap = getFirstRouteSwaps([route])[0];
 
       return this.wrapAsVerticalBranch(
         callData,
