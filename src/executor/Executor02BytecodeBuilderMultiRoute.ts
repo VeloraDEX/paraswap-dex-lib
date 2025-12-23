@@ -1493,13 +1493,14 @@ export class Executor02BytecodeBuilderMultiRoute extends ExecutorBytecodeBuilder
       swaps: BuildSwap[],
       swap: BuildSwap,
       swapIndex: number,
+      swapBeforeMultiRoute?: boolean,
     ) => {
       swap.swapExchanges.map((swapExchange, swapExchangeIndex) => {
         const { dexFlag, approveFlag } = buildFlagsMethod({
           priceRouteType,
           swaps,
           routes,
-          exchangeParams,
+          exchangeParams, // not used
           routeIndex: 0, // not used on Ex02MultiRoute
           swapIndex,
           swapExchangeIndex,

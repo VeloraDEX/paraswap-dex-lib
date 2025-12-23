@@ -245,11 +245,12 @@ export function getFirstRouteSwaps(routes: RouteBuildSwaps[]): BuildSwap[] {
   return routes
     .map(route => {
       if (route.type === 'multi-route') {
-        if (route.swaps.every(s => Array.isArray(s))) {
-          return (route.swaps[0] as BuildSwap[][]).map(s => s[0]);
+        const swaps = route.swaps[0];
+        if (isMultiRouteSwap(swaps)) {
+          return swaps.map(s => s[0]);
         }
 
-        return route.swaps[0][0];
+        return swaps[0];
       }
 
       return route.swaps[0];
