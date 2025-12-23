@@ -1216,11 +1216,14 @@ export class Executor02BytecodeBuilderMultiRoute extends ExecutorBytecodeBuilder
           // should be the same for all routes in multi-route
           const destToken = multiRouteSwaps[0].at(-1)!.destToken;
 
+          const isLast = routeSwapIndex === route.swaps.length - 1;
           // TODO-multi: as ETH is not used as intermediate connector since RouteAdvisor release, trying to simplify here
           const routeCalldata = this.buildVerticalBranchingCallDataNoEthDest(
             destToken,
             multiRoutesCalldata,
-            Flag.INSERT_FROM_AMOUNT_CHECK_SRC_TOKEN_BALANCE_AFTER_SWAP,
+            isLast
+              ? Flag.INSERT_FROM_AMOUNT_DONT_CHECK_BALANCE_AFTER_SWAP
+              : Flag.INSERT_FROM_AMOUNT_CHECK_SRC_TOKEN_BALANCE_AFTER_SWAP,
           );
 
           callData = hexConcat([callData, routeCalldata]);
