@@ -178,6 +178,7 @@ export class Executor02BytecodeBuilderMultiRoute extends ExecutorBytecodeBuilder
       swapIndex,
       swapExchangeIndex,
       priceRouteType,
+      swapBeforeMultiRoute,
     } = params;
 
     const exchangeParam = swapExchange.build.dexParams;
@@ -221,7 +222,8 @@ export class Executor02BytecodeBuilderMultiRoute extends ExecutorBytecodeBuilder
         isHorizontalSequence &&
         !applyVerticalBranching &&
         !isLastSwap) ||
-      !dexFuncHasRecipient;
+      !dexFuncHasRecipient ||
+      !!swapBeforeMultiRoute;
 
     const needUnwrap =
       needWrapNative && isEthDest && maybeWethCallData?.withdraw;
@@ -1505,6 +1507,7 @@ export class Executor02BytecodeBuilderMultiRoute extends ExecutorBytecodeBuilder
           maybeWethCallData,
           swap,
           swapExchange,
+          swapBeforeMultiRoute,
         });
         swapExchange.build.dexFlag = dexFlag;
         swapExchange.build.approveFlag = approveFlag;
@@ -1520,12 +1523,24 @@ export class Executor02BytecodeBuilderMultiRoute extends ExecutorBytecodeBuilder
           buildAndAssignFlags(route.swaps, swap, swapIndex);
         });
       } else {
-        route.swaps.forEach(routeSwaps => {
+        route.swaps.forEach((routeSwaps, routeSwapsIndex) => {
           const isMultiRoute = isMultiRouteSwap(routeSwaps);
           if (!isMultiRoute) {
+            const nextSwaps = route.swaps[routeSwapsIndex + 1];
+            let swapBeforeMultiRoute = false;
+
+            if (nextSwaps && isMultiRouteSwap(nextSwaps)) {
+              swapBeforeMultiRoute = true;
+            }
             // TODO-multi: should swapIndex be the index of the current multi-route, or the total route
+
             routeSwaps.forEach((swap, swapIndex) => {
-              buildAndAssignFlags(routeSwaps, swap, swapIndex);
+              buildAndAssignFlags(
+                routeSwaps,
+                swap,
+                swapIndex,
+                swapBeforeMultiRoute,
+              );
             });
           } else {
             routeSwaps.forEach(swaps => {

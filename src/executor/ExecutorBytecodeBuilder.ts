@@ -79,6 +79,8 @@ export type BuildSwapFlagsParams = {
   swap: BuildSwap;
   swapExchange: BuildSwapExchange<unknown>;
 
+  swapBeforeMultiRoute?: boolean;
+
   priceRouteType: PriceRouteType;
 
   // TODO-multi: to be removed after refactoring
