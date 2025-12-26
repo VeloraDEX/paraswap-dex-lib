@@ -164,9 +164,21 @@
         "internalType": "address",
         "name": "user",
         "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "amount",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "address",
+        "name": "assetRecipient",
+        "type": "address"
       }
     ],
-    "name": "BondEarlyUnlockDisabled",
+    "name": "BondUnwrapped",
     "type": "event"
   },
   {
@@ -200,55 +212,86 @@
       {
         "indexed": false,
         "internalType": "uint256",
-        "name": "amount",
+        "name": "usd0ppAmount",
         "type": "uint256"
       }
     ],
-    "name": "BondUnwrappedDuringEarlyUnlock",
+    "name": "BondUnwrappedEarlyWithUsualBurn",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "user",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "amount",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "remainingAllowance",
+        "type": "uint256"
+      }
+    ],
+    "name": "CappedUnwrap",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "user",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "amount",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "address",
+        "name": "bAssetRecipient",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "address",
+        "name": "rAssetRecipient",
+        "type": "address"
+      }
+    ],
+    "name": "Deconstructed",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "newFactor",
+        "type": "uint256"
+      }
+    ],
+    "name": "DurationCostFactorSet",
     "type": "event"
   },
   {
     "anonymous": false,
     "inputs": [],
     "name": "EIP712DomainChanged",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      {
-        "indexed": false,
-        "internalType": "address[]",
-        "name": "addressesToAllocateTo",
-        "type": "address[]"
-      },
-      {
-        "indexed": false,
-        "internalType": "uint256[]",
-        "name": "earlyUnlockBalances",
-        "type": "uint256[]"
-      }
-    ],
-    "name": "EarlyUnlockBalancesSet",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "earlyUnlockStart",
-        "type": "uint256"
-      },
-      {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "earlyUnlockEnd",
-        "type": "uint256"
-      }
-    ],
-    "name": "EarlyUnlockPeriodSet",
     "type": "event"
   },
   {
@@ -268,6 +311,31 @@
       }
     ],
     "name": "EmergencyWithdraw",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "caller",
+        "type": "address"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "collector",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "amount",
+        "type": "uint256"
+      }
+    ],
+    "name": "FeeSwept",
     "type": "event"
   },
   {
@@ -300,6 +368,19 @@
     "anonymous": false,
     "inputs": [
       {
+        "indexed": false,
+        "internalType": "address",
+        "name": "account",
+        "type": "address"
+      }
+    ],
+    "name": "Paused",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
         "indexed": true,
         "internalType": "address",
         "name": "user",
@@ -310,22 +391,15 @@
         "internalType": "uint256",
         "name": "amount",
         "type": "uint256"
-      }
-    ],
-    "name": "PARMechanismActivated",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
+      },
       {
         "indexed": false,
         "internalType": "address",
-        "name": "account",
+        "name": "assetRecipient",
         "type": "address"
       }
     ],
-    "name": "Paused",
+    "name": "Reconstructed",
     "type": "event"
   },
   {
@@ -378,6 +452,25 @@
       {
         "indexed": false,
         "internalType": "uint256",
+        "name": "cap",
+        "type": "uint256"
+      }
+    ],
+    "name": "UnwrapCapSet",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "user",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
         "name": "usd0ppAmount",
         "type": "uint256"
       },
@@ -389,6 +482,19 @@
       }
     ],
     "name": "Usd0ppUnlockedFloorPrice",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "newRate",
+        "type": "uint256"
+      }
+    ],
+    "name": "UsualDistributionPerUsd0ppSet",
     "type": "event"
   },
   {
