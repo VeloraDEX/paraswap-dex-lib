@@ -401,28 +401,10 @@ export abstract class StatefulEventSubscriber<State>
   //setState.  In case isTracking() returns true, it is assumed that the stored
   //state is current and so the minBlockNumber will be disregarded.
   getState(minBlockNumber: number): DeepReadonly<State> | null {
-    if (!this.state || this.invalid) {
-      this.logger.info(
-        `Returning null: no state or it's invalid. state=${!!this
-          .state}, invalid=${
-          this.invalid
-        }, minBlockNumber=${minBlockNumber}, stateBlockNumber=${
-          this.stateBlockNumber
-        }, name=${this.name}, parentName=${this.parentName}`,
-      );
-
-      return null;
-    }
+    if (!this.state || this.invalid) return null;
     if (this.isTracking() || this.stateBlockNumber >= minBlockNumber) {
-      this.logger.info(
-        `Returning state: minBlockNumber=${minBlockNumber}, stateBlockNumber=${this.stateBlockNumber}, name=${this.name}, parentName=${this.parentName}`,
-      );
       return this.state;
     }
-
-    this.logger.info(
-      `Returning null: stateBlockNumber too old. minBlockNumber=${minBlockNumber}, stateBlockNumber=${this.stateBlockNumber}, name=${this.name}, parentName=${this.parentName}`,
-    );
     return null;
   }
 
