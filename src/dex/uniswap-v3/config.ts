@@ -254,20 +254,6 @@ export const UniswapV3Config: DexConfigMap<DexParams> = {
       subgraphURL: 'QmWWh7RgdXHcxaSwhJMpH1SB7D9rFZRGLZVwRfg2BPKsHt',
     },
   },
-  ChronosV3: {
-    [Network.ARBITRUM]: {
-      factory: '0x4Db9D624F67E00dbF8ef7AE0e0e8eE54aF1dee49',
-      quoter: '0x6E7f0Ca45171a4440c0CDdF3A46A8dC5D4c2d4A0',
-      router: '0xE0aBdFD837D451640CF43cB1Ec4eE87976eFbb41',
-      supportedFees: SUPPORTED_FEES,
-      stateMulticall: '0x46b44eb4Cc3bEbB9f04C419f691aB85Ff885A4D6',
-      uniswapMulticall: '0xaBB58098A7B5172A9b0B38a1925A522dbf0b4FC3',
-      chunksCount: 10,
-      initRetryFrequency: 10,
-      initHash:
-        '0x09c178be473df44d1de6970978a4fdedce1ce52a23b2b979754547f6b43a19a5',
-    },
-  },
   RamsesV2: {
     [Network.ARBITRUM]: {
       factory: '0xAA2cd7477c451E703f3B9Ba5663334914763edF8',
@@ -302,35 +288,6 @@ export const UniswapV3Config: DexConfigMap<DexParams> = {
       initHash:
         '0xe34f199b19b2b4f47f68442619d555527d244f78a3297ea89325f843f87b8b54',
       // subgraphURL: '', deployed on 0xgraph
-    },
-  },
-  Retro: {
-    [Network.POLYGON]: {
-      factory: '0x91e1B99072f238352f59e58de875691e20Dc19c1',
-      quoter: '0xfe08be075758935cb6cb9318d1fbb60920416d4e',
-      router: '0x1891783cb3497Fdad1F25C933225243c2c7c4102',
-      supportedFees: SUPPORTED_FEES,
-      stateMulticall: '0x6Dc993Fe1e945A640576B4Dca81281d8e998DF71',
-      uniswapMulticall: '0x1F98415757620B543A52E61c46B32eB19261F984',
-      chunksCount: 10,
-      initRetryFrequency: 10,
-      initHash: `0x817e07951f93017a93327ac8cc31e946540203a19e1ecc37bc1761965c2d1090`,
-      subgraphURL: 'DZyDuvUHNThtJJQAEbYGr32xYc93BZAdfqatpYUNMZbe',
-    },
-  },
-  BaseswapV3: {
-    [Network.BASE]: {
-      factory: '0x38015D05f4fEC8AFe15D7cc0386a126574e8077B',
-      quoter: '0x4fDBD73aD4B1DDde594BF05497C15f76308eFfb9',
-      router: '0x1B8eea9315bE495187D873DA7773a874545D9D48',
-      supportedFees: [10000n, 2500n, 450n, 80n],
-      stateMulticall: '0x7160f736c52e1e78e92FD4eE4D73e21A7Cf4F950',
-      uniswapMulticall: '0x091e99cb1C49331a94dD62755D168E941AbD0693',
-      chunksCount: 10,
-      initRetryFrequency: 10,
-      initHash: `0xe34f199b19b2b4f47f68442619d555527d244f78a3297ea89325f843f87b8b54`,
-      // bad indexers error on subgraph
-      // subgraphURL: '39pzQzH5r3vmovd9fTs7rVDVFCj1xJye3dTMNHcSkSfL',
     },
   },
   AlienBaseV3: {
