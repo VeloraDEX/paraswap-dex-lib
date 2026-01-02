@@ -2,7 +2,6 @@ import _ from 'lodash';
 import { UnoptimizedRate } from '../types';
 import { CurveV2 } from './curve-v2/curve-v2';
 import { IDexTxBuilder, DexConstructor, IDex, IRouteOptimizer } from './idex';
-import { JarvisV6 } from './jarvis-v6/jarvis-v6';
 import { StablePool } from './stable-pool/stable-pool';
 import { Weth } from './weth/weth';
 import { PolygonMigrator } from './polygon-migrator/polygon-migrator';
@@ -14,7 +13,6 @@ import { UniswapV2Alias } from './uniswap-v2/constants';
 import { uniswapMerge } from './uniswap-v2/optimizer';
 import { BiSwap } from './uniswap-v2/biswap';
 import { MDEX } from './uniswap-v2/mdex';
-import { Dfyn } from './uniswap-v2/dfyn';
 import { Bancor } from './bancor/bancor';
 import { Compound } from './compound/compound';
 import { AaveV2 } from './aave-v2/aave-v2';
@@ -27,8 +25,6 @@ import { IDexHelper } from '../dex-helper';
 import { SwapSide } from '../constants';
 import { Adapters } from '../types';
 import { Lido } from './lido/lido';
-import { KyberDmm } from './kyberdmm/kyberdmm';
-import { GMX } from './gmx/gmx';
 import { WooFiV2 } from './woo-fi-v2/woo-fi-v2';
 import { ParaSwapLimitOrders } from './paraswap-limit-orders/paraswap-limit-orders';
 import { AugustusRFQOrder } from './augustus-rfq';
@@ -157,15 +153,11 @@ const Dexes = [
   VelodromeSlipstream,
   BiSwap,
   MDEX,
-  Dfyn,
   AaveV2,
   AaveV3,
-  KyberDmm,
   Weth,
   PolygonMigrator,
   Nerve,
-  GMX,
-  JarvisV6,
   WooFiV2,
   ParaSwapLimitOrders,
   Solidly,

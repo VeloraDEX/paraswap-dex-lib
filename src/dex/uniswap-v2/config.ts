@@ -183,16 +183,6 @@ export const UniswapV2Config: DexConfigMap<DexParams> = {
       feeCode: 20,
     },
   },
-  Baguette: {
-    [Network.AVALANCHE]: {
-      subgraphURL: '61Lx9dF7BeNUF12QE4egX5N8iN8M5PPsXVNmHeq6KBMi',
-      factoryAddress: '0x3587b8c0136c2c3605a9e5b03ab54da3e4044b50',
-      initCode:
-        '0xf4ccce374816856d11f00e4069e7cada164065686fbef53c6167a63ec2fd8c5b',
-      poolGasCost: 80 * 1000,
-      feeCode: 30,
-    },
-  },
   BakerySwap: {
     [Network.BSC]: {
       factoryAddress: '0x01bF7C66c6BD861915CdaaE475042d3c4BaE16A7',
@@ -209,16 +199,6 @@ export const UniswapV2Config: DexConfigMap<DexParams> = {
         ],
         [SwapSide.BUY]: null,
       },
-    },
-  },
-  CanarySwap: {
-    [Network.AVALANCHE]: {
-      subgraphURL: 'An3x5Mz4YXEERomXYC4AhGgNhRthPFXNYDnrMCjrAJe',
-      factoryAddress: '0xCFBA329d49C24b70F3a8b9CC0853493d4645436b',
-      initCode:
-        '0x60df5edf580dff3274fff5a3d83ad2b6ef6e296f71c3bc28c939e641888bd5b0',
-      poolGasCost: 80 * 1000,
-      feeCode: 30,
     },
   },
   CheeseSwap: {
@@ -239,40 +219,12 @@ export const UniswapV2Config: DexConfigMap<DexParams> = {
       feeCode: 20,
     },
   },
-  ComethSwap: {
-    [Network.POLYGON]: {
-      factoryAddress: '0x800b052609c355ca8103e06f022aa30647ead60a',
-      initCode:
-        '0x499154cad90a3563f914a25c3710ed01b9a43b8471a35ba8a66a056f37638542',
-      feeCode: 50,
-    },
-  },
-  ComplusSwap: {
-    [Network.AVALANCHE]: {
-      subgraphURL: 'GKMU4BaEfJpjHkrhgLdoS8wyWircmytNXN9KH3SmpkCL',
-      factoryAddress: '0x5C02e78A3969D0E64aa2CFA765ACc1d671914aC0',
-      initCode:
-        '0x0f75b63316180834cae9ff38fbeb719026e1435e60ddb4509bd435f148feac97',
-      poolGasCost: 80 * 1000,
-      feeCode: 30,
-    },
-  },
   DefiSwap: {
     [Network.MAINNET]: {
       subgraphURL: 'G7W3G1JGcFbWseucNkHHvQorxyjQLEQt7vt9yPN97hri',
       factoryAddress: '0x9DEB29c9a4c7A88a3C0257393b7f3335338D9A9D',
       initCode:
         '0x69d637e77615df9f235f642acebbdad8963ef35c5523142078c9b8f9d0ceba7e',
-      feeCode: 30,
-    },
-  },
-  ElkFinance: {
-    [Network.AVALANCHE]: {
-      subgraphURL: '2dyce92CewvhV17C8BMFoMCgaXdPTtwBzaz8AReQR3YV',
-      factoryAddress: '0x091d35d7F63487909C863001ddCA481c6De47091',
-      initCode:
-        '0x33c4831a098654d3d20a78641a198ee6ffc1ceed49f2196b75bb244891c260e3',
-      poolGasCost: 80 * 1000,
       feeCode: 30,
     },
   },
@@ -319,15 +271,6 @@ export const UniswapV2Config: DexConfigMap<DexParams> = {
       initCode:
         '0x40231f6b438bce0797c9ada29b718a87ea0a5cea3fe9a771abdd76bd41a3e545',
       poolGasCost: 89 * 1000,
-      feeCode: 30,
-    },
-  },
-  ArenaDex: {
-    [Network.AVALANCHE]: {
-      factoryAddress: '0x231DF4D421f1F9e0AAe9bA3634a87EBC87A09c39',
-      initCode:
-        '0x5eae27f407e5d417db3b2c176a2221883934aa8eecf365f8795afb69ee0b23d1',
-      poolGasCost: 120 * 1000,
       feeCode: 30,
     },
   },
@@ -474,26 +417,6 @@ export const UniswapV2Config: DexConfigMap<DexParams> = {
       feeCode: 30,
     },
   },
-  ZeroSwap: {
-    [Network.AVALANCHE]: {
-      subgraphURL: 'AqPMxtsH3QagNavTVHVXq5B7EMFjFykhwLT3rbBsTUoa',
-      factoryAddress: '0x2Ef422F30cdb7c5F1f7267AB5CF567A88974b308',
-      initCode:
-        '0x4b5b254233f8aba1e01c0538653d54036e3c9f7873daf99623bb358f1cf33188',
-      poolGasCost: 80 * 1000,
-      feeCode: 30,
-    },
-  },
-  YetiSwap: {
-    [Network.AVALANCHE]: {
-      subgraphURL: '3eghyQrrkqHWVGhFdQhMV76yb7JUpmY7EENgKodSbH7x',
-      factoryAddress: '0x58C8CD291Fa36130119E6dEb9E520fbb6AcA1c3a',
-      initCode:
-        '0xcc133f6dd9577d2022e9f47ec90dd24049584e73131095c170715fa7c950a64a',
-      poolGasCost: 80 * 1000,
-      feeCode: 30,
-    },
-  },
   WaultFinance: {
     [Network.BSC]: {
       subgraphURL: 'tyASNhX4AQEcYUG1zgdUNWVYZkPSNiY4Lw4U3ZLNd7n',
@@ -589,14 +512,6 @@ export const UniswapV2Config: DexConfigMap<DexParams> = {
       initCode: '0x', // deprecated
       poolGasCost: 90 * 1000,
       feeCode: 30,
-    },
-  },
-  DackieSwap: {
-    [Network.BASE]: {
-      factoryAddress: '0x591f122D1df761E616c13d265006fcbf4c6d6551',
-      initCode: '0x', // deprecated
-      poolGasCost: 90 * 1000,
-      feeCode: 25,
     },
   },
 };

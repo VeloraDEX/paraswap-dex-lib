@@ -4,13 +4,6 @@ import { Network } from '../../constants';
 
 export const AlgebraIntegralConfig: DexConfigMap<DexParams> = {
   QuickSwapV4: {
-    [Network.POLYGON]: {
-      factory: '0x96117a894c2c99aafeeacb972c3310e6ac83e810',
-      subgraphURL: 'B8VaWM5T8miDW4TKdGRAkZXvLekpptQykxNV8vVP8fhg',
-      quoter: '0xae65e71bcd7c84c8bc53532f6f784ed15a68f8b7',
-      router: '0xee2a7a531bcf524392dc3db67bb400bae3833991',
-      chunksCount: 10,
-    },
     [Network.BASE]: {
       factory: '0xC5396866754799B9720125B104AE01d935Ab9C7b',
       subgraphURL: 'U65NKb6BsDPGqugPAda58ebMLa1RqeMFT76fndB77oe',
