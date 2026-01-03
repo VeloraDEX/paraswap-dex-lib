@@ -1372,4 +1372,182 @@ describe('UniswapV2 E2E Avalanche', () => {
       });
     });
   });
+
+  describe('OmniExchangeV2', () => {
+    const dexKey = 'OmniExchangeV2';
+
+    describe('simpleSwap', () => {
+      it('WAVAX -> USDC', async () => {
+        await testE2E(
+          tokens.WAVAX,
+          tokens.USDC,
+          holders.WAVAX,
+          '1000000000000000000',
+          SwapSide.SELL,
+          dexKey,
+          ContractMethod.simpleSwap,
+          network,
+          provider,
+        );
+      });
+
+      it('USDC -> WAVAX', async () => {
+        await testE2E(
+          tokens.USDC,
+          tokens.WAVAX,
+          holders.USDC,
+          '10000000',
+          SwapSide.SELL,
+          dexKey,
+          ContractMethod.simpleSwap,
+          network,
+          provider,
+        );
+      });
+
+      it('WAVAX -> USDT', async () => {
+        await testE2E(
+          tokens.WAVAX,
+          tokens.USDT,
+          holders.WAVAX,
+          '1000000000000000000',
+          SwapSide.SELL,
+          dexKey,
+          ContractMethod.simpleSwap,
+          network,
+          provider,
+        );
+      });
+
+      it('USDT -> WAVAX', async () => {
+        await testE2E(
+          tokens.USDT,
+          tokens.WAVAX,
+          holders.USDT,
+          '10000000',
+          SwapSide.SELL,
+          dexKey,
+          ContractMethod.simpleSwap,
+          network,
+          provider,
+        );
+      });
+    });
+
+    describe('multiSwap', () => {
+      it('WAVAX -> USDC', async () => {
+        await testE2E(
+          tokens.WAVAX,
+          tokens.USDC,
+          holders.WAVAX,
+          '1000000000000000000',
+          SwapSide.SELL,
+          dexKey,
+          ContractMethod.multiSwap,
+          network,
+          provider,
+        );
+      });
+
+      it('USDC -> WAVAX', async () => {
+        await testE2E(
+          tokens.USDC,
+          tokens.WAVAX,
+          holders.USDC,
+          '10000000',
+          SwapSide.SELL,
+          dexKey,
+          ContractMethod.multiSwap,
+          network,
+          provider,
+        );
+      });
+
+      it('WAVAX -> USDT', async () => {
+        await testE2E(
+          tokens.WAVAX,
+          tokens.USDT,
+          holders.WAVAX,
+          '1000000000000000000',
+          SwapSide.SELL,
+          dexKey,
+          ContractMethod.multiSwap,
+          network,
+          provider,
+        );
+      });
+
+      it('USDT -> WAVAX', async () => {
+        await testE2E(
+          tokens.USDT,
+          tokens.WAVAX,
+          holders.USDT,
+          '10000000',
+          SwapSide.SELL,
+          dexKey,
+          ContractMethod.multiSwap,
+          network,
+          provider,
+        );
+      });
+    });
+
+    describe('megaSwap', () => {
+      it('WAVAX -> USDC', async () => {
+        await testE2E(
+          tokens.WAVAX,
+          tokens.USDC,
+          holders.WAVAX,
+          '1000000000000000000',
+          SwapSide.SELL,
+          dexKey,
+          ContractMethod.megaSwap,
+          network,
+          provider,
+        );
+      });
+
+      it('USDC -> WAVAX', async () => {
+        await testE2E(
+          tokens.USDC,
+          tokens.WAVAX,
+          holders.USDC,
+          '10000000',
+          SwapSide.SELL,
+          dexKey,
+          ContractMethod.megaSwap,
+          network,
+          provider,
+        );
+      });
+
+      it('WAVAX -> USDT', async () => {
+        await testE2E(
+          tokens.WAVAX,
+          tokens.USDT,
+          holders.WAVAX,
+          '1000000000000000000',
+          SwapSide.SELL,
+          dexKey,
+          ContractMethod.megaSwap,
+          network,
+          provider,
+        );
+      });
+
+      it('USDT -> WAVAX', async () => {
+        await testE2E(
+          tokens.USDT,
+          tokens.WAVAX,
+          holders.USDT,
+          '10000000',
+          SwapSide.SELL,
+          dexKey,
+          ContractMethod.megaSwap,
+          network,
+          provider,
+        );
+      });
+    });
+  });
 });
