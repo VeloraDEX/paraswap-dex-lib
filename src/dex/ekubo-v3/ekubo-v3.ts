@@ -659,7 +659,7 @@ export class EkuboV3 extends SimpleExchange implements IDex<EkuboData> {
         }
       }
 
-      poolInitializations.splice(firstNewDataIdx);
+      poolInitializations.splice(0, firstNewDataIdx);
     }
 
     if (poolInitializations.length === 0) {
