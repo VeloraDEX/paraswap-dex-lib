@@ -11,17 +11,12 @@ import {
   MIN_TICK,
   toSqrtRatio,
 } from './math/tick';
-import {
-  parseSwappedEvent,
-  PoolKey,
-  StableswapPoolTypeConfig,
-  SwappedEvent,
-} from './utils';
+import { parseSwappedEvent, PoolKey, StableswapPoolTypeConfig } from './utils';
 import { amount0Delta, amount1Delta } from './math/delta';
 import { initializedTicksCrossedGasCosts } from './base';
 import { FullRangePoolState } from './full-range';
 
-const GAS_COST_OF_ONE_STABLESWAP_SWAP = 20_700;
+const GAS_COST_OF_ONE_STABLESWAP_SWAP = 16_818;
 
 export class StableswapPool extends EkuboPool<
   StableswapPoolTypeConfig,

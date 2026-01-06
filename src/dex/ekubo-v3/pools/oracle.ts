@@ -3,6 +3,7 @@ import { FullRangePool, FullRangePoolState } from './full-range';
 import { PoolKeyed, Quote } from './pool';
 import { StableswapPoolTypeConfig } from './utils';
 
+// TODO
 const BASE_GAS_COST_OF_ONE_ORACLE_SWAP = 32_000;
 
 export class OraclePool extends FullRangePool {

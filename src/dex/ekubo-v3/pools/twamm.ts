@@ -20,9 +20,11 @@ import { bigintMax, bigintMin } from '../utils';
 
 const SLOT_DURATION_SECS = 12n;
 
-const BASE_GAS_COST_OF_ONE_TWAMM_FULL_RANGE_SWAP = 25_700;
+const BASE_GAS_COST_OF_ONE_TWAMM_SWAP = 30_716;
+
+// TODO
+const BASE_GAS_COST_OF_ONE_TWAMM_FULL_RANGE_SWAP = 19_000;
 const GAS_COST_OF_ONE_VIRTUAL_ORDER_DELTA = 7_500;
-const GAS_COST_OF_EXECUTING_VIRTUAL_ORDERS = 13_000;
 
 const LOG_BASE_256 = Math.log(256);
 
@@ -168,7 +170,7 @@ export class TwammPool extends EkuboPool<
     let lastExecutionTime = state.lastExecutionTime;
 
     let virtualOrderDeltaTimesCrossed = 0;
-    let swapCount = 1;
+    let swapCount = 0;
     let nextSaleRateDeltaIndex = state.virtualOrderDeltas.findIndex(
       srd => srd.time > lastExecutionTime,
     );
@@ -252,8 +254,8 @@ export class TwammPool extends EkuboPool<
       calculatedAmount: finalQuote.calculatedAmount,
       consumedAmount: finalQuote.consumedAmount,
       gasConsumed:
+        BASE_GAS_COST_OF_ONE_TWAMM_SWAP +
         swapCount * BASE_GAS_COST_OF_ONE_TWAMM_FULL_RANGE_SWAP +
-        GAS_COST_OF_EXECUTING_VIRTUAL_ORDERS +
         virtualOrderDeltaTimesCrossed * GAS_COST_OF_ONE_VIRTUAL_ORDER_DELTA +
         (Math.log(Number(currentTime - state.lastExecutionTime)) /
           LOG_BASE_256) *

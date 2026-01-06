@@ -21,7 +21,9 @@ import { amount0Delta, amount1Delta } from './math/delta';
 import { hexDataSlice } from 'ethers/lib/utils';
 import { BigNumber } from 'ethers';
 
-const GAS_COST_OF_ONE_CL_SWAP = 24_500;
+const GAS_COST_OF_ONE_CL_SWAP = 19_632;
+
+// TODO Estimates are still from v2
 const GAS_COST_OF_ONE_INITIALIZED_TICK_CROSSED = 13_700;
 export const GAS_COST_OF_ONE_EXTRA_BITMAP_SLOAD = 2_000;
 const GAS_COST_OF_ONE_EXTRA_MATH_ROUND = 5_750;

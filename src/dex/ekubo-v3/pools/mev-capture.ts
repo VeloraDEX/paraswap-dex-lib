@@ -6,6 +6,7 @@ import { BI_MAX_UINT64 } from '../../../bigint-constants';
 import { amountBeforeFee, computeFee } from './math/swap';
 import { ConcentratedPoolTypeConfig } from './utils';
 
+// TODO
 const EXTRA_BASE_GAS_COST_OF_ONE_MEV_CAPTURE_SWAP = 33_500;
 
 export class MevCapturePool extends BasePool {

@@ -14,7 +14,7 @@ import {
 } from './utils';
 import { amount0Delta, amount1Delta } from './math/delta';
 
-const GAS_COST_OF_ONE_FULL_RANGE_SWAP = 20_700;
+const GAS_COST_OF_ONE_FULL_RANGE_SWAP = 14_774;
 
 export class FullRangePool extends EkuboPool<
   StableswapPoolTypeConfig,

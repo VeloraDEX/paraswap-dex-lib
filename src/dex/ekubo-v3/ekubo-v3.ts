@@ -30,7 +30,6 @@ import {
   convertAndSortTokens,
   ekuboContracts,
   convertEkuboToParaSwap,
-  bigintMax,
 } from './utils';
 
 import { BigNumber, Contract } from 'ethers';
@@ -54,7 +53,6 @@ import {
 import { MevCapturePool } from './pools/mev-capture';
 import { erc20Iface } from '../../lib/tokens/utils';
 import { StableswapPool } from './pools/stableswap';
-import { ZERO_ADDRESS } from '@paraswap/sdk/dist/methods/common/orders/buildOrderData';
 
 const assertUnreachable = (x: never): never => {
   throw new Error(`Unhandled case: ${x}`);
@@ -65,6 +63,7 @@ const SUBGRAPH_QUERY = `query NewPools($startBlock: BigInt!, $coreAddress: Bytes
     where: {blockNumber_gte: $startBlock, coreAddress: $coreAddress, extension_in: $extensions}, orderBy: blockNumber
   ) {
     blockNumber
+    blockHash
     tickSpacing
     stableswapCenterTick
     stableswapAmplification
@@ -80,7 +79,6 @@ const MIN_BITMAPS_SEARCHED = 2;
 const MAX_BATCH_SIZE = 100;
 
 const POOL_MAP_UPDATE_INTERVAL_MS = 1 * 60 * 1000;
-const REORG_BACKFILL_BLOCKS = 12n;
 
 // Ekubo Protocol https://ekubo.org/
 export class EkuboV3 extends SimpleExchange implements IDex<EkuboData> {
@@ -101,7 +99,8 @@ export class EkuboV3 extends SimpleExchange implements IDex<EkuboData> {
   private readonly contracts;
 
   private interval?: NodeJS.Timeout;
-  private lastInitializedEventBlock = 0n;
+  private lastSyncedBlockNumber = 0n;
+  private lastSyncedBlockHash = '';
 
   // Caches the number of decimals for TVL computation purposes
   private readonly decimals: Record<string, AsyncOrSync<number | null>> = {
@@ -604,6 +603,7 @@ export class EkuboV3 extends SimpleExchange implements IDex<EkuboData> {
       data: {
         poolInitializations: {
           blockNumber: string;
+          blockHash: string;
           tickSpacing: number | null;
           stableswapCenterTick: number | null;
           stableswapAmplification: number | null;
@@ -619,15 +619,10 @@ export class EkuboV3 extends SimpleExchange implements IDex<EkuboData> {
       {
         query: SUBGRAPH_QUERY,
         variables: {
-          // TODO Same reorg handling as in the Kyberswap integration
-          // Query slightly before the last seen block to tolerate short reorgs
-          startBlock: bigintMax(
-            0n,
-            this.lastInitializedEventBlock - REORG_BACKFILL_BLOCKS,
-          ).toString(),
+          startBlock: this.lastSyncedBlockNumber.toString(),
           coreAddress: CORE_ADDRESS,
           extensions: [
-            ZERO_ADDRESS,
+            '0x0000000000000000000000000000000000000000',
             ORACLE_ADDRESS,
             TWAMM_ADDRESS,
             MEV_CAPTURE_ADDRESS,
@@ -637,12 +632,46 @@ export class EkuboV3 extends SimpleExchange implements IDex<EkuboData> {
       {},
     );
 
-    const poolKeys = res.data.poolInitializations.map(info => {
-      this.lastInitializedEventBlock = bigintMax(
-        this.lastInitializedEventBlock,
-        BigInt(info.blockNumber),
-      );
+    let poolInitializations = res.data.poolInitializations;
 
+    if (poolInitializations.length === 0) {
+      return [];
+    }
+
+    if (this.lastSyncedBlockNumber !== 0n) {
+      const firstInitialization = poolInitializations[0];
+      const firstBlockNumber = BigInt(firstInitialization.blockNumber);
+
+      if (
+        firstBlockNumber !== this.lastSyncedBlockNumber ||
+        firstInitialization.blockHash !== this.lastSyncedBlockHash
+      ) {
+        throw new Error('Subgraph reorg detected');
+      }
+
+      let firstNewDataIdx = 1;
+      for (; firstNewDataIdx < poolInitializations.length; firstNewDataIdx++) {
+        if (
+          BigInt(poolInitializations[firstNewDataIdx].blockNumber) >
+          firstBlockNumber
+        ) {
+          break;
+        }
+      }
+
+      poolInitializations.splice(firstNewDataIdx);
+    }
+
+    if (poolInitializations.length === 0) {
+      return [];
+    }
+
+    const lastInitialization =
+      poolInitializations[poolInitializations.length - 1];
+    this.lastSyncedBlockNumber = BigInt(lastInitialization.blockNumber);
+    this.lastSyncedBlockHash = lastInitialization.blockHash;
+
+    const poolKeys = poolInitializations.map(info => {
       if (info.tickSpacing !== null) {
         return new PoolKey(
           BigInt(info.token0),

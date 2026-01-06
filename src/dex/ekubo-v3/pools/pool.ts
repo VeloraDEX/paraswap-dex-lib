@@ -50,8 +50,6 @@ export class NamedEventHandlers<State> {
   }
 }
 
-const BASE_GAS_COST = 11_700;
-
 export abstract class EkuboPool<C extends PoolTypeConfig, S>
   extends StatefulEventSubscriber<S>
   implements IEkuboPool<C>
@@ -136,8 +134,6 @@ export abstract class EkuboPool<C extends PoolTypeConfig, S>
 
     if (quote.calculatedAmount === 0n) {
       quote.gasConsumed = 0;
-    } else {
-      quote.gasConsumed += BASE_GAS_COST;
     }
 
     return quote;
