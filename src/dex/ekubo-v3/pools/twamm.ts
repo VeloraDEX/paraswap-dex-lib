@@ -85,7 +85,10 @@ export class TwammPool extends EkuboPool<
 
             return TwammPoolState.fromOrderUpdatedEvent(
               oldState,
-              [orderKey.startTime.toBigInt(), orderKey.endTime.toBigInt()],
+              [
+                BigInt(hexDataSlice(orderKey.config, 16, 24)),
+                BigInt(hexDataSlice(orderKey.config, 24, 32)),
+              ],
               args.saleRateDelta.toBigInt(),
               isToken1,
             );
@@ -392,7 +395,11 @@ export namespace TwammPoolState {
     [startTime, endTime]: [bigint, bigint],
     orderSaleRateDelta: bigint,
     isToken1: boolean,
-  ): Object {
+  ): Object | null {
+    if (orderSaleRateDelta === 0n) {
+      return null;
+    }
+
     const clonedState = structuredClone(oldState) as DeepWritable<
       typeof oldState
     >;
@@ -416,10 +423,20 @@ export namespace TwammPoolState {
           });
         }
 
-        virtualOrderDeltas[idx][`saleRateDelta${isToken1 ? '1' : '0'}`] +=
+        const virtualOrderDelta = virtualOrderDeltas[idx];
+
+        virtualOrderDelta[`saleRateDelta${isToken1 ? '1' : '0'}`] +=
           saleRateDelta;
 
-        startIndex = idx + 1;
+        if (
+          virtualOrderDelta.saleRateDelta0 === 0n &&
+          virtualOrderDelta.saleRateDelta1 === 0n
+        ) {
+          virtualOrderDeltas.splice(idx, 1);
+          startIndex = idx;
+        } else {
+          startIndex = idx + 1;
+        }
       } else {
         clonedState[`token${isToken1 ? '1' : '0'}SaleRate`] += saleRateDelta;
       }

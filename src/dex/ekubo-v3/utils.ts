@@ -4,12 +4,18 @@ import { Contract } from 'ethers';
 import { ETHER_ADDRESS } from '../../constants';
 import { Token } from '../../types';
 import { isETHAddress } from '../../utils';
-import { DexParams, EkuboContracts } from './types';
+import { EkuboContracts } from './types';
 
 import CoreABI from '../../abi/ekubo-v3/core.json';
 import QuoteDataFetcherABI from '../../abi/ekubo-v3/quote-data-fetcher.json';
 import TwammDataFetcherABI from '../../abi/ekubo-v3/twamm-data-fetcher.json';
 import TwammABI from '../../abi/ekubo-v3/twamm.json';
+import {
+  CORE_ADDRESS,
+  QUOTE_DATA_FETCHER_ADDRESS,
+  TWAMM_ADDRESS,
+  TWAMM_DATA_FETCHER_ADDRESS,
+} from './config';
 
 export const NATIVE_TOKEN_ADDRESS = 0x0000000000000000000000000000000000000000n;
 
@@ -34,25 +40,22 @@ export function convertAndSortTokens(
   return a > b ? [b, a] : [a, b];
 }
 
-export function contractsFromDexParams(
-  params: DexParams,
-  provider: Provider,
-): EkuboContracts {
+export function ekuboContracts(provider: Provider): EkuboContracts {
   return {
     core: {
-      contract: new Contract(params.core, CoreABI, provider),
+      contract: new Contract(CORE_ADDRESS, CoreABI, provider),
       interface: new Interface(CoreABI),
       quoteDataFetcher: new Contract(
-        params.quoteDataFetcher,
+        QUOTE_DATA_FETCHER_ADDRESS,
         QuoteDataFetcherABI,
         provider,
       ),
     },
     twamm: {
-      contract: new Contract(params.twamm, TwammABI, provider),
+      contract: new Contract(TWAMM_ADDRESS, TwammABI, provider),
       interface: new Interface(TwammABI),
       quoteDataFetcher: new Contract(
-        params.twammDataFetcher,
+        TWAMM_DATA_FETCHER_ADDRESS,
         TwammDataFetcherABI,
         provider,
       ),

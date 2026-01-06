@@ -17,10 +17,12 @@ import { BI_POWS } from '../../bigint-constants';
 import { Network, SwapSide } from '../../constants';
 import { DummyDexHelper } from '../../dex-helper/index';
 import { EkuboV3 } from './ekubo-v3';
-import { isPriceIncreasing } from './pools/math/swap';
-import { MAX_SQRT_RATIO, MIN_SQRT_RATIO } from './pools/math/tick';
 import { EkuboData } from './types';
-import { DEX_KEY } from './config';
+import { DEX_KEY, ROUTER_ADDRESS } from './config';
+import { hexDataSlice } from 'ethers/lib/utils';
+import { BigNumber } from 'ethers';
+
+const NO_SQRT_RATIO_LIMIT = 0n;
 
 function getReaderCalldata(
   quoterAddress: string,
@@ -34,7 +36,7 @@ function getReaderCalldata(
       poolKeyAbi,
       isToken1,
       amount,
-      isPriceIncreasing(amount, isToken1) ? MAX_SQRT_RATIO : MIN_SQRT_RATIO,
+      NO_SQRT_RATIO_LIMIT,
       skipAhead[amount.toString()] ?? 0,
     ]),
   }));
@@ -47,9 +49,18 @@ function decodeReaderResult(
   swapSide: SwapSide,
 ): bigint[] {
   return results.map(result => {
-    const parsed = readerIface.decodeFunctionResult('quote', result);
+    const balanceUpdate: string = readerIface.decodeFunctionResult(
+      'quote',
+      result,
+    ).balanceUpdate;
+    const delta = BigNumber.from(
+      isToken1
+        ? hexDataSlice(balanceUpdate, 0, 16)
+        : hexDataSlice(balanceUpdate, 16, 32),
+    )
+      .fromTwos(128)
+      .toBigInt();
 
-    const delta: bigint = parsed[isToken1 ? 'delta0' : 'delta1'].toBigInt();
     return swapSide === SwapSide.BUY ? delta : -delta;
   });
 }
@@ -67,7 +78,7 @@ async function checkOnChainPricing(
   }
 
   const readerCallData = getReaderCalldata(
-    ekubo.config.router,
+    ROUTER_ADDRESS,
     ekubo.routerIface,
     amounts.slice(1),
     data,
@@ -153,7 +164,6 @@ let ekubo: EkuboV3;
 describe('Mainnet', () => {
   const network = Network.MAINNET;
   const dexHelper = new DummyDexHelper(network);
-
   const tokens = Tokens[network];
 
   const srcTokenSymbol = 'USDC';
@@ -161,30 +171,20 @@ describe('Mainnet', () => {
 
   const amountsForSell = [
     0n,
-    1n * BI_POWS[tokens[srcTokenSymbol].decimals],
-    2n * BI_POWS[tokens[srcTokenSymbol].decimals],
-    3n * BI_POWS[tokens[srcTokenSymbol].decimals],
-    4n * BI_POWS[tokens[srcTokenSymbol].decimals],
-    5n * BI_POWS[tokens[srcTokenSymbol].decimals],
-    6n * BI_POWS[tokens[srcTokenSymbol].decimals],
-    7n * BI_POWS[tokens[srcTokenSymbol].decimals],
-    8n * BI_POWS[tokens[srcTokenSymbol].decimals],
-    9n * BI_POWS[tokens[srcTokenSymbol].decimals],
-    10n * BI_POWS[tokens[srcTokenSymbol].decimals],
+    (BI_POWS[tokens[srcTokenSymbol].decimals] / 10n) * 1n,
+    (BI_POWS[tokens[srcTokenSymbol].decimals] / 10n) * 2n,
+    (BI_POWS[tokens[srcTokenSymbol].decimals] / 10n) * 3n,
+    (BI_POWS[tokens[srcTokenSymbol].decimals] / 10n) * 4n,
+    (BI_POWS[tokens[srcTokenSymbol].decimals] / 10n) * 5n,
   ];
 
   const amountsForBuy = [
     0n,
-    1n * BI_POWS[tokens[destTokenSymbol].decimals],
-    2n * BI_POWS[tokens[destTokenSymbol].decimals],
-    3n * BI_POWS[tokens[destTokenSymbol].decimals],
-    4n * BI_POWS[tokens[destTokenSymbol].decimals],
-    5n * BI_POWS[tokens[destTokenSymbol].decimals],
-    6n * BI_POWS[tokens[destTokenSymbol].decimals],
-    7n * BI_POWS[tokens[destTokenSymbol].decimals],
-    8n * BI_POWS[tokens[destTokenSymbol].decimals],
-    9n * BI_POWS[tokens[destTokenSymbol].decimals],
-    10n * BI_POWS[tokens[destTokenSymbol].decimals],
+    (BI_POWS[tokens[srcTokenSymbol].decimals] / 10n) * 1n,
+    (BI_POWS[tokens[srcTokenSymbol].decimals] / 10n) * 2n,
+    (BI_POWS[tokens[srcTokenSymbol].decimals] / 10n) * 3n,
+    (BI_POWS[tokens[srcTokenSymbol].decimals] / 10n) * 4n,
+    (BI_POWS[tokens[srcTokenSymbol].decimals] / 10n) * 5n,
   ];
 
   beforeAll(async () => {

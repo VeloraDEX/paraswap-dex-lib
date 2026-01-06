@@ -79,17 +79,9 @@ export class StableswapPool extends EkuboPool<
 
     this.quoteDataFetcher = quoteDataFetcher;
 
-    const { centerTick, amplificationFactor } = key.config.poolTypeConfig;
-    const liquidityWidth = MAX_TICK >> amplificationFactor;
-    const [lowerTick, upperTick] = [
-      centerTick - liquidityWidth,
-      centerTick + liquidityWidth,
-    ];
-
-    this.lowerPrice =
-      lowerTick > MIN_TICK ? toSqrtRatio(lowerTick) : MIN_SQRT_RATIO;
-    this.upperPrice =
-      upperTick < MAX_TICK ? toSqrtRatio(upperTick) : MAX_SQRT_RATIO;
+    const bounds = computeStableswapBounds(key.config.poolTypeConfig);
+    this.lowerPrice = bounds.lowerPrice;
+    this.upperPrice = bounds.upperPrice;
   }
 
   public async generateState(
@@ -131,8 +123,6 @@ export class StableswapPool extends EkuboPool<
     let initializedTicksCrossed = 0;
     let amountRemaining = amount;
 
-    const startingSqrtRatio = sqrtRatio;
-
     while (amountRemaining !== 0n && sqrtRatio !== sqrtRatioLimit) {
       let stepLiquidity = liquidity;
       const inRange =
@@ -164,7 +154,7 @@ export class StableswapPool extends EkuboPool<
       const step = computeStep({
         fee: this.key.config.fee,
         sqrtRatio,
-        liquidity,
+        liquidity: stepLiquidity,
         isToken1,
         sqrtRatioLimit: stepSqrtRatioLimit,
         amount: amountRemaining,
@@ -212,4 +202,21 @@ export class StableswapPool extends EkuboPool<
 export interface StableswapBounds {
   lowerPrice: bigint;
   upperPrice: bigint;
+}
+
+export function computeStableswapBounds(
+  config: StableswapPoolTypeConfig,
+): StableswapBounds {
+  const { centerTick, amplificationFactor } = config;
+
+  const liquidityWidth = MAX_TICK >> amplificationFactor;
+  const [lowerTick, upperTick] = [
+    centerTick - liquidityWidth,
+    centerTick + liquidityWidth,
+  ];
+
+  return {
+    lowerPrice: lowerTick > MIN_TICK ? toSqrtRatio(lowerTick) : MIN_SQRT_RATIO,
+    upperPrice: upperTick < MAX_TICK ? toSqrtRatio(upperTick) : MAX_SQRT_RATIO,
+  };
 }

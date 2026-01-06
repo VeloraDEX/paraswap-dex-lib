@@ -19,6 +19,7 @@ import {
 } from './utils';
 import { amount0Delta, amount1Delta } from './math/delta';
 import { hexDataSlice } from 'ethers/lib/utils';
+import { BigNumber } from 'ethers';
 
 const GAS_COST_OF_ONE_CL_SWAP = 24_500;
 const GAS_COST_OF_ONE_INITIALIZED_TICK_CROSSED = 13_700;
@@ -57,8 +58,12 @@ export class BasePool extends EkuboPool<
             }
 
             const [lower, upper] = [
-              Number(hexDataSlice(args.positionId, 24, 28)),
-              Number(hexDataSlice(args.positionId, 28, 32)),
+              BigNumber.from(hexDataSlice(args.positionId, 24, 28))
+                .fromTwos(32)
+                .toNumber(),
+              BigNumber.from(hexDataSlice(args.positionId, 28, 32))
+                .fromTwos(32)
+                .toNumber(),
             ];
 
             return BasePoolState.fromPositionUpdatedEvent(
@@ -273,7 +278,7 @@ export namespace BasePoolState {
 
   export function fromQuoter(data: BasicQuoteData): DeepReadonly<Object> {
     const sortedTicks = data.ticks.map(({ number, liquidityDelta }) => ({
-      number: number.toNumber(),
+      number,
       liquidityDelta: liquidityDelta.toBigInt(),
     }));
     const liquidity = data.liquidity.toBigInt();
@@ -282,10 +287,10 @@ export namespace BasePoolState {
     const state: Object = {
       sqrtRatio: floatSqrtRatioToFixed(sqrtRatioFloat),
       liquidity,
-      activeTick: data.tick.toNumber(),
+      activeTick: data.tick,
       sortedTicks,
       activeTickIndex: null, // This will be filled in
-      checkedTicksBounds: [data.minTick.toNumber(), data.maxTick.toNumber()],
+      checkedTicksBounds: [data.minTick, data.maxTick],
     };
 
     addLiquidityCutoffs(state);

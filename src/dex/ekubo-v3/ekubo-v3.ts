@@ -15,29 +15,30 @@ import {
 } from '../../types';
 import { getBigIntPow, getDexKeysWithNetwork } from '../../utils';
 import { SimpleExchange } from '../simple-exchange';
-import { EKUBO_CONFIG } from './config';
+import {
+  CORE_ADDRESS,
+  EKUBO_CONFIG,
+  MEV_CAPTURE_ADDRESS,
+  ORACLE_ADDRESS,
+  ROUTER_ADDRESS,
+  TWAMM_ADDRESS,
+} from './config';
 import { BasePool, BasePoolState } from './pools/base';
 import { BasicQuoteData, EkuboData } from './types';
 import {
   convertParaSwapToEkubo,
   convertAndSortTokens,
-  contractsFromDexParams,
+  ekuboContracts,
   convertEkuboToParaSwap,
   bigintMax,
 } from './utils';
 
 import { BigNumber, Contract } from 'ethers';
-import { hexlify, hexZeroPad } from 'ethers/lib/utils';
+import { concat, hexlify, hexZeroPad, zeroPad } from 'ethers/lib/utils';
 import { AsyncOrSync, DeepReadonly } from 'ts-essentials';
 import RouterABI from '../../abi/ekubo-v3/mev-capture-router.json';
 import { FullRangePool, FullRangePoolState } from './pools/full-range';
 import { EkuboPool, IEkuboPool } from './pools/pool';
-import { MIN_I256 } from './pools/math/constants';
-import {
-  MAX_SQRT_RATIO_FLOAT,
-  MIN_SQRT_RATIO_FLOAT,
-} from './pools/math/sqrt-ratio';
-import { isPriceIncreasing } from './pools/math/swap';
 import { OraclePool } from './pools/oracle';
 import { TwammPool, TwammPoolState } from './pools/twamm';
 import {
@@ -53,13 +54,14 @@ import {
 import { MevCapturePool } from './pools/mev-capture';
 import { erc20Iface } from '../../lib/tokens/utils';
 import { StableswapPool } from './pools/stableswap';
+import { ZERO_ADDRESS } from '@paraswap/sdk/dist/methods/common/orders/buildOrderData';
 
 const assertUnreachable = (x: never): never => {
   throw new Error(`Unhandled case: ${x}`);
 };
 
-const SUBGRAPH_QUERY = `query InitializedPools($startBlock: BigInt!, $coreAddress: Bytes!, $extensions: [Bytes!]) {
-  poolInitializeds(
+const SUBGRAPH_QUERY = `query NewPools($startBlock: BigInt!, $coreAddress: Bytes!, $extensions: [Bytes!]) {
+  poolInitializations(
     where: {blockNumber_gte: $startBlock, coreAddress: $coreAddress, extension_in: $extensions}, orderBy: blockNumber
   ) {
     blockNumber
@@ -116,7 +118,7 @@ export class EkuboV3 extends SimpleExchange implements IDex<EkuboData> {
     this.logger = dexHelper.getLogger(dexKey);
     this.config = EKUBO_CONFIG[dexKey][network];
 
-    this.contracts = contractsFromDexParams(this.config, dexHelper.provider);
+    this.contracts = ekuboContracts(dexHelper.provider);
     this.routerIface = new Interface(RouterABI);
   }
 
@@ -154,7 +156,7 @@ export class EkuboV3 extends SimpleExchange implements IDex<EkuboData> {
       [PoolKey<StableswapPoolTypeConfig>[], EkuboPoolKey[]]
     >(
       ([twammPoolKeys, otherPoolKeys], poolKey) => {
-        if (poolKey.config.extension === BigInt(this.config.twamm)) {
+        if (poolKey.config.extension === BigInt(TWAMM_ADDRESS)) {
           if (isStableswapKey(poolKey)) {
             twammPoolKeys.push(poolKey);
           } else {
@@ -269,7 +271,7 @@ export class EkuboV3 extends SimpleExchange implements IDex<EkuboData> {
                       }
                       break;
                     }
-                    case BigInt(this.config.oracle): {
+                    case BigInt(ORACLE_ADDRESS): {
                       if (
                         !isStableswapKey(poolKey) ||
                         !poolKey.config.poolTypeConfig.isFullRange()
@@ -287,7 +289,7 @@ export class EkuboV3 extends SimpleExchange implements IDex<EkuboData> {
                       );
                       break;
                     }
-                    case BigInt(this.config.mevCapture): {
+                    case BigInt(MEV_CAPTURE_ADDRESS): {
                       if (!isConcentratedKey(poolKey)) {
                         this.logger.error(
                           `Unexpected MEV-capture pool key ${poolKey}`,
@@ -465,24 +467,28 @@ export class EkuboV3 extends SimpleExchange implements IDex<EkuboData> {
       side === SwapSide.SELL ? srcAmount : destAmount
     ).toString();
 
+    const isToken1AndSkipAhead = zeroPad(
+      BigNumber.from(data.skipAhead[amountStr] ?? 0).toHexString(),
+      4,
+    );
+    if (data.isToken1) {
+      isToken1AndSkipAhead[0] |= 0x80;
+    }
+
+    const params = concat([
+      '0x000000000000000000000000', // No sqrt ratio limit
+      zeroPad(BigNumber.from(amount).toTwos(128).toHexString(), 16),
+      isToken1AndSkipAhead,
+    ]);
+
     return {
       needWrapNative: this.needWrapNative,
       exchangeData: this.routerIface.encodeFunctionData(
-        'swap((address,address,bytes32),bool,int128,uint96,uint256,int256,address)',
-        [
-          data.poolKeyAbi,
-          data.isToken1,
-          BigNumber.from(amount),
-          isPriceIncreasing(amount, data.isToken1)
-            ? MAX_SQRT_RATIO_FLOAT
-            : MIN_SQRT_RATIO_FLOAT,
-          BigNumber.from(data.skipAhead[amountStr] ?? 0),
-          MIN_I256,
-          recipient,
-        ],
+        'swapAllowPartialFill((address,address,bytes32),bytes32,address)',
+        [data.poolKeyAbi, params, recipient],
       ),
       sendEthButSupportsInsertFromAmount: true,
-      targetExchange: this.config.router,
+      targetExchange: ROUTER_ADDRESS,
       dexFuncHasRecipient: true,
       returnAmountPos: undefined,
     };
@@ -566,7 +572,7 @@ export class EkuboV3 extends SimpleExchange implements IDex<EkuboData> {
 
         return {
           exchange: this.dexKey,
-          address: this.config.core,
+          address: CORE_ADDRESS,
           connectorTokens: [
             {
               address: connector.address,
@@ -596,7 +602,7 @@ export class EkuboV3 extends SimpleExchange implements IDex<EkuboData> {
   private async fetchRecentlyAddedPoolKeys(): Promise<EkuboPoolKey[]> {
     const res = await this.dexHelper.httpRequest.querySubgraph<{
       data: {
-        poolInitializeds: {
+        poolInitializations: {
           blockNumber: string;
           tickSpacing: number | null;
           stableswapCenterTick: number | null;
@@ -613,24 +619,30 @@ export class EkuboV3 extends SimpleExchange implements IDex<EkuboData> {
       {
         query: SUBGRAPH_QUERY,
         variables: {
+          // TODO Same reorg handling as in the Kyberswap integration
           // Query slightly before the last seen block to tolerate short reorgs
           startBlock: bigintMax(
             0n,
             this.lastInitializedEventBlock - REORG_BACKFILL_BLOCKS,
-          ),
-          coreAddress: this.config.core,
+          ).toString(),
+          coreAddress: CORE_ADDRESS,
           extensions: [
-            '0x0000000000000000000000000000000000000000',
-            this.config.oracle,
-            this.config.twamm,
-            this.config.mevCapture,
+            ZERO_ADDRESS,
+            ORACLE_ADDRESS,
+            TWAMM_ADDRESS,
+            MEV_CAPTURE_ADDRESS,
           ],
         },
       },
       {},
     );
 
-    const poolKeys = res.data.poolInitializeds.map(info => {
+    const poolKeys = res.data.poolInitializations.map(info => {
+      this.lastInitializedEventBlock = bigintMax(
+        this.lastInitializedEventBlock,
+        BigInt(info.blockNumber),
+      );
+
       if (info.tickSpacing !== null) {
         return new PoolKey(
           BigInt(info.token0),
@@ -665,10 +677,6 @@ export class EkuboV3 extends SimpleExchange implements IDex<EkuboData> {
 
       throw new Error(`Pool ${info.poolId} has unknown pool type config`);
     });
-
-    this.lastInitializedEventBlock = res.data.poolInitializeds
-      .map(info => BigInt(info.blockNumber))
-      .reduce((max, bn) => bigintMax(max, bn), this.lastInitializedEventBlock);
 
     return poolKeys;
   }
@@ -755,9 +763,9 @@ export class EkuboV3 extends SimpleExchange implements IDex<EkuboData> {
             return poolKey.config.poolTypeConfig.isFullRange()
               ? FullRangePool
               : StableswapPool;
-          case BigInt(this.config.oracle):
+          case BigInt(ORACLE_ADDRESS):
             return OraclePool;
-          case BigInt(this.config.twamm):
+          case BigInt(TWAMM_ADDRESS):
             return TwammPool;
           default:
             throw new Error(
@@ -781,7 +789,7 @@ export class EkuboV3 extends SimpleExchange implements IDex<EkuboData> {
         switch (extension) {
           case 0n:
             return BasePool;
-          case BigInt(this.config.mevCapture):
+          case BigInt(MEV_CAPTURE_ADDRESS):
             return MevCapturePool;
           default:
             throw new Error(

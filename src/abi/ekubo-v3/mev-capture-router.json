@@ -337,62 +337,6 @@
         "name": "skipAhead",
         "type": "uint256",
         "internalType": "uint256"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "balanceUpdate",
-        "type": "bytes32",
-        "internalType": "PoolBalanceUpdate"
-      }
-    ],
-    "stateMutability": "payable"
-  },
-  {
-    "type": "function",
-    "name": "swap",
-    "inputs": [
-      {
-        "name": "poolKey",
-        "type": "tuple",
-        "internalType": "struct PoolKey",
-        "components": [
-          {
-            "name": "token0",
-            "type": "address",
-            "internalType": "address"
-          },
-          {
-            "name": "token1",
-            "type": "address",
-            "internalType": "address"
-          },
-          {
-            "name": "config",
-            "type": "bytes32",
-            "internalType": "PoolConfig"
-          }
-        ]
-      },
-      {
-        "name": "isToken1",
-        "type": "bool",
-        "internalType": "bool"
-      },
-      {
-        "name": "amount",
-        "type": "int128",
-        "internalType": "int128"
-      },
-      {
-        "name": "sqrtRatioLimit",
-        "type": "uint96",
-        "internalType": "SqrtRatio"
-      },
-      {
-        "name": "skipAhead",
-        "type": "uint256",
-        "internalType": "uint256"
       },
       {
         "name": "calculatedAmountThreshold",
@@ -648,6 +592,280 @@
     "stateMutability": "payable"
   },
   {
+    "type": "function",
+    "name": "swapAllowPartialFill",
+    "inputs": [
+      {
+        "name": "poolKey",
+        "type": "tuple",
+        "internalType": "struct PoolKey",
+        "components": [
+          {
+            "name": "token0",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "token1",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "config",
+            "type": "bytes32",
+            "internalType": "PoolConfig"
+          }
+        ]
+      },
+      {
+        "name": "params",
+        "type": "bytes32",
+        "internalType": "SwapParameters"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "balanceUpdate",
+        "type": "bytes32",
+        "internalType": "PoolBalanceUpdate"
+      }
+    ],
+    "stateMutability": "payable"
+  },
+  {
+    "type": "function",
+    "name": "swapAllowPartialFill",
+    "inputs": [
+      {
+        "name": "poolKey",
+        "type": "tuple",
+        "internalType": "struct PoolKey",
+        "components": [
+          {
+            "name": "token0",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "token1",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "config",
+            "type": "bytes32",
+            "internalType": "PoolConfig"
+          }
+        ]
+      },
+      {
+        "name": "isToken1",
+        "type": "bool",
+        "internalType": "bool"
+      },
+      {
+        "name": "amount",
+        "type": "int128",
+        "internalType": "int128"
+      },
+      {
+        "name": "sqrtRatioLimit",
+        "type": "uint96",
+        "internalType": "SqrtRatio"
+      },
+      {
+        "name": "skipAhead",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "recipient",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "balanceUpdate",
+        "type": "bytes32",
+        "internalType": "PoolBalanceUpdate"
+      }
+    ],
+    "stateMutability": "payable"
+  },
+  {
+    "type": "function",
+    "name": "swapAllowPartialFill",
+    "inputs": [
+      {
+        "name": "poolKey",
+        "type": "tuple",
+        "internalType": "struct PoolKey",
+        "components": [
+          {
+            "name": "token0",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "token1",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "config",
+            "type": "bytes32",
+            "internalType": "PoolConfig"
+          }
+        ]
+      },
+      {
+        "name": "isToken1",
+        "type": "bool",
+        "internalType": "bool"
+      },
+      {
+        "name": "amount",
+        "type": "int128",
+        "internalType": "int128"
+      },
+      {
+        "name": "sqrtRatioLimit",
+        "type": "uint96",
+        "internalType": "SqrtRatio"
+      },
+      {
+        "name": "skipAhead",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "balanceUpdate",
+        "type": "bytes32",
+        "internalType": "PoolBalanceUpdate"
+      }
+    ],
+    "stateMutability": "payable"
+  },
+  {
+    "type": "function",
+    "name": "swapAllowPartialFill",
+    "inputs": [
+      {
+        "name": "poolKey",
+        "type": "tuple",
+        "internalType": "struct PoolKey",
+        "components": [
+          {
+            "name": "token0",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "token1",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "config",
+            "type": "bytes32",
+            "internalType": "PoolConfig"
+          }
+        ]
+      },
+      {
+        "name": "params",
+        "type": "bytes32",
+        "internalType": "SwapParameters"
+      },
+      {
+        "name": "recipient",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "balanceUpdate",
+        "type": "bytes32",
+        "internalType": "PoolBalanceUpdate"
+      }
+    ],
+    "stateMutability": "payable"
+  },
+  {
+    "type": "function",
+    "name": "swapAllowPartialFill",
+    "inputs": [
+      {
+        "name": "node",
+        "type": "tuple",
+        "internalType": "struct RouteNode",
+        "components": [
+          {
+            "name": "poolKey",
+            "type": "tuple",
+            "internalType": "struct PoolKey",
+            "components": [
+              {
+                "name": "token0",
+                "type": "address",
+                "internalType": "address"
+              },
+              {
+                "name": "token1",
+                "type": "address",
+                "internalType": "address"
+              },
+              {
+                "name": "config",
+                "type": "bytes32",
+                "internalType": "PoolConfig"
+              }
+            ]
+          },
+          {
+            "name": "sqrtRatioLimit",
+            "type": "uint96",
+            "internalType": "SqrtRatio"
+          },
+          {
+            "name": "skipAhead",
+            "type": "uint256",
+            "internalType": "uint256"
+          }
+        ]
+      },
+      {
+        "name": "tokenAmount",
+        "type": "tuple",
+        "internalType": "struct TokenAmount",
+        "components": [
+          {
+            "name": "token",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "amount",
+            "type": "int128",
+            "internalType": "int128"
+          }
+        ]
+      }
+    ],
+    "outputs": [
+      {
+        "name": "balanceUpdate",
+        "type": "bytes32",
+        "internalType": "PoolBalanceUpdate"
+      }
+    ],
+    "stateMutability": "payable"
+  },
+  {
     "type": "error",
     "name": "BaseLockerAccountantOnly",
     "inputs": []
@@ -709,5 +927,10 @@
         "internalType": "uint256"
       }
     ]
+  },
+  {
+    "type": "error",
+    "name": "UseSwapAllowPartialFill",
+    "inputs": []
   }
 ]

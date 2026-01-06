@@ -11,13 +11,13 @@ export type Pool = {
 };
 
 export type BasicQuoteData = {
-  tick: BigNumber;
+  tick: number;
   sqrtRatio: BigNumber;
   liquidity: BigNumber;
-  minTick: BigNumber;
-  maxTick: BigNumber;
+  minTick: number;
+  maxTick: number;
   ticks: {
-    number: BigNumber;
+    number: number;
     liquidityDelta: BigNumber;
   }[];
 };
@@ -43,13 +43,6 @@ export type EkuboData = {
 
 export type DexParams = {
   subgraphId: string;
-  core: string;
-  oracle: string;
-  twamm: string;
-  mevCapture: string;
-  quoteDataFetcher: string;
-  twammDataFetcher: string;
-  router: string;
 };
 
 export type EkuboContract = {

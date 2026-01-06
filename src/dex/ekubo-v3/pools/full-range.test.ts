@@ -90,17 +90,17 @@ describe(FullRangePoolState.fromQuoter, () => {
     expect(
       FullRangePoolState.fromQuoter({
         liquidity: BigNumber.from(1),
-        maxTick: BigNumber.from(MAX_TICK),
-        minTick: BigNumber.from(MIN_TICK),
+        maxTick: MAX_TICK,
+        minTick: MIN_TICK,
         sqrtRatio: BigNumber.from(ONE_FLOAT_SQRT_RATIO),
-        tick: BigNumber.from(0),
+        tick: 0,
         ticks: [
           {
-            number: BigNumber.from(MIN_TICK),
+            number: MIN_TICK,
             liquidityDelta: BigNumber.from(1),
           },
           {
-            number: BigNumber.from(MAX_TICK),
+            number: MAX_TICK,
             liquidityDelta: BigNumber.from(-1),
           },
         ],

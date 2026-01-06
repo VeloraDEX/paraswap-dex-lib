@@ -309,17 +309,17 @@ describe(BasePoolState.fromQuoter, () => {
     expect(
       BasePoolState.fromQuoter({
         liquidity: BigNumber.from(1),
-        maxTick: BigNumber.from(5),
-        minTick: BigNumber.from(-5),
+        maxTick: 5,
+        minTick: -5,
         sqrtRatio: BigNumber.from(ONE_FLOAT_SQRT_RATIO),
-        tick: BigNumber.from(0),
+        tick: 0,
         ticks: [
           {
-            number: BigNumber.from(-2),
+            number: -2,
             liquidityDelta: BigNumber.from(1),
           },
           {
-            number: BigNumber.from(2),
+            number: 2,
             liquidityDelta: BigNumber.from(-1),
           },
         ],

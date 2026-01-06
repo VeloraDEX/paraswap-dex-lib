@@ -18,10 +18,9 @@ describe(PoolKey, () => {
         0x553a2efc570c9e104942cec6ac1c18118e54c091n,
       );
       expect(parsed.config.fee).toBe(18446744073709n);
-      expect(parsed.config.poolTypeConfig).toBe({
-        type: 'concentrated',
-        tickSpacing: 100,
-      });
+      expect(parsed.config.poolTypeConfig).toStrictEqual(
+        new ConcentratedPoolTypeConfig(100),
+      );
     });
 
     test('stableswap', () => {
@@ -35,11 +34,9 @@ describe(PoolKey, () => {
         0x553a2efc570c9e104942cec6ac1c18118e54c091n,
       );
       expect(parsed.config.fee).toBe(18446744073709n);
-      expect(parsed.config.poolTypeConfig).toBe({
-        type: 'stableswap',
-        amplificationFactor: 1,
-        centerTick: -100,
-      });
+      expect(parsed.config.poolTypeConfig).toStrictEqual(
+        new StableswapPoolTypeConfig(-100, 1),
+      );
     });
   });
 

@@ -199,16 +199,14 @@ export interface SwappedEvent {
 export function parseSwappedEvent(data: string): SwappedEvent {
   let n = BigInt(data);
 
+  const liquidityAfter = BigInt.asUintN(128, n);
+  n >>= 128n;
+
   const tickAfter = Number(BigInt.asIntN(32, n));
   n >>= 32n;
 
-  const sqrtRatioAfterCompact = BigInt.asUintN(96, n);
-  n >>= 96n;
-
-  const sqrtRatioAfter = floatSqrtRatioToFixed(sqrtRatioAfterCompact);
-
-  const liquidityAfter = BigInt.asUintN(128, n);
-  n >>= 384n;
+  const sqrtRatioAfter = floatSqrtRatioToFixed(BigInt.asUintN(96, n));
+  n >>= 352n;
 
   const poolId = BigInt.asUintN(256, n);
 
