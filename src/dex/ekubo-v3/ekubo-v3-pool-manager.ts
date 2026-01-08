@@ -235,131 +235,143 @@ export class EkuboV3PoolManager implements EventSubscriber {
       | null;
     subscribedBlockNumber: number | null;
   }> {
-    const {
-      _meta: {
-        block: { number: subgraphBlockNumber, hash: subgraphBlockHash },
-      },
-      poolInitializations,
-    } = (
-      await this.dexHelper.httpRequest.querySubgraph<{
-        data: {
-          _meta: {
-            block: {
-              hash: string;
-              number: number;
-            };
-          };
-          poolInitializations: {
-            blockNumber: string;
-            blockHash: string;
-            tickSpacing: number | null;
-            stableswapCenterTick: number | null;
-            stableswapAmplification: number | null;
-            extension: string;
-            fee: string;
-            poolId: string;
-            token0: string;
-            token1: string;
-          }[];
-        };
-      }>(
-        this.subgraphId,
-        {
-          query: SUBGRAPH_QUERY,
-          variables: {
-            coreAddress: CORE_ADDRESS,
-            extensions: [
-              NULL_ADDRESS,
-              ORACLE_ADDRESS,
-              TWAMM_ADDRESS,
-              MEV_CAPTURE_ADDRESS,
-            ],
-          },
-        },
-        {},
-      )
-    ).data;
-
+    let poolKeys = null;
     let subscribedBlockNumber = null;
 
-    if (subscribeToBlockManager) {
-      subscribedBlockNumber = Math.min(subgraphBlockNumber, maxBlockNumber);
-
-      this.dexHelper.blockManager.subscribeToLogs(
-        this,
-        [
-          this.contracts.core.contract.address,
-          this.contracts.twamm.contract.address,
-        ],
-        subgraphBlockNumber,
-      );
-    }
-
-    // Just check the existence of the latest known block by hash in the canonical chain.
-    // This, together with the pool manager being subscribed before this check, ensures that
-    // we can consistently transition from the subgraph to the RPC state.
     try {
-      await this.dexHelper.provider.getBlock(subgraphBlockHash);
-    } catch (err) {
-      this.logger.warn(
-        'Transition attempt from subgraph to RPC failed (possibly due to reorg):',
-        err,
-      );
+      const {
+        _meta: {
+          block: { number: subgraphBlockNumber, hash: subgraphBlockHash },
+        },
+        poolInitializations,
+      } = (
+        await this.dexHelper.httpRequest.querySubgraph<{
+          data: {
+            _meta: {
+              block: {
+                hash: string;
+                number: number;
+              };
+            };
+            poolInitializations: {
+              blockNumber: string;
+              blockHash: string;
+              tickSpacing: number | null;
+              stableswapCenterTick: number | null;
+              stableswapAmplification: number | null;
+              extension: string;
+              fee: string;
+              poolId: string;
+              token0: string;
+              token1: string;
+            }[];
+          };
+        }>(
+          this.subgraphId,
+          {
+            query: SUBGRAPH_QUERY,
+            variables: {
+              coreAddress: CORE_ADDRESS,
+              extensions: [
+                NULL_ADDRESS,
+                ORACLE_ADDRESS,
+                TWAMM_ADDRESS,
+                MEV_CAPTURE_ADDRESS,
+              ],
+            },
+          },
+          {},
+        )
+      ).data;
 
+      if (subscribeToBlockManager) {
+        const blockNumber = Math.min(subgraphBlockNumber, maxBlockNumber);
+
+        this.dexHelper.blockManager.subscribeToLogs(
+          this,
+          [
+            this.contracts.core.contract.address,
+            this.contracts.twamm.contract.address,
+          ],
+          blockNumber,
+        );
+
+        subscribedBlockNumber = blockNumber;
+      }
+
+      // Just check the existence of the latest known block by hash in the canonical chain.
+      // This, together with the pool manager being subscribed before this check, ensures that
+      // we can consistently transition from the subgraph to the RPC state.
+      try {
+        await this.dexHelper.provider.getBlock(subgraphBlockHash);
+      } catch (err) {
+        this.logger.warn(
+          'Failed to transition from subgraph to RPC state (possible reorg):',
+          err,
+        );
+
+        return {
+          poolKeys: null,
+          subscribedBlockNumber,
+        };
+      }
+
+      // Remove pools initialized at a block > maxBlockNumber
+      while (true) {
+        const lastElem = poolInitializations.at(-1);
+        if (
+          typeof lastElem === 'undefined' ||
+          Number(lastElem.blockNumber) <= maxBlockNumber
+        ) {
+          break;
+        }
+        poolInitializations.pop();
+      }
+
+      poolKeys = poolInitializations.flatMap(info => {
+        let poolTypeConfig;
+
+        if (info.tickSpacing !== null) {
+          poolTypeConfig = new ConcentratedPoolTypeConfig(info.tickSpacing);
+        } else if (
+          info.stableswapAmplification !== null &&
+          info.stableswapCenterTick !== null
+        ) {
+          poolTypeConfig = new StableswapPoolTypeConfig(
+            info.stableswapCenterTick,
+            info.stableswapAmplification,
+          );
+        } else {
+          this.logger.error(
+            `Pool ${info.poolId} has an unknown pool type config`,
+          );
+          return [];
+        }
+
+        return [
+          {
+            key: new PoolKey(
+              BigInt(info.token0),
+              BigInt(info.token1),
+              new PoolConfig(
+                BigInt(info.extension),
+                BigInt(info.fee),
+                poolTypeConfig,
+              ),
+              BigInt(info.poolId),
+            ),
+            initBlockNumber: Number(info.blockNumber),
+          },
+        ];
+      });
+    } catch (err) {
+      this.logger.error('Subgraph pool key retrieval failed:', err);
+    } finally {
       return {
-        poolKeys: null,
+        poolKeys,
         subscribedBlockNumber,
       };
     }
-
-    // Remove pools initialized at a block > maxBlockNumber
-    while (true) {
-      const lastElem = poolInitializations.at(-1);
-      if (
-        typeof lastElem === 'undefined' ||
-        Number(lastElem.blockNumber) <= maxBlockNumber
-      ) {
-        break;
-      }
-      poolInitializations.pop();
-    }
-
-    const poolKeys = poolInitializations.map(info => {
-      let poolTypeConfig;
-
-      if (info.tickSpacing !== null) {
-        poolTypeConfig = new ConcentratedPoolTypeConfig(info.tickSpacing);
-      } else if (
-        info.stableswapAmplification !== null &&
-        info.stableswapCenterTick !== null
-      ) {
-        poolTypeConfig = new StableswapPoolTypeConfig(
-          info.stableswapCenterTick,
-          info.stableswapAmplification,
-        );
-      } else {
-        throw new Error(`Pool ${info.poolId} has unknown pool type config`);
-      }
-
-      return {
-        key: new PoolKey(
-          BigInt(info.token0),
-          BigInt(info.token1),
-          new PoolConfig(
-            BigInt(info.extension),
-            BigInt(info.fee),
-            poolTypeConfig,
-          ),
-          BigInt(info.poolId),
-        ),
-        initBlockNumber: Number(info.blockNumber),
-      };
-    });
-
-    return {
-      poolKeys,
-      subscribedBlockNumber,
-    };
   }
 
   public async updatePools(
@@ -379,9 +391,8 @@ export class EkuboV3PoolManager implements EventSubscriber {
         mustActivateSubscription,
       );
 
-      mustActivateSubscription = false;
-
       if (res.subscribedBlockNumber !== null) {
+        mustActivateSubscription = false;
         maxBlockNumber = res.subscribedBlockNumber;
       }
 
