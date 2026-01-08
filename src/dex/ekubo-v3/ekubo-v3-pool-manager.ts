@@ -1,9 +1,5 @@
 import { Result } from '@ethersproject/abi';
-import {
-  BasicQuoteData,
-  EkuboContracts,
-  PoolInitializationState,
-} from './types';
+import { BasicQuoteData, EkuboContracts } from './types';
 import { DeepReadonly } from 'ts-essentials';
 import { BlockHeader } from 'web3-eth';
 import { Log, Logger, Token } from '../../types';
@@ -11,7 +7,6 @@ import { EventSubscriber, IDexHelper } from '../../dex-helper';
 import { EkuboPool, IEkuboPool } from './pools/pool';
 import {
   ConcentratedPoolTypeConfig,
-  EkuboPoolKey,
   isConcentratedKey,
   isStableswapKey,
   PoolConfig,
@@ -425,15 +420,13 @@ export class EkuboV3PoolManager implements EventSubscriber {
       ]
     >(
       ([twammPoolKeys, otherPoolKeys], poolKeyWithInitBlockNumber) => {
-        const pk = poolKeyWithInitBlockNumber.key;
-        if (pk.config.extension === BigInt(TWAMM_ADDRESS)) {
-          if (isStableswapKey(poolKeyWithInitBlockNumber.key)) {
-            twammPoolKeys.push(
-              poolKeyWithInitBlockNumber as PoolKeyWithInitBlockNumber<StableswapPoolTypeConfig>,
-            );
-          } else {
-            this.logger.error(`TWAMM pool key should be stableswap: ${pk}`);
-          }
+        if (
+          poolKeyWithInitBlockNumber.key.config.extension ===
+          BigInt(TWAMM_ADDRESS)
+        ) {
+          twammPoolKeys.push(
+            poolKeyWithInitBlockNumber as PoolKeyWithInitBlockNumber<StableswapPoolTypeConfig>,
+          );
         } else {
           otherPoolKeys.push(poolKeyWithInitBlockNumber);
         }
@@ -506,80 +499,69 @@ export class EkuboV3PoolManager implements EventSubscriber {
                 const { extension } = poolKey.config;
 
                 try {
-                  switch (extension) {
-                    case 0n: {
-                      if (isStableswapKey(poolKey)) {
-                        if (poolKey.config.poolTypeConfig.isFullRange()) {
-                          await addPool(
-                            FullRangePool,
-                            FullRangePoolState.fromQuoter(data),
-                            initBlockNumber,
-                            poolKey,
-                          );
-                        } else {
-                          await addPool(
-                            StableswapPool,
-                            FullRangePoolState.fromQuoter(data),
-                            initBlockNumber,
-                            poolKey,
-                          );
-                        }
-                      } else if (isConcentratedKey(poolKey)) {
+                  if (isStableswapKey(poolKey)) {
+                    switch (extension) {
+                      case 0n:
+                        poolKey.config.poolTypeConfig.isFullRange()
+                          ? await addPool(
+                              FullRangePool,
+                              FullRangePoolState.fromQuoter(data),
+                              initBlockNumber,
+                              poolKey,
+                            )
+                          : await addPool(
+                              StableswapPool,
+                              FullRangePoolState.fromQuoter(data),
+                              initBlockNumber,
+                              poolKey,
+                            );
+                        break;
+                      case BigInt(ORACLE_ADDRESS):
+                        await addPool(
+                          OraclePool,
+                          FullRangePoolState.fromQuoter(data),
+                          initBlockNumber,
+                          poolKey,
+                        );
+                        break;
+                      default:
+                        throw new Error(
+                          `Unknown pool extension ${hexZeroPad(
+                            hexlify(extension),
+                            20,
+                          )}`,
+                        );
+                    }
+                  } else if (isConcentratedKey(poolKey)) {
+                    switch (extension) {
+                      case 0n:
                         await addPool(
                           BasePool,
                           BasePoolState.fromQuoter(data),
                           initBlockNumber,
                           poolKey,
                         );
-                      } else {
+                        break;
+                      case BigInt(MEV_CAPTURE_ADDRESS):
+                        await addPool(
+                          MevCapturePool,
+                          BasePoolState.fromQuoter(data),
+                          initBlockNumber,
+                          poolKey,
+                        );
+                        break;
+                      default:
                         throw new Error(
-                          `Unknown pool key type config in pool key ${poolKey}`,
+                          `Unknown pool extension ${hexZeroPad(
+                            hexlify(extension),
+                            20,
+                          )}`,
                         );
-                      }
-                      break;
                     }
-                    case BigInt(ORACLE_ADDRESS): {
-                      if (
-                        !isStableswapKey(poolKey) ||
-                        !poolKey.config.poolTypeConfig.isFullRange()
-                      ) {
-                        this.logger.error(
-                          `Unexpected Oracle pool key ${poolKey}`,
-                        );
-                        break;
-                      }
-
-                      await addPool(
-                        OraclePool,
-                        FullRangePoolState.fromQuoter(data),
-                        initBlockNumber,
-                        poolKey,
-                      );
-                      break;
-                    }
-                    case BigInt(MEV_CAPTURE_ADDRESS): {
-                      if (!isConcentratedKey(poolKey)) {
-                        this.logger.error(
-                          `Unexpected MEV-capture pool key ${poolKey}`,
-                        );
-                        break;
-                      }
-
-                      await addPool(
-                        MevCapturePool,
-                        BasePoolState.fromQuoter(data),
-                        initBlockNumber,
-                        poolKey,
-                      );
-                      break;
-                    }
-                    default:
-                      throw new Error(
-                        `Unknown pool extension ${hexZeroPad(
-                          hexlify(extension),
-                          20,
-                        )}`,
-                      );
+                  } else {
+                    throw new Error(
+                      `Unknown pool key type config in pool key ${poolKey}`,
+                    );
                   }
                 } catch (err) {
                   this.logger.error(
@@ -695,11 +677,10 @@ export class EkuboV3PoolManager implements EventSubscriber {
       constructor: { new (...args: [...typeof commonArgs, PoolKey<C>]): P },
       poolKey: PoolKey<C>,
       initialState: DeepReadonly<S> | undefined,
-    ): Promise<P> => {
+    ): Promise<void> => {
       const pool = new constructor(...commonArgs, poolKey);
       await pool.initialize(blockNumber, { state: initialState });
       this.setPool(pool);
-      return pool;
     };
 
     if (isStableswapKey(poolKey)) {
@@ -723,8 +704,8 @@ export class EkuboV3PoolManager implements EventSubscriber {
             TwammPoolState.fromPoolInitialization(state),
           );
         default:
-          throw new Error(
-            `Unknown pool extension ${hexZeroPad(
+          this.logger.debug(
+            `Ignoring unknown pool extension ${hexZeroPad(
               hexlify(extension),
               20,
             )} for stableswap pool`,
@@ -739,15 +720,15 @@ export class EkuboV3PoolManager implements EventSubscriber {
         case BigInt(MEV_CAPTURE_ADDRESS):
           return addPool(MevCapturePool, poolKey, basePoolState);
         default:
-          throw new Error(
-            `Unknown pool extension ${hexZeroPad(
+          this.logger.debug(
+            `Ignoring unknown pool extension ${hexZeroPad(
               hexlify(extension),
               20,
             )} for concentrated pool`,
           );
       }
     } else {
-      throw new Error(`Unknown pool key type config in pool key ${poolKey}`);
+      this.logger.error(`Unknown pool key type config in pool key ${poolKey}`);
     }
   }
 }
