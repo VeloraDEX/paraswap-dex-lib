@@ -9,7 +9,7 @@ describe(PoolKey, () => {
   describe(PoolKey.fromStringId, () => {
     test('concentrated', () => {
       const parsed = PoolKey.fromStringId(
-        'ekubo_0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48_0xdac17f958d2ee523a2206206994597c13d831ec7_0x553a2efc570c9e104942cec6ac1c18118e54c091_18446744073709_concentrated_100',
+        'ekubov3_0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48_0xdac17f958d2ee523a2206206994597c13d831ec7_0x553a2efc570c9e104942cec6ac1c18118e54c091_18446744073709_concentrated_100',
       );
 
       expect(parsed.token0).toBe(0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48n);
@@ -25,7 +25,7 @@ describe(PoolKey, () => {
 
     test('stableswap', () => {
       const parsed = PoolKey.fromStringId(
-        'ekubo_0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48_0xdac17f958d2ee523a2206206994597c13d831ec7_0x553a2efc570c9e104942cec6ac1c18118e54c091_18446744073709_stableswap_1_-100',
+        'ekubov3_0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48_0xdac17f958d2ee523a2206206994597c13d831ec7_0x553a2efc570c9e104942cec6ac1c18118e54c091_18446744073709_stableswap_1_-100',
       );
 
       expect(parsed.token0).toBe(0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48n);
@@ -53,7 +53,7 @@ describe(PoolKey, () => {
           ),
         ).stringId,
       ).toBe(
-        'ekubo_0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48_0xdac17f958d2ee523a2206206994597c13d831ec7_0x553a2efc570c9e104942cec6ac1c18118e54c091_18446744073709_concentrated_100',
+        'ekubov3_0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48_0xdac17f958d2ee523a2206206994597c13d831ec7_0x553a2efc570c9e104942cec6ac1c18118e54c091_18446744073709_concentrated_100',
       );
     });
 
@@ -69,7 +69,7 @@ describe(PoolKey, () => {
           ),
         ).stringId,
       ).toBe(
-        'ekubo_0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48_0xdac17f958d2ee523a2206206994597c13d831ec7_0x553a2efc570c9e104942cec6ac1c18118e54c091_18446744073709_stableswap_1_-100',
+        'ekubov3_0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48_0xdac17f958d2ee523a2206206994597c13d831ec7_0x553a2efc570c9e104942cec6ac1c18118e54c091_18446744073709_stableswap_1_-100',
       );
     });
   });
