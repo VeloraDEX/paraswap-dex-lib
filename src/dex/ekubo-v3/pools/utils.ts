@@ -63,7 +63,7 @@ export class PoolKey<C extends PoolTypeConfig> {
 
   public get stringId(): string {
     this._stringId ??= [
-      'ekubo',
+      'ekubov3',
       hexZeroPad(hexlify(this.token0), 20),
       hexZeroPad(hexlify(this.token1), 20),
       hexZeroPad(hexlify(this.config.extension), 20),
