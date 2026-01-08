@@ -282,7 +282,10 @@ export namespace BasePoolState {
       sqrtRatio: state.sqrtRatio,
       liquidity: 0n,
       activeTick: state.tick,
-      sortedTicks: [],
+      sortedTicks: [
+        { number: MIN_TICK, liquidityDelta: 0n },
+        { number: MAX_TICK, liquidityDelta: 0n },
+      ],
       activeTickIndex: null,
       checkedTicksBounds: [MIN_TICK, MAX_TICK],
     };
