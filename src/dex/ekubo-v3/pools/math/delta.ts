@@ -24,7 +24,7 @@ export function amount0Delta(
     throw new Error('AMOUNT0_DELTA_OVERFLOW_U256');
   }
   let result = result0 / lower;
-  if (roundUp && result % lower !== 0n) {
+  if (roundUp && result0 % lower !== 0n) {
     result++;
   }
 
