@@ -8,64 +8,86 @@ import { testE2E } from '../../../tests/utils-e2e';
 import { generateConfig } from '../../config';
 import { ContractMethod, Network, SwapSide } from '../../constants';
 import { BI_POWS } from '../../bigint-constants';
-import { DEX_KEY } from './config';
+import { DEX_KEY, EkuboSupportedNetwork } from './config';
 
-describe('Mainnet', () => {
-  const network = Network.MAINNET;
-  const tokens = Tokens[network];
-  const holders = Holders[network];
+const testConfigs: Record<
+  EkuboSupportedNetwork,
+  {
+    pair: [
+      { symbol: string; amount: bigint },
+      { symbol: string; amount: bigint },
+    ];
+  }
+> = {
+  [Network.MAINNET]: {
+    pair: [
+      {
+        symbol: 'USDC',
+        amount: BI_POWS[5],
+      },
+      {
+        symbol: 'USDT',
+        amount: BI_POWS[5],
+      },
+    ],
+  },
+  [Network.ARBITRUM]: {
+    pair: [
+      {
+        symbol: 'USDC',
+        amount: BI_POWS[5],
+      },
+      {
+        symbol: 'USDT',
+        amount: BI_POWS[5],
+      },
+    ],
+  },
+};
 
-  const pairsToTest = [
-    {
-      pair: [
-        {
-          symbol: 'USDC',
-          amount: BI_POWS[5],
-        },
-        {
-          symbol: 'USDT',
-          amount: BI_POWS[5],
-        },
-      ],
-    },
-  ];
+Object.entries(testConfigs).forEach(([networkStr, config]) => {
+  const network = Number(networkStr);
 
-  const provider = new StaticJsonRpcProvider(
-    generateConfig(network).privateHttpProvider,
-    network,
-  );
+  describe(generateConfig(network).networkName, () => {
+    const tokens = Tokens[network];
+    const holders = Holders[network];
+    const [tokenA, tokenB] = config.pair;
 
-  const sideToContractMethods = new Map([
-    [SwapSide.SELL, [ContractMethod.swapExactAmountIn]],
-    [SwapSide.BUY, [ContractMethod.swapExactAmountOut]],
-  ]);
+    const provider = new StaticJsonRpcProvider(
+      generateConfig(network).privateHttpProvider,
+      network,
+    );
 
-  sideToContractMethods.forEach((contractMethods, side) =>
-    describe(`${side}`, () => {
-      contractMethods.forEach((contractMethod: ContractMethod) => {
-        describe(`${contractMethod}`, () => {
-          function test(
-            srcTokenSymbol: string,
-            destTokenSymbol: string,
-            amount: string,
-            side: SwapSide,
-            poolIdentifiers?: string[],
-          ) {
-            return testE2E(
-              tokens[srcTokenSymbol],
-              tokens[destTokenSymbol],
-              holders[srcTokenSymbol],
-              amount,
-              side,
-              DEX_KEY,
-              contractMethod,
-              network,
-              provider,
-              poolIdentifiers && { [DEX_KEY]: poolIdentifiers },
-            );
-          }
+    const sideToContractMethods = new Map([
+      [SwapSide.SELL, [ContractMethod.swapExactAmountIn]],
+      [SwapSide.BUY, [ContractMethod.swapExactAmountOut]],
+    ]);
 
-          pairsToTest.forEach(({ pair: [tokenA, tokenB] }) => {
+    sideToContractMethods.forEach((contractMethods, side) =>
+      describe(`${side}`, () => {
+        contractMethods.forEach((contractMethod: ContractMethod) => {
+          describe(`${contractMethod}`, () => {
+            function test(
+              srcTokenSymbol: string,
+              destTokenSymbol: string,
+              amount: string,
+              side: SwapSide,
+              poolIdentifiers?: string[],
+            ) {
+              return testE2E(
+                tokens[srcTokenSymbol],
+                tokens[destTokenSymbol],
+                holders[srcTokenSymbol],
+                amount,
+                side,
+                DEX_KEY,
+                contractMethod,
+                network,
+                provider,
+                poolIdentifiers && { [DEX_KEY]: poolIdentifiers },
+              );
+            }
+
             it(`${tokenA.symbol} -> ${tokenB.symbol}`, () =>
               test(
                 tokenA.symbol,
@@ -82,7 +104,7 @@ describe('Mainnet', () => {
               ));
           });
         });
-      });
-    }),
-  );
+      }),
+    );
+  });
 });

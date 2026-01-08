@@ -13,10 +13,11 @@ import {
 } from '../../../tests/utils';
 import { BI_POWS } from '../../bigint-constants';
 import { Network, SwapSide } from '../../constants';
+import { generateConfig } from '../../config';
 import { DummyDexHelper } from '../../dex-helper/index';
 import { EkuboV3 } from './ekubo-v3';
 import { EkuboData } from './types';
-import { DEX_KEY, ROUTER_ADDRESS } from './config';
+import { DEX_KEY, EkuboSupportedNetwork, ROUTER_ADDRESS } from './config';
 import { hexDataSlice } from 'ethers/lib/utils';
 import { BigNumber } from 'ethers';
 
@@ -156,84 +157,101 @@ async function testPricingOnNetwork(
   );
 }
 
-let blockNumber: number;
-let ekubo: EkuboV3;
+const testConfigs = {
+  [Network.MAINNET]: {
+    pair: { srcTokenSymbol: 'USDC', destTokenSymbol: 'USDT' },
+  },
+  [Network.ARBITRUM]: {
+    pair: { srcTokenSymbol: 'USDC', destTokenSymbol: 'ETH' },
+  },
+} satisfies Record<
+  EkuboSupportedNetwork,
+  { pair: { srcTokenSymbol: string; destTokenSymbol: string } }
+>;
 
-describe('Mainnet', () => {
-  const network = Network.MAINNET;
-  const dexHelper = new DummyDexHelper(network);
-  const tokens = Tokens[network];
+Object.entries(testConfigs).forEach(([networkStr, config]) => {
+  const network = Number(networkStr);
 
-  const srcTokenSymbol = 'USDC';
-  const destTokenSymbol = 'USDT';
+  describe(generateConfig(network).networkName, () => {
+    const dexHelper = new DummyDexHelper(network);
+    const tokens = Tokens[network];
 
-  const amountsForSell = [
-    0n,
-    (BI_POWS[tokens[srcTokenSymbol].decimals] / 10n) * 1n,
-    (BI_POWS[tokens[srcTokenSymbol].decimals] / 10n) * 2n,
-    (BI_POWS[tokens[srcTokenSymbol].decimals] / 10n) * 3n,
-    (BI_POWS[tokens[srcTokenSymbol].decimals] / 10n) * 4n,
-    (BI_POWS[tokens[srcTokenSymbol].decimals] / 10n) * 5n,
-  ];
+    let blockNumber: number;
+    let ekubo: EkuboV3;
 
-  const amountsForBuy = [
-    0n,
-    (BI_POWS[tokens[srcTokenSymbol].decimals] / 10n) * 1n,
-    (BI_POWS[tokens[srcTokenSymbol].decimals] / 10n) * 2n,
-    (BI_POWS[tokens[srcTokenSymbol].decimals] / 10n) * 3n,
-    (BI_POWS[tokens[srcTokenSymbol].decimals] / 10n) * 4n,
-    (BI_POWS[tokens[srcTokenSymbol].decimals] / 10n) * 5n,
-  ];
+    const { srcTokenSymbol, destTokenSymbol } = config.pair;
 
-  beforeEach(async () => {
-    blockNumber = await dexHelper.web3Provider.eth.getBlockNumber();
-    ekubo = new EkuboV3(network, DEX_KEY, dexHelper);
-  });
+    const amountsForSell = [
+      0n,
+      (BI_POWS[tokens[srcTokenSymbol].decimals] / 10n) * 1n,
+      (BI_POWS[tokens[srcTokenSymbol].decimals] / 10n) * 2n,
+      (BI_POWS[tokens[srcTokenSymbol].decimals] / 10n) * 3n,
+      (BI_POWS[tokens[srcTokenSymbol].decimals] / 10n) * 4n,
+      (BI_POWS[tokens[srcTokenSymbol].decimals] / 10n) * 5n,
+    ];
 
-  it('getPoolIdentifiers and getPricesVolume SELL', async function () {
-    await ekubo.initializePricing(blockNumber);
-    await testPricingOnNetwork(
-      ekubo,
-      network,
-      DEX_KEY,
-      blockNumber,
-      srcTokenSymbol,
-      destTokenSymbol,
-      SwapSide.SELL,
-      amountsForSell,
-    );
-  });
+    const amountsForBuy = [
+      0n,
+      (BI_POWS[tokens[srcTokenSymbol].decimals] / 10n) * 1n,
+      (BI_POWS[tokens[srcTokenSymbol].decimals] / 10n) * 2n,
+      (BI_POWS[tokens[srcTokenSymbol].decimals] / 10n) * 3n,
+      (BI_POWS[tokens[srcTokenSymbol].decimals] / 10n) * 4n,
+      (BI_POWS[tokens[srcTokenSymbol].decimals] / 10n) * 5n,
+    ];
 
-  it('getPoolIdentifiers and getPricesVolume BUY', async function () {
-    await ekubo.initializePricing(blockNumber);
-    await testPricingOnNetwork(
-      ekubo,
-      network,
-      DEX_KEY,
-      blockNumber,
-      srcTokenSymbol,
-      destTokenSymbol,
-      SwapSide.BUY,
-      amountsForBuy,
-    );
-  });
+    beforeAll(async () => {
+      blockNumber = await dexHelper.web3Provider.eth.getBlockNumber();
+    });
 
-  it('getTopPoolsForToken', async function () {
-    await ekubo.updatePoolState();
+    beforeEach(async () => {
+      ekubo = new EkuboV3(network, DEX_KEY, dexHelper);
+    });
 
-    const poolLiquidity = await ekubo.getTopPoolsForToken(
-      tokens[srcTokenSymbol].address,
-      10,
-    );
-    console.log(
-      `${srcTokenSymbol} Top Pools:`,
-      util.inspect(poolLiquidity, { depth: null }),
-    );
+    it('getPoolIdentifiers and getPricesVolume SELL', async function () {
+      await ekubo.initializePricing(blockNumber);
+      await testPricingOnNetwork(
+        ekubo,
+        network,
+        DEX_KEY,
+        blockNumber,
+        srcTokenSymbol,
+        destTokenSymbol,
+        SwapSide.SELL,
+        amountsForSell,
+      );
+    });
 
-    checkPoolsLiquidity(
-      poolLiquidity,
-      Tokens[network][srcTokenSymbol].address,
-      DEX_KEY,
-    );
+    it('getPoolIdentifiers and getPricesVolume BUY', async function () {
+      await ekubo.initializePricing(blockNumber);
+      await testPricingOnNetwork(
+        ekubo,
+        network,
+        DEX_KEY,
+        blockNumber,
+        srcTokenSymbol,
+        destTokenSymbol,
+        SwapSide.BUY,
+        amountsForBuy,
+      );
+    });
+
+    it('getTopPoolsForToken', async function () {
+      await ekubo.updatePoolState();
+
+      const poolLiquidity = await ekubo.getTopPoolsForToken(
+        tokens[srcTokenSymbol].address,
+        10,
+      );
+      console.log(
+        `${srcTokenSymbol} Top Pools:`,
+        util.inspect(poolLiquidity, { depth: null }),
+      );
+
+      checkPoolsLiquidity(
+        poolLiquidity,
+        Tokens[network][srcTokenSymbol].address,
+        DEX_KEY,
+      );
+    });
   });
 });

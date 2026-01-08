@@ -15,7 +15,7 @@ import {
 } from '../../types';
 import { getBigIntPow, getDexKeysWithNetwork } from '../../utils';
 import { SimpleExchange } from '../simple-exchange';
-import { CORE_ADDRESS, EKUBO_CONFIG, ROUTER_ADDRESS } from './config';
+import { CORE_ADDRESS, EKUBO_V3_CONFIG, ROUTER_ADDRESS } from './config';
 import { EkuboData } from './types';
 import {
   convertParaSwapToEkubo,
@@ -36,7 +36,7 @@ export class EkuboV3 extends SimpleExchange implements IDex<EkuboData> {
   public static readonly dexKeysWithNetwork: {
     key: string;
     networks: Network[];
-  }[] = getDexKeysWithNetwork(EKUBO_CONFIG);
+  }[] = getDexKeysWithNetwork(EKUBO_V3_CONFIG);
 
   public readonly hasConstantPriceLargeAmounts = false;
   public readonly needWrapNative = false;
@@ -62,7 +62,7 @@ export class EkuboV3 extends SimpleExchange implements IDex<EkuboData> {
     super(dexHelper, dexKey);
 
     this.logger = dexHelper.getLogger(dexKey);
-    this.config = EKUBO_CONFIG[dexKey][network];
+    this.config = EKUBO_V3_CONFIG[dexKey][network];
 
     this.contracts = ekuboContracts(dexHelper.provider);
     this.routerIface = new Interface(RouterABI);

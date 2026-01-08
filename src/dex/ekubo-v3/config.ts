@@ -14,10 +14,15 @@ export const TWAMM_DATA_FETCHER_ADDRESS =
   '0xc07e5b80750247c8b5d7234a9c79dfc58785392b';
 export const ROUTER_ADDRESS = '0xd26f20001a72a18C002b00e6710000d68700ce00';
 
-export const EKUBO_CONFIG: DexConfigMap<DexParams> = {
+export type EkuboSupportedNetwork = Network.MAINNET | Network.ARBITRUM;
+
+export const EKUBO_V3_CONFIG: DexConfigMap<DexParams> = {
   [DEX_KEY]: {
     [Network.MAINNET]: {
       subgraphId: '6MLKVikss1iYdhhggAR1w6Vqw2Z386AqNLMZYr8qaeG9',
     },
+    [Network.ARBITRUM]: {
+      subgraphId: 'FdPuN6GM73kviG7XfLG72yHKqFczeSd4yzEXeBxESvtG',
+    },
   },
-};
+} satisfies Record<typeof DEX_KEY, Record<EkuboSupportedNetwork, unknown>>;
