@@ -4,6 +4,10 @@ import { keccak256 } from 'web3-utils';
 import { AbiPoolKey } from '../types';
 import { floatSqrtRatioToFixed } from './math/sqrt-ratio';
 
+export type EkuboPoolKey = PoolKey<
+  StableswapPoolTypeConfig | ConcentratedPoolTypeConfig
+>;
+
 export class PoolKey<C extends PoolTypeConfig> {
   private _stringId?: string;
 
@@ -13,6 +17,14 @@ export class PoolKey<C extends PoolTypeConfig> {
     public readonly config: PoolConfig<C>,
     private _numId?: bigint,
   ) {}
+
+  public static fromAbi(abiPk: AbiPoolKey): EkuboPoolKey {
+    return new PoolKey(
+      BigInt(abiPk.token0),
+      BigInt(abiPk.token1),
+      PoolConfig.fromCompressed(BigInt(abiPk.config)),
+    );
+  }
 
   public static fromStringId(stringId: string): EkuboPoolKey {
     const [
@@ -25,42 +37,28 @@ export class PoolKey<C extends PoolTypeConfig> {
       poolTypeConfig1,
       poolTypeConfig2,
     ] = stringId.split('_');
+    let poolTypeConfig;
     if (poolTypeConfigDiscriminator === 'stableswap') {
-      const poolKey = new PoolKey(
-        BigInt(token0),
-        BigInt(token1),
-        new PoolConfig(
-          BigInt(extension),
-          BigInt(fee),
-          new StableswapPoolTypeConfig(
-            Number(poolTypeConfig2),
-            Number(poolTypeConfig1),
-          ),
-        ),
+      poolTypeConfig = new StableswapPoolTypeConfig(
+        Number(poolTypeConfig2),
+        Number(poolTypeConfig1),
       );
-
-      poolKey._stringId = stringId;
-      return poolKey;
+    } else if (poolTypeConfigDiscriminator === 'concentrated') {
+      poolTypeConfig = new ConcentratedPoolTypeConfig(Number(poolTypeConfig1));
+    } else {
+      throw new Error(
+        `unknown pool type config discriminator "${poolTypeConfigDiscriminator}"`,
+      );
     }
 
-    if (poolTypeConfigDiscriminator === 'concentrated') {
-      const poolKey = new PoolKey(
-        BigInt(token0),
-        BigInt(token1),
-        new PoolConfig(
-          BigInt(extension),
-          BigInt(fee),
-          new ConcentratedPoolTypeConfig(Number(poolTypeConfig1)),
-        ),
-      );
-
-      poolKey._stringId = stringId;
-      return poolKey;
-    }
-
-    throw new Error(
-      `unknown pool type config discriminator "${poolTypeConfigDiscriminator}"`,
+    const poolKey = new PoolKey(
+      BigInt(token0),
+      BigInt(token1),
+      new PoolConfig(BigInt(extension), BigInt(fee), poolTypeConfig),
     );
+
+    poolKey._stringId = stringId;
+    return poolKey;
   }
 
   public get stringId(): string {
@@ -124,7 +122,9 @@ export class StableswapPoolTypeConfig implements PoolTypeConfig {
   }
 
   public compressed(): bigint {
-    return BigInt(this.centerTick) + (BigInt(this.amplificationFactor) << 24n);
+    // Store the bit pattern of a signed in a truncated unsigned bigint
+    const centerTick = BigInt.asUintN(24, BigInt(this.centerTick));
+    return (BigInt(this.amplificationFactor) << 24n) | centerTick;
   }
 
   public stringId(): string {
@@ -157,6 +157,35 @@ export type PoolTypeConfigUnion =
     };
 
 export class PoolConfig<C extends PoolTypeConfig> {
+  public static fromCompressed(
+    compressed: bigint,
+  ): PoolConfig<ConcentratedPoolTypeConfig | StableswapPoolTypeConfig> {
+    const poolTypeConfigRaw = compressed % 2n ** 32n;
+
+    let poolTypeConfig;
+
+    if ((poolTypeConfigRaw & 0x80000000n) === 0n) {
+      poolTypeConfig = new StableswapPoolTypeConfig(
+        Number(BigInt.asIntN(24, poolTypeConfigRaw)),
+        Number(BigInt.asUintN(7, poolTypeConfigRaw >> 24n)),
+      );
+    } else {
+      poolTypeConfig = new ConcentratedPoolTypeConfig(
+        Number(BigInt.asUintN(31, poolTypeConfigRaw)),
+      );
+    }
+
+    const config = new PoolConfig(
+      compressed >> 96n,
+      (compressed >> 32n) % 2n ** 64n,
+      poolTypeConfig,
+    );
+
+    config._compressed = compressed;
+
+    return config;
+  }
+
   public constructor(
     public readonly extension: bigint,
     public readonly fee: bigint,
@@ -173,10 +202,6 @@ export class PoolConfig<C extends PoolTypeConfig> {
   }
 }
 
-export type EkuboPoolKey =
-  | PoolKey<StableswapPoolTypeConfig>
-  | PoolKey<ConcentratedPoolTypeConfig>;
-
 export function isStableswapKey(
   key: EkuboPoolKey,
 ): key is PoolKey<StableswapPoolTypeConfig> {
@@ -190,7 +215,6 @@ export function isConcentratedKey(
 }
 
 export interface SwappedEvent {
-  poolId: bigint;
   tickAfter: number;
   sqrtRatioAfter: bigint;
   liquidityAfter: bigint;
@@ -206,12 +230,8 @@ export function parseSwappedEvent(data: string): SwappedEvent {
   n >>= 32n;
 
   const sqrtRatioAfter = floatSqrtRatioToFixed(BigInt.asUintN(96, n));
-  n >>= 352n;
-
-  const poolId = BigInt.asUintN(256, n);
 
   return {
-    poolId,
     tickAfter,
     sqrtRatioAfter,
     liquidityAfter,

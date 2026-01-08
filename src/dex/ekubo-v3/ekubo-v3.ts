@@ -15,16 +15,8 @@ import {
 } from '../../types';
 import { getBigIntPow, getDexKeysWithNetwork } from '../../utils';
 import { SimpleExchange } from '../simple-exchange';
-import {
-  CORE_ADDRESS,
-  EKUBO_CONFIG,
-  MEV_CAPTURE_ADDRESS,
-  ORACLE_ADDRESS,
-  ROUTER_ADDRESS,
-  TWAMM_ADDRESS,
-} from './config';
-import { BasePool, BasePoolState } from './pools/base';
-import { BasicQuoteData, EkuboData } from './types';
+import { CORE_ADDRESS, EKUBO_CONFIG, ROUTER_ADDRESS } from './config';
+import { EkuboData } from './types';
 import {
   convertParaSwapToEkubo,
   convertAndSortTokens,
@@ -33,74 +25,29 @@ import {
 } from './utils';
 
 import { BigNumber, Contract } from 'ethers';
-import { concat, hexlify, hexZeroPad, zeroPad } from 'ethers/lib/utils';
-import { AsyncOrSync, DeepReadonly } from 'ts-essentials';
+import { concat, zeroPad } from 'ethers/lib/utils';
+import { AsyncOrSync } from 'ts-essentials';
 import RouterABI from '../../abi/ekubo-v3/mev-capture-router.json';
-import { FullRangePool, FullRangePoolState } from './pools/full-range';
-import { EkuboPool, IEkuboPool } from './pools/pool';
-import { OraclePool } from './pools/oracle';
-import { TwammPool, TwammPoolState } from './pools/twamm';
-import {
-  ConcentratedPoolTypeConfig,
-  EkuboPoolKey,
-  PoolConfig,
-  PoolKey,
-  PoolTypeConfig,
-  StableswapPoolTypeConfig,
-  isConcentratedKey,
-  isStableswapKey,
-} from './pools/utils';
-import { MevCapturePool } from './pools/mev-capture';
 import { erc20Iface } from '../../lib/tokens/utils';
-import { StableswapPool } from './pools/stableswap';
-
-const assertUnreachable = (x: never): never => {
-  throw new Error(`Unhandled case: ${x}`);
-};
-
-const SUBGRAPH_QUERY = `query NewPools($startBlock: BigInt!, $coreAddress: Bytes!, $extensions: [Bytes!]) {
-  poolInitializations(
-    where: {blockNumber_gte: $startBlock, coreAddress: $coreAddress, extension_in: $extensions}, orderBy: blockNumber
-  ) {
-    blockNumber
-    blockHash
-    tickSpacing
-    stableswapCenterTick
-    stableswapAmplification
-    extension
-    fee
-    poolId
-    token0
-    token1
-  }
-}`;
-
-const MIN_BITMAPS_SEARCHED = 2;
-const MAX_BATCH_SIZE = 100;
-
-const POOL_MAP_UPDATE_INTERVAL_MS = 1 * 60 * 1000;
+import { EkuboV3PoolManager } from './ekubo-v3-pool-manager';
 
 // Ekubo Protocol https://ekubo.org/
 export class EkuboV3 extends SimpleExchange implements IDex<EkuboData> {
+  public static readonly dexKeysWithNetwork: {
+    key: string;
+    networks: Network[];
+  }[] = getDexKeysWithNetwork(EKUBO_CONFIG);
+
   public readonly hasConstantPriceLargeAmounts = false;
   public readonly needWrapNative = false;
   public readonly isFeeOnTransferSupported = false;
 
-  public static dexKeysWithNetwork: { key: string; networks: Network[] }[] =
-    getDexKeysWithNetwork(EKUBO_CONFIG);
-
-  private readonly pools: Map<string, IEkuboPool<PoolTypeConfig>> = new Map();
-
-  public logger;
-
-  public readonly config;
-
   public readonly routerIface;
-  private readonly contracts;
+  private readonly logger;
+  private readonly config;
 
-  private interval?: NodeJS.Timeout;
-  private lastSyncedBlockNumber = 0n;
-  private lastSyncedBlockHash = '';
+  private readonly poolManager;
+  private readonly contracts;
 
   // Caches the number of decimals for TVL computation purposes
   private readonly decimals: Record<string, AsyncOrSync<number | null>> = {
@@ -119,234 +66,17 @@ export class EkuboV3 extends SimpleExchange implements IDex<EkuboData> {
 
     this.contracts = ekuboContracts(dexHelper.provider);
     this.routerIface = new Interface(RouterABI);
+    this.poolManager = new EkuboV3PoolManager(
+      this.dexKey,
+      this.logger,
+      this.dexHelper,
+      this.contracts,
+      this.config.subgraphId,
+    );
   }
 
   public async initializePricing(blockNumber: number) {
-    await this.updatePools(blockNumber, true);
-
-    // Periodically schedules fetching pool keys from the subgraph and filling in details with the quote data fetcher
-    this.interval = setInterval(
-      async () =>
-        this.updatePools(await this.dexHelper.provider.getBlockNumber(), true),
-      POOL_MAP_UPDATE_INTERVAL_MS,
-    );
-  }
-
-  private async updatePools(
-    blockNumber: number,
-    subscribe: boolean,
-  ): Promise<void> {
-    let poolKeys: EkuboPoolKey[] = [];
-    try {
-      poolKeys = await this.fetchRecentlyAddedPoolKeys();
-    } catch (err) {
-      this.logger.error(`Fetching pool keys from subgraph failed: ${err}`);
-
-      if (subscribe) {
-        return;
-      }
-    }
-
-    const untrackedPoolKeys = poolKeys.filter(
-      poolKey => !this.pools.has(poolKey.stringId),
-    );
-
-    const [twammPoolKeys, otherPoolKeys] = untrackedPoolKeys.reduce<
-      [PoolKey<StableswapPoolTypeConfig>[], EkuboPoolKey[]]
-    >(
-      ([twammPoolKeys, otherPoolKeys], poolKey) => {
-        if (poolKey.config.extension === BigInt(TWAMM_ADDRESS)) {
-          if (isStableswapKey(poolKey)) {
-            twammPoolKeys.push(poolKey);
-          } else {
-            this.logger.error(
-              `TWAMM pool key should be stableswap: ${poolKey}`,
-            );
-          }
-        } else {
-          otherPoolKeys.push(poolKey);
-        }
-
-        return [twammPoolKeys, otherPoolKeys];
-      },
-      [[], []],
-    );
-
-    const promises: Promise<void>[] = [];
-
-    if (!subscribe) {
-      promises.push(
-        ...this.pools.values().map(pool =>
-          pool.updateState(blockNumber).catch(err => {
-            this.logger.error(
-              `Updating state of pool ${pool.key.stringId} failed: ${err}`,
-            );
-          }),
-        ),
-      );
-    }
-
-    const commonArgs = [
-      this.dexKey,
-      this.dexHelper,
-      this.logger,
-      this.contracts,
-    ] as const;
-
-    const addPool = async <
-      C extends PoolTypeConfig,
-      S,
-      P extends EkuboPool<C, S>,
-    >(
-      constructor: { new (...args: [...typeof commonArgs, PoolKey<C>]): P },
-      initialState: DeepReadonly<S> | undefined,
-      poolKey: PoolKey<C>,
-    ): Promise<void> => {
-      const pool = new constructor(...commonArgs, poolKey);
-
-      if (subscribe) {
-        await pool.initialize(blockNumber, { state: initialState });
-      } else {
-        pool.setState(
-          initialState ?? (await pool.generateState(blockNumber)),
-          blockNumber,
-        );
-      }
-
-      this.pools.set(poolKey.stringId, pool);
-    };
-
-    for (
-      let batchStart = 0;
-      batchStart < otherPoolKeys.length;
-      batchStart += MAX_BATCH_SIZE
-    ) {
-      const batch = otherPoolKeys.slice(
-        batchStart,
-        batchStart + MAX_BATCH_SIZE,
-      );
-
-      promises.push(
-        (
-          this.contracts.core.quoteDataFetcher.getQuoteData(
-            batch.map(poolKey => poolKey.toAbi()),
-            MIN_BITMAPS_SEARCHED,
-            {
-              blockTag: blockNumber,
-            },
-          ) as Promise<BasicQuoteData[]>
-        )
-          .then(async fetchedData => {
-            await Promise.all(
-              fetchedData.map(async (data, i) => {
-                const poolKey = otherPoolKeys[batchStart + i];
-                const { extension } = poolKey.config;
-
-                try {
-                  switch (extension) {
-                    case 0n: {
-                      if (isStableswapKey(poolKey)) {
-                        if (poolKey.config.poolTypeConfig.isFullRange()) {
-                          await addPool(
-                            FullRangePool,
-                            FullRangePoolState.fromQuoter(data),
-                            poolKey,
-                          );
-                        } else {
-                          await addPool(
-                            StableswapPool,
-                            FullRangePoolState.fromQuoter(data),
-                            poolKey,
-                          );
-                        }
-                      } else if (isConcentratedKey(poolKey)) {
-                        await addPool(
-                          BasePool,
-                          BasePoolState.fromQuoter(data),
-                          poolKey,
-                        );
-                      } else {
-                        assertUnreachable(poolKey);
-                      }
-                      break;
-                    }
-                    case BigInt(ORACLE_ADDRESS): {
-                      if (
-                        !isStableswapKey(poolKey) ||
-                        !poolKey.config.poolTypeConfig.isFullRange()
-                      ) {
-                        this.logger.error(
-                          `Unexpected Oracle pool key ${poolKey}`,
-                        );
-                        break;
-                      }
-
-                      await addPool(
-                        OraclePool,
-                        FullRangePoolState.fromQuoter(data),
-                        poolKey,
-                      );
-                      break;
-                    }
-                    case BigInt(MEV_CAPTURE_ADDRESS): {
-                      if (!isConcentratedKey(poolKey)) {
-                        this.logger.error(
-                          `Unexpected MEV-capture pool key ${poolKey}`,
-                        );
-                        break;
-                      }
-
-                      await addPool(
-                        MevCapturePool,
-                        BasePoolState.fromQuoter(data),
-                        poolKey,
-                      );
-                      break;
-                    }
-                    default:
-                      throw new Error(
-                        `Unknown pool extension ${hexZeroPad(
-                          hexlify(extension),
-                          20,
-                        )}`,
-                      );
-                  }
-                } catch (err) {
-                  this.logger.error(
-                    `Failed to construct pool ${poolKey.stringId}: ${err}`,
-                  );
-                }
-              }),
-            );
-          })
-          .catch((err: any) => {
-            this.logger.error(
-              `Fetching batch failed. Pool keys: ${batch.map(
-                poolKey => poolKey.stringId,
-              )}. Error: ${err}`,
-            );
-          }),
-      );
-    }
-
-    promises.push(
-      ...twammPoolKeys.map(async poolKey => {
-        // The TWAMM data fetcher doesn't allow fetching state for multiple pools at once, so we just let `generateState` work to avoid duplicating logic
-        try {
-          await addPool<
-            StableswapPoolTypeConfig,
-            TwammPoolState.Object,
-            TwammPool
-          >(TwammPool, undefined, poolKey);
-        } catch (err) {
-          this.logger.error(
-            `Failed to construct pool ${poolKey.stringId}: ${err}`,
-          );
-        }
-      }),
-    );
-
-    await Promise.all(promises);
+    await this.poolManager.updatePools(blockNumber, true);
   }
 
   public async getPoolIdentifiers(
@@ -356,17 +86,15 @@ export class EkuboV3 extends SimpleExchange implements IDex<EkuboData> {
     _blockNumber: number,
   ): Promise<string[]> {
     const [token0, token1] = convertAndSortTokens(srcToken, destToken);
-    const stringIds = new Set(
-      this.pools
-        .entries()
-        .filter(
-          ([_, pool]) =>
-            pool.key.token0 === token0 && pool.key.token1 === token1,
-        )
-        .map(([stringId, _]) => stringId),
-    );
 
-    return Array.from(stringIds);
+    return Array.from(
+      this.poolManager.poolsByBI
+        .values()
+        .filter(
+          pool => pool.key.token0 === token0 && pool.key.token1 === token1,
+        )
+        .map(pool => pool.key.stringId),
+    );
   }
 
   public async getPricesVolume(
@@ -377,10 +105,9 @@ export class EkuboV3 extends SimpleExchange implements IDex<EkuboData> {
     blockNumber: number,
     limitPools?: string[],
   ): Promise<null | ExchangePrices<EkuboData>> {
-    const pools = await this.getPools(
+    const pools = await this.poolManager.getQuotePools(
       srcToken,
       destToken,
-      blockNumber,
       limitPools,
     );
 
@@ -494,7 +221,7 @@ export class EkuboV3 extends SimpleExchange implements IDex<EkuboData> {
   }
 
   public async updatePoolState() {
-    return this.updatePools(
+    return this.poolManager.updatePools(
       await this.dexHelper.provider.getBlockNumber(),
       false,
     );
@@ -506,7 +233,7 @@ export class EkuboV3 extends SimpleExchange implements IDex<EkuboData> {
   ): Promise<PoolLiquidity[]> {
     const poolsTokenTvls = (
       await Promise.all(
-        this.pools.values().map(async pool => {
+        this.poolManager.poolsByBI.values().map(async pool => {
           try {
             const tokenPair = [
               convertEkuboToParaSwap(pool.key.token0),
@@ -591,125 +318,6 @@ export class EkuboV3 extends SimpleExchange implements IDex<EkuboData> {
     return poolLiquidities;
   }
 
-  public releaseResources(): void {
-    if (this.interval) {
-      clearInterval(this.interval);
-      this.interval = undefined;
-    }
-  }
-
-  private async fetchRecentlyAddedPoolKeys(): Promise<EkuboPoolKey[]> {
-    const res = await this.dexHelper.httpRequest.querySubgraph<{
-      data: {
-        poolInitializations: {
-          blockNumber: string;
-          blockHash: string;
-          tickSpacing: number | null;
-          stableswapCenterTick: number | null;
-          stableswapAmplification: number | null;
-          extension: string;
-          fee: string;
-          poolId: string;
-          token0: string;
-          token1: string;
-        }[];
-      };
-    }>(
-      this.config.subgraphId,
-      {
-        query: SUBGRAPH_QUERY,
-        variables: {
-          startBlock: this.lastSyncedBlockNumber.toString(),
-          coreAddress: CORE_ADDRESS,
-          extensions: [
-            '0x0000000000000000000000000000000000000000',
-            ORACLE_ADDRESS,
-            TWAMM_ADDRESS,
-            MEV_CAPTURE_ADDRESS,
-          ],
-        },
-      },
-      {},
-    );
-
-    let poolInitializations = res.data.poolInitializations;
-
-    if (poolInitializations.length === 0) {
-      return [];
-    }
-
-    if (this.lastSyncedBlockNumber !== 0n) {
-      const firstInitialization = poolInitializations[0];
-      const firstBlockNumber = BigInt(firstInitialization.blockNumber);
-
-      if (
-        firstBlockNumber !== this.lastSyncedBlockNumber ||
-        firstInitialization.blockHash !== this.lastSyncedBlockHash
-      ) {
-        throw new Error('Subgraph reorg detected');
-      }
-
-      let firstNewDataIdx = 1;
-      for (; firstNewDataIdx < poolInitializations.length; firstNewDataIdx++) {
-        if (
-          BigInt(poolInitializations[firstNewDataIdx].blockNumber) >
-          firstBlockNumber
-        ) {
-          break;
-        }
-      }
-
-      poolInitializations.splice(0, firstNewDataIdx);
-    }
-
-    if (poolInitializations.length === 0) {
-      return [];
-    }
-
-    const lastInitialization =
-      poolInitializations[poolInitializations.length - 1];
-    this.lastSyncedBlockNumber = BigInt(lastInitialization.blockNumber);
-    this.lastSyncedBlockHash = lastInitialization.blockHash;
-
-    const poolKeys = poolInitializations.map(info => {
-      if (info.tickSpacing !== null) {
-        return new PoolKey(
-          BigInt(info.token0),
-          BigInt(info.token1),
-          new PoolConfig(
-            BigInt(info.extension),
-            BigInt(info.fee),
-            new ConcentratedPoolTypeConfig(info.tickSpacing),
-          ),
-          BigInt(info.poolId),
-        );
-      }
-
-      if (
-        info.stableswapAmplification !== null &&
-        info.stableswapCenterTick !== null
-      ) {
-        return new PoolKey(
-          BigInt(info.token0),
-          BigInt(info.token1),
-          new PoolConfig(
-            BigInt(info.extension),
-            BigInt(info.fee),
-            new StableswapPoolTypeConfig(
-              info.stableswapCenterTick,
-              info.stableswapAmplification,
-            ),
-          ),
-          BigInt(info.poolId),
-        );
-      }
-
-      throw new Error(`Pool ${info.poolId} has unknown pool type config`);
-    });
-
-    return poolKeys;
-  }
-
   private getDecimals(erc20Token: string): AsyncOrSync<number | null> {
     const cached = this.decimals[erc20Token];
     if (typeof cached !== 'undefined') {
@@ -735,116 +343,6 @@ export class EkuboV3 extends SimpleExchange implements IDex<EkuboData> {
     this.decimals[erc20Token] = promise;
 
     return promise;
-  }
-
-  private async getPools(
-    tokenA: Token,
-    tokenB: Token,
-    blockNumber: number,
-    limitPools: string[] | undefined,
-  ): Promise<Iterable<IEkuboPool<PoolTypeConfig>>> {
-    const [token0, token1] = convertAndSortTokens(tokenA, tokenB);
-
-    let unfilteredPools: IteratorObject<IEkuboPool<PoolTypeConfig>>;
-    if (typeof limitPools === 'undefined') {
-      unfilteredPools = this.pools.values();
-    } else {
-      const unfilteredPoolsArr: IEkuboPool<PoolTypeConfig>[] = [];
-
-      await Promise.all(
-        limitPools.map(async stringId => {
-          let pool = this.pools.get(stringId);
-
-          if (typeof pool === 'undefined') {
-            try {
-              pool = await this.initializeUntrackedPool(stringId, blockNumber);
-            } catch (err) {
-              this.logger.error(`Initializing pool ${stringId} failed: ${err}`);
-              return;
-            }
-          }
-
-          unfilteredPoolsArr.push(pool);
-        }),
-      );
-
-      unfilteredPools = Iterator.from(unfilteredPoolsArr);
-    }
-
-    return unfilteredPools.filter(
-      pool => pool.key.token0 === token0 && pool.key.token1 === token1,
-    );
-  }
-
-  private async initializeUntrackedPool(
-    stringId: string,
-    blockNumber: number,
-  ): Promise<IEkuboPool<PoolTypeConfig>> {
-    const poolKey = PoolKey.fromStringId(stringId);
-    const { extension } = poolKey.config;
-
-    let pool;
-
-    if (isStableswapKey(poolKey)) {
-      const constructor = (() => {
-        switch (extension) {
-          case 0n:
-            return poolKey.config.poolTypeConfig.isFullRange()
-              ? FullRangePool
-              : StableswapPool;
-          case BigInt(ORACLE_ADDRESS):
-            return OraclePool;
-          case BigInt(TWAMM_ADDRESS):
-            return TwammPool;
-          default:
-            throw new Error(
-              `Unknown pool extension ${hexZeroPad(
-                hexlify(extension),
-                20,
-              )} for stableswap pool`,
-            );
-        }
-      })();
-
-      pool = new constructor(
-        this.dexKey,
-        this.dexHelper,
-        this.logger,
-        this.contracts,
-        poolKey,
-      );
-    } else if (isConcentratedKey(poolKey)) {
-      const constructor = (() => {
-        switch (extension) {
-          case 0n:
-            return BasePool;
-          case BigInt(MEV_CAPTURE_ADDRESS):
-            return MevCapturePool;
-          default:
-            throw new Error(
-              `Unknown pool extension ${hexZeroPad(
-                hexlify(extension),
-                20,
-              )} for concentrated pool`,
-            );
-        }
-      })();
-
-      pool = new constructor(
-        this.dexKey,
-        this.dexHelper,
-        this.logger,
-        this.contracts,
-        poolKey,
-      );
-    } else {
-      return assertUnreachable(poolKey);
-    }
-
-    await pool.initialize(blockNumber);
-    this.pools.set(stringId, pool);
-
-    return pool;
   }
 
   // LEGACY

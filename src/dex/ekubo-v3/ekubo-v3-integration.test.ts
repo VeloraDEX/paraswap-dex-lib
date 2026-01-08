@@ -185,15 +185,13 @@ describe('Mainnet', () => {
     (BI_POWS[tokens[srcTokenSymbol].decimals] / 10n) * 5n,
   ];
 
-  beforeAll(async () => {
+  beforeEach(async () => {
     blockNumber = await dexHelper.web3Provider.eth.getBlockNumber();
     ekubo = new EkuboV3(network, DEX_KEY, dexHelper);
-    if (ekubo.initializePricing) {
-      await ekubo.initializePricing(blockNumber);
-    }
   });
 
   it('getPoolIdentifiers and getPricesVolume SELL', async function () {
+    await ekubo.initializePricing(blockNumber);
     await testPricingOnNetwork(
       ekubo,
       network,
@@ -207,6 +205,7 @@ describe('Mainnet', () => {
   });
 
   it('getPoolIdentifiers and getPricesVolume BUY', async function () {
+    await ekubo.initializePricing(blockNumber);
     await testPricingOnNetwork(
       ekubo,
       network,
@@ -220,7 +219,6 @@ describe('Mainnet', () => {
   });
 
   it('getTopPoolsForToken', async function () {
-    const ekubo = new EkuboV3(network, DEX_KEY, dexHelper);
     await ekubo.updatePoolState();
 
     const poolLiquidity = await ekubo.getTopPoolsForToken(

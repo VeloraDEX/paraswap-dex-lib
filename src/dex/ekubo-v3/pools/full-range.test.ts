@@ -145,7 +145,6 @@ describe(FullRangePoolState.fromSwappedEvent, () => {
   test('example', () => {
     expect(
       FullRangePoolState.fromSwappedEvent({
-        poolId: 0n, // Not used here
         liquidityAfter: 0n,
         sqrtRatioAfter: TWO_POW_128,
         tickAfter: 0,

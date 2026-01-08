@@ -1,7 +1,11 @@
 import { DeepReadonly, DeepWritable } from 'ts-essentials';
 import { IDexHelper } from '../../../dex-helper/idex-helper';
 import { Logger } from '../../../types';
-import { BasicQuoteData, EkuboContracts } from '../types';
+import {
+  BasicQuoteData,
+  EkuboContracts,
+  PoolInitializationState,
+} from '../types';
 import { EkuboPool, NamedEventHandlers, PoolKeyed, Quote } from './pool';
 import { floatSqrtRatioToFixed } from './math/sqrt-ratio';
 import { computeStep, isPriceIncreasing } from './math/swap';
@@ -27,6 +31,7 @@ export class FullRangePool extends EkuboPool<
     dexHelper: IDexHelper,
     logger: Logger,
     contracts: EkuboContracts,
+    initBlockNumber: number,
     key: PoolKey<StableswapPoolTypeConfig>,
   ) {
     const {
@@ -39,31 +44,21 @@ export class FullRangePool extends EkuboPool<
       parentName,
       dexHelper,
       logger,
+      initBlockNumber,
       key,
+
       {
         [address]: new NamedEventHandlers(iface, {
-          PositionUpdated: (args, oldState) => {
-            if (key.numId !== BigInt(args.poolId)) {
-              return null;
-            }
-
-            return FullRangePoolState.fromPositionUpdatedEvent(
+          PositionUpdated: (args, oldState) =>
+            FullRangePoolState.fromPositionUpdatedEvent(
               oldState,
               args.liquidityDelta.toBigInt(),
-            );
-          },
+            ),
         }),
       },
       {
-        [address]: data => {
-          const ev = parseSwappedEvent(data);
-
-          if (key.numId !== ev.poolId) {
-            return null;
-          }
-
-          return FullRangePoolState.fromSwappedEvent(ev);
-        },
+        [address]: data =>
+          FullRangePoolState.fromSwappedEvent(parseSwappedEvent(data)),
       },
     );
 
@@ -138,6 +133,15 @@ export namespace FullRangePoolState {
     sqrtRatio: bigint;
     liquidity: bigint;
   };
+
+  export function fromPoolInitialization(
+    state: PoolInitializationState,
+  ): DeepReadonly<Object> {
+    return {
+      sqrtRatio: state.sqrtRatio,
+      liquidity: 0n,
+    };
+  }
 
   export function fromQuoter(data: BasicQuoteData): DeepReadonly<Object> {
     const liquidity = data.liquidity.toBigInt();

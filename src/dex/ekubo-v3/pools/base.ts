@@ -1,14 +1,20 @@
 import { DeepReadonly, DeepWritable } from 'ts-essentials';
 import { IDexHelper } from '../../../dex-helper/idex-helper';
 import { Logger } from '../../../types';
-import { BasicQuoteData, EkuboContracts } from '../types';
+import {
+  BasicQuoteData,
+  EkuboContracts,
+  PoolInitializationState,
+} from '../types';
 import { EkuboPool, NamedEventHandlers, PoolKeyed, Quote } from './pool';
 import { floatSqrtRatioToFixed } from './math/sqrt-ratio';
 import { computeStep, isPriceIncreasing } from './math/swap';
 import {
   approximateNumberOfTickSpacingsCrossed,
   MAX_SQRT_RATIO,
+  MAX_TICK,
   MIN_SQRT_RATIO,
+  MIN_TICK,
   toSqrtRatio,
 } from './math/tick';
 import {
@@ -39,6 +45,7 @@ export class BasePool extends EkuboPool<
     dexHelper: IDexHelper,
     logger: Logger,
     contracts: EkuboContracts,
+    initBlockNumber: number,
     key: PoolKey<ConcentratedPoolTypeConfig>,
   ) {
     const {
@@ -51,14 +58,11 @@ export class BasePool extends EkuboPool<
       parentName,
       dexHelper,
       logger,
+      initBlockNumber,
       key,
       {
         [address]: new NamedEventHandlers(iface, {
           PositionUpdated: (args, oldState) => {
-            if (key.numId !== BigInt(args.poolId)) {
-              return null;
-            }
-
             const [lower, upper] = [
               BigNumber.from(hexDataSlice(args.positionId, 24, 28))
                 .fromTwos(32)
@@ -77,15 +81,8 @@ export class BasePool extends EkuboPool<
         }),
       },
       {
-        [address]: (data, oldState) => {
-          const ev = parseSwappedEvent(data);
-
-          if (key.numId !== ev.poolId) {
-            return null;
-          }
-
-          return BasePoolState.fromSwappedEvent(oldState, ev);
-        },
+        [address]: (data, oldState) =>
+          BasePoolState.fromSwappedEvent(oldState, parseSwappedEvent(data)),
       },
     );
 
@@ -277,6 +274,19 @@ export namespace BasePoolState {
     activeTickIndex: number | null;
     readonly checkedTicksBounds: readonly [number, number];
   };
+
+  export function fromPoolInitialization(
+    state: PoolInitializationState,
+  ): DeepReadonly<Object> {
+    return {
+      sqrtRatio: state.sqrtRatio,
+      liquidity: 0n,
+      activeTick: state.tick,
+      sortedTicks: [],
+      activeTickIndex: null,
+      checkedTicksBounds: [MIN_TICK, MAX_TICK],
+    };
+  }
 
   export function fromQuoter(data: BasicQuoteData): DeepReadonly<Object> {
     const sortedTicks = data.ticks.map(({ number, liquidityDelta }) => ({

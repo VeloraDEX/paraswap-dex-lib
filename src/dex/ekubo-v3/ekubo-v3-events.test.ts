@@ -2,10 +2,13 @@
 import dotenv from 'dotenv';
 dotenv.config();
 
-import { testEventSubscriber } from '../../../tests/utils-events';
+import {
+  getOrFetchBlockInfo,
+  getOrFetchState,
+} from '../../../tests/utils-events';
 import { Network } from '../../constants';
 import { DummyDexHelper } from '../../dex-helper/index';
-import { DEX_KEY, TWAMM_ADDRESS } from './config';
+import { DEX_KEY, EKUBO_CONFIG, TWAMM_ADDRESS } from './config';
 import {
   BasePool,
   BasePoolState,
@@ -22,6 +25,7 @@ import {
 } from './pools/utils';
 import { ekuboContracts } from './utils';
 import { Tokens } from '../../../tests/constants-e2e';
+import { EkuboV3PoolManager } from './ekubo-v3-pool-manager';
 
 jest.setTimeout(50 * 1000);
 
@@ -149,7 +153,46 @@ describe('Mainnet', function () {
     ),
   );
 
-  const commonArgs = [DEX_KEY, dexHelper, logger, contracts] as const;
+  const commonArgs = [DEX_KEY, dexHelper, logger, contracts, 0] as const;
+  async function testLogStateUpdate(pool: AnyEkuboPool, blockNumber: number) {
+    const cacheKey = `${DEX_KEY}_${pool.key.stringId}_poolManager`;
+    const poolManager = new EkuboV3PoolManager(
+      DEX_KEY,
+      logger,
+      dexHelper,
+      contracts,
+      EKUBO_CONFIG[DEX_KEY][network].subgraphId,
+    );
+
+    // Seed pool state before the event so the update has a baseline.
+    const priorState = await getOrFetchState(
+      blockNumber - 1,
+      cacheKey,
+      async (blockNumber: number) => pool.generateState(blockNumber),
+    );
+    pool.setState(priorState, blockNumber - 1);
+    pool.isTracking = () => true;
+
+    poolManager.setPool(pool);
+
+    const blockInfo = await getOrFetchBlockInfo(
+      blockNumber,
+      cacheKey,
+      [contracts.core.contract.address, contracts.twamm.contract.address],
+      dexHelper.provider,
+    );
+
+    await poolManager.update(blockInfo.logs, blockInfo.blockHeaders);
+
+    const expectedState = await getOrFetchState(
+      blockNumber,
+      cacheKey,
+      async (blockNumber: number) => pool.generateState(blockNumber),
+    );
+    const newState = pool.getState(blockNumber);
+
+    stateCompare(newState, expectedState);
+  }
 
   function newPool<C extends PoolTypeConfig, S>(
     constructor: {
@@ -184,18 +227,63 @@ describe('Mainnet', function () {
   Object.entries(eventsToTest).forEach(([eventName, eventDetails]) => {
     describe(eventName, () => {
       for (const [pool, blockNumber] of eventDetails) {
-        test(`State of ${pool.key.stringId} at block ${blockNumber}`, async function () {
-          await testEventSubscriber(
-            pool,
-            pool.addressesSubscribed,
-            async (blockNumber: number) => pool.generateState(blockNumber),
-            blockNumber,
-            `${DEX_KEY}_${pool.key.stringId}`,
-            dexHelper.provider,
-            stateCompare,
-          );
+        test(`registers event at block ${blockNumber} for pool ${pool.key.stringId}`, async function () {
+          await testLogStateUpdate(pool, blockNumber);
         });
       }
+    });
+  });
+
+  describe('PoolInitialized', () => {
+    let poolManager: EkuboV3PoolManager;
+
+    beforeEach(() => {
+      poolManager = new EkuboV3PoolManager(
+        DEX_KEY,
+        logger,
+        dexHelper,
+        contracts,
+        EKUBO_CONFIG[DEX_KEY][network].subgraphId,
+      );
+    });
+
+    test('adds a pool', async () => {
+      const blockInfo = await getOrFetchBlockInfo(
+        24134507, // https://etherscan.io/tx/0x2757427086944621c7fb8eca63a01809be4c76bb5b7b32596ced53d7fd17a691#eventlog#114
+        `${DEX_KEY}_PoolInitialized_${clEthUsdcPoolKey.stringId}`,
+        [contracts.core.contract.address],
+        dexHelper.provider,
+      );
+
+      expect(poolManager.poolsByBI.size).toBe(0);
+
+      await poolManager.update(blockInfo.logs, blockInfo.blockHeaders);
+
+      expect(poolManager.poolsByBI.get(clEthUsdcPoolKey.numId)).toBeDefined();
+      expect(
+        poolManager.poolsByString.get(clEthUsdcPoolKey.stringId),
+      ).toBeDefined();
+    });
+
+    test('removes a pool on rollback past initialization', async () => {
+      const initBlockNumber = 24134507;
+      const blockInfo = await getOrFetchBlockInfo(
+        initBlockNumber, // https://etherscan.io/tx/0x2757427086944621c7fb8eca63a01809be4c76bb5b7b32596ced53d7fd17a691#eventlog#114
+        `${DEX_KEY}_PoolInitialized_reorg_${clEthUsdcPoolKey.stringId}`,
+        [contracts.core.contract.address],
+        dexHelper.provider,
+      );
+
+      await poolManager.update(blockInfo.logs, blockInfo.blockHeaders);
+
+      expect(poolManager.poolsByBI.get(clEthUsdcPoolKey.numId)).toBeDefined();
+
+      poolManager.rollback(initBlockNumber - 1);
+
+      expect(poolManager.poolsByBI.get(clEthUsdcPoolKey.numId)).toBeUndefined();
+      expect(
+        poolManager.poolsByString.get(clEthUsdcPoolKey.stringId),
+      ).toBeUndefined();
     });
   });
 });

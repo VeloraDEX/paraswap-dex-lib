@@ -32,6 +32,7 @@ export class StableswapPool extends EkuboPool<
     dexHelper: IDexHelper,
     logger: Logger,
     contracts: EkuboContracts,
+    initBlockNumber: number,
     key: PoolKey<StableswapPoolTypeConfig>,
   ) {
     const {
@@ -44,31 +45,20 @@ export class StableswapPool extends EkuboPool<
       parentName,
       dexHelper,
       logger,
+      initBlockNumber,
       key,
       {
         [address]: new NamedEventHandlers(iface, {
-          PositionUpdated: (args, oldState) => {
-            if (key.numId !== BigInt(args.poolId)) {
-              return null;
-            }
-
-            return FullRangePoolState.fromPositionUpdatedEvent(
+          PositionUpdated: (args, oldState) =>
+            FullRangePoolState.fromPositionUpdatedEvent(
               oldState,
               args.liquidityDelta.toBigInt(),
-            );
-          },
+            ),
         }),
       },
       {
-        [address]: data => {
-          const ev = parseSwappedEvent(data);
-
-          if (key.numId !== ev.poolId) {
-            return null;
-          }
-
-          return FullRangePoolState.fromSwappedEvent(ev);
-        },
+        [address]: data =>
+          FullRangePoolState.fromSwappedEvent(parseSwappedEvent(data)),
       },
     );
 

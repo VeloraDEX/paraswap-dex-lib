@@ -1,7 +1,11 @@
 import { Logger } from 'log4js';
 import { DeepReadonly, DeepWritable } from 'ts-essentials';
 import { IDexHelper } from '../../../dex-helper/idex-helper';
-import { EkuboContracts, TwammQuoteData } from '../types';
+import {
+  EkuboContracts,
+  PoolInitializationState,
+  TwammQuoteData,
+} from '../types';
 import { FullRangePool, FullRangePoolState } from './full-range';
 import { EkuboPool, NamedEventHandlers, Quote } from './pool';
 import { MAX_U32 } from './math/constants';
@@ -39,6 +43,7 @@ export class TwammPool extends EkuboPool<
     dexHelper: IDexHelper,
     logger: Logger,
     contracts: EkuboContracts,
+    initBlockNumber: number,
     key: PoolKey<StableswapPoolTypeConfig>,
   ) {
     const {
@@ -55,19 +60,15 @@ export class TwammPool extends EkuboPool<
       parentName,
       dexHelper,
       logger,
+      initBlockNumber,
       key,
       {
         [coreAddress]: new NamedEventHandlers(coreIface, {
-          PositionUpdated: (args, oldState) => {
-            if (key.numId !== BigInt(args.poolId)) {
-              return null;
-            }
-
-            return TwammPoolState.fromPositionUpdatedEvent(
+          PositionUpdated: (args, oldState) =>
+            TwammPoolState.fromPositionUpdatedEvent(
               oldState,
               args.liquidityDelta.toBigInt(),
-            );
-          },
+            ),
         }),
         [twammAddress]: new NamedEventHandlers(twammIface, {
           OrderUpdated: (args, oldState) => {
@@ -98,28 +99,14 @@ export class TwammPool extends EkuboPool<
         }),
       },
       {
-        [coreAddress]: (data, oldState) => {
-          const ev = parseSwappedEvent(data);
-
-          if (key.numId !== ev.poolId) {
-            return null;
-          }
-
-          return TwammPoolState.fromSwappedEvent(oldState, ev);
-        },
-        [twammAddress]: (data, oldState, blockHeader) => {
-          const ev = parseVirtualOrdersExecutedEvent(data);
-
-          if (key.numId !== ev.poolId) {
-            return null;
-          }
-
-          return TwammPoolState.fromVirtualOrdersExecutedEvent(
+        [coreAddress]: (data, oldState) =>
+          TwammPoolState.fromSwappedEvent(oldState, parseSwappedEvent(data)),
+        [twammAddress]: (data, oldState, blockHeader) =>
+          TwammPoolState.fromVirtualOrdersExecutedEvent(
             oldState,
-            ev,
+            parseVirtualOrdersExecutedEvent(data),
             BigInt(blockHeader.timestamp),
-          );
-        },
+          ),
       },
     );
 
@@ -270,7 +257,6 @@ export class TwammPool extends EkuboPool<
 }
 
 interface VirtualOrdersExecutedEvent {
-  poolId: bigint;
   token0SaleRate: bigint;
   token1SaleRate: bigint;
 }
@@ -284,12 +270,8 @@ function parseVirtualOrdersExecutedEvent(
   n >>= 112n;
 
   const token0SaleRate = BigInt.asUintN(112, n);
-  n >>= 112n;
-
-  const poolId = n;
 
   return {
-    poolId,
     token0SaleRate,
     token1SaleRate,
   };
@@ -309,6 +291,18 @@ export namespace TwammPoolState {
     token1SaleRate: bigint;
     lastExecutionTime: bigint;
     virtualOrderDeltas: SaleRateDelta[];
+  }
+
+  export function fromPoolInitialization(
+    state: PoolInitializationState,
+  ): DeepReadonly<Object> {
+    return {
+      fullRangePoolState: FullRangePoolState.fromPoolInitialization(state),
+      token0SaleRate: 0n,
+      token1SaleRate: 0n,
+      lastExecutionTime: BigInt(state.blockHeader.timestamp),
+      virtualOrderDeltas: [],
+    };
   }
 
   export function fromQuoter(data: TwammQuoteData): DeepReadonly<Object> {

@@ -355,7 +355,6 @@ describe(BasePoolState.fromQuoter, () => {
 describe(BasePoolState.fromSwappedEvent, () => {
   test('example', () => {
     const ev: SwappedEvent = {
-      poolId: 0n, // Not used here
       liquidityAfter: 1n,
       sqrtRatioAfter: TWO_POW_128,
       tickAfter: 0,

@@ -1,6 +1,7 @@
 import { Interface } from '@ethersproject/abi';
 import { BigNumber, Contract } from 'ethers';
 import { PoolKey } from '../synthetix/types';
+import { BlockHeader } from 'web3-eth';
 
 export type Pool = {
   key: PoolKey;
@@ -59,7 +60,8 @@ export type AbiPoolKey = {
   config: string;
 };
 
-export type VanillaPoolParameters = {
-  fee: bigint;
-  tickSpacing: number;
+export type PoolInitializationState = {
+  tick: number;
+  sqrtRatio: bigint;
+  blockHeader: Readonly<BlockHeader>;
 };

@@ -5,6 +5,7 @@ import { IDexHelper } from '../../../dex-helper/idex-helper';
 import { StatefulEventSubscriber } from '../../../stateful-event-subscriber';
 import { BlockHeader, Log } from '../../../types';
 import { PoolKey, PoolTypeConfig } from './utils';
+import { EventSubscriber } from '../../../dex-helper';
 
 export type Quote<StateAfter = undefined> = {
   consumedAmount: bigint;
@@ -17,7 +18,10 @@ export interface PoolKeyed<C extends PoolTypeConfig> {
   key: PoolKey<C>;
 }
 
-export interface IEkuboPool<C extends PoolTypeConfig> extends PoolKeyed<C> {
+export interface IEkuboPool<C extends PoolTypeConfig>
+  extends PoolKeyed<C>,
+    EventSubscriber {
+  initializationBlockNumber(): number;
   quote(amount: bigint, token: bigint, blockNumber: number): Quote;
   updateState(blockNumber: number): Promise<void>;
   computeTvl(): [bigint, bigint];
@@ -46,7 +50,9 @@ export class NamedEventHandlers<State> {
     blockHeader: Readonly<BlockHeader>,
   ): DeepReadonly<State> | null {
     const event = this.iface.parseLog(log);
-    return this.handlers[event.name]?.(event.args, oldState, blockHeader);
+    return (
+      this.handlers[event.name]?.(event.args, oldState, blockHeader) ?? null
+    );
   }
 }
 
@@ -58,6 +64,7 @@ export abstract class EkuboPool<C extends PoolTypeConfig, S>
     parentName: string,
     dexHelper: IDexHelper,
     logger: Logger,
+    private readonly initBlockNumber: number,
     public readonly key: PoolKey<C>,
     private readonly namedEventHandlers: Record<string, NamedEventHandlers<S>>,
     private readonly anonymousEventHandlers: Record<
@@ -76,35 +83,12 @@ export abstract class EkuboPool<C extends PoolTypeConfig, S>
     ];
   }
 
-  public async updateState(blockNumber: number): Promise<void> {
-    this.setState(await this.generateState(blockNumber), blockNumber);
+  public initializationBlockNumber(): number {
+    return this.initBlockNumber;
   }
 
-  /**
-   * The function is called every time any of the subscribed
-   * addresses release log. The function accepts the current
-   * state, updates the state according to the log, and returns
-   * the updated state.
-   * @param state - Current state of event subscriber
-   * @param log - Log released by one of the subscribed addresses
-   * @returns Updates state of the event subscriber after the log
-   */
-  protected override processLog(
-    state: DeepReadonly<S>,
-    log: Readonly<Log>,
-    blockHeader: Readonly<BlockHeader>,
-  ): DeepReadonly<S> | null {
-    const emitter = log.address;
-
-    if (log.topics.length === 0) {
-      return this.anonymousEventHandlers[emitter]?.(
-        log.data,
-        state,
-        blockHeader,
-      );
-    }
-
-    return this.namedEventHandlers[emitter]?.parseLog(log, state, blockHeader);
+  public async updateState(blockNumber: number): Promise<void> {
+    this.setState(await this.generateState(blockNumber), blockNumber);
   }
 
   public quote(amount: bigint, token: bigint, blockNumber: number): Quote {
@@ -139,13 +123,6 @@ export abstract class EkuboPool<C extends PoolTypeConfig, S>
     return quote;
   }
 
-  protected abstract _quote(
-    amount: bigint,
-    isToken1: boolean,
-    state: DeepReadonly<S>,
-    sqrtRatioLimit?: bigint,
-  ): Quote;
-
   public computeTvl(): [bigint, bigint] {
     const state = this.getStaleState();
     if (state === null) {
@@ -154,6 +131,43 @@ export abstract class EkuboPool<C extends PoolTypeConfig, S>
 
     return this._computeTvl(state);
   }
+
+  /**
+   * The function is called every time any of the subscribed
+   * addresses release log. The function accepts the current
+   * state, updates the state according to the log, and returns
+   * the updated state.
+   * @param state - Current state of event subscriber
+   * @param log - Log released by one of the subscribed addresses
+   * @returns Updates state of the event subscriber after the log
+   */
+  protected override processLog(
+    state: DeepReadonly<S>,
+    log: Readonly<Log>,
+    blockHeader: Readonly<BlockHeader>,
+  ): DeepReadonly<S> | null {
+    const emitter = log.address;
+
+    if (log.topics.length === 0) {
+      return this.anonymousEventHandlers[emitter]?.(
+        log.data,
+        state,
+        blockHeader,
+      );
+    }
+
+    return (
+      this.namedEventHandlers[emitter]?.parseLog(log, state, blockHeader) ??
+      null
+    );
+  }
+
+  protected abstract _quote(
+    amount: bigint,
+    isToken1: boolean,
+    state: DeepReadonly<S>,
+    sqrtRatioLimit?: bigint,
+  ): Quote;
 
   protected abstract _computeTvl(state: DeepReadonly<S>): [bigint, bigint];
 }

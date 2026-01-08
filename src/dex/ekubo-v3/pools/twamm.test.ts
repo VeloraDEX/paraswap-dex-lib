@@ -485,7 +485,6 @@ describe(TwammPoolState.fromSwappedEvent, () => {
     ];
 
     const stateAfterSwap = TwammPoolState.fromSwappedEvent(state, {
-      poolId: 0n, // Not used here
       liquidityAfter,
       sqrtRatioAfter,
       tickAfter: 0,
@@ -528,7 +527,6 @@ describe(TwammPoolState.fromVirtualOrdersExecutedEvent, () => {
       TwammPoolState.fromVirtualOrdersExecutedEvent(
         state,
         {
-          poolId: 0n, // Not used here
           token0SaleRate: state.token0SaleRate,
           token1SaleRate: state.token1SaleRate,
         },
@@ -553,7 +551,6 @@ describe(TwammPoolState.fromVirtualOrdersExecutedEvent, () => {
       TwammPoolState.fromVirtualOrdersExecutedEvent(
         state,
         {
-          poolId: 0n, // Not used here
           token0SaleRate: newToken0SaleRate,
           token1SaleRate: newToken1SaleRate,
         },
