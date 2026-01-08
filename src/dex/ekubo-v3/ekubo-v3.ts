@@ -231,6 +231,8 @@ export class EkuboV3 extends SimpleExchange implements IDex<EkuboData> {
     tokenAddress: Address,
     limit: number,
   ): Promise<PoolLiquidity[]> {
+    tokenAddress = tokenAddress.toLowerCase();
+
     const poolsTokenTvls = (
       await Promise.all(
         this.poolManager.poolsByBI.values().map(async pool => {

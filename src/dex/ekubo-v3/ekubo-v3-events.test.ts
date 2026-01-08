@@ -218,6 +218,13 @@ const eventFixtures: Record<
   },
   [Network.ARBITRUM]: tokens => {
     const USDC = BigInt(tokens['USDC'].address);
+    const USDT = BigInt(tokens['USDT'].address);
+
+    const clUsdcUsdtPoolKey = new PoolKey(
+      USDC,
+      USDT,
+      new PoolConfig(0n, 92233720368548n, new ConcentratedPoolTypeConfig(50)),
+    );
 
     const clEthUsdcPoolKey = new PoolKey(
       NATIVE_TOKEN_ADDRESS,
@@ -230,7 +237,11 @@ const eventFixtures: Record<
     );
 
     return {
-      poolStateEvents: {},
+      poolStateEvents: {
+        PositionUpdated: [
+          [newPool(BasePool, clUsdcUsdtPoolKey), 419274779], // Withdraw liquidity https://arbiscan.io/tx/0x84271744e848a448748b3916c274461c0523b1f4a1c4ad59afd0f46867fe38a4#eventlog#8
+        ],
+      },
       poolInitializationEvent: {
         poolKey: clEthUsdcPoolKey,
         initBlockNumber: 418181209, // https://arbiscan.io/tx/0x08e71cc1efb9c6587d4eea02d1a340e266f263d3be83730be27a41a4aa696f99#eventlog#1

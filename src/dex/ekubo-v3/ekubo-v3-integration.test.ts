@@ -162,7 +162,7 @@ const testConfigs = {
     pair: { srcTokenSymbol: 'USDC', destTokenSymbol: 'USDT' },
   },
   [Network.ARBITRUM]: {
-    pair: { srcTokenSymbol: 'USDC', destTokenSymbol: 'ETH' },
+    pair: { srcTokenSymbol: 'USDC', destTokenSymbol: 'USDT' },
   },
 } satisfies Record<
   EkuboSupportedNetwork,
