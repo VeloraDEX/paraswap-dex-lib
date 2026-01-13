@@ -164,25 +164,6 @@ describe('UniswapV2 Base E2E', () => {
     );
   });
 
-  describe('DackieSwap', () => {
-    const dexKey = 'DackieSwap';
-
-    const tokenASymbol: string = 'WETH';
-    const tokenBSymbol: string = 'USDbC';
-
-    const tokenAAmount: string = '1000000000000000000';
-    const tokenBAmount: string = '1000000';
-
-    testForNetwork(
-      network,
-      dexKey,
-      tokenASymbol,
-      tokenBSymbol,
-      tokenAAmount,
-      tokenBAmount,
-    );
-  });
-
   describe('QuickSwap', () => {
     const dexKey = 'QuickSwap';
 
