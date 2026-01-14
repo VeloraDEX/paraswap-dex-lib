@@ -24,9 +24,8 @@ import {
   convertEkuboToParaSwap,
 } from './utils';
 
-import { BigNumber, Contract } from 'ethers';
+import { BigNumber } from 'ethers';
 import { concat, zeroPad } from 'ethers/lib/utils';
-import { AsyncOrSync } from 'ts-essentials';
 import RouterABI from '../../abi/ekubo-v3/mev-capture-router.json';
 import { erc20Iface } from '../../lib/tokens/utils';
 import { EkuboV3PoolManager } from './ekubo-v3-pool-manager';
@@ -350,11 +349,23 @@ export class EkuboV3 extends SimpleExchange implements IDex<EkuboData> {
     return null;
   }
 
-  // LEGACY
   public getCalldataGasCost(
     _poolPrices: PoolPrices<EkuboData>,
   ): number | number[] {
-    return CALLDATA_GAS_COST.DEX_NO_PAYLOAD;
+    // swapAllowPartialFill((address,address,bytes32),bytes32,address)
+    return (
+      CALLDATA_GAS_COST.DEX_OVERHEAD +
+      // poolKey.token0
+      CALLDATA_GAS_COST.ADDRESS +
+      // poolKey.token1
+      CALLDATA_GAS_COST.ADDRESS +
+      // poolKey.config (bytes32)
+      CALLDATA_GAS_COST.FULL_WORD +
+      // swap parameters (bytes32)
+      CALLDATA_GAS_COST.FULL_WORD +
+      // recipient
+      CALLDATA_GAS_COST.ADDRESS
+    );
   }
 
   // LEGACY
