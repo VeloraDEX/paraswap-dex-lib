@@ -30,6 +30,7 @@ import { AsyncOrSync } from 'ts-essentials';
 import RouterABI from '../../abi/ekubo-v3/mev-capture-router.json';
 import { erc20Iface } from '../../lib/tokens/utils';
 import { EkuboV3PoolManager } from './ekubo-v3-pool-manager';
+import { uint8ToNumber } from '../../lib/decoders';
 
 // Ekubo Protocol https://ekubo.org/
 export class EkuboV3 extends SimpleExchange implements IDex<EkuboData> {
@@ -49,9 +50,8 @@ export class EkuboV3 extends SimpleExchange implements IDex<EkuboData> {
   private readonly poolManager;
   private readonly contracts;
 
-  // Caches the number of decimals for TVL computation purposes
-  private readonly decimals: Record<string, AsyncOrSync<number | null>> = {
-    [ETHER_ADDRESS]: 18,
+  private decimals: Record<string, number> = {
+    [ETHER_ADDRESS.toLowerCase()]: 18,
   };
 
   public constructor(
@@ -221,10 +221,35 @@ export class EkuboV3 extends SimpleExchange implements IDex<EkuboData> {
   }
 
   public async updatePoolState() {
-    return this.poolManager.updatePools(
-      await this.dexHelper.provider.getBlockNumber(),
+    const blockNumber = await this.dexHelper.provider.getBlockNumber();
+    await this.poolManager.updatePools(blockNumber, false);
+
+    const tokenAddresses = new Set<string>();
+    for (const pool of this.poolManager.poolsByBI.values()) {
+      tokenAddresses.add(convertEkuboToParaSwap(pool.key.token0).toLowerCase());
+      tokenAddresses.add(convertEkuboToParaSwap(pool.key.token1).toLowerCase());
+    }
+
+    if (!tokenAddresses.size) return;
+
+    const calls = Array.from(tokenAddresses).map(tokenAddress => ({
+      target: tokenAddress,
+      callData: erc20Iface.encodeFunctionData('decimals'),
+      decodeFunction: uint8ToNumber,
+    }));
+
+    const results = await this.dexHelper.multiWrapper.tryAggregate(
       false,
+      calls,
+      blockNumber,
     );
+
+    Array.from(tokenAddresses).forEach((address, i) => {
+      const result = results[i];
+      if (result.success) {
+        this.decimals[address] = result.returnData;
+      }
+    });
   }
 
   public async getTopPoolsForToken(
@@ -248,20 +273,18 @@ export class EkuboV3 extends SimpleExchange implements IDex<EkuboData> {
 
             const tvls = pool.computeTvl();
 
-            const [token0Tvl, token1Tvl] = await Promise.all(
-              tokenPair.map(async (tokenAddress, i) => {
-                const decimals = await this.getDecimals(tokenAddress);
-                if (decimals === null) {
-                  return null;
-                }
+            const [token0Tvl, token1Tvl] = tokenPair.map((tokenAddress, i) => {
+              const decimals = this.decimals[tokenAddress.toLowerCase()];
+              if (!decimals) {
+                return null;
+              }
 
-                return {
-                  tvl: tvls[i],
-                  address: tokenAddress,
-                  decimals,
-                };
-              }),
-            );
+              return {
+                tvl: tvls[i],
+                address: tokenAddress,
+                decimals,
+              };
+            });
 
             if (token0Tvl === null || token1Tvl === null) {
               return null;
@@ -318,33 +341,6 @@ export class EkuboV3 extends SimpleExchange implements IDex<EkuboData> {
       .splice(limit, Infinity);
 
     return poolLiquidities;
-  }
-
-  private getDecimals(erc20Token: string): AsyncOrSync<number | null> {
-    const cached = this.decimals[erc20Token];
-    if (typeof cached !== 'undefined') {
-      return cached;
-    }
-
-    const call: Promise<number> = new Contract(
-      erc20Token,
-      erc20Iface,
-      this.dexHelper.provider,
-    ).decimals();
-
-    const promise = call.catch((err: any) => {
-      this.logger.error(
-        'Failed to fetch decimals for token',
-        erc20Token,
-        'due to:',
-        err,
-      );
-      return null;
-    });
-
-    this.decimals[erc20Token] = promise;
-
-    return promise;
   }
 
   // LEGACY
