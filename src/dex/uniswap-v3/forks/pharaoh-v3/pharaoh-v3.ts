@@ -6,6 +6,11 @@ import { VelodromeSlipstream } from '../velodrome-slipstream/velodrome-slipstrea
 import { Address } from '@paraswap/core';
 import { PoolLiquidity } from '../../../../types';
 import { UNISWAPV3_EFFICIENCY_FACTOR } from '../../constants';
+import { MultiCallParams } from '../../../../lib/multi-wrapper';
+import { uint24ToBigInt } from '../../../../lib/decoders';
+import { Interface } from '@ethersproject/abi';
+import PharaohV3PoolABI from '../../../../abi/pharaoh-v3/PharaohV3Pool.abi.json';
+import { VelodromeSlipstreamEventPool } from '../velodrome-slipstream/velodrome-slipstream-pool';
 
 interface SubgraphPool {
   id: string;
@@ -26,6 +31,18 @@ interface SubgraphPool {
 export class PharaohV3 extends VelodromeSlipstream {
   public static dexKeysWithNetwork: { key: string; networks: Network[] }[] =
     getDexKeysWithNetwork(_.pick(UniswapV3Config, ['PharaohV3']));
+
+  protected readonly poolIface = new Interface(PharaohV3PoolABI);
+
+  protected buildFeeCallData(
+    pools: VelodromeSlipstreamEventPool[],
+  ): MultiCallParams<bigint>[] {
+    return pools.map(pool => ({
+      target: pool.poolAddress,
+      callData: this.poolIface.encodeFunctionData('fee', []),
+      decodeFunction: uint24ToBigInt,
+    }));
+  }
 
   async getTopPoolsForToken(
     tokenAddress: Address,

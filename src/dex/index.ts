@@ -13,8 +13,6 @@ import { UniswapV2 } from './uniswap-v2/uniswap-v2';
 import { UniswapV2Alias } from './uniswap-v2/constants';
 import { uniswapMerge } from './uniswap-v2/optimizer';
 import { BiSwap } from './uniswap-v2/biswap';
-import { MDEX } from './uniswap-v2/mdex';
-import { Dfyn } from './uniswap-v2/dfyn';
 import { Bancor } from './bancor/bancor';
 import { Compound } from './compound/compound';
 import { AaveV2 } from './aave-v2/aave-v2';
@@ -36,15 +34,11 @@ import { Solidly } from './solidly/solidly';
 import { SolidlyV3 } from './solidly-v3/solidly-v3';
 import { Ramses } from './solidly/forks-override/ramses';
 import { Thena } from './solidly/forks-override/thena';
-import { Chronos } from './solidly/forks-override/chronos';
 import { Velodrome } from './solidly/forks-override/velodrome';
 import { VelodromeV2 } from './solidly/forks-override/velodromeV2';
-import { Aerodrome } from './solidly/forks-override/aerodrome';
 import { SpiritSwapV2 } from './solidly/forks-override/spiritSwapV2';
 import { Synthetix } from './synthetix/synthetix';
-import { Usdfi } from './solidly/forks-override/usdfi';
 import { Equalizer } from './solidly/forks-override/equalizer';
-import { Velocimeter } from './solidly/forks-override/velocimeter';
 import { BalancerV1 } from './balancer-v1/balancer-v1';
 import { balancerV1Merge } from './balancer-v1/optimizer';
 import { CurveV1 } from './curve-v1/curve-v1';
@@ -58,7 +52,6 @@ import { WstETH } from './wsteth/wsteth';
 import { ERC4626 } from './erc4626/erc4626';
 import { Camelot } from './camelot/camelot';
 import { Hashflow } from './hashflow/hashflow';
-import { Infusion } from './infusion/infusion';
 import { SolidlyEthereum } from './solidly/solidly-ethereum';
 import { MaverickV1 } from './maverick-v1/maverick-v1';
 import { MaverickV2 } from './maverick-v2/maverick-v2';
@@ -71,7 +64,6 @@ import { PancakeswapV3 } from './pancakeswap-v3/pancakeswap-v3';
 import { Algebra } from './algebra/algebra';
 import { AngleTransmuter } from './angle-transmuter/angle-transmuter';
 import { AngleStakedStable } from './angle-staked-stable/angle-staked-stable';
-import { NomiswapV2 } from './uniswap-v2/nomiswap-v2';
 import { Dexalot } from './dexalot/dexalot';
 import { Bebop } from './bebop/bebop';
 import { Wombat } from './wombat/wombat';
@@ -157,8 +149,6 @@ const Dexes = [
   PancakeswapV3,
   VelodromeSlipstream,
   BiSwap,
-  MDEX,
-  Dfyn,
   AaveV2,
   AaveV3,
   KyberDmm,
@@ -174,13 +164,9 @@ const Dexes = [
   SpiritSwapV2,
   Ramses,
   Thena,
-  Chronos,
   Velodrome,
   VelodromeV2,
-  Aerodrome,
   Equalizer,
-  Velocimeter,
-  Usdfi,
   Synthetix,
   CurveV1Factory,
   CurveV1StableNg,
@@ -188,14 +174,12 @@ const Dexes = [
   ERC4626,
   Hashflow,
   Native,
-  Infusion,
   MaverickV1,
   MaverickV2,
   Camelot,
   SwaapV2,
   AngleTransmuter,
   AngleStakedStable,
-  NomiswapV2,
   SolidlyV3,
   Wombat,
   Swell,

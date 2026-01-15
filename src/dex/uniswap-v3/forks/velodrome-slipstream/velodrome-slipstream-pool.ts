@@ -9,8 +9,8 @@ import {
 } from '../../types';
 import { uint24ToBigInt, uint256ToBigInt } from '../../../../lib/decoders';
 import { decodeStateMultiCallResultWithRelativeBitmaps } from './utils';
-import { Address, BlockHeader, Log } from '../../../../types';
-import { assert, DeepReadonly } from 'ts-essentials';
+import { Address } from '../../../../types';
+import { assert } from 'ts-essentials';
 import { _reduceTickBitmap, _reduceTicks } from '../../contract-math/utils';
 import { bigIntify } from '../../../../utils';
 import { TickBitMap } from '../../contract-math/TickBitMap';
@@ -19,52 +19,6 @@ import { ethers } from 'ethers';
 export class VelodromeSlipstreamEventPool extends UniswapV3EventPool {
   public readonly poolIface = new Interface(VelodromeSlipstreamPoolABI);
   public readonly factoryIface = new Interface(VelodromeSlipstreamFactoryABI);
-
-  protected async processBlockLogs(
-    state: DeepReadonly<PoolState>,
-    logs: Readonly<Log>[],
-    blockHeader: Readonly<BlockHeader>,
-  ): Promise<DeepReadonly<PoolState> | null> {
-    const newState = await super.processBlockLogs(state, logs, blockHeader);
-    const fee = await this.getCurrentFee(blockHeader.number);
-
-    if (newState && newState.fee !== fee) {
-      const state = { ...newState };
-      state.fee = fee;
-
-      return state;
-    }
-
-    return newState;
-  }
-
-  protected async getCurrentFee(blockNumber: number): Promise<bigint> {
-    try {
-      const [result] = await this.dexHelper.multiWrapper.tryAggregate<bigint>(
-        false,
-        [
-          {
-            target: this.factoryAddress,
-            callData: this.factoryIface.encodeFunctionData('getSwapFee', [
-              this.poolAddress,
-            ]),
-            decodeFunction: uint24ToBigInt,
-          },
-        ],
-        blockNumber,
-      );
-
-      if (result.success) {
-        return result.returnData;
-      }
-    } catch (error) {
-      this.logger.error(
-        `VelodromeSlipstream: Failed to fetch fee for pool ${this.poolAddress}:`,
-        error,
-      );
-    }
-    return this.feeCode;
-  }
 
   protected _getStateRequestCallData() {
     if (!this._stateRequestCallData) {
