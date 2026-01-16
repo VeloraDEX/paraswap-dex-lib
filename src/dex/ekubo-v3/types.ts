@@ -1,15 +1,6 @@
 import { Interface } from '@ethersproject/abi';
 import { BigNumber, Contract } from 'ethers';
-import { PoolKey } from '../synthetix/types';
 import { BlockHeader } from 'web3-eth';
-
-export type Pool = {
-  key: PoolKey;
-  activeTick: number;
-  liquidity: bigint;
-  sqrtRatio: bigint;
-  ticks: bigint[];
-};
 
 export type BasicQuoteData = {
   tick: number;
