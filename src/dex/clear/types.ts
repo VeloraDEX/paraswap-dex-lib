@@ -6,7 +6,6 @@ export type ClearData = {
 };
 
 export interface DexParams {
-  subgraphURL?: string;
   factoryAddress: Address;
   swapAddress: Address;
   oracleAddress: Address;

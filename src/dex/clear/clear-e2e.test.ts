@@ -61,7 +61,7 @@ function testForNetwork(network: Network, dexKey: string, pairs: Pairs) {
 }
 
 describe('Clear E2E', () => {
-  const dexKey = 'Clear';
+  const dexKey = 'clear';
 
   describe('Mainnet', () => {
     const network = Network.MAINNET;
