@@ -1,5 +1,5 @@
 import { Interface } from '@ethersproject/abi';
-import { AsyncOrSync } from 'ts-essentials';
+import { AsyncOrSync, DeepReadonly } from 'ts-essentials';
 import {
   Logger,
   Token,
@@ -21,22 +21,24 @@ import { getDexKeysWithNetwork } from '../../utils';
 import clearSwapAbi from '../../abi/clear/ClearSwap.json';
 import { NumberAsString } from '@paraswap/core';
 import { MultiCallParams } from '../../lib/multi-wrapper';
+import { ClearFactory } from './clear-factory';
 
 const CLEAR_GAS_COST = 150_000;
 
 /**
  * Clear DEX Integration for ParaSwap
  *
- * Clear is a custom multi-token vault protocol (NOT a standard AMM)
- * - Vaults contain N tokens (not just 2 like Uniswap pools)
- * - Pricing via ClearSwap.previewSwap() RPC call (no x*y=k formula)
- * - Discovery via GraphQL indexer
+ * Clear is a depeg arbitrage protocol for stablecoins
+ * - Vaults contain N tokens (multi-token, not pairs)
+ * - Pricing via ClearSwap.previewSwap() - returns 0 when no depeg
+ * - Discovery via StatefulEventSubscriber (getters + NewClearVault events)
  * - Each (vault, tokenA, tokenB) combination = one "pool" for ParaSwap
  */
 export class Clear extends SimpleExchange implements IDex<ClearData> {
   static dexKeys = ['clear'];
   logger: Logger;
   protected config: DexParams;
+  protected factory: ClearFactory;
 
   readonly hasConstantPriceLargeAmounts = false;
   readonly isFeeOnTransferSupported = false;
@@ -46,10 +48,8 @@ export class Clear extends SimpleExchange implements IDex<ClearData> {
 
   readonly clearSwapIface = new Interface(clearSwapAbi);
 
-  // Vault cache - updated periodically via timer
+  // Vault cache - updated by factory subscriber
   private vaults: ClearVault[] = [];
-  private vaultsUpdateTimer?: NodeJS.Timeout;
-  private readonly VAULTS_CACHE_TTL_MS = 60 * 1000; // 1 minute
 
   constructor(
     readonly network: Network,
@@ -59,101 +59,60 @@ export class Clear extends SimpleExchange implements IDex<ClearData> {
     super(dexHelper, dexKey);
     this.config = ClearConfig[dexKey][network];
     this.logger = dexHelper.getLogger(dexKey);
+
+    // Initialize factory subscriber with callback to update vaults
+    this.factory = new ClearFactory(
+      dexKey,
+      this.config,
+      network,
+      dexHelper,
+      this.logger,
+      this.onVaultsUpdated.bind(this),
+    );
+  }
+
+  /**
+   * Callback when factory detects new vaults
+   */
+  private onVaultsUpdated(vaults: DeepReadonly<ClearVault[]>): void {
+    this.updateVaultsFromState(vaults);
+    this.logger.info(
+      `${this.dexKey}: Vaults updated, count: ${this.vaults.length}`,
+    );
   }
 
   getAdapters(_side: SwapSide): null {
     return null;
   }
 
-  async initializePricing(_blockNumber: number): Promise<void> {
-    await this.fetchAndCacheVaults();
+  async initializePricing(blockNumber: number): Promise<void> {
+    // Initialize factory and fetch initial state
+    await this.factory.initialize(blockNumber);
+    const vaults = await this.factory.getStateOrGenerate(blockNumber);
+    this.updateVaultsFromState(vaults);
+    this.logger.info(
+      `${this.dexKey}: Initialized ${this.vaults.length} vaults`,
+    );
+  }
 
-    if (!this.vaultsUpdateTimer) {
-      this.vaultsUpdateTimer = setInterval(async () => {
-        try {
-          await this.fetchAndCacheVaults();
-        } catch (e) {
-          this.logger.error(
-            `${this.dexKey}: Failed to update vaults cache:`,
-            e,
-          );
-        }
-      }, this.VAULTS_CACHE_TTL_MS);
-    }
+  /**
+   * Deep copy vaults from readonly state to mutable cache
+   */
+  private updateVaultsFromState(vaults: DeepReadonly<ClearVault[]>): void {
+    this.vaults = vaults.map(v => ({
+      id: v.id,
+      address: v.address,
+      tokens: v.tokens.map(t => ({
+        id: t.id,
+        address: t.address,
+        symbol: t.symbol,
+        decimals: t.decimals,
+      })),
+    }));
   }
 
   releaseResources(): AsyncOrSync<void> {
-    if (this.vaultsUpdateTimer) {
-      clearInterval(this.vaultsUpdateTimer);
-      this.vaultsUpdateTimer = undefined;
-      this.logger.info(`${this.dexKey}: cleared vaults update timer`);
-    }
-  }
-
-  private async queryClearAPI<T>(query: string): Promise<T> {
-    if (!this.config?.subgraphURL) {
-      throw new Error(
-        `Clear API endpoint not configured for ${this.dexKey} on ${this.network}`,
-      );
-    }
-
-    const body = JSON.stringify({ query });
-
-    try {
-      const response = await fetch(this.config.subgraphURL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body,
-      });
-
-      const responseText = await response.text();
-
-      if (!response.ok) {
-        throw new Error(
-          `Clear API returned ${response.status}: ${responseText}`,
-        );
-      }
-
-      let json: { data?: T; errors?: unknown[] };
-      try {
-        json = JSON.parse(responseText);
-      } catch (parseError) {
-        throw new Error(`Failed to parse Clear API response: ${responseText}`);
-      }
-
-      if (json.errors) {
-        this.logger.error('Clear API errors:', json.errors);
-        throw new Error(
-          `Clear API query failed: ${JSON.stringify(json.errors)}`,
-        );
-      }
-
-      return json.data as T;
-    } catch (error) {
-      this.logger.error('Failed to query Clear API:', error);
-      throw error;
-    }
-  }
-
-  private async fetchAndCacheVaults(): Promise<void> {
-    const query = `
-      query {
-        clearVaults {
-          id
-          address
-          tokens {
-            id
-            address
-            symbol
-            decimals
-          }
-        }
-      }
-    `;
-
-    const data = await this.queryClearAPI<{ clearVaults: ClearVault[] }>(query);
-    this.vaults = data.clearVaults || [];
-    this.logger.debug(`Fetched ${this.vaults.length} Clear vaults from API`);
+    this.logger.info(`${this.dexKey}: released resources`);
   }
 
   private processMulticallResults(
@@ -182,10 +141,11 @@ export class Clear extends SimpleExchange implements IDex<ClearData> {
       }
 
       if (!result.success) {
-        this.logger.error(
+        // Expected when no depeg exists - previewSwap reverts with AssetIsNotDepeg
+        this.logger.debug(
           info.isUnit
-            ? `Failed to get unit price for vault ${info.vaultAddress}`
-            : `Failed to preview swap for amount index ${info.amountIndex} in vault ${info.vaultAddress}`,
+            ? `No price for vault ${info.vaultAddress} (no depeg)`
+            : `No swap available for amount index ${info.amountIndex} in vault ${info.vaultAddress}`,
         );
         continue;
       }
@@ -357,9 +317,7 @@ export class Clear extends SimpleExchange implements IDex<ClearData> {
 
       for (const [vaultAddress, vaultData] of vaultResults) {
         if (vaultData.prices.every(p => p === 0n)) {
-          this.logger.warn(
-            `All prices returned 0 for ${srcToken.symbol}-${destToken.symbol} in vault ${vaultAddress}`,
-          );
+          // Expected when no depeg - skip this vault
           continue;
         }
 
@@ -383,9 +341,7 @@ export class Clear extends SimpleExchange implements IDex<ClearData> {
       }
 
       if (poolPrices.length === 0) {
-        this.logger.warn(
-          `No vaults could be priced for ${srcToken.symbol}-${destToken.symbol}`,
-        );
+        // Expected when no depeg exists
         return null;
       }
 
