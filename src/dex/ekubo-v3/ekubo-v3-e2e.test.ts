@@ -34,12 +34,12 @@ const testConfigs: Record<
   [Network.ARBITRUM]: {
     pair: [
       {
-        symbol: 'USDC',
-        amount: BI_POWS[5],
+        symbol: 'ETH',
+        amount: BI_POWS[18],
       },
       {
-        symbol: 'USDT',
-        amount: BI_POWS[5],
+        symbol: 'USDC',
+        amount: BI_POWS[8],
       },
     ],
   },
