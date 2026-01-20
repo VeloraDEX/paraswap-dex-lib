@@ -1,0 +1,161 @@
+[
+  {
+    "type": "constructor",
+    "inputs": [
+      {
+        "name": "core",
+        "type": "address",
+        "internalType": "contract ICore"
+      }
+    ],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "getInitializedTicksInRange",
+    "inputs": [
+      {
+        "name": "poolKey",
+        "type": "tuple",
+        "internalType": "struct PoolKey",
+        "components": [
+          {
+            "name": "token0",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "token1",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "config",
+            "type": "bytes32",
+            "internalType": "PoolConfig"
+          }
+        ]
+      },
+      {
+        "name": "fromTick",
+        "type": "int32",
+        "internalType": "int32"
+      },
+      {
+        "name": "toTick",
+        "type": "int32",
+        "internalType": "int32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "ticks",
+        "type": "tuple[]",
+        "internalType": "struct TickDelta[]",
+        "components": [
+          {
+            "name": "number",
+            "type": "int32",
+            "internalType": "int32"
+          },
+          {
+            "name": "liquidityDelta",
+            "type": "int128",
+            "internalType": "int128"
+          }
+        ]
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getQuoteData",
+    "inputs": [
+      {
+        "name": "poolKeys",
+        "type": "tuple[]",
+        "internalType": "struct PoolKey[]",
+        "components": [
+          {
+            "name": "token0",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "token1",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "config",
+            "type": "bytes32",
+            "internalType": "PoolConfig"
+          }
+        ]
+      },
+      {
+        "name": "minBitmapsSearched",
+        "type": "uint32",
+        "internalType": "uint32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "results",
+        "type": "tuple[]",
+        "internalType": "struct QuoteData[]",
+        "components": [
+          {
+            "name": "tick",
+            "type": "int32",
+            "internalType": "int32"
+          },
+          {
+            "name": "sqrtRatio",
+            "type": "uint96",
+            "internalType": "SqrtRatio"
+          },
+          {
+            "name": "liquidity",
+            "type": "uint128",
+            "internalType": "uint128"
+          },
+          {
+            "name": "minTick",
+            "type": "int32",
+            "internalType": "int32"
+          },
+          {
+            "name": "maxTick",
+            "type": "int32",
+            "internalType": "int32"
+          },
+          {
+            "name": "ticks",
+            "type": "tuple[]",
+            "internalType": "struct TickDelta[]",
+            "components": [
+              {
+                "name": "number",
+                "type": "int32",
+                "internalType": "int32"
+              },
+              {
+                "name": "liquidityDelta",
+                "type": "int128",
+                "internalType": "int128"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "error",
+    "name": "CoreOnly",
+    "inputs": []
+  }
+]

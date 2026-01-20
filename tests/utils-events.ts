@@ -24,7 +24,7 @@ if (fs.existsSync(absLogPath)) logs = require(logPath);
 const bigintify = (val: string) => BigInt(val);
 const stringify = (val: bigint) => val.toString();
 
-interface BlockInfo {
+export interface BlockInfo {
   logs: Log[];
   blockHeaders: { [blockNumber: number]: BlockHeader };
 }
@@ -42,11 +42,11 @@ export async function testEventSubscriber<SubscriberState>(
   ) => void,
 ) {
   // Get state of the subscriber block before the event was released
-  let poolState = getSavedState(blockNumber - 1, cacheKey);
-  if (!poolState) {
-    poolState = await fetchState(blockNumber - 1);
-    saveState(blockNumber - 1, cacheKey, poolState);
-  }
+  const poolState = await getOrFetchState(
+    blockNumber - 1,
+    cacheKey,
+    fetchState,
+  );
 
   // Set subscriber state before the event block
   eventSubscriber.setState(
@@ -56,42 +56,22 @@ export async function testEventSubscriber<SubscriberState>(
   eventSubscriber.isTracking = () => true;
 
   // Get logs and blockHeader of the block when the event was emitted
-  let blockInfo = await getSavedBlockInfo(blockNumber, cacheKey);
-  if (!blockInfo) {
-    const logs = (
-      await Promise.all(
-        subscribedAddress.map(address =>
-          provider.getLogs({
-            fromBlock: blockNumber,
-            toBlock: blockNumber,
-            address,
-          }),
-        ),
-      )
-    )
-      .flat()
-      .sort((a, b) => a.logIndex - b.logIndex);
-
-    blockInfo = {
-      logs,
-      blockHeaders: {
-        [blockNumber]: <BlockHeader>(
-          (<unknown>await provider.getBlock(blockNumber))
-        ),
-      },
-    };
-    saveBlockInfo(blockNumber, cacheKey, blockInfo);
-  }
+  const blockInfo = await getOrFetchBlockInfo(
+    blockNumber,
+    cacheKey,
+    subscribedAddress,
+    provider,
+  );
 
   // Update subscriber with event logs
   await eventSubscriber.update(blockInfo.logs, blockInfo.blockHeaders);
 
   // Get the expected state of the subscriber after the event
-  let expectedNewPoolState = getSavedState(blockNumber, cacheKey);
-  if (!expectedNewPoolState) {
-    expectedNewPoolState = await fetchState(blockNumber);
-    saveState(blockNumber, cacheKey, expectedNewPoolState);
-  }
+  const expectedNewPoolState = await getOrFetchState(
+    blockNumber,
+    cacheKey,
+    fetchState,
+  );
 
   // Get the updated state of the subscriber
   const newPoolState = eventSubscriber.getState(blockNumber);
@@ -183,4 +163,57 @@ function saveBlockInfo(
 ) {
   logs[`${cacheKey}_${blockNumber}`] = blockInfo;
   fs.writeFileSync(absLogPath, JSON.stringify(logs, null, 2));
+}
+
+export async function getOrFetchBlockInfo(
+  blockNumber: number,
+  cacheKey: string,
+  subscribedAddress: Address[],
+  provider: Provider,
+): Promise<BlockInfo> {
+  let blockInfo = getSavedBlockInfo(blockNumber, cacheKey);
+  if (blockInfo) {
+    return blockInfo;
+  }
+
+  const logs = (
+    await Promise.all(
+      subscribedAddress.map(address =>
+        provider.getLogs({
+          fromBlock: blockNumber,
+          toBlock: blockNumber,
+          address,
+        }),
+      ),
+    )
+  )
+    .flat()
+    .sort((a, b) => a.logIndex - b.logIndex);
+
+  blockInfo = {
+    logs,
+    blockHeaders: {
+      [blockNumber]: <BlockHeader>(
+        (<unknown>await provider.getBlock(blockNumber))
+      ),
+    },
+  };
+  saveBlockInfo(blockNumber, cacheKey, blockInfo);
+
+  return blockInfo;
+}
+
+export async function getOrFetchState<SubscriberState>(
+  blockNumber: number,
+  cacheKey: string,
+  fetchState: (blockNumber: number) => Promise<SubscriberState>,
+): Promise<SubscriberState> {
+  let state = getSavedState<SubscriberState>(blockNumber, cacheKey);
+  if (state) {
+    return state;
+  }
+
+  state = await fetchState(blockNumber);
+  saveState(blockNumber, cacheKey, state);
+  return state;
 }
