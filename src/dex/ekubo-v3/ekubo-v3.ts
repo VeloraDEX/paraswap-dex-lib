@@ -274,7 +274,7 @@ export class EkuboV3 extends SimpleExchange implements IDex<EkuboData> {
 
             const [token0Tvl, token1Tvl] = tokenPair.map((tokenAddress, i) => {
               const decimals = this.decimals[tokenAddress.toLowerCase()];
-              if (!decimals) {
+              if (typeof decimals === 'undefined') {
                 return null;
               }
 

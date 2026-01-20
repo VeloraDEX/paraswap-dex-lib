@@ -152,7 +152,11 @@ export class EkuboV3PoolManager implements EventSubscriber {
 
         if (typeof pool === 'undefined') {
           this.logger.warn(
-            `Pool ID ${hexZeroPad(hexValue(poolId), 32)} not found in pool map`,
+            `Pool ID ${
+              typeof poolId === 'bigint'
+                ? hexZeroPad(hexValue(poolId), 32)
+                : poolId
+            } not found in pool map`,
           );
           continue;
         }
