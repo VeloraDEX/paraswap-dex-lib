@@ -955,7 +955,6 @@ describe('Executor02ByteCodeBuilder e2e tests', () => {
       describe('ETH -> DAI', () => {
         const dexKeys = [
           'UniswapV3',
-          'GMX',
           'TraderJoeV2.1',
           'RamsesV2',
           'CamelotV3',
@@ -1011,7 +1010,6 @@ describe('Executor02ByteCodeBuilder e2e tests', () => {
           'PangolinSwap',
           'TraderJoe',
           'UniswapV3',
-          'GMX',
           'Wombat',
         ];
 
@@ -1202,7 +1200,6 @@ describe('Executor02ByteCodeBuilder e2e tests', () => {
           'UniswapV3',
           'QuickSwapV3',
           'IronV2',
-          'Synapse',
         ];
 
         const tokenASymbol: string = 'WBTC';

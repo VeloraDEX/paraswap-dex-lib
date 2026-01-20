@@ -160,7 +160,7 @@ export class BalancerEventHook extends StatefulEventSubscriber<HookStateMap> {
 
   async updateHookState() {
     // Not all hooks need updated, only ones with settings/state that can't be handled by events
-    const blockNumber = await this.dexHelper.provider.getBlockNumber();
+    const blockNumber = this.dexHelper.blockManager.getLatestBlockNumber();
     const currentState =
       (_.cloneDeep(this.getStaleState()) as HookStateMap) || {};
 

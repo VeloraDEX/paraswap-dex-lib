@@ -5,20 +5,20 @@ import { Tokens } from '../../../tests/constants-e2e';
 import { Network, SwapSide } from '../../constants';
 import { ContractMethodV6 } from '@paraswap/core';
 
-describe('Stader Gas Estimation', () => {
-  const dexKey = 'Stader';
-  const network = Network.MAINNET;
+describe('TraderJoeV2.2 Gas Estimation', () => {
+  const dexKey = 'traderjoev2.2';
+  const network = Network.AVALANCHE;
 
   describe('swapExactAmountIn', () => {
-    const ETH = Tokens[network]['ETH'];
-    const ETHx = Tokens[network]['ETHx'];
-    const amount = 1000000000000000000n;
+    const USDT = Tokens[network]['USDT'];
+    const USDC = Tokens[network]['USDC'];
+    const amount = 100000000n;
 
-    it('deposit', async () => {
+    it('swapExactTokensForTokens', async () => {
       await testGasEstimation(
         network,
-        ETH,
-        ETHx,
+        USDT,
+        USDC,
         amount,
         SwapSide.SELL,
         dexKey,

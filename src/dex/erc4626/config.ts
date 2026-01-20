@@ -3,28 +3,6 @@ import { DexConfigMap } from '../../types';
 import { Network } from '../../constants';
 
 export const ERC4626Config: DexConfigMap<ERC4626Params> = {
-  wUSDM: {
-    [Network.MAINNET]: {
-      vault: '0x57F5E098CaD7A3D1Eed53991D4d66C45C9AF7812',
-      asset: '0x59D9356E565Ab3A36dD77763Fc0d87fEaf85508C',
-    },
-    [Network.OPTIMISM]: {
-      vault: '0x57F5E098CaD7A3D1Eed53991D4d66C45C9AF7812',
-      asset: '0x59D9356E565Ab3A36dD77763Fc0d87fEaf85508C',
-    },
-    [Network.ARBITRUM]: {
-      vault: '0x57F5E098CaD7A3D1Eed53991D4d66C45C9AF7812',
-      asset: '0x59D9356E565Ab3A36dD77763Fc0d87fEaf85508C',
-    },
-    [Network.BASE]: {
-      vault: '0x57F5E098CaD7A3D1Eed53991D4d66C45C9AF7812',
-      asset: '0x59D9356E565Ab3A36dD77763Fc0d87fEaf85508C',
-    },
-    [Network.POLYGON]: {
-      vault: '0x57F5E098CaD7A3D1Eed53991D4d66C45C9AF7812',
-      asset: '0x59D9356E565Ab3A36dD77763Fc0d87fEaf85508C',
-    },
-  },
   // might give 1wei difference on BUY
   sDAI: {
     [Network.GNOSIS]: {
