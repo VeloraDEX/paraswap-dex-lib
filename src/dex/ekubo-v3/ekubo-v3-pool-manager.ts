@@ -174,7 +174,7 @@ export class EkuboV3PoolManager implements EventSubscriber {
         }
 
         try {
-          await this.handlePoolInitialized(
+          this.handlePoolInitialized(
             this.contracts.core.interface.decodeEventLog(
               this.poolInitializedFragment,
               log.data,
@@ -459,14 +459,11 @@ export class EkuboV3PoolManager implements EventSubscriber {
     ): Promise<void> => {
       const pool = new constructor(...commonArgs, initBlockNumber, poolKey);
 
-      if (subscribe) {
-        await pool.initialize(blockNumber, { state: initialState });
-      } else {
-        pool.setState(
-          initialState ?? (await pool.generateState(blockNumber)),
-          blockNumber,
-        );
-      }
+      pool.isTracking = this.isTracking;
+      pool.setState(
+        initialState ?? (await pool.generateState(blockNumber)),
+        blockNumber,
+      );
 
       this.setPool(pool);
     };
@@ -648,7 +645,7 @@ export class EkuboV3PoolManager implements EventSubscriber {
     this.poolsByString.clear();
   }
 
-  private async handlePoolInitialized(
+  private handlePoolInitialized(
     ev: Result,
     blockHeader: Readonly<BlockHeader>,
   ) {
@@ -669,17 +666,14 @@ export class EkuboV3PoolManager implements EventSubscriber {
       blockNumber,
     ] as const;
 
-    const addPool = async <
-      C extends PoolTypeConfig,
-      S,
-      P extends EkuboPool<C, S>,
-    >(
+    const addPool = <C extends PoolTypeConfig, S, P extends EkuboPool<C, S>>(
       constructor: { new (...args: [...typeof commonArgs, PoolKey<C>]): P },
       poolKey: PoolKey<C>,
-      initialState: DeepReadonly<S> | undefined,
-    ): Promise<void> => {
+      initialState: DeepReadonly<S>,
+    ): void => {
       const pool = new constructor(...commonArgs, poolKey);
-      await pool.initialize(blockNumber, { state: initialState });
+      pool.isTracking = this.isTracking;
+      pool.setState(initialState, blockNumber);
       this.setPool(pool);
     };
 
