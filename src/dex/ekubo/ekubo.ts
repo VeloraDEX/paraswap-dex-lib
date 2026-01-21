@@ -219,8 +219,14 @@ export class Ekubo extends SimpleExchange implements IDex<EkuboData> {
       const pool = new constructor(...commonArgs, poolKey);
 
       if (subscribe) {
+        this.logger.info(`Adding and subscribing to pool ${poolKey.stringId}`);
         await pool.initialize(blockNumber, { state: initialState });
       } else {
+        if (!initialState) {
+          this.logger.info(
+            `Fetching initial state for pool ${poolKey.stringId}`,
+          );
+        }
         pool.setState(
           initialState ?? (await pool.generateState(blockNumber)),
           blockNumber,
@@ -761,6 +767,8 @@ export class Ekubo extends SimpleExchange implements IDex<EkuboData> {
       this.contracts,
       poolKey,
     );
+
+    this.logger.info(`Initializing untracked pool ${stringId}`);
     await pool.initialize(blockNumber);
     this.pools.set(stringId, pool);
 
