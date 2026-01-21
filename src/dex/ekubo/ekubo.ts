@@ -618,6 +618,7 @@ export class Ekubo extends SimpleExchange implements IDex<EkuboData> {
   private async fetchAllPoolKeys(): Promise<PoolKey[]> {
     const res = await this.dexHelper.httpRequest.get(
       `${this.config.apiUrl}/v1/poolKeys`,
+      5000,
     );
 
     const { error, value } = allPoolsSchema.validate(res, {
