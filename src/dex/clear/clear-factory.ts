@@ -6,6 +6,7 @@ import { StatefulEventSubscriber } from '../../stateful-event-subscriber';
 import { IDexHelper } from '../../dex-helper';
 import { MultiCallParams } from '../../lib/multi-wrapper';
 import { Address } from '../../types';
+import { uint256DecodeToNumber } from '../../lib/decoders';
 import { ClearVault, DexParams } from './types';
 import ClearFactoryABI from '../../abi/clear/ClearFactory.json';
 import ClearVaultABI from '../../abi/clear/ClearVault.json';
@@ -184,8 +185,8 @@ export class ClearFactory extends StatefulEventSubscriber<ClearVault[]> {
       false,
     );
 
-    const vaults: ClearVault[] = [];
-
+    // Collect all valid vault data first
+    const validVaultData: { address: string; tokens: string[] }[] = [];
     for (let i = 0; i < vaultAddresses.length; i++) {
       const result = tokenResults[i];
       if (!result.success || !result.returnData) {
@@ -194,20 +195,60 @@ export class ClearFactory extends StatefulEventSubscriber<ClearVault[]> {
         );
         continue;
       }
-
-      const tokenAddresses = result.returnData;
-
-      vaults.push({
-        id: vaultAddresses[i],
+      validVaultData.push({
         address: vaultAddresses[i],
-        tokens: tokenAddresses.map(addr => ({
-          id: addr.toLowerCase(),
-          address: addr.toLowerCase(),
-          symbol: '',
-          decimals: '18',
-        })),
+        tokens: result.returnData,
       });
     }
+
+    // Step 4: Collect all unique token addresses and fetch their decimals
+    const uniqueTokens = Array.from(
+      new Set(validVaultData.flatMap(v => v.tokens.map(t => t.toLowerCase()))),
+    );
+
+    const decimalCalls: MultiCallParams<number>[] = uniqueTokens.map(token => ({
+      target: token,
+      callData: '0x313ce567', // decimals()
+      decodeFunction: uint256DecodeToNumber,
+    }));
+
+    const decimalResults =
+      await this.dexHelper.multiWrapper.tryAggregate<number>(
+        false,
+        decimalCalls,
+        blockNumber,
+        this.dexHelper.multiWrapper.defaultBatchSize,
+        false,
+      );
+
+    // Build token -> decimals map (default to 18 if call fails)
+    const tokenDecimals: Record<string, number> = {};
+    for (let i = 0; i < uniqueTokens.length; i++) {
+      const result = decimalResults[i];
+      if (result.success && result.returnData !== undefined) {
+        tokenDecimals[uniqueTokens[i]] = result.returnData;
+      } else {
+        this.logger.warn(
+          `${this.parentName}: Failed to fetch decimals for ${uniqueTokens[i]}, defaulting to 18`,
+        );
+        tokenDecimals[uniqueTokens[i]] = 18;
+      }
+    }
+
+    // Build vaults with correct decimals
+    const vaults: ClearVault[] = validVaultData.map(vaultData => ({
+      id: vaultData.address,
+      address: vaultData.address,
+      tokens: vaultData.tokens.map(addr => {
+        const addrLower = addr.toLowerCase();
+        return {
+          id: addrLower,
+          address: addrLower,
+          symbol: '',
+          decimals: String(tokenDecimals[addrLower] ?? 18),
+        };
+      }),
+    }));
 
     this.logger.info(
       `${this.parentName}: Generated state with ${vaults.length} vaults`,

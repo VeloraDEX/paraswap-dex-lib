@@ -46,7 +46,6 @@ export enum Network {
   ARBITRUM = 42161,
   AVALANCHE = 43114,
   SEPOLIA = 11155111,
-  ARBITRUM_SEPOLIA = 421614,
 }
 
 export const SUBGRAPH_TIMEOUT = 20 * 1000;
