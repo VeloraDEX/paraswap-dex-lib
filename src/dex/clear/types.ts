@@ -8,10 +8,7 @@ export type ClearData = {
 export interface DexParams {
   factoryAddress: Address;
   swapAddress: Address;
-  oracleAddress: Address;
-  accessManagerAddress?: Address;
   poolGasCost?: number;
-  feeCode: number;
 }
 
 export interface ClearVaultToken {

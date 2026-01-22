@@ -323,8 +323,14 @@ export class Clear extends SimpleExchange implements IDex<ClearData> {
         }
 
         let unit = vaultData.unit;
-        if (unit === 0n && vaultData.prices[0] && amounts[0]) {
-          unit = (vaultData.prices[0] * unitAmount) / amounts[0];
+        if (unit === 0n) {
+          // Fallback: find first valid amount/price pair to calculate unit
+          for (let i = 0; i < amounts.length; i++) {
+            if (amounts[i] > 0n && vaultData.prices[i] > 0n) {
+              unit = (vaultData.prices[i] * unitAmount) / amounts[i];
+              break;
+            }
+          }
         }
 
         poolPrices.push({
