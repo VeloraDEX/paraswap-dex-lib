@@ -49,9 +49,12 @@ export class ClearFactory extends StatefulEventSubscriber<ClearVault[]> {
   /**
    * Handle NewClearVault event - regenerate state when a new vault is created
    */
-  async handleNewClearVault(): Promise<DeepReadonly<ClearVault[]> | null> {
-    const blockNumber = await this.dexHelper.provider.getBlockNumber();
-    const vaults = await this.getStateOrGenerate(blockNumber, false);
+  async handleNewClearVault(
+    _event: any,
+    _state: DeepReadonly<ClearVault[]>,
+    log: Readonly<Log>,
+  ): Promise<DeepReadonly<ClearVault[]> | null> {
+    const vaults = await this.getStateOrGenerate(log.blockNumber, false);
     this.onVaultCreated(vaults);
     return vaults;
   }

@@ -112,6 +112,7 @@ export class Clear extends SimpleExchange implements IDex<ClearData> {
   }
 
   releaseResources(): AsyncOrSync<void> {
+    this.factory.inactivate();
     this.logger.info(`${this.dexKey}: released resources`);
   }
 
