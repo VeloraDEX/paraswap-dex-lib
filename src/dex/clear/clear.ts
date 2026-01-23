@@ -333,6 +333,11 @@ export class Clear extends SimpleExchange implements IDex<ClearData> {
           }
         }
 
+        // Skip pool if we couldn't calculate a valid unit
+        if (unit === 0n) {
+          continue;
+        }
+
         poolPrices.push({
           prices: vaultData.prices,
           unit,
