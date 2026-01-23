@@ -54,7 +54,9 @@ export class ClearFactory extends StatefulEventSubscriber<ClearVault[]> {
     _state: DeepReadonly<ClearVault[]>,
     log: Readonly<Log>,
   ): Promise<DeepReadonly<ClearVault[]> | null> {
-    const vaults = await this.getStateOrGenerate(log.blockNumber, false);
+    // Force regenerate to include the new vault
+    const vaults = await this.generateState(log.blockNumber);
+    this.setState(vaults, log.blockNumber);
     this.onVaultCreated(vaults);
     return vaults;
   }
