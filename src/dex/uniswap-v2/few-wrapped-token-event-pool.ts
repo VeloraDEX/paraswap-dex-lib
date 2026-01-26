@@ -3,10 +3,12 @@ import { Address, Log, Logger, Token } from '../../types';
 import { IDexHelper } from '../../dex-helper';
 import { Interface } from '@ethersproject/abi';
 import { AsyncOrSync, DeepReadonly } from 'ts-essentials';
-import erc20ABI from '../../abi/ERC20.abi.json';
+import ERC20_ABI from '../../abi/ERC20.abi.json';
 import { ethers } from 'ethers';
 
-const erc20iface = new Interface(erc20ABI);
+const ERC20_INTERFACE = new Interface(ERC20_ABI);
+const TRANSFER_TOPIC =
+  '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef';
 
 export type FewWrappedToken = Token & {
   underlying: Address;
@@ -32,7 +34,11 @@ export class FewWrappedTokenEventPool extends StatefulEventSubscriber<FewWrapped
     state: DeepReadonly<FewWrappedTokenState>,
     log: Readonly<Log>,
   ): AsyncOrSync<DeepReadonly<FewWrappedTokenState> | null> {
-    const event = erc20iface.parseLog(log);
+    if (log.topics[0] !== TRANSFER_TOPIC) {
+      return null;
+    }
+
+    const event = ERC20_INTERFACE.parseLog(log);
 
     if (event.name === 'Transfer') {
       if (event.args.to.toLowerCase() === this.fwToken.address.toLowerCase()) {
@@ -58,7 +64,7 @@ export class FewWrappedTokenEventPool extends StatefulEventSubscriber<FewWrapped
     let calldata = [
       {
         target: this.fwToken.underlying,
-        callData: erc20iface.encodeFunctionData('balanceOf', [
+        callData: ERC20_INTERFACE.encodeFunctionData('balanceOf', [
           this.fwToken.address,
         ]),
       },
