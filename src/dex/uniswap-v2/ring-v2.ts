@@ -285,8 +285,12 @@ export class RingV2 extends UniswapV2 {
           );
 
       // apply balance cap
-      prices = prices.map(p => {
+      prices = prices.map((p, i) => {
         if (isSell && p > availableBalance) {
+          return 0n;
+        }
+
+        if (!isSell && p > amounts[i]) {
           return 0n;
         }
 
