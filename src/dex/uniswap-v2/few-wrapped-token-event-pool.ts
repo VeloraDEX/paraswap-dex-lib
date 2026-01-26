@@ -39,22 +39,25 @@ export class FewWrappedTokenEventPool extends StatefulEventSubscriber<FewWrapped
     }
 
     const event = ERC20_INTERFACE.parseLog(log);
+    const from = event.args.from.toLowerCase();
+    const to = event.args.to.toLowerCase();
 
-    if (event.name === 'Transfer') {
-      if (event.args.to.toLowerCase() === this.fwToken.address.toLowerCase()) {
-        return {
-          balance: state.balance + BigInt(event.args.value),
-        };
-      }
-
-      if (
-        event.args.from.toLowerCase() === this.fwToken.address.toLowerCase()
-      ) {
-        return {
-          balance: state.balance - BigInt(event.args.value),
-        };
-      }
+    if (to === from) {
+      return null;
     }
+
+    if (to === this.fwToken.address.toLowerCase()) {
+      return {
+        balance: state.balance + BigInt(event.args.value),
+      };
+    }
+
+    if (from === this.fwToken.address.toLowerCase()) {
+      return {
+        balance: state.balance - BigInt(event.args.value),
+      };
+    }
+
     return null;
   }
 
