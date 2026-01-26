@@ -3,7 +3,7 @@ import { Address, Log, Logger, Token } from '../../types';
 import { IDexHelper } from '../../dex-helper';
 import { Interface } from '@ethersproject/abi';
 import { AsyncOrSync, DeepReadonly } from 'ts-essentials';
-import erc20ABI from '../../abi/erc20.json';
+import erc20ABI from '../../abi/ERC20.abi.json';
 import { ethers } from 'ethers';
 
 const erc20iface = new Interface(erc20ABI);
