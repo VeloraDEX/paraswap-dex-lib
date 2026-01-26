@@ -200,9 +200,10 @@ export class RingV2 extends UniswapV2 {
       token,
       this.logger,
     );
-    await pool.initialize(blockNumber);
 
     this.fwTokenPools[token.address.toLowerCase()] = pool;
+
+    await pool.initialize(blockNumber);
 
     return pool;
   }
