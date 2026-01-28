@@ -38,6 +38,22 @@ export const ERC4626Config: DexConfigMap<ERC4626Params> = {
       withdrawDisabled: true,
     },
   },
+  yoEUR: {
+    [Network.BASE]: {
+      vault: '0x50c749ae210d3977adc824ae11f3c7fd10c871e9', // yoEUR
+      asset: '0x60a3E35Cc302bFA44Cb288Bc5a4F316Fdb1adb42', // EURC
+      decimals: 6,
+      withdrawDisabled: true,
+    },
+  },
+  yoGOLD: {
+    [Network.MAINNET]: {
+      vault: '0x586675A3a46B008d8408933cf42d8ff6c9CC61a1', // yoGOLD
+      asset: '0x68749665FF8D2d112Fa859AA293F07A622782F38', // XAUt
+      decimals: 6,
+      withdrawDisabled: true,
+    },
+  },
   stcUSD: {
     [Network.MAINNET]: {
       vault: '0x88887bE419578051FF9F4eb6C858A951921D8888', // stcUSD
