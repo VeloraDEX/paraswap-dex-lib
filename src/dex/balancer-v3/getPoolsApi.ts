@@ -190,7 +190,11 @@ function getHookType(
   if (!hook) return undefined;
   else if (poolType === ReClammApiName || poolType === 'RECLAMM_V2')
     return undefined; // The hook is not used for pricing so we just treat as non-existent
-  else return hooksConfigMap[hook.address.toLowerCase()].type;
+  else {
+    const configs = hooksConfigMap[hook.address.toLowerCase()];
+    // Return the type from the first config (all configs for same hook address should have same type)
+    return configs && configs.length > 0 ? configs[0].type : undefined;
+  }
 }
 
 function getHookAddress(
