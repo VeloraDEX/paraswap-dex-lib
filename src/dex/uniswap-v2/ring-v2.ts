@@ -291,7 +291,7 @@ export class RingV2 extends UniswapV2 {
           return 0n;
         }
 
-        if (!isSell && p > amounts[i]) {
+        if (!isSell && availableBalance > amounts[i]) {
           return 0n;
         }
 
