@@ -49,8 +49,7 @@ describe('Clear Simple Integration Test', function () {
   });
 
   afterAll(() => {
-    // Clean up timer
-    clear.releaseResources();
+    // Cleanup handled automatically by StatefulEventSubscriber
   });
 
   describe('GraphQL Connectivity', function () {

@@ -1,5 +1,5 @@
 import { Interface } from '@ethersproject/abi';
-import { AsyncOrSync, DeepReadonly } from 'ts-essentials';
+import { DeepReadonly } from 'ts-essentials';
 import {
   Logger,
   Token,
@@ -19,9 +19,11 @@ import { Network, SwapSide } from '../../constants';
 import * as CALLDATA_GAS_COST from '../../calldata-gas-cost';
 import { getDexKeysWithNetwork } from '../../utils';
 import clearSwapAbi from '../../abi/clear/ClearSwap.json';
+import clearVaultAbi from '../../abi/clear/ClearVault.json';
 import { NumberAsString } from '@paraswap/core';
 import { MultiCallParams } from '../../lib/multi-wrapper';
 import { ClearFactory } from './clear-factory';
+import { uint256ToBigInt } from '../../lib/decoders';
 
 const CLEAR_GAS_COST = 150_000;
 
@@ -47,8 +49,9 @@ export class Clear extends SimpleExchange implements IDex<ClearData> {
     getDexKeysWithNetwork(ClearConfig);
 
   readonly clearSwapIface = new Interface(clearSwapAbi);
+  readonly clearVaultIface = new Interface(clearVaultAbi);
 
-  // Vault cache - updated by factory subscriber
+  // Vault cache - updated by factory subscriber or updatePoolState
   private vaults: ClearVault[] = [];
 
   constructor(
@@ -75,7 +78,7 @@ export class Clear extends SimpleExchange implements IDex<ClearData> {
    * Callback when factory detects new vaults
    */
   private onVaultsUpdated(vaults: DeepReadonly<ClearVault[]>): void {
-    this.updateVaultsFromState(vaults);
+    this.vaults = vaults as ClearVault[];
     this.logger.info(
       `${this.dexKey}: Vaults updated, count: ${this.vaults.length}`,
     );
@@ -89,31 +92,64 @@ export class Clear extends SimpleExchange implements IDex<ClearData> {
     // Initialize factory and fetch initial state
     await this.factory.initialize(blockNumber);
     const vaults = await this.factory.getStateOrGenerate(blockNumber);
-    this.updateVaultsFromState(vaults);
+    this.vaults = vaults as ClearVault[];
     this.logger.info(
       `${this.dexKey}: Initialized ${this.vaults.length} vaults`,
     );
   }
 
   /**
-   * Deep copy vaults from readonly state to mutable cache
+   * Fetch vaults with tokens, decimals and TVL for getTopPoolsForToken
+   * This method is called by PoolTracker service which doesn't call initializePricing
    */
-  private updateVaultsFromState(vaults: DeepReadonly<ClearVault[]>): void {
-    this.vaults = vaults.map(v => ({
-      id: v.id,
-      address: v.address,
-      tokens: v.tokens.map(t => ({
-        id: t.id,
-        address: t.address,
-        symbol: t.symbol,
-        decimals: t.decimals,
-      })),
-    }));
-  }
+  async updatePoolState(): Promise<void> {
+    if (this.vaults.length > 0) {
+      return; // Already have vaults
+    }
 
-  releaseResources(): AsyncOrSync<void> {
-    this.factory.inactivate();
-    this.logger.info(`${this.dexKey}: released resources`);
+    const blockNumber = await this.dexHelper.provider.getBlockNumber();
+    const vaults = await this.factory.getStateOrGenerate(blockNumber, true);
+
+    if (vaults.length === 0) {
+      this.logger.info(`${this.dexKey}: No vaults found in updatePoolState`);
+      return;
+    }
+
+    // Fetch totalAssets for each vault to get actual TVL
+    const totalAssetsCalls: MultiCallParams<bigint>[] = vaults.map(vault => ({
+      target: vault.address,
+      callData: this.clearVaultIface.encodeFunctionData('totalAssets'),
+      decodeFunction: uint256ToBigInt,
+    }));
+
+    const totalAssetsResults =
+      await this.dexHelper.multiWrapper.tryAggregate<bigint>(
+        false,
+        totalAssetsCalls,
+        blockNumber,
+        this.dexHelper.multiWrapper.defaultBatchSize,
+        false,
+      );
+
+    // Build vaults with TVL
+    this.vaults = vaults.map((vault, i) => {
+      const result = totalAssetsResults[i];
+      return {
+        id: vault.id,
+        address: vault.address,
+        tokens: vault.tokens.map(t => ({
+          id: t.id,
+          address: t.address,
+          symbol: t.symbol,
+          decimals: t.decimals,
+        })),
+        totalAssets: result.success ? result.returnData : undefined,
+      };
+    });
+
+    this.logger.info(
+      `${this.dexKey}: updatePoolState loaded ${this.vaults.length} vaults`,
+    );
   }
 
   private processMulticallResults(
@@ -401,8 +437,21 @@ export class Clear extends SimpleExchange implements IDex<ClearData> {
     };
   }
 
+  /**
+   * Gas cost for exchangeData calldata
+   * swap(address recipient, address vault, address srcToken, address destToken, uint256 srcAmount, uint256 destAmount, bool useIous)
+   */
   getCalldataGasCost(_poolPrices: PoolPrices<ClearData>): number | number[] {
-    return CALLDATA_GAS_COST.DEX_NO_PAYLOAD;
+    return (
+      CALLDATA_GAS_COST.DEX_OVERHEAD +
+      CALLDATA_GAS_COST.ADDRESS + // recipient
+      CALLDATA_GAS_COST.ADDRESS + // vault
+      CALLDATA_GAS_COST.ADDRESS + // srcToken
+      CALLDATA_GAS_COST.ADDRESS + // destToken
+      CALLDATA_GAS_COST.AMOUNT + // srcAmount
+      CALLDATA_GAS_COST.AMOUNT + // destAmount
+      CALLDATA_GAS_COST.BOOL // useIous
+    );
   }
 
   async getTopPoolsForToken(
@@ -419,22 +468,6 @@ export class Clear extends SimpleExchange implements IDex<ClearData> {
       return [];
     }
 
-    const tokenInfo = vaultsWithToken[0].tokens.find(
-      t => t.address.toLowerCase() === tokenAddress.toLowerCase(),
-    );
-
-    if (!tokenInfo) {
-      return [];
-    }
-
-    const decimals = parseInt(tokenInfo.decimals, 10);
-    const amount = BigInt(10) ** BigInt(decimals);
-
-    const tokenUsdPrice = await this.dexHelper.getTokenUSDPrice(
-      { address: tokenAddress, decimals },
-      amount,
-    );
-
     const poolLiquidities: PoolLiquidity[] = vaultsWithToken
       .map(vault => {
         const connectorTokens = vault.tokens
@@ -448,11 +481,17 @@ export class Clear extends SimpleExchange implements IDex<ClearData> {
           return null;
         }
 
+        // Use totalAssets as TVL - stablecoins are ~$1 each
+        // totalAssets is in vault decimals (typically 18 for stablecoin vaults)
+        const liquidityUSD = vault.totalAssets
+          ? Number(vault.totalAssets) / 1e18
+          : 0;
+
         return {
           exchange: this.dexKey,
           address: vault.address,
           connectorTokens,
-          liquidityUSD: tokenUsdPrice,
+          liquidityUSD,
         };
       })
       .filter((p): p is PoolLiquidity => p !== null);

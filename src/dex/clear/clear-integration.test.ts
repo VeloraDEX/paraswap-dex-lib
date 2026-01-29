@@ -40,9 +40,7 @@ describe('Clear Integration', function () {
   });
 
   afterAll(() => {
-    if (clear.releaseResources) {
-      clear.releaseResources();
-    }
+    // Cleanup handled automatically by StatefulEventSubscriber
   });
 
   describe('Pool Discovery', () => {
