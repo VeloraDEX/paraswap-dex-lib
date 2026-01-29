@@ -578,6 +578,10 @@ export const Tokens: {
       decimals: 18,
       symbol: 'USD0++',
     },
+    ynETH: {
+      address: '0x14dc3d915107dca9ed39e29e14fbdfe4358a1346',
+      decimals: 18,
+    },
     wUSDL: {
       address: '0x7751e2f4b8ae93ef6b79d86419d42fe3295a4559',
       decimals: 18,
