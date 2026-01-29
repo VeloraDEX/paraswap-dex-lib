@@ -22,6 +22,7 @@ export interface ClearVault {
   id: string;
   address: string;
   tokens: ClearVaultToken[];
+  totalAssets?: bigint;
 }
 
 export interface PreviewSwapCallInfo {

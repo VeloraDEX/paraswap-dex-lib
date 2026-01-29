@@ -47,18 +47,77 @@ export class ClearFactory extends StatefulEventSubscriber<ClearVault[]> {
   }
 
   /**
-   * Handle NewClearVault event - regenerate state when a new vault is created
+   * Handle NewClearVault event - add the new vault to existing state
    */
   async handleNewClearVault(
-    _event: any,
-    _state: DeepReadonly<ClearVault[]>,
+    event: any,
+    state: DeepReadonly<ClearVault[]>,
     log: Readonly<Log>,
   ): Promise<DeepReadonly<ClearVault[]> | null> {
-    // Force regenerate to include the new vault
-    const vaults = await this.generateState(log.blockNumber);
-    this.setState(vaults, log.blockNumber);
-    this.onVaultCreated(vaults);
-    return vaults;
+    const vaultAddress = event.args.vault.toLowerCase();
+
+    // Fetch tokens for the new vault
+    const tokenCall: MultiCallParams<string[]> = {
+      target: vaultAddress,
+      callData: this.vaultIface.encodeFunctionData('tokens'),
+      decodeFunction: (result: any) => {
+        const decoded = this.vaultIface.decodeFunctionResult('tokens', result);
+        return decoded[0] as string[];
+      },
+    };
+
+    const [tokenResult] = await this.dexHelper.multiWrapper.tryAggregate<
+      string[]
+    >(false, [tokenCall], log.blockNumber);
+
+    if (!tokenResult.success || !tokenResult.returnData) {
+      this.logger.error(
+        `${this.parentName}: Failed to fetch tokens for new vault ${vaultAddress}`,
+      );
+      return null;
+    }
+
+    const tokenAddresses = tokenResult.returnData.map(t => t.toLowerCase());
+
+    // Fetch decimals for each token
+    const decimalCalls: MultiCallParams<number>[] = tokenAddresses.map(
+      token => ({
+        target: token,
+        callData: '0x313ce567', // decimals()
+        decodeFunction: uint256DecodeToNumber,
+      }),
+    );
+
+    const decimalResults =
+      await this.dexHelper.multiWrapper.tryAggregate<number>(
+        false,
+        decimalCalls,
+        log.blockNumber,
+      );
+
+    // Build the new vault
+    const newVault: ClearVault = {
+      id: vaultAddress,
+      address: vaultAddress,
+      tokens: tokenAddresses.map((addr, i) => {
+        const result = decimalResults[i];
+        const decimals =
+          result.success && result.returnData !== undefined
+            ? result.returnData
+            : 18;
+        return {
+          id: addr,
+          address: addr,
+          symbol: '',
+          decimals: String(decimals),
+        };
+      }),
+    };
+
+    // Add new vault to existing state
+    const updatedVaults = [...state, newVault];
+    this.onVaultCreated(updatedVaults);
+    return updatedVaults;
   }
 
   /**
