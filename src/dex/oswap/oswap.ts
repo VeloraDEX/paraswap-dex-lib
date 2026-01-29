@@ -30,8 +30,11 @@ import {
 import { OSwapConfig, Adapters, OSWAP_GAS_COST } from './config';
 import { OSwapEventPool } from './oswap-pool';
 import OSwapABI from '../../abi/oswap/oswap.abi.json';
+import ERC4626ABI from '../../abi/ERC4626.json';
 import { extractReturnAmountPosition } from '../../executor/utils';
 import { applyTransferFee } from '../../lib/token-transfer-fee';
+import { ERC4626Functions } from '../erc4626/types';
+import { uint256ToBigInt } from '../../lib/decoders';
 
 export class OSwap extends SimpleExchange implements IDex<OSwapData> {
   readonly eventPools: { [id: string]: OSwapEventPool } = {};
@@ -49,6 +52,7 @@ export class OSwap extends SimpleExchange implements IDex<OSwapData> {
   logger: Logger;
 
   readonly iOSwap: Interface;
+  readonly iERC4626: Interface;
 
   readonly pools: OSwapPool[];
 
@@ -61,11 +65,15 @@ export class OSwap extends SimpleExchange implements IDex<OSwapData> {
     super(dexHelper, dexKey);
     this.logger = dexHelper.getLogger(dexKey);
     this.iOSwap = new Interface(OSwapABI);
+    this.iERC4626 = new Interface(ERC4626ABI);
 
     this.pools = OSwapConfig[dexKey][network].pools;
 
     // Create an OSwapEventPool per pool, to track each pool's state by subscribing to on-chain events.
     for (const pool of this.pools) {
+      if (pool.erc4626Only) {
+        continue;
+      }
       this.eventPools[pool.id] = new OSwapEventPool(
         dexKey,
         pool,
@@ -295,6 +303,55 @@ export class OSwap extends SimpleExchange implements IDex<OSwapData> {
       // Make sure the pool meets the optional limitPools filter.
       if (limitPools && !limitPools.includes(pool.id)) return null;
 
+      if (pool.erc4626Only) {
+        const totals = await this.getErc4626Totals(pool, blockNumber);
+        if (!totals) return null;
+
+        const unitAmount = getBigIntPow(18);
+        const unitPrice = this.calcErc4626Price(
+          pool,
+          totals.totalAssets,
+          totals.totalShares,
+          srcToken,
+          unitAmount,
+          side,
+        );
+        const prices = amounts.map(amount =>
+          this.calcErc4626Price(
+            pool,
+            totals.totalAssets,
+            totals.totalShares,
+            srcToken,
+            amount,
+            side,
+          ),
+        );
+
+        const [unitPriceWithFee, ...pricesWithFee] = applyTransferFee(
+          [unitPrice, ...prices],
+          side,
+          side === SwapSide.SELL ? transferFees.srcFee : transferFees.destFee,
+          side === SwapSide.SELL
+            ? SRC_TOKEN_PARASWAP_TRANSFERS
+            : DEST_TOKEN_PARASWAP_TRANSFERS,
+        );
+
+        return [
+          {
+            prices: pricesWithFee,
+            unit: unitPriceWithFee,
+            data: {
+              pool: pool.address,
+              path: [srcToken.address, destToken.address],
+            },
+            exchange: this.dexKey,
+            poolIdentifiers: [pool.id],
+            gasCost: OSWAP_GAS_COST,
+            poolAddresses: [pool.address],
+          },
+        ];
+      }
+
       const eventPool = this.eventPools[pool.id];
 
       if (!eventPool) {
@@ -410,6 +467,48 @@ export class OSwap extends SimpleExchange implements IDex<OSwapData> {
     let args: any;
     let returnAmountPos: number | undefined = undefined;
 
+    const pool = this.pools.find(
+      item => item.address.toLowerCase() === data.pool.toLowerCase(),
+    );
+    if (pool?.erc4626) {
+      const assetToken = pool.erc4626.assetToken.toLowerCase();
+      const vaultToken = pool.erc4626.vaultToken.toLowerCase();
+      const srcAddress = srcToken.toLowerCase();
+      const destAddress = destToken.toLowerCase();
+      const isWrap = srcAddress === assetToken && destAddress === vaultToken;
+      const isUnwrap = srcAddress === vaultToken && destAddress === assetToken;
+
+      if (isWrap || isUnwrap) {
+        if (side === SwapSide.SELL) {
+          method = isWrap
+            ? ERC4626Functions.deposit
+            : ERC4626Functions.redeem;
+          returnAmountPos = extractReturnAmountPosition(
+            this.iERC4626,
+            method,
+          );
+          args = isWrap
+            ? [srcAmount, recipient]
+            : [srcAmount, recipient, executorAddress];
+        } else {
+          method = isWrap ? ERC4626Functions.mint : ERC4626Functions.withdraw;
+          args = isWrap
+            ? [destAmount, recipient]
+            : [destAmount, recipient, executorAddress];
+        }
+
+        const swapData = this.iERC4626.encodeFunctionData(method, args);
+
+        return {
+          needWrapNative: this.needWrapNative,
+          dexFuncHasRecipient: true,
+          exchangeData: swapData,
+          targetExchange: pool.erc4626.vaultToken,
+          returnAmountPos,
+        };
+      }
+    }
+
     const deadline = getLocalDeadlineAsFriendlyPlaceholder();
     if (side === SwapSide.SELL) {
       method = 'swapExactTokensForTokens';
@@ -457,6 +556,38 @@ export class OSwap extends SimpleExchange implements IDex<OSwapData> {
 
     const results = await Promise.all<PoolLiquidity>(
       pools.map(async pool => {
+        if (pool.erc4626Only && pool.erc4626) {
+          const blockNumber =
+            await this.dexHelper.web3Provider.eth.getBlockNumber();
+          const totals = await this.getErc4626Totals(pool, blockNumber);
+          if (!totals) {
+            return {
+              exchange: this.dexKey,
+              address: pool.address,
+              connectorTokens: [],
+              liquidityUSD: 0,
+            };
+          }
+
+          const assetToken = pool.erc4626.assetToken.toLowerCase();
+          const pairedToken =
+            assetToken === tokenAddress.toLowerCase()
+              ? { address: pool.erc4626.vaultToken, decimals: 18 }
+              : { address: pool.erc4626.assetToken, decimals: 18 };
+
+          const liquidityUSD = await this.dexHelper.getTokenUSDPrice(
+            { address: pool.erc4626.assetToken, decimals: 18 },
+            totals.totalAssets,
+          );
+
+          return {
+            exchange: this.dexKey,
+            address: pool.address,
+            connectorTokens: [pairedToken],
+            liquidityUSD,
+          };
+        }
+
         // Get the pool's balance and its USD value.
         const eventPool = this.eventPools[pool.id];
         const blockNumber =
@@ -490,6 +621,73 @@ export class OSwap extends SimpleExchange implements IDex<OSwapData> {
       .filter(r => r)
       .sort((a, b) => a.liquidityUSD - b.liquidityUSD)
       .slice(0, limit);
+  }
+
+  private async getErc4626Totals(
+    pool: OSwapPool,
+    blockNumber: number,
+  ): Promise<{ totalAssets: bigint; totalShares: bigint } | null> {
+    if (!pool.erc4626) {
+      return null;
+    }
+
+    const callData = [
+      {
+        target: pool.erc4626.vaultToken,
+        callData: this.iERC4626.encodeFunctionData('totalAssets', []),
+        decodeFunction: uint256ToBigInt,
+      },
+      {
+        target: pool.erc4626.vaultToken,
+        callData: this.iERC4626.encodeFunctionData('totalSupply', []),
+        decodeFunction: uint256ToBigInt,
+      },
+    ];
+
+    const [totalAssets, totalShares] =
+      await this.dexHelper.multiWrapper.aggregate<bigint>(
+        callData,
+        blockNumber,
+        this.dexHelper.multiWrapper.defaultBatchSize,
+      );
+
+    return {
+      totalAssets,
+      totalShares,
+    };
+  }
+
+  private calcErc4626Price(
+    pool: OSwapPool,
+    totalAssets: bigint,
+    totalShares: bigint,
+    srcToken: Token,
+    amount: bigint,
+    side: SwapSide,
+  ): bigint {
+    if (!pool.erc4626 || totalAssets === 0n || totalShares === 0n) {
+      return 0n;
+    }
+
+    const assetToken = pool.erc4626.assetToken.toLowerCase();
+    const vaultToken = pool.erc4626.vaultToken.toLowerCase();
+    const srcAddress = srcToken.address.toLowerCase();
+
+    const isSrcAsset = srcAddress === assetToken;
+    const isSrcVault = srcAddress === vaultToken;
+    if (!isSrcAsset && !isSrcVault) {
+      return 0n;
+    }
+
+    if (side === SwapSide.SELL) {
+      return isSrcAsset
+        ? (amount * totalShares) / totalAssets
+        : (amount * totalAssets) / totalShares;
+    }
+
+    return isSrcAsset
+      ? (amount * totalAssets) / totalShares
+      : (amount * totalShares) / totalAssets;
   }
 
   // This is optional function in case if your implementation has acquired any resources

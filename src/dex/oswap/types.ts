@@ -33,6 +33,7 @@ export type OSwapPool = {
   token0: Address;
   token1: Address;
   erc4626?: OSwapERC4626Config;
+  erc4626Only?: boolean;
 };
 
 export type DexParams = {
