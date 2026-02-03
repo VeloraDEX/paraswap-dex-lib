@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 import dotenv from 'dotenv';
 dotenv.config();
 
@@ -17,30 +18,16 @@ import { Tokens } from '../../../tests/constants-e2e';
 import { MaverickV1Config } from './config';
 import { ExchangePrices } from '../../types';
 import { MaverickV1Data } from './types';
-
-/*
-  README
-  ======
-
-  This test script adds tests for MaverickV1 general integration
-  with the DEX interface. The test cases below are example tests.
-  It is recommended to add tests which cover MaverickV1 specific
-  logic.
-
-  You can run this individual test script by running:
-  `npx jest src/dex/<dex-name>/<dex-name>-integration.test.ts`
-
-  (This comment should be removed from the final implementation)
-*/
+import { assert } from 'ts-essentials';
 
 const network = Network.MAINNET;
-const TokenASymbol = 'USDC';
+const TokenASymbol = 'ETH';
 const TokenA = Tokens[network][TokenASymbol];
 
 const TokenBSymbol = 'USDT';
 const TokenB = Tokens[network][TokenBSymbol];
 
-const amounts = [0n, BI_POWS[6], 2000000n];
+const amounts = [0n, BI_POWS[18], 2n * BI_POWS[18], 3n * BI_POWS[18]];
 
 const dexHelper = new DummyDexHelper(network);
 const dexKey = 'MaverickV1';
@@ -166,5 +153,127 @@ describe('MaverickV1', function () {
       poolPrices!,
       TokenA.address,
     );
+  });
+
+  it('search for broken event', async function () {
+    const startBlockNumber = 18233872;
+    // const startBlockNumber = 18235059;
+    // const blockNumberCheck = 18235060;
+    const blocksToLookForward = 10000;
+    const poolAddress = '0x352B186090068Eb35d532428676cE510E17AB581';
+    const srcToken = {
+      address: `0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee`,
+      decimals: 18,
+    };
+    const destToken = {
+      address: '0xdac17f958d2ee523a2206206994597c13d831ec7',
+      decimals: 6,
+    };
+    const inputParams = {
+      srcToken,
+      destToken,
+      amounts: [0n, BI_POWS[18]],
+      side: SwapSide.SELL,
+      blockNumber: startBlockNumber,
+      limitPools: ['MaverickV1_0x352b186090068eb35d532428676ce510e17ab581'],
+    };
+
+    maverickV1 = new MaverickV1(network, dexKey, dexHelper);
+    await maverickV1.initializePricing(startBlockNumber);
+    const pool = maverickV1.pools[poolAddress.toLowerCase()];
+    assert(pool, 'pool not found');
+    assert(
+      pool.addressesSubscribed.length === 1,
+      'Pool must subscribe to only one pool',
+    );
+
+    // const correctState = await pool.generateState(blockNumberCheck);
+
+    const logsToDispatch = await dexHelper.provider.getLogs({
+      fromBlock: startBlockNumber,
+      toBlock: startBlockNumber + blocksToLookForward,
+      address: pool.addressesSubscribed[0],
+    });
+
+    console.log(`Subscribed addresses: ${pool.addressesSubscribed.join(', ')}`);
+    console.log(`Received ${logsToDispatch.length} logs to dispatch`);
+
+    let output = (
+      await maverickV1.getPricesVolume(
+        inputParams.srcToken,
+        inputParams.destToken,
+        inputParams.amounts,
+        inputParams.side,
+        inputParams.blockNumber,
+        inputParams.limitPools,
+      )
+    )?.[0].prices[1];
+
+    console.log(`Init output: ${output}`);
+    let currentBlock = await dexHelper.web3Provider.eth.getBlock(
+      startBlockNumber,
+    );
+
+    for (const [i, log] of logsToDispatch.entries()) {
+      if (log.blockNumber > currentBlock.number) {
+        inputParams.blockNumber = log.blockNumber;
+        currentBlock = await dexHelper.web3Provider.eth.getBlock(
+          log.blockNumber,
+        );
+      }
+
+      pool.update([log], {
+        [inputParams.blockNumber]: currentBlock,
+      });
+
+      let output = (
+        await maverickV1.getPricesVolume(
+          inputParams.srcToken,
+          inputParams.destToken,
+          inputParams.amounts,
+          inputParams.side,
+          inputParams.blockNumber,
+          inputParams.limitPools,
+        )
+      )?.[0].prices[1];
+
+      console.log(
+        `Output after ${log.blockNumber}/${inputParams.blockNumber} and topic0 ${log.topics[0]}, txHash=${log.transactionHash}, txInd=${log.transactionIndex}: ${output}`,
+      );
+
+      // if (i === 2) {
+      //   const incorrectState = pool.getState(blockNumberCheck);
+      //   expect(correctState).toEqual(incorrectState);
+      // }
+
+      // console.log(
+      //   getReaderCalldata(
+      //     poolAddress,
+      //     new Interface(PoolInspectorABI),
+      //     inputParams.amounts,
+      //     'calculateSwap',
+      //     true,
+      //     false,
+      //   ),
+      // );
+      // expect(output).toBeLessThan(1800000000);
+    }
+
+    // const incorrectState = pool.getState(blockNumberCheck);
+    //
+    // expect(correctState).toEqual(incorrectState);
+    //
+    // output = (
+    //   await maverickV1.getPricesVolume(
+    //     inputParams.srcToken,
+    //     inputParams.destToken,
+    //     inputParams.amounts,
+    //     inputParams.side,
+    //     blockNumberCheck,
+    //     inputParams.limitPools,
+    //   )
+    // )?.[0].prices[1];
+    //
+    // console.log(`Output after ${blockNumberCheck}: ${output}`);
   });
 });
