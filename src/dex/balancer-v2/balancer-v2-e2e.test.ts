@@ -1180,6 +1180,80 @@ describe('BalancerV2 E2E', () => {
     });
   });
 
+  describe('Optimism', () => {
+    const dexKey = 'BeetsFi';
+    const network = Network.OPTIMISM;
+    const tokens = Tokens[network];
+    const holders = Holders[network];
+    const provider = new StaticJsonRpcProvider(
+      generateConfig(network).privateHttpProvider,
+      network,
+    );
+
+    [
+      ContractMethod.swapExactAmountInOnBalancerV2,
+      ContractMethod.swapExactAmountIn,
+    ].forEach(method => {
+      describe(method, () => {
+        it('PSP -> OP', async () => {
+          await testE2E(
+            tokens['PSP'],
+            tokens['OP'],
+            holders['PSP'],
+            '1000000000000000000',
+            SwapSide.SELL,
+            dexKey,
+            method,
+            network,
+            provider,
+          );
+        });
+
+        it('OP -> PSP', async () => {
+          await testE2E(
+            tokens['OP'],
+            tokens['PSP'],
+            holders['OP'],
+            '1000000000000000000',
+            SwapSide.SELL,
+            dexKey,
+            method,
+            network,
+            provider,
+          );
+        });
+
+        it('PSP -> WETH', async () => {
+          await testE2E(
+            tokens['PSP'],
+            tokens['WETH'],
+            holders['PSP'],
+            '1000000000000000000',
+            SwapSide.SELL,
+            dexKey,
+            method,
+            network,
+            provider,
+          );
+        });
+
+        it('WETH -> PSP', async () => {
+          await testE2E(
+            tokens['WETH'],
+            tokens['PSP'],
+            holders['WETH'],
+            '100000000000000000',
+            SwapSide.SELL,
+            dexKey,
+            method,
+            network,
+            provider,
+          );
+        });
+      });
+    });
+  });
+
   describe('Polygon', () => {
     const dexKey = 'BalancerV2';
     const network = Network.POLYGON;
