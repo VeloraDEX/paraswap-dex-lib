@@ -97,13 +97,13 @@ const FallbackPoolsConfig: Record<string, Record<number, FallbackPool[]>> = {
         poolTypeVersion: 1,
         tokens: [
           {
-            address: '0xcafe001067cdef266afb7eb5a286dcfd277f3de5',
-            decimals: 18,
-          }, // PSP
-          {
             address: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2',
             decimals: 18,
           }, // WETH
+          {
+            address: '0xcafe001067cdef266afb7eb5a286dcfd277f3de5',
+            decimals: 18,
+          }, // PSP
         ],
         mainIndex: 0,
         wrappedIndex: 0,
@@ -157,13 +157,13 @@ const FallbackPoolsConfig: Record<string, Record<number, FallbackPool[]>> = {
         poolTypeVersion: 4,
         tokens: [
           {
-            address: '0xd3594e879b358f430e20f82bea61e83562d49d48',
-            decimals: 18,
-          }, // PSP
-          {
             address: '0x4200000000000000000000000000000000000042',
             decimals: 18,
           }, // OP
+          {
+            address: '0xd3594e879b358f430e20f82bea61e83562d49d48',
+            decimals: 18,
+          }, // PSP
         ],
         mainIndex: 0,
         wrappedIndex: 0,
