@@ -38,7 +38,7 @@ export type HookStateMap = {
 export type HookConfig = DirectionalFeeConfig | StableSurgeConfig | AkronConfig;
 
 export type HooksConfigMap = {
-  [hookAddress: string]: HookConfig;
+  [hookAddress: string]: HookConfig[];
 };
 
 /**
@@ -133,24 +133,42 @@ export class BalancerEventHook extends StatefulEventSubscriber<HookStateMap> {
 
     await Promise.all(
       Object.keys(this.hooksConfigMap).map(async hookAddress => {
-        const hookConfig = this.hooksConfigMap[hookAddress];
-        if (hookConfig.type === DirectionalFee.type) {
-          hookState[hookAddress] = await getDirectionalFeeHookState();
-        } else if (hookConfig.type === StableSurge.type) {
-          hookState[hookAddress] = await getStableSurgeHookState(
-            this.interfaces[1],
-            hookAddress,
-            hookConfig.factoryAddress,
-            hookConfig.factoryDeploymentBlock,
-            this.dexHelper,
-            blockNumber,
-          );
-        } else if (hookConfig.type === Akron.type) {
-          // this hook does not need to be updated by event subscriber. Values filled from pool at swap time
-          hookState[hookAddress] = {
-            weights: [],
-            minimumSwapFeePercentage: 0n,
-          };
+        const hookConfigs = this.hooksConfigMap[hookAddress];
+        // Process all configs for this hook address
+        for (const hookConfig of hookConfigs) {
+          if (hookConfig.type === DirectionalFee.type) {
+            // DirectionalFee hooks don't need factory, so just set once
+            if (!hookState[hookAddress]) {
+              hookState[hookAddress] = await getDirectionalFeeHookState();
+            }
+          } else if (hookConfig.type === StableSurge.type) {
+            // For StableSurge, merge states from all factories sharing the same hook address
+            const factoryState = await getStableSurgeHookState(
+              this.interfaces[1],
+              hookAddress,
+              hookConfig.factoryAddress,
+              hookConfig.factoryDeploymentBlock,
+              this.dexHelper,
+              blockNumber,
+            );
+            // Merge with existing state for this hook address
+            if (hookState[hookAddress]) {
+              hookState[hookAddress] = {
+                ...(hookState[hookAddress] as StableSurgeHookState),
+                ...factoryState,
+              };
+            } else {
+              hookState[hookAddress] = factoryState;
+            }
+          } else if (hookConfig.type === Akron.type) {
+            // this hook does not need to be updated by event subscriber. Values filled from pool at swap time
+            if (!hookState[hookAddress]) {
+              hookState[hookAddress] = {
+                weights: [],
+                minimumSwapFeePercentage: 0n,
+              };
+            }
+          }
         }
       }),
     );
@@ -166,17 +184,27 @@ export class BalancerEventHook extends StatefulEventSubscriber<HookStateMap> {
 
     await Promise.all(
       Object.keys(this.hooksConfigMap).map(async hookAddress => {
-        const hookConfig = this.hooksConfigMap[hookAddress];
-        // StableSurge can have new registered pools with associated hook state
-        if (hookConfig.type === StableSurge.type) {
-          currentState[hookAddress] = await getStableSurgeHookState(
-            this.interfaces[1],
-            hookAddress,
-            hookConfig.factoryAddress,
-            hookConfig.factoryDeploymentBlock,
-            this.dexHelper,
-            blockNumber,
-          );
+        const hookConfigs = this.hooksConfigMap[hookAddress];
+        // Process all StableSurge configs for this hook address and merge their states
+        const stableSurgeConfigs = hookConfigs.filter(
+          config => config.type === StableSurge.type,
+        );
+        if (stableSurgeConfigs.length > 0) {
+          // Merge states from all factories sharing the same hook address
+          const mergedState: StableSurgeHookState = {};
+          for (const hookConfig of stableSurgeConfigs) {
+            const factoryState = await getStableSurgeHookState(
+              this.interfaces[1],
+              hookAddress,
+              hookConfig.factoryAddress,
+              hookConfig.factoryDeploymentBlock,
+              this.dexHelper,
+              blockNumber,
+            );
+            // Merge factory state into merged state
+            Object.assign(mergedState, factoryState);
+          }
+          currentState[hookAddress] = mergedState;
         }
       }),
     );
