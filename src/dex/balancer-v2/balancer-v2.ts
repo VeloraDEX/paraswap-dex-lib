@@ -47,6 +47,7 @@ import {
   BalancerSwap,
   BalancerV2Data,
   BalancerV2DirectParam,
+  FallbackPool,
   OptimizedBalancerV2Data,
   PoolState,
   PoolStateCache,
@@ -84,6 +85,128 @@ import BalancerVaultABI from '../../abi/balancer-v2/vault.json';
 import { BigNumber } from 'ethers';
 import { SpecialDex } from '../../executor/types';
 import { extractReturnAmountPosition } from '../../executor/utils';
+
+// Fallback pools configuration for when subgraph is unavailable
+const FallbackPoolsConfig: Record<string, Record<number, FallbackPool[]>> = {
+  BalancerV2: {
+    [Network.MAINNET]: [
+      {
+        id: '0xcb0e14e96f2cefa8550ad8e4aea344f211e5061d00020000000000000000011a',
+        address: '0xcb0e14e96f2cefa8550ad8e4aea344f211e5061d',
+        poolType: BalancerPoolTypes.Weighted,
+        poolTypeVersion: 1,
+        tokens: [
+          {
+            address: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2',
+            decimals: 18,
+          }, // WETH
+          {
+            address: '0xcafe001067cdef266afb7eb5a286dcfd277f3de5',
+            decimals: 18,
+          }, // PSP
+        ],
+        mainIndex: 0,
+        wrappedIndex: 0,
+      },
+      {
+        id: '0x4446d101e91d042b5d08b62fde126e307f1acd570002000000000000000006f9',
+        address: '0x4446d101e91d042b5d08b62fde126e307f1acd57',
+        poolType: BalancerPoolTypes.Weighted,
+        poolTypeVersion: 4,
+        tokens: [
+          {
+            address: '0x4e107a0000db66f0e9fd2039288bf811dd1f9c74',
+            decimals: 18,
+          }, // VLR
+          {
+            address: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2',
+            decimals: 18,
+          }, // WETH
+        ],
+        mainIndex: 0,
+        wrappedIndex: 0,
+      },
+    ],
+    [Network.BASE]: [
+      {
+        id: '0x44d46a43ceb5a1e04ef12b5731de5f9917f0ec8a000200000000000000000208',
+        address: '0x44d46a43ceb5a1e04ef12b5731de5f9917f0ec8a',
+        poolType: BalancerPoolTypes.Weighted,
+        poolTypeVersion: 4,
+        tokens: [
+          {
+            address: '0x4200000000000000000000000000000000000006',
+            decimals: 18,
+          }, // WETH
+          {
+            address: '0x4e107a0000db66f0e9fd2039288bf811dd1f9c74',
+            decimals: 18,
+          }, // VLR
+        ],
+        mainIndex: 0,
+        wrappedIndex: 0,
+      },
+    ],
+  },
+  BeetsFi: {
+    [Network.OPTIMISM]: [
+      {
+        id: '0x0244b0025264dc5f5c113d472d579c9c994a59ce0002000000000000000000c9',
+        address: '0x0244b0025264dc5f5c113d472d579c9c994a59ce',
+        poolType: BalancerPoolTypes.Weighted,
+        poolTypeVersion: 4,
+        tokens: [
+          {
+            address: '0x4200000000000000000000000000000000000042',
+            decimals: 18,
+          }, // OP
+          {
+            address: '0xd3594e879b358f430e20f82bea61e83562d49d48',
+            decimals: 18,
+          }, // PSP
+        ],
+        mainIndex: 0,
+        wrappedIndex: 0,
+      },
+      {
+        id: '0x11f0b5cca01b0f0a9fe6265ad6e8ee3419c684400002000000000000000000d4',
+        address: '0x11f0b5cca01b0f0a9fe6265ad6e8ee3419c68440',
+        poolType: BalancerPoolTypes.Weighted,
+        poolTypeVersion: 4,
+        tokens: [
+          {
+            address: '0x4200000000000000000000000000000000000006',
+            decimals: 18,
+          }, // WETH
+          {
+            address: '0xd3594e879b358f430e20f82bea61e83562d49d48',
+            decimals: 18,
+          }, // PSP
+        ],
+        mainIndex: 0,
+        wrappedIndex: 0,
+      },
+      {
+        id: '0x9620b74077e2a9f118cd37ef60001aeb327ec1a7000200000000000000000171',
+        address: '0x9620b74077e2a9f118cd37ef60001aeb327ec1a7',
+        poolType: BalancerPoolTypes.Weighted,
+        poolTypeVersion: 4,
+        tokens: [
+          {
+            address: '0x4200000000000000000000000000000000000006',
+            decimals: 18,
+          }, // WETH
+          {
+            address: '0x4e107a0000db66f0e9fd2039288bf811dd1f9c74',
+            decimals: 18,
+          }, // VLR
+        ],
+        mainIndex: 0,
+        wrappedIndex: 0,
+      },
+    ],
+  },
+};
 
 // If you disable some pool, don't forget to clear the cache, otherwise changes won't be applied immediately
 const enabledPoolTypes = [
@@ -283,6 +406,7 @@ export class BalancerV2EventPool extends StatefulEventSubscriber<PoolStateMap> {
     protected subgraphURL: string,
     protected dexHelper: IDexHelper,
     logger: Logger,
+    protected fallbackPools: FallbackPool[] = [],
   ) {
     super(parentName, vaultAddress, dexHelper, logger);
     this.vaultInterface = new Interface(VaultABI);
@@ -393,43 +517,89 @@ export class BalancerV2EventPool extends StatefulEventSubscriber<PoolStateMap> {
       `Fetching ${this.parentName}_${this.network} Pools from subgraph`,
     );
 
-    const variables = {
-      count: MAX_POOL_CNT,
-    };
-    const { data } = await this.dexHelper.httpRequest.querySubgraph(
-      this.subgraphURL,
-      { query: fetchAllPools, variables },
-      { timeout: SUBGRAPH_TIMEOUT },
-    );
+    try {
+      const variables = {
+        count: MAX_POOL_CNT,
+      };
+      const { data } = await this.dexHelper.httpRequest.querySubgraph(
+        this.subgraphURL,
+        { query: fetchAllPools, variables },
+        { timeout: SUBGRAPH_TIMEOUT },
+      );
 
-    if (!(data && data.pools))
-      throw new Error('Unable to fetch pools from the subgraph');
+      if (!(data && data.pools))
+        throw new Error('Unable to fetch pools from the subgraph');
 
-    const poolsMap = keyBy(data.pools, 'address');
-    const allPools: SubgraphPoolBase[] = data.pools.map(
-      (pool: Omit<SubgraphPoolBase, 'mainTokens'>) => ({
-        ...pool,
-        mainTokens: poolGetMainTokens(pool, poolsMap),
-        tokensMap: pool.tokens.reduce(
-          (acc, token) => ({ ...acc, [token.address.toLowerCase()]: token }),
-          {},
-        ),
-      }),
-    );
+      const poolsMap = keyBy(data.pools, 'address');
+      const allPools: SubgraphPoolBase[] = data.pools.map(
+        (pool: Omit<SubgraphPoolBase, 'mainTokens'>) => ({
+          ...pool,
+          mainTokens: poolGetMainTokens(pool, poolsMap),
+          tokensMap: pool.tokens.reduce(
+            (acc, token) => ({ ...acc, [token.address.toLowerCase()]: token }),
+            {},
+          ),
+        }),
+      );
 
-    this.dexHelper.cache.setex(
-      this.parentName,
-      this.network,
-      cacheKey,
-      POOL_CACHE_TTL,
-      JSON.stringify(allPools),
-    );
+      this.dexHelper.cache.setex(
+        this.parentName,
+        this.network,
+        cacheKey,
+        POOL_CACHE_TTL,
+        JSON.stringify(allPools),
+      );
 
-    this.logger.info(
-      `Got ${allPools.length} ${this.parentName}_${this.network} pools from subgraph`,
-    );
+      this.logger.info(
+        `Got ${allPools.length} ${this.parentName}_${this.network} pools from subgraph`,
+      );
 
-    return allPools;
+      return allPools;
+    } catch (e) {
+      if (this.fallbackPools.length > 0) {
+        this.logger.warn(
+          `Subgraph unavailable for ${this.parentName}_${this.network}, using ${this.fallbackPools.length} fallback pools`,
+        );
+        return this.buildPoolsFromFallback();
+      }
+
+      throw e;
+    }
+  }
+
+  private buildPoolsFromFallback(): SubgraphPoolBase[] {
+    const basePools = this.fallbackPools.map(pool => ({
+      ...pool,
+      tokensMap: pool.tokens.reduce(
+        (acc, token) => ({ ...acc, [token.address.toLowerCase()]: token }),
+        {} as { [tokenAddress: string]: { address: string; decimals: number } },
+      ),
+      root3Alpha: '',
+      alpha: '',
+      beta: '',
+      c: '',
+      s: '',
+      lambda: '',
+      tauAlphaX: '',
+      tauAlphaY: '',
+      tauBetaX: '',
+      tauBetaY: '',
+      u: '',
+      v: '',
+      w: '',
+      z: '',
+      dSq: '',
+    }));
+
+    const poolsMap = keyBy(
+      basePools,
+      'address',
+    ) as unknown as SubgraphPoolAddressDictionary;
+
+    return basePools.map(pool => ({
+      ...pool,
+      mainTokens: poolGetMainTokens(pool, poolsMap),
+    }));
   }
 
   async generateState(blockNumber: number): Promise<Readonly<PoolStateMap>> {
@@ -653,6 +823,9 @@ export class BalancerV2
     public vaultAddress: Address = BalancerConfig[dexKey][network].vaultAddress,
     protected subgraphURL: string = BalancerConfig[dexKey][network].subgraphURL,
     protected adapters = Adapters[network],
+    protected fallbackPools: FallbackPool[] = FallbackPoolsConfig[dexKey]?.[
+      network
+    ] ?? [],
   ) {
     super(dexHelper, dexKey);
     // Initialise cache - this will hold pool state of non-event pools in memory to be reused if block hasn't expired
@@ -665,6 +838,7 @@ export class BalancerV2
       subgraphURL,
       dexHelper,
       this.logger,
+      this.fallbackPools,
     );
   }
 
@@ -692,34 +866,46 @@ export class BalancerV2
       timestampPast: timeNow - POOL_EVENT_REENABLE_DELAY,
       timestampFuture: timeNow + POOL_EVENT_DISABLED_TTL,
     };
-    const { data } = await this.dexHelper.httpRequest.querySubgraph(
-      this.subgraphURL,
-      { query: fetchWeightUpdating, variables },
-      { timeout: SUBGRAPH_TIMEOUT },
-    );
 
-    if (!(data && data.gradualWeightUpdates)) {
-      throw new Error(
-        `${this.dexKey}_${this.network} failed to fetch weight updates from subgraph`,
+    try {
+      const { data } = await this.dexHelper.httpRequest.querySubgraph(
+        this.subgraphURL,
+        { query: fetchWeightUpdating, variables },
+        { timeout: SUBGRAPH_TIMEOUT },
       );
-    }
 
-    this.eventDisabledPools = _.uniq(
-      data.gradualWeightUpdates.map(
-        (wu: { poolId: { address: Address } }) => wu.poolId.address,
-      ),
-    );
-    const poolAddressList = JSON.stringify(this.eventDisabledPools);
-    this.logger.info(
-      `Pools blocked from event based on ${this.dexKey}_${this.network}: ${poolAddressList}`,
-    );
-    this.dexHelper.cache.setex(
-      this.dexKey,
-      this.network,
-      cacheKey,
-      POOL_EVENT_DISABLED_TTL,
-      poolAddressList,
-    );
+      if (!(data && data.gradualWeightUpdates)) {
+        throw new Error(
+          `${this.dexKey}_${this.network} failed to fetch weight updates from subgraph`,
+        );
+      }
+
+      this.eventDisabledPools = _.uniq(
+        data.gradualWeightUpdates.map(
+          (wu: { poolId: { address: Address } }) => wu.poolId.address,
+        ),
+      );
+      const poolAddressList = JSON.stringify(this.eventDisabledPools);
+      this.logger.info(
+        `Pools blocked from event based on ${this.dexKey}_${this.network}: ${poolAddressList}`,
+      );
+      this.dexHelper.cache.setex(
+        this.dexKey,
+        this.network,
+        cacheKey,
+        POOL_EVENT_DISABLED_TTL,
+        poolAddressList,
+      );
+    } catch (e) {
+      if (this.fallbackPools.length > 0) {
+        this.logger.warn(
+          `Subgraph unavailable for ${this.dexKey}_${this.network} weight updates, using empty eventDisabledPools for fallback pools`,
+        );
+        this.eventDisabledPools = [];
+        return;
+      }
+      throw e;
+    }
   }
 
   async initializePricing(blockNumber: number) {

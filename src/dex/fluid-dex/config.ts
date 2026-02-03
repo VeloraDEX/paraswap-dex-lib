@@ -11,6 +11,13 @@ export const FluidDexConfig: DexConfigMap<DexParams> = {
         dexFactory: '0x91716C4EDA1Fb55e84Bf8b4c7085f84285c19085',
       },
     },
+    [Network.BSC]: {
+      commonAddresses: {
+        liquidityProxy: '0x52Aa899454998Be5b000Ad077a46Bbe360F4e497',
+        resolver: '0x05Bd8269A20C472b148246De20E6852091BF16Ff',
+        dexFactory: '0x91716C4EDA1Fb55e84Bf8b4c7085f84285c19085',
+      },
+    },
     [Network.ARBITRUM]: {
       commonAddresses: {
         liquidityProxy: '0x52Aa899454998Be5b000Ad077a46Bbe360F4e497',
