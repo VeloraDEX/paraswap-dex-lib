@@ -108,6 +108,44 @@ const FallbackPoolsConfig: Record<string, Record<number, FallbackPool[]>> = {
         mainIndex: 0,
         wrappedIndex: 0,
       },
+      {
+        id: '0x4446d101e91d042b5d08b62fde126e307f1acd570002000000000000000006f9',
+        address: '0x4446d101e91d042b5d08b62fde126e307f1acd57',
+        poolType: BalancerPoolTypes.Weighted,
+        poolTypeVersion: 4,
+        tokens: [
+          {
+            address: '0x4e107a0000db66f0e9fd2039288bf811dd1f9c74',
+            decimals: 18,
+          }, // VLR
+          {
+            address: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2',
+            decimals: 18,
+          }, // WETH
+        ],
+        mainIndex: 0,
+        wrappedIndex: 0,
+      },
+    ],
+    [Network.BASE]: [
+      {
+        id: '0x44d46a43ceb5a1e04ef12b5731de5f9917f0ec8a000200000000000000000208',
+        address: '0x44d46a43ceb5a1e04ef12b5731de5f9917f0ec8a',
+        poolType: BalancerPoolTypes.Weighted,
+        poolTypeVersion: 4,
+        tokens: [
+          {
+            address: '0x4200000000000000000000000000000000000006',
+            decimals: 18,
+          }, // WETH
+          {
+            address: '0x4e107a0000db66f0e9fd2039288bf811dd1f9c74',
+            decimals: 18,
+          }, // VLR
+        ],
+        mainIndex: 0,
+        wrappedIndex: 0,
+      },
     ],
   },
   BeetsFi: {
@@ -144,6 +182,24 @@ const FallbackPoolsConfig: Record<string, Record<number, FallbackPool[]>> = {
             address: '0xd3594e879b358f430e20f82bea61e83562d49d48',
             decimals: 18,
           }, // PSP
+        ],
+        mainIndex: 0,
+        wrappedIndex: 0,
+      },
+      {
+        id: '0x9620b74077e2a9f118cd37ef60001aeb327ec1a7000200000000000000000171',
+        address: '0x9620b74077e2a9f118cd37ef60001aeb327ec1a7',
+        poolType: BalancerPoolTypes.Weighted,
+        poolTypeVersion: 4,
+        tokens: [
+          {
+            address: '0x4200000000000000000000000000000000000006',
+            decimals: 18,
+          }, // WETH
+          {
+            address: '0x4e107a0000db66f0e9fd2039288bf811dd1f9c74',
+            decimals: 18,
+          }, // VLR
         ],
         mainIndex: 0,
         wrappedIndex: 0,
