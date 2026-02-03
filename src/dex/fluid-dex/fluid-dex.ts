@@ -990,10 +990,8 @@ export class FluidDex extends SimpleExchange implements IDex<FluidDexData> {
     centerPrice: bigint,
     syncTime: number,
   ): bigint {
-    const amountOutWithBuffer = (amountOut * 1000001n) / 1000000n;
-
     const amountOutAdjusted =
-      (amountOutWithBuffer * BigInt(10 ** 12)) / BigInt(10 ** outDecimals);
+      (amountOut * BigInt(10 ** 12)) / BigInt(10 ** outDecimals);
 
     const amountIn = this.swapOutAdjusted(
       swap0to1,
