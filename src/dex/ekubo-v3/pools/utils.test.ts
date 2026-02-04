@@ -73,4 +73,22 @@ describe(PoolKey, () => {
       );
     });
   });
+
+  describe('PoolConfig.fromCompressed', () => {
+    test('stableswap rounds negative center tick to 16', () => {
+      const config = new StableswapPoolTypeConfig(-17, 5);
+      const decoded = PoolConfig.fromCompressed(config.compressed());
+      expect(decoded.poolTypeConfig).toStrictEqual(
+        new StableswapPoolTypeConfig(-16, 5),
+      );
+    });
+
+    test('stableswap rounds positive center tick to 16', () => {
+      const config = new StableswapPoolTypeConfig(17, 5);
+      const decoded = PoolConfig.fromCompressed(config.compressed());
+      expect(decoded.poolTypeConfig).toStrictEqual(
+        new StableswapPoolTypeConfig(16, 5),
+      );
+    });
+  });
 });

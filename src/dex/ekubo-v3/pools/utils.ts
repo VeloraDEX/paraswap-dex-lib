@@ -123,7 +123,10 @@ export class StableswapPoolTypeConfig implements PoolTypeConfig {
 
   public compressed(): bigint {
     // Store the bit pattern of a signed in a truncated unsigned bigint
-    const centerTick = BigInt.asUintN(24, BigInt(this.centerTick));
+    const centerTick = BigInt.asUintN(
+      24,
+      BigInt(Math.trunc(this.centerTick / 16)),
+    );
     return (BigInt(this.amplificationFactor) << 24n) | centerTick;
   }
 
@@ -166,7 +169,7 @@ export class PoolConfig<C extends PoolTypeConfig> {
 
     if ((poolTypeConfigRaw & 0x80000000n) === 0n) {
       poolTypeConfig = new StableswapPoolTypeConfig(
-        Number(BigInt.asIntN(24, poolTypeConfigRaw)),
+        Number(BigInt.asIntN(24, poolTypeConfigRaw)) * 16,
         Number(BigInt.asUintN(7, poolTypeConfigRaw >> 24n)),
       );
     } else {

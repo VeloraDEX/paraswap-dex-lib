@@ -206,6 +206,27 @@ describe(StableswapPool.prototype.quoteStableswap, () => {
     );
   });
 
+  test('exact out above upper boundary does not hang', () => {
+    const amplification = 26;
+    const [_, upper] = activeRange(0, amplification);
+    const outsideTick = Math.min(upper + 1_000, MAX_TICK);
+    const liquidity = mintedLiquidity(0, amplification, outsideTick);
+    const poolTypeConfig = new StableswapPoolTypeConfig(0, amplification);
+    const { upperPrice } = computeStableswapBounds(poolTypeConfig);
+
+    const res = quote(
+      -SMALL_AMOUNT,
+      true,
+      {
+        sqrtRatio: upperPrice,
+        liquidity,
+      },
+      poolTypeConfig,
+    );
+
+    expect(res.consumedAmount).toBeLessThanOrEqual(0n);
+  });
+
   test('inside range has liquidity', () => {
     const amplification = 10;
     const [lower, upper] = activeRange(0, amplification);

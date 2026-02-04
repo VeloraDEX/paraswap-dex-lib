@@ -105,13 +105,15 @@ export class StableswapPool extends EkuboPool<
     sqrtRatioLimit ??= isIncreasing ? MAX_SQRT_RATIO : MIN_SQRT_RATIO;
 
     let calculatedAmount = 0n;
-    let initializedTicksCrossed = 0;
     let amountRemaining = amount;
+    let movedOutOfBoundary = false;
 
     while (amountRemaining !== 0n && sqrtRatio !== sqrtRatioLimit) {
       let stepLiquidity = liquidity;
       const inRange =
-        sqrtRatio < this.upperPrice && sqrtRatio > this.lowerPrice;
+        sqrtRatio <= this.upperPrice &&
+        sqrtRatio >= this.lowerPrice &&
+        !movedOutOfBoundary;
 
       let nextTickSqrtRatio = null;
       if (inRange) {
@@ -119,12 +121,12 @@ export class StableswapPool extends EkuboPool<
       } else {
         stepLiquidity = 0n;
 
-        if (sqrtRatio <= this.lowerPrice) {
-          if (isIncreasing) {
-            nextTickSqrtRatio = this.lowerPrice;
-          }
-        } else {
-          if (!isIncreasing) {
+        if (!movedOutOfBoundary) {
+          if (sqrtRatio < this.lowerPrice) {
+            if (isIncreasing) {
+              nextTickSqrtRatio = this.lowerPrice;
+            }
+          } else if (!isIncreasing) {
             nextTickSqrtRatio = this.upperPrice;
           }
         }
@@ -149,17 +151,19 @@ export class StableswapPool extends EkuboPool<
       calculatedAmount += step.calculatedAmount;
       sqrtRatio = step.sqrtRatioNext;
 
-      if (sqrtRatio === nextTickSqrtRatio) {
-        initializedTicksCrossed++;
+      if (
+        sqrtRatio === nextTickSqrtRatio &&
+        ((sqrtRatio === this.upperPrice && isIncreasing) ||
+          (sqrtRatio === this.lowerPrice && !isIncreasing))
+      ) {
+        movedOutOfBoundary = true;
       }
     }
 
     return {
       consumedAmount: amount - amountRemaining,
       calculatedAmount,
-      gasConsumed:
-        GAS_COST_OF_ONE_STABLESWAP_SWAP +
-        initializedTicksCrossedGasCosts(initializedTicksCrossed),
+      gasConsumed: GAS_COST_OF_ONE_STABLESWAP_SWAP,
       skipAhead: 0,
       stateAfter: {
         sqrtRatio,
