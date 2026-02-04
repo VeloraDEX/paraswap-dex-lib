@@ -409,8 +409,8 @@ export class OSwap extends SimpleExchange implements IDex<OSwapData> {
     let method: string;
     let args: any;
     let returnAmountPos: number | undefined = undefined;
-
     const deadline = getLocalDeadlineAsFriendlyPlaceholder();
+
     if (side === SwapSide.SELL) {
       method = 'swapExactTokensForTokens';
       returnAmountPos = extractReturnAmountPosition(
