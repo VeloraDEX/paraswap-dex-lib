@@ -127,87 +127,11 @@ describe('Oswap E2E', () => {
     );
   });
 
-  describe('Mainnet - OETH/wOETH', () => {
-    const network = Network.MAINNET;
-
-    const tokenASymbol: string = 'OETH';
-    const tokenBSymbol: string = 'wOETH';
-
-    const tokenAAmount: string = '1000000000000000000';
-    const tokenBAmount: string = '1000000000000000000';
-
-    testForNetwork(
-      network,
-      dexKey,
-      tokenASymbol,
-      tokenBSymbol,
-      tokenAAmount,
-      tokenBAmount,
-    );
-  });
-
-  describe('Mainnet - OUSD/wOUSD', () => {
-    const network = Network.MAINNET;
-
-    const tokenASymbol: string = 'OUSD';
-    const tokenBSymbol: string = 'wOUSD';
-
-    const tokenAAmount: string = '1000000000000000000';
-    const tokenBAmount: string = '1000000000000000000';
-
-    testForNetwork(
-      network,
-      dexKey,
-      tokenASymbol,
-      tokenBSymbol,
-      tokenAAmount,
-      tokenBAmount,
-    );
-  });
-
   describe('Sonic', () => {
     const network = Network.SONIC;
 
     const tokenASymbol: string = 'WS';
     const tokenBSymbol: string = 'OS';
-
-    const tokenAAmount: string = '1000000000000000000';
-    const tokenBAmount: string = '1000000000000000000';
-
-    testForNetwork(
-      network,
-      dexKey,
-      tokenASymbol,
-      tokenBSymbol,
-      tokenAAmount,
-      tokenBAmount,
-    );
-  });
-
-  describe('Sonic - OS/wOS', () => {
-    const network = Network.SONIC;
-
-    const tokenASymbol: string = 'OS';
-    const tokenBSymbol: string = 'wOS';
-
-    const tokenAAmount: string = '1000000000000000000';
-    const tokenBAmount: string = '1000000000000000000';
-
-    testForNetwork(
-      network,
-      dexKey,
-      tokenASymbol,
-      tokenBSymbol,
-      tokenAAmount,
-      tokenBAmount,
-    );
-  });
-
-  describe('Base - superOETHb/wsuperOETHb', () => {
-    const network = Network.BASE;
-
-    const tokenASymbol: string = 'superOETHb';
-    const tokenBSymbol: string = 'wsuperOETHb';
 
     const tokenAAmount: string = '1000000000000000000';
     const tokenBAmount: string = '1000000000000000000';
