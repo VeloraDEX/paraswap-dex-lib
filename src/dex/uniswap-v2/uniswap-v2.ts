@@ -416,7 +416,7 @@ export class UniswapV2
     }
 
     this.logger.info(
-      `${this.dexKey}: Fetching pair on-chain for ${token0.address}/${token1.address}` +
+      `Fetching pair on-chain for ${token0.address}/${token1.address}` +
         (cachedPair
           ? ` (cache expired, checkExistenceAfter=${
               cachedPair.checkExistenceAfter
@@ -429,9 +429,9 @@ export class UniswapV2
       .call();
 
     this.logger.info(
-      `${this.dexKey}: getPair result for ${token0.address}/${
-        token1.address
-      }: ${exchange === NULL_ADDRESS ? 'NULL_ADDRESS' : exchange}`,
+      `getPair result for ${token0.address}/${token1.address}: ${
+        exchange === NULL_ADDRESS ? 'NULL_ADDRESS' : exchange
+      }`,
     );
 
     if (exchange === NULL_ADDRESS) {
@@ -439,11 +439,11 @@ export class UniswapV2
       if (!this.newlyCreatedPoolKeys.has(key)) {
         pair = { token0, token1 };
         this.logger.info(
-          `${this.dexKey}: Pair ${token0.address}/${token1.address} does not exist on-chain`,
+          `Pair ${token0.address}/${token1.address} does not exist on-chain`,
         );
       } else {
         this.logger.info(
-          `${this.dexKey}: Pair ${token0.address}/${token1.address} returned NULL but is in newlyCreatedPoolKeys, skipping`,
+          `Pair ${token0.address}/${token1.address} returned NULL but is in newlyCreatedPoolKeys, skipping`,
         );
       }
     } else {
@@ -529,9 +529,7 @@ export class UniswapV2
       const pair = await this.findPair(_pair[0], _pair[1]);
       if (!(pair && pair.exchange)) continue;
       if (!pair.pool) {
-        this.logger.info(
-          `${this.dexKey}: Pool not initialized for ${pair.exchange}`,
-        );
+        this.logger.info(`Pool not initialized for ${pair.exchange}`);
         pairsToFetch.push(pair);
       } else if (!pair.pool.getState(blockNumber)) {
         const staleState = pair.pool.getStaleState();
@@ -539,7 +537,7 @@ export class UniswapV2
         const isTracking = pair.pool.isTracking();
         const isInvalid = pair.pool.isInvalid();
         this.logger.info(
-          `${this.dexKey}: State miss for ${pair.exchange} - ` +
+          `State miss for ${pair.exchange} - ` +
             `hasState=${!!staleState}, stateBlock=${stateBlockNumber}, ` +
             `requestedBlock=${blockNumber}, isTracking=${isTracking}, isInvalid=${isInvalid}`,
         );
