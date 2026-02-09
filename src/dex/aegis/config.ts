@@ -20,9 +20,7 @@ export const AegisConfig: DexConfigMap<DexParams> = {
       quoter: '0x0d5e0f971ed27fbff6c2837bf31316121532048d',
       router: '0x6ff5693b99212da76ad316178a184ab56d299b43',
       stateView: '0xa3c0c9b65bad0b08107aa264b0f3db444b867a71',
-      supportedHooks: [
-        // Add hook addresses here
-      ],
+      supportedHooks: ['0x88c9ff9fc0b22cca42265d3f1d1c2c39e41cdacc'],
     },
     [Network.OPTIMISM]: {
       poolManager: '0x9a13f98cb987694c9f086b1f5eb990eea8264ec3',
@@ -50,9 +48,7 @@ export const AegisConfig: DexConfigMap<DexParams> = {
       quoter: '0xb3d5c3dfc3a7aebff71895a7191796bffc2c81b9',
       router: '0x1095692a6237d83c6a72f3f5efedb9a670c49223',
       stateView: '0x5ea1bd7974c8a611cbab0bdcafcb1d9cc9b3ba5a',
-      supportedHooks: [
-        // Add hook addresses here
-      ],
+      supportedHooks: ['0x15cd9520d0faf71c938db4426f8c58b5cbaa9acc'],
     },
     [Network.AVALANCHE]: {
       poolManager: '0x06380c0e0912312b5150364b9dc4542ba0dbbc85',
@@ -80,7 +76,7 @@ export const AegisConfig: DexConfigMap<DexParams> = {
       quoter: '0x333e3c607b141b18ff6de9f258db6e77fe7491e0',
       router: '0xef740bf23acae26f6492b10de645d6b98dc8eaf3',
       stateView: '0x86e8631a016f9068c3f085faf484ee3f5fdee8f2',
-      supportedHooks: ['0xa0b0d2d00fd544d8e0887f1a3cedd6e24baf10cc'],
+      supportedHooks: ['0xa0b0d2d00fd544d8e0887f1a3cedd6e24baf10cc', '0x88c9ff9fc0b22cca42265d3f1d1c2c39e41cdacc'],
     },
   },
 };
