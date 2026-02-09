@@ -31,7 +31,7 @@ import {
 } from './encoder';
 import { UniswapV4PoolManager } from './uniswap-v4-pool-manager';
 import { DeepReadonly } from 'ts-essentials';
-import { PoolState } from '../uniswap-v4/types';
+import { PoolState } from './types';
 import { uniswapV4PoolMath } from './contract-math/uniswap-v4-pool-math';
 import { SwapSide } from '@paraswap/core';
 import { queryAvailablePoolsForToken } from './subgraph';
