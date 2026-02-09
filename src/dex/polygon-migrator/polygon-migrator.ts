@@ -76,17 +76,21 @@ export class PolygonMigrator
     );
   }
 
+  private getPoolIdentifier(srcToken: Token, destToken: Token): string {
+    return `${this.dexKey}_${srcToken.address}_${destToken.address}`;
+  }
+
   async getPoolIdentifiers(
     srcToken: Token,
     destToken: Token,
     side: SwapSide,
     blockNumber: number,
   ): Promise<string[]> {
-    if (this.isAppropriatePair(srcToken, destToken)) {
-      return [`${this.dexKey}_${srcToken.address}_${destToken.address}`];
+    if (!this.isAppropriatePair(srcToken, destToken)) {
+      return [];
     }
 
-    return [];
+    return [this.getPoolIdentifier(srcToken, destToken)];
   }
 
   async getPricesVolume(
@@ -108,6 +112,7 @@ export class PolygonMigrator
         gasCost: POLYGON_MIGRATION_GAS_COST,
         exchange: this.dexKey,
         poolAddresses: [this.migratorAddress],
+        poolIdentifiers: [this.getPoolIdentifier(srcToken, destToken)],
         data: null,
       },
     ];

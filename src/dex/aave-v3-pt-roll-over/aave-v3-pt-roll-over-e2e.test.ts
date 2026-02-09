@@ -59,8 +59,8 @@ describe('AaveV3Pendle E2E', () => {
   describe('Mainnet', () => {
     const network = Network.MAINNET;
 
-    const tokenASymbol: string = 'PT-sUSDe-29MAY2025';
-    const tokenBSymbol: string = 'PT-sUSDe-31JUL2025';
+    const tokenASymbol: string = 'PT-sUSDe-31JUL2025';
+    const tokenBSymbol: string = 'PT-sUSDe-25SEP2025';
 
     const tokenAAmount: string = '1000000000000000000';
     const tokenBAmount: string = '1000000000000000000';

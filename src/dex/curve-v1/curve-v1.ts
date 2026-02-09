@@ -86,6 +86,7 @@ import {
   DirectCurveV1Param,
   DirectCurveV1ParamV6,
   CurveV1DirectSwap,
+  ApiPool,
 } from './types';
 import { erc20Iface } from '../../lib/utils-interfaces';
 import { applyTransferFee } from '../../lib/token-transfer-fee';
@@ -93,10 +94,14 @@ import { DIRECT_METHOD_NAME, DIRECT_METHOD_NAME_V6 } from './constants';
 import { packCurveData } from '../../lib/curve/encoder';
 import { encodeCurveAssets } from './packer';
 import { hexConcat, hexZeroPad, hexlify } from 'ethers/lib/utils';
+import {
+  CURVE_API_URL,
+  NETWORK_ID_TO_NAME,
+} from '../curve-v1-factory/constants';
 
 const CURVE_DEFAULT_CHUNKS = 10;
 
-const CURVE_LENDING_POOl_GAS = 340 * 1000;
+const CURVE_LENDING_POOL_GAS = 340 * 1000;
 const CURVE_POOL_GAS = 200 * 1000;
 
 const coder = new AbiCoder();
@@ -119,6 +124,7 @@ export class CurveV1
   private decimalsCoinsAndUnderlying: Record<string, number> = {};
 
   protected pools: Record<string, PoolConfig>;
+  protected allApiPools: ApiPool[] = [];
   protected eventSupportedPools: string[];
   protected baseTokens: Record<string, TokenWithReasonableVolume>;
 
@@ -768,9 +774,9 @@ export class CurveV1
               deadline: 0,
             },
             exchange: this.dexKey,
-            poolIdentifier: `${this.dexKey}_${poolConfig.name.toLowerCase()}`,
+            poolIdentifiers: [this.getPoolIdentifier(poolConfig.name)],
             gasCost: poolConfig.isLending
-              ? CURVE_LENDING_POOl_GAS
+              ? CURVE_LENDING_POOL_GAS
               : CURVE_POOL_GAS,
             poolAddresses: [_price.exchange],
           });
@@ -1251,6 +1257,30 @@ export class CurveV1
     }
   }
 
+  async fetchAllApiPools() {
+    const baseUrl = CURVE_API_URL;
+    const networkSlug = NETWORK_ID_TO_NAME[this.network];
+    const url = `${baseUrl}/${networkSlug}`;
+
+    try {
+      const response = await this.dexHelper.httpRequest.get<{
+        success: boolean;
+        data: { poolData: ApiPool[] };
+      }>(url);
+
+      if (response.success) {
+        this.allApiPools = response.data.poolData.map(t => ({
+          ...t,
+          address: t.address.toLowerCase(),
+        }));
+      }
+    } catch (error) {
+      this.logger.error(
+        `fetchAllApiPools ${this.dexKey} on ${url} failed to fetch pools from API`,
+      );
+    }
+  }
+
   async updatePoolState(): Promise<void> {
     if (!Object.keys(this.decimalsCoinsAndUnderlying).length) {
       await this.fetchDecimals();
@@ -1258,6 +1288,7 @@ export class CurveV1
 
     await this.updateBaseTokenPrice();
     await this.fetchAllPools();
+    await this.fetchAllApiPools();
   }
 
   async getTopPoolsForToken(
@@ -1285,11 +1316,22 @@ export class CurveV1
           ? _.concat(connectorTokens, pool.underlying)
           : connectorTokens;
 
+        const apiPool = this.allApiPools.find(
+          p => p.address === pool.address.toLowerCase(),
+        );
+
+        if (apiPool && apiPool.isBroken) {
+          this.logger.warn(
+            `CurveV1 pool ${pool.address} is marked as broken in the API, skipping it for top pools`,
+          );
+          return acc;
+        }
+
         if (connectorTokens.length) {
           acc.push({
             exchange: this.dexKey,
             address: pool.address,
-            liquidityUSD: pool.liquidityUSD!,
+            liquidityUSD: apiPool?.usdTotal ?? pool.liquidityUSD!,
             connectorTokens: _.uniq(connectorTokens)
               .filter(
                 (_token: string) =>

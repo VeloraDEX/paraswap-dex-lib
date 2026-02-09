@@ -124,39 +124,6 @@ describe('SolidlyV3 E2E', () => {
     testForNetwork(network, dexKey, pairs);
   });
 
-  describe('Fantom', () => {
-    const network = Network.FANTOM;
-
-    const pairs = [
-      [
-        {
-          name: NativeTokenSymbols[network],
-          sellAmount: '100000000000000000',
-          buyAmount: '1000000000',
-        },
-        {
-          name: 'SOLID',
-          sellAmount: '1000000000000000000',
-          buyAmount: '1000000000',
-        },
-      ],
-      [
-        {
-          name: 'WFTM',
-          sellAmount: '1000000000000000000',
-          buyAmount: '1000000000',
-        },
-        {
-          name: 'SOLID',
-          sellAmount: '1000000000000000000',
-          buyAmount: '1000000000',
-        },
-      ],
-    ];
-
-    testForNetwork(network, dexKey, pairs);
-  });
-
   describe('Base', () => {
     const network = Network.BASE;
 

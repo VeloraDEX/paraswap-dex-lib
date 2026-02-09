@@ -59,8 +59,8 @@ type PoolPairsInfo = {
 
 const PoolsRegistryHashKey = `${CACHE_PREFIX}_poolsRegistry`;
 
-const UNISWAPV3_CLEAN_NOT_EXISTING_POOL_TTL_MS = 60 * 60 * 24 * 1000; // 24 hours
-const UNISWAPV3_CLEAN_NOT_EXISTING_POOL_INTERVAL_MS = 30 * 60 * 1000; // Once in 30 minutes
+const UNISWAPV3_CLEAN_NOT_EXISTING_POOL_TTL_MS = 6 * 24 * 60 * 60 * 1000; // 6 days
+const UNISWAPV3_CLEAN_NOT_EXISTING_POOL_INTERVAL_MS = 2 * 24 * 60 * 60 * 1000; // Once in two days
 
 export class SolidlyV3
   extends SimpleExchange
@@ -559,11 +559,13 @@ export class SolidlyV3
               zeroForOne,
               poolAddress: pool.poolAddress,
             },
-            poolIdentifier: this.getPoolIdentifier(
-              pool.token0,
-              pool.token1,
-              pool.tickSpacing,
-            ),
+            poolIdentifiers: [
+              this.getPoolIdentifier(
+                pool.token0,
+                pool.token1,
+                pool.tickSpacing,
+              ),
+            ],
             exchange: this.dexKey,
             gasCost: gasCost,
             poolAddresses: [pool.poolAddress],

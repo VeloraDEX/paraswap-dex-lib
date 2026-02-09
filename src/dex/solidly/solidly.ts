@@ -36,15 +36,12 @@ import {
 } from './types';
 import { SolidlyConfig, Adapters } from './config';
 import { applyTransferFee } from '../../lib/token-transfer-fee';
-import {
-  hexDataLength,
-  hexZeroPad,
-  hexlify,
-  id,
-  solidityPack,
-} from 'ethers/lib/utils';
+import { hexZeroPad, hexlify, solidityPack } from 'ethers/lib/utils';
 import { BigNumber } from 'ethers';
-import { Flag, SpecialDex } from '../../executor/types';
+import { SpecialDex } from '../../executor/types';
+import { addressDecode } from '../../lib/decoders';
+
+const SOLIDLY_RECHECK_PAIR_EXISTENCE_AFTER_MS = 3 * 24 * 60 * 60 * 1000; // 3 days
 
 const erc20Iface = new Interface(erc20ABI);
 const solidlyPairIface = new Interface(solidlyPair);
@@ -67,6 +64,7 @@ export class Solidly extends UniswapV2 {
   pairs: { [key: string]: SolidlyPair } = {};
   stableFee?: number;
   volatileFee?: number;
+  getPairMethodName: string;
 
   readonly isFeeOnTransferSupported: boolean = true;
   readonly SRC_TOKEN_DEX_TRANSFERS = 1;
@@ -87,6 +85,7 @@ export class Solidly extends UniswapV2 {
         'Velocimeter',
         'Usdfi',
         'PharaohV1',
+        'Blackhole',
       ]),
     );
 
@@ -128,9 +127,11 @@ export class Solidly extends UniswapV2 {
 
     this.stableFee = SolidlyConfig[dexKey][network].stableFee;
     this.volatileFee = SolidlyConfig[dexKey][network].volatileFee;
+    this.getPairMethodName =
+      SolidlyConfig[dexKey][network].getPairMethodName ?? 'getPair';
 
     this.factory = new dexHelper.web3Provider.eth.Contract(
-      solidlyFactoryABI as any,
+      SolidlyConfig[dexKey][network].factoryAbi ?? (solidlyFactoryABI as any),
       factoryAddress !== undefined
         ? factoryAddress
         : SolidlyConfig[dexKey][network].factoryAddress,
@@ -144,46 +145,120 @@ export class Solidly extends UniswapV2 {
     this.feeFactor = SolidlyConfig[dexKey][network].feeFactor || this.feeFactor;
   }
 
-  async findSolidlyPair(from: Token, to: Token, stable: boolean) {
-    if (from.address.toLowerCase() === to.address.toLowerCase()) return null;
+  async findSolidlyPairs(from: Token, to: Token): Promise<SolidlyPair[]> {
     const [token0, token1] =
       from.address.toLowerCase() < to.address.toLowerCase()
         ? [from, to]
         : [to, from];
 
-    const typePostfix = this.poolPostfix(stable);
-    const key = `${token0.address.toLowerCase()}-${token1.address.toLowerCase()}-${typePostfix}`;
-    let pair = this.pairs[key];
-    if (pair) return pair;
+    const stableValues = [false, true];
+    const pairKeys = stableValues.map(stable =>
+      this.getPoolIdentifier(token0.address, token1.address, stable),
+    );
 
-    let exchange = await this.factory.methods
-      // Solidly has additional boolean parameter "StablePool"
-      // At first we look for uniswap-like volatile pool
-      .getPair(token0.address, token1.address, stable)
-      .call();
+    // get cached pairs
+    const pairs = pairKeys.map(key => this.pairs[key]);
 
-    if (exchange === NULL_ADDRESS) {
-      pair = { token0, token1, stable };
-    } else {
-      pair = { token0, token1, exchange, stable };
-    }
-    this.pairs[key] = pair;
-    return pair;
+    if (pairs.every(Boolean)) return pairs;
+
+    const cachedPairsRaw = await this.dexHelper.cache.hmget(
+      this.pairsHashCacheKey,
+      pairKeys,
+    );
+
+    const cachedPairs = cachedPairsRaw.map(p =>
+      p ? (JSON.parse(p) as SolidlyPair) : null,
+    );
+
+    const shouldFetchFromRpc = cachedPairs.some(
+      (cachedPair, i): cachedPair is SolidlyPair => {
+        if (
+          cachedPair &&
+          (cachedPair.exchange ||
+            (cachedPair.checkExistenceAfter &&
+              cachedPair.checkExistenceAfter > Date.now()))
+        ) {
+          // prevent wiping initialized pool
+          if (!pairs[i]?.pool) {
+            pairs[i] = cachedPair;
+            this.pairs[pairKeys[i]] = cachedPair;
+          }
+          return false;
+        }
+
+        return true;
+      },
+    );
+
+    if (!shouldFetchFromRpc) return pairs;
+
+    const calldata = stableValues.map(stable => {
+      return {
+        target: this.factoryAddress,
+        callData: this.factory.methods[this.getPairMethodName](
+          token0.address,
+          token1.address,
+          stable,
+        ).encodeABI(),
+      };
+    });
+
+    const data: { returnData: any[] } =
+      await this.dexHelper.multiContract.methods.aggregate(calldata).call({});
+
+    const exchanges = data.returnData.map(addressDecode);
+
+    // cache and return
+    stableValues.forEach((stable, i) => {
+      // prevent wiping initialized pool
+      if (pairs[i]?.pool) {
+        return;
+      }
+
+      const exchange = exchanges[i];
+
+      if (exchange === NULL_ADDRESS) {
+        pairs[i] = {
+          token0,
+          token1,
+          stable,
+          checkExistenceAfter:
+            Date.now() + SOLIDLY_RECHECK_PAIR_EXISTENCE_AFTER_MS,
+        };
+      } else {
+        pairs[i] = { token0, token1, stable, exchange };
+      }
+
+      this.pairs[pairKeys[i]] = pairs[i];
+    });
+
+    const pairsToCache = pairKeys
+      .map<[string, SolidlyPair]>((key, i) => [key, pairs[i]])
+      .filter(([_, pair]) => !pair.pool);
+
+    await this.dexHelper.cache.hmset(
+      this.pairsHashCacheKey,
+      Object.fromEntries(
+        pairsToCache.map(([key, pair]) => [key, JSON.stringify(pair)]),
+      ),
+    );
+
+    return pairs;
   }
 
   async batchCatchUpPairs(pairs: [Token, Token][], blockNumber: number) {
     if (!blockNumber) return;
     const pairsToFetch: SolidlyPair[] = [];
     for (const _pair of pairs) {
-      for (const stable of [false, true]) {
-        const pair = await this.findSolidlyPair(_pair[0], _pair[1], stable);
-        if (!(pair && pair.exchange)) continue;
+      const foundPairs = await this.findSolidlyPairs(_pair[0], _pair[1]);
+      foundPairs.forEach(pair => {
+        if (!(pair && pair.exchange)) return;
         if (!pair.pool) {
           pairsToFetch.push(pair);
         } else if (!pair.pool.getState(blockNumber)) {
           pairsToFetch.push(pair);
         }
-      }
+      });
     }
 
     if (!pairsToFetch.length) return;
@@ -267,10 +342,10 @@ export class Solidly extends UniswapV2 {
     }
   }
 
-  async getSellPrice(
+  getSellPrice(
     priceParams: SolidlyPoolOrderedParams,
     srcAmount: bigint,
-  ): Promise<bigint> {
+  ): bigint {
     return priceParams.stable
       ? SolidlyStablePool.getSellPrice(priceParams, srcAmount, this.feeFactor)
       : Uniswapv2ConstantProductPool.getSellPrice(
@@ -280,10 +355,10 @@ export class Solidly extends UniswapV2 {
         );
   }
 
-  async getBuyPrice(
+  getBuyPrice(
     priceParams: SolidlyPoolOrderedParams,
     srcAmount: bigint,
-  ): Promise<bigint> {
+  ): bigint {
     if (priceParams.stable) throw new Error(`Buy not supported`);
     return Uniswapv2ConstantProductPool.getBuyPrice(
       priceParams,
@@ -325,7 +400,17 @@ export class Solidly extends UniswapV2 {
 
       await this.batchCatchUpPairs([[from, to]], blockNumber);
 
-      const resultPromises = [false, true].map(async stable => {
+      const pairsParams = await this.getSolidlyPairOrderedParams(
+        from,
+        to,
+        blockNumber,
+        transferFees.srcDexFee,
+      );
+
+      const resultPools = pairsParams.map(pairParam => {
+        if (!pairParam) return null;
+        const stable = pairParam.stable;
+
         // We don't support fee on transfer for stable pools yet
         if (
           stable &&
@@ -341,15 +426,6 @@ export class Solidly extends UniswapV2 {
           return null;
 
         const isSell = side === SwapSide.SELL;
-        const pairParam = await this.getSolidlyPairOrderedParams(
-          from,
-          to,
-          blockNumber,
-          stable,
-          transferFees.srcDexFee,
-        );
-
-        if (!pairParam) return null;
 
         const unitAmount = getBigIntPow(
           // @ts-expect-error Buy side is not implemented yet
@@ -366,25 +442,17 @@ export class Solidly extends UniswapV2 {
         const unit =
           // @ts-expect-error Buy side is not implemented yet
           side === SwapSide.BUY
-            ? await this.getBuyPricePath(unitVolumeWithFee, [pairParam])
-            : await this.getSellPricePath(unitVolumeWithFee, [pairParam]);
+            ? this.getBuyPricePath(unitVolumeWithFee, [pairParam])
+            : this.getSellPricePath(unitVolumeWithFee, [pairParam]);
 
         const prices =
           // @ts-expect-error Buy side is not implemented yet
           side === SwapSide.BUY
-            ? await Promise.all(
-                amountsWithFee.map(amount =>
-                  amount === 0n
-                    ? 0n
-                    : this.getBuyPricePath(amount, [pairParam]),
-                ),
+            ? amountsWithFee.map(amount =>
+                amount === 0n ? 0n : this.getBuyPricePath(amount, [pairParam]),
               )
-            : await Promise.all(
-                amountsWithFee.map(amount =>
-                  amount === 0n
-                    ? 0n
-                    : this.getSellPricePath(amount, [pairParam]),
-                ),
+            : amountsWithFee.map(amount =>
+                amount === 0n ? 0n : this.getSellPricePath(amount, [pairParam]),
               );
 
         const [unitOutWithFee, ...outputsWithFee] = applyTransferFee(
@@ -417,15 +485,12 @@ export class Solidly extends UniswapV2 {
             ],
           },
           exchange: this.dexKey,
-          poolIdentifier,
+          poolIdentifiers: [poolIdentifier],
           gasCost: this.poolGasCost,
           poolAddresses: [pairParam.exchange],
         };
       });
 
-      const resultPools = (await Promise.all(
-        resultPromises,
-      )) as ExchangePrices<UniswapV2Data>;
       const resultPoolsFiltered = resultPools.filter(item => !!item); // filter null elements
       return resultPoolsFiltered.length > 0 ? resultPoolsFiltered : null;
     } catch (e) {
@@ -535,56 +600,57 @@ export class Solidly extends UniswapV2 {
     );
   }
 
-  // Same as at uniswap-v2-pool.json, but extended with decimals and stable
   async getSolidlyPairOrderedParams(
     from: Token,
     to: Token,
     blockNumber: number,
-    stable: boolean,
     tokenDexTransferFee: number,
-  ): Promise<SolidlyPoolOrderedParams | null> {
-    const pair = await this.findSolidlyPair(from, to, stable);
-    if (!(pair && pair.pool && pair.exchange)) return null;
-    const pairState = pair.pool.getState(blockNumber);
+  ): Promise<Array<SolidlyPoolOrderedParams | null>> {
+    const pairs = await this.findSolidlyPairs(from, to);
 
-    if (!pairState) {
-      this.logger.error(
-        `Error_orderPairParams expected reserves, got none (maybe the pool doesn't exist) ${
-          from.symbol || from.address
-        } ${to.symbol || to.address}`,
-      );
-      return null;
-    }
+    return pairs.map(pair => {
+      if (!(pair && pair.pool && pair.exchange)) return null;
+      const pairState = pair.pool.getState(blockNumber);
 
-    const fee = (pairState.feeCode + tokenDexTransferFee).toString();
-    const pairReversed =
-      pair.token1.address.toLowerCase() === from.address.toLowerCase();
-    if (pairReversed) {
+      if (!pairState) {
+        this.logger.error(
+          `Error_orderPairParams expected reserves, got none (maybe the pool doesn't exist) ${
+            from.symbol || from.address
+          } ${to.symbol || to.address}`,
+        );
+        return null;
+      }
+
+      const fee = (pairState.feeCode + tokenDexTransferFee).toString();
+      const pairReversed =
+        pair.token1.address.toLowerCase() === from.address.toLowerCase();
+      if (pairReversed) {
+        return {
+          tokenIn: from.address,
+          tokenOut: to.address,
+          reservesIn: pairState.reserves1,
+          reservesOut: pairState.reserves0,
+          fee,
+          direction: false,
+          exchange: pair.exchange,
+          decimalsIn: from.decimals,
+          decimalsOut: to.decimals,
+          stable: pair.stable,
+        };
+      }
       return {
         tokenIn: from.address,
         tokenOut: to.address,
-        reservesIn: pairState.reserves1,
-        reservesOut: pairState.reserves0,
+        reservesIn: pairState.reserves0,
+        reservesOut: pairState.reserves1,
         fee,
-        direction: false,
+        direction: true,
         exchange: pair.exchange,
         decimalsIn: from.decimals,
         decimalsOut: to.decimals,
-        stable,
+        stable: pair.stable,
       };
-    }
-    return {
-      tokenIn: from.address,
-      tokenOut: to.address,
-      reservesIn: pairState.reserves0,
-      reservesOut: pairState.reserves1,
-      fee,
-      direction: true,
-      exchange: pair.exchange,
-      decimalsIn: from.decimals,
-      decimalsOut: to.decimals,
-      stable,
-    };
+    });
   }
 
   async getPoolIdentifiers(
@@ -602,14 +668,24 @@ export class Solidly extends UniswapV2 {
       return [];
     }
 
-    const tokenAddress = [from.address.toLowerCase(), to.address.toLowerCase()]
+    return [
+      this.getPoolIdentifier(from.address, to.address, false),
+      this.getPoolIdentifier(from.address, to.address, true),
+    ];
+  }
+
+  protected getPoolIdentifier(
+    token0: string,
+    token1: string,
+    stable: boolean = false,
+  ): string {
+    const tokenAddress = [token0.toLowerCase(), token1.toLowerCase()]
       .sort((a, b) => (a > b ? 1 : -1))
       .join('_');
 
     const poolIdentifier = `${this.dexKey}_${tokenAddress}`;
-    const poolIdentifierUniswap = poolIdentifier + this.poolPostfix(false);
-    const poolIdentifierStable = poolIdentifier + this.poolPostfix(true);
-    return [poolIdentifierUniswap, poolIdentifierStable];
+
+    return poolIdentifier + this.poolPostfix(stable);
   }
 
   poolPostfix(stable: boolean) {
@@ -668,7 +744,7 @@ export class Solidly extends UniswapV2 {
     if (side === SwapSide.BUY) throw new Error(`Buy not supported`);
     let exchangeDataTypes = ['bytes4', 'bytes32'];
 
-    const isStable = data.pools.some(pool => !!pool.stable);
+    const isStable = data.pools.some(pool => pool.stable);
     const isStablePoolAndPoolCount = isStable
       ? BigNumber.from(1)
           .shl(255)

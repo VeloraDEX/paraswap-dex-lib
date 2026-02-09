@@ -12,7 +12,7 @@ import type {
   NumberAsString,
   DexExchangeParam,
 } from '../../types';
-import { SwapSide, Network } from '../../constants';
+import { SwapSide, Network, UNLIMITED_USD_LIQUIDITY } from '../../constants';
 import * as CALLDATA_GAS_COST from '../../calldata-gas-cost';
 import { getDexKeysWithNetwork } from '../../utils';
 import type { Context, IDex } from '../../dex/idex';
@@ -306,11 +306,12 @@ export class AngleStakedStable
     tokenAddress: Address,
     limit: number,
   ): Promise<PoolLiquidity[]> {
-    if (
-      this.isPaused[this.config.stakeToken] ||
-      (tokenAddress.toLowerCase() !== this.config.agToken &&
-        tokenAddress.toLowerCase() !== this.config.stakeToken)
-    ) {
+    const token = tokenAddress.toLowerCase();
+
+    const { agToken, stakeToken } = this.config;
+    const isPaused = this.isPaused[stakeToken];
+
+    if (isPaused || (token !== agToken && token !== stakeToken)) {
       return [];
     }
 
@@ -319,12 +320,12 @@ export class AngleStakedStable
         exchange: this.dexKey,
         address: this.config.stakeToken,
         connectorTokens: [
-          tokenAddress.toLowerCase() === this.config.agToken
-            ? ({ address: this.config.stakeToken, decimals: 18 } as Token)
-            : ({ address: this.config.agToken, decimals: 18 } as Token),
+          {
+            decimals: 18,
+            address: token === agToken ? stakeToken : agToken,
+          },
         ],
-        // liquidity is infinite as to have been able to mint stakeToken, you must have deposited agToken
-        liquidityUSD: 1e12,
+        liquidityUSD: UNLIMITED_USD_LIQUIDITY,
       },
     ];
   }

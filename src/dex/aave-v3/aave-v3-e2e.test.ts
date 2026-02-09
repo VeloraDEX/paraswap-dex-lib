@@ -495,6 +495,75 @@ describe('AaveV3 E2E', () => {
     });
   });
 
+  describe('AaveV3 Plasma', () => {
+    const dexKey = 'AaveV3';
+    const network = Network.PLASMA;
+    const tokens = Tokens[network];
+    const provider = new StaticJsonRpcProvider(
+      generateConfig(network).privateHttpProvider,
+      network,
+    );
+
+    const pairs = [
+      {
+        tokenSymbol: 'USDT0',
+        aTokenSymbol: 'aPlaUSDT0',
+        amount: '1000000',
+      },
+      {
+        tokenSymbol: 'USDe',
+        aTokenSymbol: 'aPlaUSDe',
+        amount: '1000000000000000000',
+      },
+      {
+        tokenSymbol: 'sUSDe',
+        aTokenSymbol: 'aPlasUSDe',
+        amount: '1000000000000000000',
+      },
+    ];
+
+    const sideToContractMethods = new Map([
+      [SwapSide.SELL, [ContractMethod.swapExactAmountIn]],
+      [SwapSide.BUY, [ContractMethod.swapExactAmountOut]],
+    ]);
+
+    pairs.forEach(pair => {
+      sideToContractMethods.forEach((contractMethods, side) =>
+        contractMethods.forEach((contractMethod: ContractMethod) => {
+          describe(`${contractMethod}`, () => {
+            it(pair.aTokenSymbol + ' -> ' + pair.tokenSymbol, async () => {
+              await testE2E(
+                tokens[pair.aTokenSymbol],
+                tokens[pair.tokenSymbol],
+                '',
+                pair.amount,
+                side,
+                dexKey,
+                contractMethod,
+                network,
+                provider,
+              );
+            });
+
+            it(pair.tokenSymbol + ' -> ' + pair.aTokenSymbol, async () => {
+              await testE2E(
+                tokens[pair.tokenSymbol],
+                tokens[pair.aTokenSymbol],
+                '',
+                pair.amount,
+                side,
+                dexKey,
+                contractMethod,
+                network,
+                provider,
+              );
+            });
+          });
+        }),
+      );
+    });
+  });
+
   // describe('AaveV3 GNOSIS', () => {
   //   const network = Network.GNOSIS;
   //   const tokens = Tokens[network];

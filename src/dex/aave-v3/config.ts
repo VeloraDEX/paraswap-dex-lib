@@ -11,6 +11,7 @@ import {
   AaveV3Optimism,
   AaveV3Polygon,
   AaveV3Gnosis,
+  AaveV3Plasma,
   AaveV3EthereumLido,
 } from '@bgd-labs/aave-address-book';
 
@@ -58,6 +59,12 @@ export const Config: DexConfigMap<DexParam> = {
       lendingGasCost: 328 * 1000,
       poolAddress: AaveV3Base.POOL,
       wethGatewayAddress: AaveV3Base.WETH_GATEWAY,
+    },
+    [Network.PLASMA]: {
+      ethGasCost: 246 * 100,
+      lendingGasCost: 328 * 1000,
+      poolAddress: AaveV3Plasma.POOL,
+      wethGatewayAddress: AaveV3Plasma.WETH_GATEWAY,
     },
     [Network.BSC]: {
       ethGasCost: 246 * 100,
@@ -138,14 +145,6 @@ export const Adapters: {
       {
         name: 'BscAdapter02',
         index: 9,
-      },
-    ],
-  },
-  [Network.ZKEVM]: {
-    [SwapSide.SELL]: [
-      {
-        name: 'PolygonZkEvmAdapter02',
-        index: 1,
       },
     ],
   },

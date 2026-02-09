@@ -421,7 +421,9 @@ export class PancakeswapV3
     if (pools.length === 0) {
       return null;
     }
-    this.logger.warn(`fallback to rpc for ${pools.length} pool(s)`);
+    this.logger.warn(
+      `fallback to rpc for ${pools.length} pool(s) for tokens ${from.address}/${to.address}`,
+    );
 
     const requests = pools.map<BalanceRequest>(
       pool => ({
@@ -537,11 +539,9 @@ export class PancakeswapV3
             },
           ],
         },
-        poolIdentifier: this.getPoolIdentifier(
-          pool.token0,
-          pool.token1,
-          pool.feeCode,
-        ),
+        poolIdentifiers: [
+          this.getPoolIdentifier(pool.token0, pool.token1, pool.feeCode),
+        ],
         exchange: this.dexKey,
         gasCost: prices.map(p => (p === 0n ? 0 : PANCAKESWAPV3_QUOTE_GASLIMIT)),
         poolAddresses: [pool.poolAddress],
@@ -659,7 +659,7 @@ export class PancakeswapV3
         _destToken,
         amounts,
         side,
-        this.network === Network.ZKEVM ? [] : poolsToUse.poolWithoutState,
+        poolsToUse.poolWithoutState,
       );
 
       const states = poolsToUse.poolWithState.map(
@@ -740,11 +740,9 @@ export class PancakeswapV3
                 },
               ],
             },
-            poolIdentifier: this.getPoolIdentifier(
-              pool.token0,
-              pool.token1,
-              pool.feeCode,
-            ),
+            poolIdentifiers: [
+              this.getPoolIdentifier(pool.token0, pool.token1, pool.feeCode),
+            ],
             exchange: this.dexKey,
             gasCost: gasCost,
             poolAddresses: [pool.poolAddress],

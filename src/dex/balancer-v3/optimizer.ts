@@ -36,6 +36,11 @@ export function balancerV3Merge(or: UnoptimizedRate): UnoptimizedRate {
             s.swapExchanges[0].poolAddresses!,
           );
 
+        lastExchange.swapExchanges[0].poolIdentifiers =
+          lastExchange.swapExchanges[0].poolIdentifiers!.concat(
+            s.swapExchanges[0].poolIdentifiers!,
+          );
+
         lastExchange.swapExchanges[0].data.gasUSD = (
           parseFloat(lastExchange.swapExchanges[0].data.gasUSD) +
           parseFloat(s.swapExchanges[0].data.gasUSD)

@@ -26,7 +26,11 @@ export const BebopConfig: DexConfigMap<DexParams> = {
     [Network.BASE]: {
       settlementAddress: '0xbbbbbBB520d69a9775E85b458C58c648259FAD5F',
       chainName: 'base',
-      middleTokens: ['0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913'],
+      middleTokens: [
+        '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913', // USDC
+        '0xd9aAEc86B65D86f6A7B5B1b0c42FFA531710b6CA', // USDbC
+        '0x4200000000000000000000000000000000000006', // WETH
+      ],
     },
     [Network.OPTIMISM]: {
       settlementAddress: '0xbbbbbBB520d69a9775E85b458C58c648259FAD5F',
@@ -37,6 +41,19 @@ export const BebopConfig: DexConfigMap<DexParams> = {
       settlementAddress: '0xbbbbbBB520d69a9775E85b458C58c648259FAD5F',
       chainName: 'bsc',
       middleTokens: ['0x55d398326f99059fF775485246999027B3197955'],
+    },
+    [Network.POLYGON]: {
+      settlementAddress: '0xbbbbbBB520d69a9775E85b458C58c648259FAD5F',
+      chainName: 'polygon',
+      middleTokens: ['0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174'],
+    },
+    [Network.AVALANCHE]: {
+      settlementAddress: '0xbbbbbBB520d69a9775E85b458C58c648259FAD5F',
+      chainName: 'avalanche',
+      middleTokens: [
+        '0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E', // USDC
+        '0x9702230A8Ea53601f5cD2dc00fDBc13d4dF4A8c7', // USDT
+      ],
     },
   },
 };

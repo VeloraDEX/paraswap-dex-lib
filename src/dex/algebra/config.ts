@@ -18,53 +18,6 @@ export const AlgebraConfig: DexConfigMap<DexParams> = {
       deployer: '0x2d98e2fa9da15aa6dc9581ab097ced7af697cb92',
       version: 'v1.1',
     },
-    [Network.ZKEVM]: {
-      factory: '0x4B9f4d2435Ef65559567e5DbFC1BbB37abC43B57',
-      router: '0xF6Ad3CcF71Abb3E12beCf6b3D2a74C963859ADCd',
-      quoter: '0x55BeE1bD3Eb9986f6d2d963278de09eE92a3eF1D',
-      initHash:
-        '0x6ec6c9c8091d160c0aa74b2b14ba9c1717e95093bd3ac085cee99a49aab294a4',
-      chunksCount: 3,
-      initRetryFrequency: 30,
-      algebraStateMulticall: '0xa6bc273A238867dD74F2bBbD5fBbA3c941C939B9',
-      subgraphURL: '3L5Y5brtgvzDoAFGaPs63xz27KdviCdzRuY12spLSBGU',
-      uniswapMulticall: '0x61530d6E1c7A47BBB3e48e8b8EdF7569DcFeE121',
-      deployer: '0x0d500b1d8e8ef31e21c99d1db9a6444d3adf1270',
-      version: 'v1.1',
-      forceManualStateGenerate: true,
-    },
-  },
-  ZyberSwapV3: {
-    [Network.ARBITRUM]: {
-      factory: '0x9C2ABD632771b433E5E7507BcaA41cA3b25D8544',
-      router: '0xFa58b8024B49836772180f2Df902f231ba712F72',
-      quoter: '0xAeD211346Fa2E6A5063b4f273BCf7DDbD0368d62',
-      initHash:
-        '0x6ec6c9c8091d160c0aa74b2b14ba9c1717e95093bd3ac085cee99a49aab294a4',
-      chunksCount: 10,
-      initRetryFrequency: 10,
-      algebraStateMulticall: '0xcd7C50ba57136b6B461168D1f634E2CffA4c298D',
-      subgraphURL: '7ZP9MeeuXno2y9pWR5LzA96UtYuZYWTA4WYZDZR7ghbN',
-      uniswapMulticall: '0x1F98415757620B543A52E61c46B32eB19261F984',
-      deployer: '0x24e85f5f94c6017d2d87b434394e87df4e4d56e3',
-      version: 'v1.1',
-    },
-    [Network.OPTIMISM]: {
-      factory: '0x0C8f7b0cb986b31c67D994fb5c224592A03A4AfD',
-      router: '0xEDB4E3E3bB11255fF14C2762C6A6A28F1D3A36f2',
-      quoter: '0xf4211E7709D2294Cd10799E41623006dFB0D66aF',
-      initHash:
-        '0xbce37a54eab2fcd71913a0d40723e04238970e7fc1159bfd58ad5b79531697e7',
-      chunksCount: 10,
-      initRetryFrequency: 10,
-      algebraStateMulticall: '0x30F6B9b6485ff0B67E881f5ac80D3F1c70A4B23d',
-      subgraphURL: '3CA9ffebLkS3N2otXaSj8XaDDdspty75upBjKTUS79qY',
-      uniswapMulticall: '0x1F98415757620B543A52E61c46B32eB19261F984',
-      deployer: '0xc0d4323426c709e8d04b5b130e7f059523464a91',
-      // optimism fork uses v1.9-bidirectional-fee (with TickSpacing event and simple `fee` in globalState),
-      // not sure why v1.1 is used here
-      version: 'v1.1',
-    },
   },
   CamelotV3: {
     [Network.ARBITRUM]: {
@@ -108,10 +61,6 @@ export const Adapters: Record<number, AdapterMappings> = {
   [Network.POLYGON]: {
     [SwapSide.SELL]: [{ name: 'PolygonAdapter01', index: 13 }],
     [SwapSide.BUY]: [{ name: 'PolygonBuyAdapter', index: 2 }],
-  },
-  [Network.ZKEVM]: {
-    [SwapSide.SELL]: [{ name: 'PolygonZkEvmAdapter01', index: 1 }],
-    [SwapSide.BUY]: [{ name: 'PolygonZkEvmBuyAdapter', index: 1 }],
   },
   [Network.ARBITRUM]: {
     [SwapSide.SELL]: [{ name: 'ArbitrumAdapter02', index: 7 }],

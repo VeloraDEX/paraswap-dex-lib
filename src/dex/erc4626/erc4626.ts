@@ -1,4 +1,3 @@
-import { AsyncOrSync } from 'ts-essentials';
 import {
   Token,
   Address,
@@ -11,7 +10,12 @@ import {
   NumberAsString,
   DexExchangeParam,
 } from '../../types';
-import { SwapSide, Network } from '../../constants';
+import {
+  SwapSide,
+  Network,
+  UNLIMITED_USD_LIQUIDITY,
+  NO_USD_LIQUIDITY,
+} from '../../constants';
 import * as CALLDATA_GAS_COST from '../../calldata-gas-cost';
 import { getDexKeysWithNetwork } from '../../utils';
 import { IDex, Context } from '../idex';
@@ -51,6 +55,11 @@ export class ERC4626
     readonly dexHelper: IDexHelper,
     readonly vault: string = ERC4626Config[dexKey][network].vault,
     readonly asset: string = ERC4626Config[dexKey][network].asset,
+    readonly cooldownEnabled: boolean = ERC4626Config[dexKey][network]
+      .cooldownEnabled || false,
+    readonly decimals: number = ERC4626Config[dexKey][network].decimals || 18,
+    readonly withdrawDisabled: boolean = ERC4626Config[dexKey][network]
+      .withdrawDisabled || false,
     readonly erc4626Interface: Interface = new Interface(ERC4626_ABI),
   ) {
     super(dexHelper, dexKey);
@@ -67,6 +76,7 @@ export class ERC4626
       DEPOSIT_TOPIC,
       WITHDRAW_TOPIC,
       TRANSFER_TOPIC,
+      cooldownEnabled,
     );
   }
 
@@ -130,7 +140,7 @@ export class ERC4626
     const _destToken = this.dexHelper.config.wrapETH(destToken);
 
     if (!this.isAppropriatePair(_srcToken, _destToken)) return null;
-    const state = this.eventPool.getState(blockNumber);
+    const state = await this.eventPool.getOrGenerateState(blockNumber);
     if (!state) return null;
 
     const isSrcAsset = this.isAsset(_srcToken.address);
@@ -143,18 +153,24 @@ export class ERC4626
       if (isSrcAsset) {
         calcFunction = this.previewDeposit.bind(this);
       } else {
+        if (!this.redeemAllowed(state)) {
+          return null;
+        }
         calcFunction = this.previewRedeem.bind(this);
       }
     } else {
       if (isSrcAsset) {
         calcFunction = this.previewMint.bind(this);
       } else {
+        if (!this.withdrawAllowed(state)) {
+          return null;
+        }
         calcFunction = this.previewWithdraw.bind(this);
       }
     }
     return [
       {
-        unit: BI_POWS[18],
+        unit: BI_POWS[this.decimals],
         prices: amounts.map(amount => calcFunction(amount, state)),
         gasCost: isWrap ? 60000 : 70000,
         data: {
@@ -165,6 +181,7 @@ export class ERC4626
           },
         },
         poolAddresses: [this.vault],
+        poolIdentifiers: [`${this.dexKey}_${this.vault}`],
         exchange: this.dexKey,
       },
     ];
@@ -176,11 +193,41 @@ export class ERC4626
     return CALLDATA_GAS_COST.DEX_NO_PAYLOAD;
   }
 
+  async updatePoolState() {
+    const state = this.eventPool.getStaleState();
+    // generate state only once
+    if (!state) {
+      const blockNumber = await this.dexHelper.provider.getBlockNumber();
+      const newState = await this.eventPool.getOrGenerateState(blockNumber);
+      this.eventPool.setState(newState, blockNumber);
+    }
+  }
+
   async getTopPoolsForToken(
     tokenAddress: Address,
     limit: number,
   ): Promise<PoolLiquidity[]> {
     if (!this.isAsset(tokenAddress) && !this.isVault(tokenAddress)) return [];
+
+    // cooldownDuration is not tracked in the event pool, so get initial state
+    const state = this.eventPool.getStaleState();
+
+    const vaultToAsset = this.isVault(tokenAddress);
+    const vaultToAssetAllowed =
+      state === null
+        ? true
+        : this.withdrawAllowed(state) || this.redeemAllowed(state);
+
+    let liquidityUSD = UNLIMITED_USD_LIQUIDITY;
+    let connectorLiquidityUSD = UNLIMITED_USD_LIQUIDITY;
+
+    if (!vaultToAssetAllowed) {
+      if (vaultToAsset) {
+        liquidityUSD = NO_USD_LIQUIDITY;
+      } else {
+        connectorLiquidityUSD = NO_USD_LIQUIDITY;
+      }
+    }
 
     return [
       {
@@ -188,11 +235,12 @@ export class ERC4626
         address: this.vault,
         connectorTokens: [
           {
-            decimals: 18,
-            address: this.isAsset(tokenAddress) ? this.vault : this.asset,
+            decimals: this.decimals,
+            address: vaultToAsset ? this.asset : this.vault,
+            liquidityUSD: connectorLiquidityUSD,
           },
         ],
-        liquidityUSD: 1000000000, // Just returning a big number so this DEX will be preferred
+        liquidityUSD,
       },
     ];
   }
@@ -329,5 +377,25 @@ export class ERC4626
 
   previewDeposit(assets: bigint, state: ERC4626PoolState) {
     return (assets * state.totalShares) / state.totalAssets;
+  }
+
+  redeemAllowed(state: ERC4626PoolState): boolean {
+    if (state.cooldownDuration) {
+      return state.cooldownDuration === 0n;
+    }
+
+    return true;
+  }
+
+  withdrawAllowed(state: ERC4626PoolState): boolean {
+    if (this.withdrawDisabled) {
+      return false;
+    }
+
+    if (state.cooldownDuration) {
+      return state.cooldownDuration === 0n;
+    }
+
+    return true;
   }
 }

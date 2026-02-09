@@ -35,4 +35,4 @@ export { IDex } from './dex/idex';
 
 export { ConfigHelper } from './config';
 
-export { SlippageCheckError } from './dex/generic-rfq/types';
+export { SlippageCheckError, BlacklistError } from './dex/generic-rfq/types';

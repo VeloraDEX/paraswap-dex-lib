@@ -153,16 +153,6 @@ export class BalancerV3 extends SimpleExchange implements IDex<BalancerV3Data> {
     );
   }
 
-  async getBlock(blockNumber: number): Promise<Block> {
-    if (this.latestBlock && this.latestBlock.number === blockNumber) {
-      return this.latestBlock;
-    }
-
-    const block = await this.dexHelper.provider.getBlock(blockNumber);
-    this.latestBlock = block;
-    return block;
-  }
-
   findPoolAddressesWithTokens(
     pools: DeepReadonly<PoolStateMap>,
     tokenA: string,
@@ -224,8 +214,19 @@ export class BalancerV3 extends SimpleExchange implements IDex<BalancerV3Data> {
         return null;
       }
 
-      // This is used to get block timestamp which is needed to calculate Amp if it is updating
-      const block = await this.getBlock(blockNumber);
+      // This is needed to calculate Amp if it is updating
+      let blockTimestamp: number | undefined;
+
+      const latestBlockNumber =
+        this.dexHelper.blockManager.getLatestBlockNumber();
+      const activeChainHead = this.dexHelper.blockManager.getActiveChainHead();
+
+      if (activeChainHead && blockNumber === latestBlockNumber) {
+        blockTimestamp = Number(activeChainHead.timestamp);
+      } else {
+        // Timestamp diff between current time and block.timestamp is acceptable for pricing in this case
+        blockTimestamp = Math.floor(Date.now() / 1000);
+      }
 
       // get up to date pools and state
       const allPoolState = this.eventPools.getState(blockNumber);
@@ -276,7 +277,7 @@ export class BalancerV3 extends SimpleExchange implements IDex<BalancerV3Data> {
             tokenInInfo,
             tokenOutInfo,
             swapKind,
-            block.timestamp,
+            blockTimestamp,
           );
 
           let unit = 0n;
@@ -285,7 +286,7 @@ export class BalancerV3 extends SimpleExchange implements IDex<BalancerV3Data> {
               steps,
               unitAmount,
               swapKind,
-              block.timestamp,
+              blockTimestamp,
               this.eventHooks.getState(blockNumber) || {},
             );
 
@@ -298,7 +299,7 @@ export class BalancerV3 extends SimpleExchange implements IDex<BalancerV3Data> {
             exchange: this.dexKey,
             gasCost: getGasCost(steps),
             poolAddresses: [pool.poolAddress],
-            poolIdentifier: `${this.dexKey}_${pool.poolAddress}`,
+            poolIdentifiers: [pool.poolAddress],
           };
 
           for (let j = 0; j < amounts.length; j++) {
@@ -308,7 +309,7 @@ export class BalancerV3 extends SimpleExchange implements IDex<BalancerV3Data> {
                 steps,
                 amounts[j],
                 swapKind,
-                block.timestamp,
+                blockTimestamp,
                 this.eventHooks.getState(blockNumber) || {},
               );
             }
@@ -598,6 +599,7 @@ export class BalancerV3 extends SimpleExchange implements IDex<BalancerV3Data> {
   // getTopPoolsForToken. It is optional for a DEX
   // to implement this
   async updatePoolState(): Promise<void> {
+    this.eventPools.setHooksConfigMap(this.eventHooks.hooksConfigMap);
     await this.eventPools.updateStatePools();
   }
 

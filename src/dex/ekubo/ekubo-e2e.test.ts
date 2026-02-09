@@ -2,123 +2,130 @@
 import dotenv from 'dotenv';
 dotenv.config();
 
-import { testE2E } from '../../../tests/utils-e2e';
-import {
-  Tokens,
-  Holders,
-  NativeTokenSymbols,
-} from '../../../tests/constants-e2e';
-import { Network, ContractMethod, SwapSide } from '../../constants';
 import { StaticJsonRpcProvider } from '@ethersproject/providers';
+import { Holders, Tokens } from '../../../tests/constants-e2e';
+import { testE2E } from '../../../tests/utils-e2e';
 import { generateConfig } from '../../config';
+import { ContractMethod, Network, SwapSide } from '../../constants';
+import { PoolConfig, PoolKey } from './pools/utils';
+import { BI_POWS } from '../../bigint-constants';
+import { DEX_KEY, EKUBO_CONFIG } from './config';
 
-function testForNetwork(
-  network: Network,
-  dexKey: string,
-  tokenASymbol: string,
-  tokenBSymbol: string,
-  tokenAAmount: string,
-  tokenBAmount: string,
-  nativeTokenAmount: string,
-) {
+describe('Mainnet', () => {
+  const network = Network.MAINNET;
+  const tokens = Tokens[network];
+  const config = EKUBO_CONFIG[DEX_KEY][network];
+
+  const tokensToTest = [
+    {
+      pair: [
+        {
+          symbol: 'USDC',
+          amount: '10000000',
+        },
+        {
+          symbol: 'USDT',
+          amount: '10000000',
+        },
+      ],
+    },
+    {
+      pair: [
+        {
+          symbol: 'ETH',
+          amount: '1000000000000000',
+        },
+        {
+          symbol: 'USDC',
+          amount: '10000000',
+        },
+      ],
+      // ETH/USDC 0.05% fee TWAMM pool
+      limitPools: [
+        new PoolKey(
+          0n,
+          0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48n,
+          new PoolConfig(BigInt(config.twamm), 9223372036854775n, 0),
+        ).stringId,
+      ],
+    },
+    {
+      pair: [
+        {
+          symbol: 'ETH',
+          amount: BI_POWS[16],
+        },
+        {
+          symbol: 'wstETH',
+          amount: BI_POWS[16],
+        },
+      ],
+      limitPools: [
+        new PoolKey(
+          0n,
+          BigInt(tokens['wstETH'].address),
+          new PoolConfig(BigInt(config.mevResist), 184467440737096n, 10),
+        ).stringId,
+      ],
+    },
+  ];
+
   const provider = new StaticJsonRpcProvider(
     generateConfig(network).privateHttpProvider,
     network,
   );
-  const tokens = Tokens[network];
   const holders = Holders[network];
-  const nativeTokenSymbol = NativeTokenSymbols[network];
 
   const sideToContractMethods = new Map([
     [SwapSide.SELL, [ContractMethod.swapExactAmountIn]],
     [SwapSide.BUY, [ContractMethod.swapExactAmountOut]],
   ]);
 
-  describe(`${network}`, () => {
-    sideToContractMethods.forEach((contractMethods, side) =>
-      describe(`${side}`, () => {
-        contractMethods.forEach((contractMethod: ContractMethod) => {
-          describe(`${contractMethod}`, () => {
-            it(`${nativeTokenSymbol} -> ${tokenASymbol}`, async () => {
-              await testE2E(
-                tokens[nativeTokenSymbol],
-                tokens[tokenASymbol],
-                holders[nativeTokenSymbol],
-                side === SwapSide.SELL ? nativeTokenAmount : tokenAAmount,
+  sideToContractMethods.forEach((contractMethods, side) =>
+    describe(`${side}`, () => {
+      contractMethods.forEach((contractMethod: ContractMethod) => {
+        describe(`${contractMethod}`, () => {
+          function test(
+            srcTokenSymbol: string,
+            destTokenSymbol: string,
+            amount: string,
+            side: SwapSide,
+            poolIdentifiers?: string[],
+          ) {
+            return testE2E(
+              tokens[srcTokenSymbol],
+              tokens[destTokenSymbol],
+              holders[srcTokenSymbol],
+              amount,
+              side,
+              DEX_KEY,
+              contractMethod,
+              network,
+              provider,
+              poolIdentifiers && { [DEX_KEY]: poolIdentifiers },
+            );
+          }
+
+          tokensToTest.forEach(({ pair: [tokenA, tokenB], limitPools }) => {
+            it(`${tokenA.symbol} -> ${tokenB.symbol}`, () =>
+              test(
+                tokenA.symbol,
+                tokenB.symbol,
+                String(side === SwapSide.SELL ? tokenA.amount : tokenB.amount),
                 side,
-                dexKey,
-                contractMethod,
-                network,
-                provider,
-              );
-            });
-            it(`${tokenASymbol} -> ${nativeTokenSymbol}`, async () => {
-              await testE2E(
-                tokens[tokenASymbol],
-                tokens[nativeTokenSymbol],
-                holders[tokenASymbol],
-                side === SwapSide.SELL ? tokenAAmount : nativeTokenAmount,
+                limitPools,
+              ));
+            it(`${tokenB.symbol} -> ${tokenA.symbol}`, () =>
+              test(
+                tokenB.symbol,
+                tokenA.symbol,
+                String(side === SwapSide.SELL ? tokenB.amount : tokenA.amount),
                 side,
-                dexKey,
-                contractMethod,
-                network,
-                provider,
-              );
-            });
-            it(`${tokenASymbol} -> ${tokenBSymbol}`, async () => {
-              await testE2E(
-                tokens[tokenASymbol],
-                tokens[tokenBSymbol],
-                holders[tokenASymbol],
-                side === SwapSide.SELL ? tokenAAmount : tokenBAmount,
-                side,
-                dexKey,
-                contractMethod,
-                network,
-                provider,
-              );
-            });
-            it(`${tokenBSymbol} -> ${tokenASymbol}`, async () => {
-              await testE2E(
-                tokens[tokenBSymbol],
-                tokens[tokenASymbol],
-                holders[tokenBSymbol],
-                side === SwapSide.SELL ? tokenBAmount : tokenAAmount,
-                side,
-                dexKey,
-                contractMethod,
-                network,
-                provider,
-              );
-            });
+                limitPools,
+              ));
           });
         });
-      }),
-    );
-  });
-}
-
-describe('Ekubo E2E', () => {
-  const dexKey = 'Ekubo';
-
-  describe('Mainnet', () => {
-    const network = Network.MAINNET;
-
-    const tokenASymbol: string = 'USDC';
-    const tokenBSymbol: string = 'USDT';
-
-    const tokenAAmount: string = '10000000';
-    const tokenBAmount: string = '10000000';
-    const nativeTokenAmount = '1000000000000000';
-
-    testForNetwork(
-      network,
-      dexKey,
-      tokenASymbol,
-      tokenBSymbol,
-      tokenAAmount,
-      tokenBAmount,
-      nativeTokenAmount,
-    );
-  });
+      });
+    }),
+  );
 });

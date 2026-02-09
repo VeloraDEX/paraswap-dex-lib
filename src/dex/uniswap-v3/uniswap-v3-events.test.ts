@@ -2,6 +2,7 @@
 import dotenv from 'dotenv';
 dotenv.config();
 
+import VelodromeSlipstreamMulticallABi from '../../abi/velodrome-slipstream/VelodromeSlipstreamStateMulticall.abi.json';
 import _ from 'lodash';
 import { UniswapV3EventPool } from './uniswap-v3-pool';
 import { UniswapV3Config } from './config';
@@ -14,10 +15,14 @@ import ERC20ABI from '../../abi/erc20.json';
 import StateMulticallABI from '../../abi/uniswap-v3/UniswapV3StateMulticall.abi.json';
 import { AbiItem } from 'web3-utils';
 import { decodeStateMultiCallResultWithRelativeBitmaps } from './utils';
+import { VelodromeSlipstreamEventPool } from './forks/velodrome-slipstream/velodrome-slipstream-pool';
+import { decodeStateMultiCallResultWithRelativeBitmaps as decodeStateMultiCallResultWithRelativeBitmapsForVelodromeSlipstream } from './forks/velodrome-slipstream/utils';
 
 jest.setTimeout(300 * 1000);
-const dexKey = 'UniswapV3';
-const network = Network.MAINNET;
+// const dexKey = 'UniswapV3';
+const dexKey = 'VelodromeSlipstreamNewFactory';
+
+const network = Network.OPTIMISM;
 const config = UniswapV3Config[dexKey][network];
 
 async function fetchPoolStateFromContract(
@@ -166,6 +171,56 @@ describe('UniswapV3 Event', function () {
       logger,
       undefined,
       config.initHash,
+    );
+
+    // It is done in generateState. But here have to make it manually
+    uniswapV3Pool.poolAddress = _poolAddress.toLowerCase();
+    uniswapV3Pool.addressesSubscribed[0] = _poolAddress;
+
+    await testEventSubscriber(
+      uniswapV3Pool,
+      uniswapV3Pool.addressesSubscribed,
+      (_blockNumber: number) =>
+        fetchPoolStateFromContract(uniswapV3Pool, _blockNumber, _poolAddress),
+      blockNumber,
+      `${dexKey}_${_poolAddress}`,
+      dexHelper.provider,
+    );
+  });
+
+  // We had issue with this event. Test to tackle that special case
+  it('VelodromeSlipstreamEventPool', async () => {
+    const _poolAddress =
+      '0x478946BcD4a5a22b316470F5486fAfb928C0bA25'.toLowerCase();
+    const _feeCode = 100n;
+    const _token0 = '0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85';
+    const _token1 = '0x4200000000000000000000000000000000000006';
+    const blockNumber = 142136604;
+    const tickSpacing = 100n;
+
+    const dexHelper = new DummyDexHelper(Network.OPTIMISM);
+
+    const logger = dexHelper.getLogger(dexKey);
+
+    const _config = UniswapV3Config[dexKey][Network.OPTIMISM];
+
+    const uniswapV3Pool = new VelodromeSlipstreamEventPool(
+      dexHelper,
+      dexKey,
+      new dexHelper.web3Provider.eth.Contract(
+        VelodromeSlipstreamMulticallABi as AbiItem[],
+        config.stateMulticall,
+      ),
+      decodeStateMultiCallResultWithRelativeBitmapsForVelodromeSlipstream,
+      new Interface(ERC20ABI),
+      _config.factory,
+      _feeCode,
+      _token0,
+      _token1,
+      logger,
+      undefined,
+      config.initHash,
+      tickSpacing,
     );
 
     // It is done in generateState. But here have to make it manually

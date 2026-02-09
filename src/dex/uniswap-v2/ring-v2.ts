@@ -18,6 +18,7 @@ import {
   DexExchangeParam,
   NumberAsString,
   DexConfigMap,
+  SimpleExchangeParam,
 } from '../../types';
 import { getBigIntPow, getDexKeysWithNetwork } from '../../utils';
 import { DexParams, UniswapV2Data } from './types';
@@ -26,6 +27,10 @@ import uniswapV2ABI from '../../abi/uniswap-v2/uniswap-v2-pool.json';
 import uniswapV2factoryABI from '../../abi/uniswap-v2/uniswap-v2-factory.json';
 import RingV2ExchangeRouterABI from '../../abi/uniswap-v2/ring-v2-router.json';
 import { extractReturnAmountPosition } from '../../executor/utils';
+import {
+  FewWrappedToken,
+  FewWrappedTokenEventPool,
+} from './few-wrapped-token-event-pool';
 
 export enum RingV2Functions {
   swapExactTokensForTokens = 'swapExactTokensForTokens',
@@ -90,6 +95,8 @@ export class RingV2 extends UniswapV2 {
   public static dexKeysWithNetwork: { key: string; networks: Network[] }[] =
     getDexKeysWithNetwork(RingV2Config);
 
+  private fwTokenPools: Record<Address, FewWrappedTokenEventPool> = {};
+
   constructor(
     protected network: Network,
     dexKey: string,
@@ -121,7 +128,7 @@ export class RingV2 extends UniswapV2 {
       feeCode,
       poolGasCost,
       decoderIface,
-      undefined, // adapters being the same as UniswapV2
+      undefined, // disabled for V5
       router,
     );
 
@@ -133,39 +140,33 @@ export class RingV2 extends UniswapV2 {
     this.exchangeRouterInterface = new Interface(RingV2ExchangeRouterABI);
   }
 
-  getTokenAddresses<T extends string | Token>(_from: T, _to: T): [T, T] {
-    const from =
-      typeof _from === 'string'
-        ? this.dexHelper.config.wrapETH(_from)
-        : this.dexHelper.config.wrapETH(_from);
+  // disable for V5
+  getAdapters(): null {
+    return null;
+  }
 
-    const to =
-      typeof _to === 'string'
-        ? this.dexHelper.config.wrapETH(_to)
-        : this.dexHelper.config.wrapETH(_to);
+  getFewWrappedTokens(
+    _from: Token,
+    _to: Token,
+  ): [FewWrappedToken, FewWrappedToken] {
+    const from = this.dexHelper.config.wrapETH(_from);
+    const to = this.dexHelper.config.wrapETH(_to);
 
-    const getFewWrappedToken = (token: T): T => {
-      const address = typeof token === 'string' ? token : token.address;
-
+    const getFewWrappedToken = (underlying: Token): FewWrappedToken => {
       const fewTokenAddress = computeFWTokenAddress(
-        address,
+        underlying.address,
         this.dexKey,
         this.network,
       );
 
-      const newToken =
-        typeof token === 'string'
-          ? (fewTokenAddress as T)
-          : ({
-              ...(token as Token),
-              address: fewTokenAddress,
-              ...(token.symbol ? { symbol: `fw${token.symbol}` } : {}),
-            } as T);
-
-      return newToken;
+      return {
+        ...underlying,
+        address: fewTokenAddress,
+        underlying: underlying.address,
+      };
     };
 
-    return [getFewWrappedToken(from as T), getFewWrappedToken(to as T)];
+    return [getFewWrappedToken(from), getFewWrappedToken(to)];
   }
 
   async getPoolIdentifiers(
@@ -174,13 +175,37 @@ export class RingV2 extends UniswapV2 {
     side: SwapSide,
     blockNumber: number,
   ): Promise<string[]> {
-    const [from, to] = this.getTokenAddresses(_from, _to);
+    const [from, to] = this.getFewWrappedTokens(_from, _to);
 
     if (from.address.toLowerCase() === to.address.toLowerCase()) {
       return [];
     }
 
     return [this.getPoolIdentifier(from.address, to.address)];
+  }
+
+  async getFewWrappedTokenPool(
+    token: FewWrappedToken,
+    blockNumber: number,
+  ): Promise<FewWrappedTokenEventPool> {
+    let pool = this.fwTokenPools[token.address.toLowerCase()];
+
+    if (pool) {
+      return pool;
+    }
+
+    pool = new FewWrappedTokenEventPool(
+      this.dexKey,
+      this.dexHelper,
+      token,
+      this.logger,
+    );
+
+    this.fwTokenPools[token.address.toLowerCase()] = pool;
+
+    await pool.initialize(blockNumber);
+
+    return pool;
   }
 
   async getPricesVolume(
@@ -199,7 +224,7 @@ export class RingV2 extends UniswapV2 {
     },
   ): Promise<ExchangePrices<UniswapV2Data> | null> {
     try {
-      const [from, to] = this.getTokenAddresses(_from, _to);
+      const [from, to] = this.getFewWrappedTokens(_from, _to);
 
       if (from.address.toLowerCase() === to.address.toLowerCase()) {
         return null;
@@ -220,10 +245,15 @@ export class RingV2 extends UniswapV2 {
         blockNumber,
         transferFees.srcDexFee,
       );
+
       if (!pairParam) {
         this.logger.debug('No pair parameters found');
         return null;
       }
+
+      const toTokenPool = await this.getFewWrappedTokenPool(to, blockNumber);
+      const { balance: availableBalance } =
+        await toTokenPool.getOrGenerateState(blockNumber);
 
       const unitAmount = getBigIntPow(isSell ? from.decimals : to.decimals);
 
@@ -243,7 +273,7 @@ export class RingV2 extends UniswapV2 {
         ? await this.getSellPricePath(unitVolumeWithFee, [pairParam])
         : await this.getBuyPricePath(unitVolumeWithFee, [pairParam]);
 
-      const prices = isSell
+      let prices = isSell
         ? await Promise.all(
             amountsWithFee.map(amount =>
               this.getSellPricePath(amount, [pairParam]),
@@ -254,6 +284,19 @@ export class RingV2 extends UniswapV2 {
               this.getBuyPricePath(amount, [pairParam]),
             ),
           );
+
+      // apply balance cap
+      prices = prices.map((p, i) => {
+        if (isSell && p > availableBalance) {
+          return 0n;
+        }
+
+        if (!isSell && amountsWithFee[i] > availableBalance) {
+          return 0n;
+        }
+
+        return p;
+      });
 
       const [unitOutWithFee, ...outputsWithFee] = applyTransferFee(
         [unit, ...prices],
@@ -285,7 +328,7 @@ export class RingV2 extends UniswapV2 {
             ],
           },
           exchange: this.dexKey,
-          poolIdentifier,
+          poolIdentifiers: [poolIdentifier],
           gasCost: this.poolGasCost,
           poolAddresses: [pairParam.exchange],
         },
@@ -346,5 +389,45 @@ export class RingV2 extends UniswapV2 {
         1,
       ),
     };
+  }
+
+  async getSimpleParam(
+    src: Address,
+    dest: Address,
+    srcAmount: NumberAsString,
+    destAmount: NumberAsString,
+    data: UniswapV2Data,
+    side: SwapSide,
+  ): Promise<SimpleExchangeParam> {
+    let args: any[];
+    let functionName: RingV2Functions;
+
+    let ttl = 1200;
+    const deadline = `0x${(
+      Math.floor(new Date().getTime() / 1000) + ttl
+    ).toString(16)}`;
+
+    if (side === SwapSide.SELL) {
+      functionName = RingV2Functions.swapExactTokensForTokens;
+      args = [srcAmount, destAmount, data.path, this.augustusAddress, deadline];
+    } else {
+      functionName = RingV2Functions.swapTokensForExactTokens;
+      args = [destAmount, srcAmount, data.path, this.augustusAddress, deadline];
+    }
+
+    const exchangeData = this.exchangeRouterInterface.encodeFunctionData(
+      functionName,
+      args,
+    );
+
+    return this.buildSimpleParamWithoutWETHConversion(
+      src,
+      srcAmount,
+      dest,
+      destAmount,
+      exchangeData,
+      data.router,
+      data.router,
+    );
   }
 }

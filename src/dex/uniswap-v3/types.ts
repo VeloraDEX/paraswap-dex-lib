@@ -28,9 +28,6 @@ export type OracleObservationCandidates = {
 export type TickInfo = {
   liquidityGross: bigint;
   liquidityNet: bigint;
-  tickCumulativeOutside: bigint;
-  secondsPerLiquidityOutsideX128: bigint;
-  secondsOutside: bigint;
   initialized: boolean;
 };
 
@@ -99,6 +96,7 @@ export type DexParams = {
   eventPoolImplementation?: typeof UniswapV3EventPool;
   factoryImplementation?: typeof UniswapV3Factory;
   decodeStateMultiCallResultWithRelativeBitmaps?: DecodeStateMultiCallFunc;
+  liquidityField?: string;
 };
 
 export type UniswapV3SimpleSwapSellParam = {

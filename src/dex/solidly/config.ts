@@ -1,34 +1,10 @@
+import { AbiItem } from 'web3-utils';
 import { DexParams } from './types';
 import { DexConfigMap, AdapterMappings } from '../../types';
 import { Network, SwapSide } from '../../constants';
+import AerodromeFactoryABI from '../../abi/aerodrome/aerodrome-pool-factory.json';
 
 export const SolidlyConfig: DexConfigMap<DexParams> = {
-  SolidlyV2: {
-    [Network.MAINNET]: {
-      factoryAddress: '0x777de5Fe8117cAAA7B44f396E93a401Cf5c9D4d6',
-      router: '0x5b39e7A1C706464F5B3956b21CD22a43F0dB0eAC',
-      subgraphURL: '4GX8RE9TzEWormbkayeGj4NQmmhYE46izVVUvXv8WPDh',
-      initCode:
-        '0x413d36e4ab9e83cf39b8064a3b5c98253a9e46a6cf02c8efd185314c866d656b',
-      stableFee: 200, // This is not fixed
-      volatileFee: 2000,
-      feeCode: 0,
-      poolGasCost: 220 * 1000, // https://dashboard.tenderly.co/paraswap/paraswap/tx/mainnet/0x80f01d841ac01cfaedc93ceaadc88fc799ee1539841c2ac19cfccfdcfb605d70/gas-usage
-      feeFactor: 1e6,
-    },
-  },
-  Dystopia: {
-    [Network.POLYGON]: {
-      subgraphURL: '89e9ZAHs7mJvpckEaSmpTtRXUsYcc1mesE7Czp1Hrqxa',
-      factoryAddress: '0x1d21Db6cde1b18c7E47B0F7F42f4b3F68b9beeC9',
-      router: '0xc8DB3501281c192fFE9697A1b905b161ca0cd64d',
-      initCode:
-        '0x009bce6d7eb00d3d075e5bd9851068137f44bba159f1cde806a268e20baaf2e8',
-      // Fixed Fees, same for volatile and stable pools
-      feeCode: 5,
-      poolGasCost: 180 * 1000,
-    },
-  },
   Velodrome: {
     [Network.OPTIMISM]: {
       subgraphURL: '2bam2XEb91cFqABFPSKj3RiSjpop9HvDt1MnYq5cDX5E',
@@ -64,6 +40,8 @@ export const SolidlyConfig: DexConfigMap<DexParams> = {
         '0x1a8f01f7eab324003d9388f229ea17991eee9c9d14586f429799f3656790eba0',
       poolGasCost: 180 * 1000,
       feeCode: 0,
+      factoryAbi: AerodromeFactoryABI as AbiItem[],
+      getPairMethodName: 'getPool',
     },
   },
   Thena: {
@@ -77,17 +55,6 @@ export const SolidlyConfig: DexConfigMap<DexParams> = {
       volatileFee: 20, // 10000 / 500 = 20 in BPS
       poolGasCost: 180 * 1000,
       feeCode: 1,
-    },
-  },
-  Chronos: {
-    [Network.ARBITRUM]: {
-      subgraphURL: 'BCCAQ3VvF4jLqCpr966QRRnAK8xpvv4MFJYHYCTv224r',
-      factoryAddress: '0xce9240869391928253ed9cc9bcb8cb98cb5b0722',
-      router: '0xb2634B3CBc1E401AB3C2743DB44d459C5c9aA662',
-      initCode:
-        '0x1840ae455256f509042de907fe0623f2e5e0ad44751ef974c4c37c1e516b7644',
-      poolGasCost: 180 * 1000,
-      feeCode: 0,
     },
   },
   Ramses: {
@@ -126,24 +93,13 @@ export const SolidlyConfig: DexConfigMap<DexParams> = {
       poolGasCost: 180 * 1000,
     },
   },
-  Velocimeter: {
-    [Network.BASE]: {
+  Blackhole: {
+    [Network.AVALANCHE]: {
       // RPC pool tracker is used
-      factoryAddress: '0xe21Aac7F113Bd5DC2389e4d8a8db854a87fD6951',
-      router: '0xDCf4EE5B700e2a5Fec458e06B763A4a3E3004494',
+      factoryAddress: '0xfE926062Fb99CA5653080d6C14fE945Ad68c265C',
+      router: '0xCaD684775d7879E63f5d319dAcC8086EeCC01B01',
       initCode:
-        '0xac4013aa7118234c1dd1f9cc4cdd3933d5a426224bc691c1bde3d8930a7e6151', // PairFactory.pairCodeHash
-      feeCode: 0, // dynamic fees
-      poolGasCost: 180 * 1000, // just same as other forks
-    },
-  },
-  Usdfi: {
-    [Network.BSC]: {
-      subgraphURL: 'EvFsjvtmZpMJ4Y5RdJCx9TD5AkQjXCKpWaTYUvZ2DpWM',
-      factoryAddress: '0xB3863573d9f25e6a84895d4685a408db7a488416',
-      router: '0xc2b5a8082D2E1867A9CBBF41b625E3ae9dF81f8b',
-      initCode:
-        '0x1d770cc32abcf060a45b0de3f0afbd8594effe9f6d836f93d19c05d76b4b4dfa',
+        '0x87b2d661db12ce27ece6305198fcb950a2522c8e43e3b90e93256b71a6db5899',
       poolGasCost: 180 * 1000,
       feeCode: 0, // dynamic fees
     },
@@ -151,25 +107,19 @@ export const SolidlyConfig: DexConfigMap<DexParams> = {
 };
 
 export const Adapters: Record<number, AdapterMappings> = {
-  [Network.POLYGON]: {
-    [SwapSide.SELL]: [{ name: 'PolygonAdapter02', index: 3 }], // dystopia
-  },
   [Network.OPTIMISM]: {
     [SwapSide.SELL]: [{ name: 'OptimismAdapter01', index: 8 }], // velodrome
   },
   [Network.BSC]: {
-    [SwapSide.SELL]: [{ name: 'BscAdapter02', index: 1 }], // thena + cone, usdFi
-  },
-  [Network.MAINNET]: {
-    [SwapSide.SELL]: [{ name: 'Adapter04', index: 1 }], // solidly
+    [SwapSide.SELL]: [{ name: 'BscAdapter02', index: 1 }], // thena
   },
   [Network.AVALANCHE]: {
-    [SwapSide.SELL]: [{ name: 'AvalancheAdapter02', index: 3 }], // solisnek (deprecated)
+    [SwapSide.SELL]: [{ name: 'AvalancheAdapter02', index: 3 }], // blackhole
   },
   [Network.ARBITRUM]: {
-    [SwapSide.SELL]: [{ name: 'ArbitrumAdapter02', index: 1 }], // chronos, ramses
+    [SwapSide.SELL]: [{ name: 'ArbitrumAdapter02', index: 1 }], // ramses
   },
   [Network.BASE]: {
-    [SwapSide.SELL]: [{ name: 'BaseAdapter01', index: 3 }], // aerodrome, equalizer, velocimeter
+    [SwapSide.SELL]: [{ name: 'BaseAdapter01', index: 3 }], // aerodrome, equalizer
   },
 };

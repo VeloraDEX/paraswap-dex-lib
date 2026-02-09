@@ -1,5 +1,4 @@
 import {
-  Address,
   LoggerConstructor,
   Logger,
   Token,
@@ -13,6 +12,7 @@ import {
   SETUP_RETRY_TIMEOUT,
   FETCH_POOL_IDENTIFIER_TIMEOUT,
   FETCH_POOL_PRICES_TIMEOUT,
+  NULL_ADDRESS,
 } from './constants';
 import { DexAdapterService } from './dex';
 import { IDex, IRouteOptimizer } from './dex/idex';
@@ -67,12 +67,17 @@ export class PricingHelper {
     return this.dexAdapterService.getAllDexKeys();
   }
 
-  public getDexByKey(key: string): IDex<any, any, any> | null {
+  public getDexByKey(
+    key: string,
+    logWhenNotFound = true,
+  ): IDex<any, any, any> | null {
     try {
       return this.dexAdapterService.getDexByKey(key);
     } catch (e) {
       if (e instanceof Error && e.message.startsWith('Invalid Dex Key')) {
-        this.logger.warn(`Dex ${key} was not found in getDexByKey`);
+        if (logWhenNotFound) {
+          this.logger.warn(`Dex ${key} was not found in getDexByKey`);
+        }
         return null;
       }
       // Unexpected error
@@ -155,6 +160,112 @@ export class PricingHelper {
       },
       {},
     );
+  }
+
+  // filter out dexes that are restricted
+  // or have `userAddress` blacklisted
+  async filterOutDexKeysWithRestrictions(
+    dexKeys: string[],
+    userAddress = NULL_ADDRESS,
+    usdTradeValue: number | null = null,
+  ): Promise<string[]> {
+    const checkBlacklist = userAddress !== NULL_ADDRESS;
+    const dexesWithBlacklists: string[] = [];
+    const dexBlacklistCacheKeys: string[] = [];
+    const dexesWithRestrictions: string[] = [];
+    const dexRestrictionCacheKeys: string[] = [];
+
+    const dexesWithNotSufficientUsdTrade: string[] = [];
+
+    for (const key of dexKeys) {
+      const dex = this.getDexByKey(key, false);
+
+      if (dex) {
+        if (dex?.minUsdTradeValue) {
+          const minTradeUsd = dex?.minUsdTradeValue();
+          if (
+            minTradeUsd !== null &&
+            (usdTradeValue === null || usdTradeValue < minTradeUsd)
+          ) {
+            dexesWithNotSufficientUsdTrade.push(key);
+            continue;
+          }
+        }
+
+        if (checkBlacklist && dex.hasBlacklist?.()) {
+          dexesWithBlacklists.push(key);
+          dexBlacklistCacheKeys.push(dex.getBlacklistedCacheKey(userAddress));
+        }
+
+        if (dex.hasDexRestriction?.()) {
+          dexesWithRestrictions.push(key);
+          dexRestrictionCacheKeys.push(dex.getRestrictedCacheKey());
+        }
+      }
+    }
+
+    const cacheKeysToGet = [
+      ...dexBlacklistCacheKeys,
+      ...dexRestrictionCacheKeys,
+    ];
+
+    if (!cacheKeysToGet.length) {
+      return dexKeys.filter(
+        key => !dexesWithNotSufficientUsdTrade.includes(key),
+      );
+    }
+
+    const result = await this.dexAdapterService.dexHelper.cache.mget(
+      cacheKeysToGet,
+    );
+    const dexesWithBlacklistedUser = dexesWithBlacklists.filter(
+      (_, i) => result[i], // knowing the result is not NULL is sufficient
+    );
+
+    const restrictedDexes = dexesWithRestrictions.filter(
+      (_, i) => result[dexesWithBlacklists.length + i],
+    );
+
+    return dexKeys.filter(
+      key =>
+        !dexesWithBlacklistedUser.includes(key) &&
+        !restrictedDexes.includes(key) &&
+        !dexesWithNotSufficientUsdTrade.includes(key),
+    );
+  }
+
+  async filterOutDexKeysWithRestrictedPair(
+    dexKeys: string[],
+    token0: string,
+    token1: string,
+  ): Promise<string[]> {
+    const dexesWithPairRestrictions: string[] = [];
+    const pairRestrictionCacheKeys: string[] = [];
+
+    for (const key of dexKeys) {
+      const dex = this.getDexByKey(key, false);
+
+      if (dex && dex.hasPairRestriction?.()) {
+        dexesWithPairRestrictions.push(key);
+        pairRestrictionCacheKeys.push(
+          dex.getRestrictedPairCacheKey(token0, token1),
+        );
+      }
+    }
+
+    if (!pairRestrictionCacheKeys.length) {
+      return dexKeys;
+    }
+
+    const result = await this.dexAdapterService.dexHelper.cache.mget(
+      pairRestrictionCacheKeys,
+    );
+
+    const dexesWithRestrictedPair = dexesWithPairRestrictions.filter(
+      (_, i) => result[i], // knowing the result is not NULL is sufficient
+    );
+
+    return dexKeys.filter(key => !dexesWithRestrictedPair.includes(key));
   }
 
   getDexsSupportingFeeOnTransfer(): string[] {

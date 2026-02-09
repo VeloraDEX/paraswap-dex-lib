@@ -9,7 +9,7 @@ import {
 } from '../../types';
 import { uint24ToBigInt, uint256ToBigInt } from '../../../../lib/decoders';
 import { decodeStateMultiCallResultWithRelativeBitmaps } from './utils';
-import { Address, Logger } from '../../../../types';
+import { Address } from '../../../../types';
 import { assert } from 'ts-essentials';
 import { _reduceTickBitmap, _reduceTicks } from '../../contract-math/utils';
 import { bigIntify } from '../../../../utils';
@@ -159,7 +159,7 @@ export class VelodromeSlipstreamEventPool extends UniswapV3EventPool {
     };
   }
 
-  private predictDeterministicAddress(
+  protected predictDeterministicAddress(
     factory: string,
     implementation: string,
     salt: string,

@@ -75,11 +75,6 @@ export class TickManager {
     let flipped = liquidityGrossAfter === 0n;
     if (liquidityGrossBefore === 0n) {
       flipped = !flipped;
-      if (tick <= tickCurrent) {
-        info.secondsPerLiquidityOutsideX128 = secondsPerLiquidityCumulativeX128;
-        info.tickCumulativeOutside = tickCumulative;
-        info.secondsOutside = time;
-      }
       info.initialized = true;
     }
 

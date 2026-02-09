@@ -380,12 +380,8 @@ export class Executor02BytecodeBuilder extends ExecutorBytecodeBuilder<
           ['uint256'],
           [swapExchange.srcAmount],
         );
-        const fromAmountIndex = exchangeData
-          .replace('0x', '')
-          .indexOf(fromAmount.replace('0x', ''));
 
-        fromAmountPos =
-          (fromAmountIndex !== -1 ? fromAmountIndex : exchangeData.length) / 2;
+        fromAmountPos = this.findAmountPosInCalldata(exchangeData, fromAmount);
       }
     }
 

@@ -1,12 +1,15 @@
 import { Interface } from '@ethersproject/abi';
 import { DeepReadonly } from 'ts-essentials';
 import FactoryABI from '../../abi/algebra-integral/AlgebraFactory.abi.json';
+import erc20Abi from '../../abi/erc20.json';
 import { IDexHelper } from '../../dex-helper/idex-helper';
 import { StatefulEventSubscriber } from '../../stateful-event-subscriber';
 import { Address, Log, Logger } from '../../types';
 import { LogDescription } from 'ethers/lib/utils';
 import { FactoryState, Pool } from './types';
-import { NULL_ADDRESS, SUBGRAPH_TIMEOUT } from '../../constants';
+import { ETHER_ADDRESS, NULL_ADDRESS, SUBGRAPH_TIMEOUT } from '../../constants';
+import { MIN_USD_TVL_FOR_PRICING } from './constants';
+import { uint256ToBigInt } from '../../lib/decoders';
 
 /*
  * "Stateless" event subscriber in order to capture "PoolCreated" event on new pools created.
@@ -20,6 +23,7 @@ export class AlgebraIntegralFactory extends StatefulEventSubscriber<FactoryState
   logDecoder: (log: Log) => any;
 
   private pools: Pool[] = [];
+  private erc20Interface = new Interface(erc20Abi);
 
   constructor(
     readonly parentName: string,
@@ -63,7 +67,6 @@ export class AlgebraIntegralFactory extends StatefulEventSubscriber<FactoryState
   public getAvailablePoolsForPair(
     srcToken: Address,
     destToken: Address,
-    blockNumber: number,
   ): Pool[] {
     const _srcToken = this.dexHelper.config.wrapETH(srcToken);
     const _destToken = this.dexHelper.config.wrapETH(destToken);
@@ -79,6 +82,7 @@ export class AlgebraIntegralFactory extends StatefulEventSubscriber<FactoryState
           (pool.token0 === _srcAddress && pool.token1 === _destAddress) ||
           (pool.token0 === _destAddress && pool.token1 === _srcAddress),
       )
+      .filter(pool => pool.tvlUSD >= MIN_USD_TVL_FOR_PRICING)
       .sort((a, b) => {
         // sort by tvl
         const tvlDiff = b.tvlUSD - a.tvlUSD;
@@ -167,7 +171,10 @@ export class AlgebraIntegralFactory extends StatefulEventSubscriber<FactoryState
     );
 
     if (res.errors && res.errors.length) {
-      if (res.errors[0].message.includes('missing block')) {
+      if (
+        res.errors[0].message.includes('missing block') ||
+        res.errors[0].message.includes('not yet available')
+      ) {
         this.logger.info(
           `${this.parentName}: subgraph fallback to the latest block...`,
         );
@@ -223,5 +230,68 @@ export class AlgebraIntegralFactory extends StatefulEventSubscriber<FactoryState
         tvlUSD: 0,
       });
     }
+  }
+
+  async updatePoolsTvl(): Promise<void> {
+    if (this.pools.length === 0) return;
+
+    // Build multicall to fetch token balances for all pools
+    const balanceCalls = this.pools.flatMap(pool => [
+      {
+        target: pool.token0,
+        callData: this.erc20Interface.encodeFunctionData('balanceOf', [
+          pool.poolAddress,
+        ]),
+        decodeFunction: uint256ToBigInt,
+      },
+      {
+        target: pool.token1,
+        callData: this.erc20Interface.encodeFunctionData('balanceOf', [
+          pool.poolAddress,
+        ]),
+        decodeFunction: uint256ToBigInt,
+      },
+    ]);
+
+    const balanceResults =
+      await this.dexHelper.multiWrapper.tryAggregate<bigint>(
+        false,
+        balanceCalls,
+      );
+
+    // Build token amounts for USD conversion
+    const tokenAmounts: [string, bigint][] = this.pools.flatMap((pool, i) => {
+      const balance0 = balanceResults[i * 2].success
+        ? balanceResults[i * 2].returnData
+        : 0n;
+      const balance1 = balanceResults[i * 2 + 1].success
+        ? balanceResults[i * 2 + 1].returnData
+        : 0n;
+
+      return [
+        [
+          pool.token0 === NULL_ADDRESS.toLowerCase()
+            ? ETHER_ADDRESS
+            : pool.token0,
+          balance0,
+        ],
+        [
+          pool.token1 === NULL_ADDRESS.toLowerCase()
+            ? ETHER_ADDRESS
+            : pool.token1,
+          balance1,
+        ],
+      ] as [string, bigint][];
+    });
+
+    // Get USD values
+    const usdValues = await this.dexHelper.getUsdTokenAmounts(tokenAmounts);
+
+    // Update pool TVL
+    this.pools.forEach((pool, i) => {
+      const tvl0 = usdValues[i * 2] || 0;
+      const tvl1 = usdValues[i * 2 + 1] || 0;
+      pool.tvlUSD = tvl0 + tvl1;
+    });
   }
 }

@@ -245,21 +245,21 @@ export class Executor03BytecodeBuilder extends ExecutorBytecodeBuilder<
     // after the last path
     if (index === exchangeParams.length - 1) {
       // if some of dexes doesn't have recipient add one transfer in the end
-      if (
-        exchangeParams.some(param => !param.dexFuncHasRecipient) &&
-        !isETHAddress(swap.destToken)
-      ) {
-        const transferCallData = this.buildTransferCallData(
-          this.erc20Interface.encodeFunctionData('transfer', [
-            this.dexHelper.config.data.augustusV6Address,
-            // insert 0 because it's still gonna be replaced with balance check result
-            '0',
-          ]),
-          swap.destToken,
-        );
-
-        swapCallData = hexConcat([swapCallData, transferCallData]);
-      }
+      // if (
+      //   exchangeParams.some(param => !param.dexFuncHasRecipient) &&
+      //   !isETHAddress(swap.destToken)
+      // ) {
+      //   const transferCallData = this.buildTransferCallData(
+      //     this.erc20Interface.encodeFunctionData('transfer', [
+      //       this.dexHelper.config.data.augustusV6Address,
+      //       // insert 0 because it's still gonna be replaced with balance check result
+      //       '0',
+      //     ]),
+      //     swap.destToken,
+      //   );
+      //
+      //   swapCallData = hexConcat([swapCallData, transferCallData]);
+      // }
 
       // withdraw WETH
       if (isETHAddress(swap.destToken) && maybeWethCallData?.withdraw) {
@@ -271,13 +271,13 @@ export class Executor03BytecodeBuilder extends ExecutorBytecodeBuilder<
       }
 
       // send ETH to augustus
-      if (
-        isETHAddress(swap.destToken) &&
-        (!curExchangeParam.dexFuncHasRecipient || maybeWethCallData?.withdraw)
-      ) {
-        const finalSpecialFlagCalldata = this.buildFinalSpecialFlagCalldata();
-        swapCallData = hexConcat([swapCallData, finalSpecialFlagCalldata]);
-      }
+      // if (
+      //   isETHAddress(swap.destToken) &&
+      //   (!curExchangeParam.dexFuncHasRecipient || maybeWethCallData?.withdraw)
+      // ) {
+      //   const finalSpecialFlagCalldata = this.buildFinalSpecialFlagCalldata();
+      //   swapCallData = hexConcat([swapCallData, finalSpecialFlagCalldata]);
+      // }
     }
 
     return this.addMetadata(
@@ -359,12 +359,7 @@ export class Executor03BytecodeBuilder extends ExecutorBytecodeBuilder<
           [swap.swapExchanges[swapExchangeIndex].srcAmount],
         );
 
-        const fromAmountIndex = exchangeData
-          .replace('0x', '')
-          .indexOf(fromAmount.replace('0x', ''));
-
-        fromAmountPos =
-          (fromAmountIndex !== -1 ? fromAmountIndex : exchangeData.length) / 2;
+        fromAmountPos = this.findAmountPosInCalldata(exchangeData, fromAmount);
       }
 
       const toAmount = ethers.utils.defaultAbiCoder.encode(
@@ -372,12 +367,7 @@ export class Executor03BytecodeBuilder extends ExecutorBytecodeBuilder<
         [swap.swapExchanges[swapExchangeIndex].destAmount],
       );
 
-      const toAmountIndex = exchangeData
-        .replace('0x', '')
-        .lastIndexOf(toAmount.replace('0x', ''));
-
-      toAmountPos =
-        (toAmountIndex !== -1 ? toAmountIndex : exchangeData.length) / 2;
+      toAmountPos = this.findAmountPosInCalldata(exchangeData, toAmount);
     }
 
     return this.buildCallData(

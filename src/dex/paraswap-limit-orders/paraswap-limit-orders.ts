@@ -40,8 +40,6 @@ import {
 import BigNumber from 'bignumber.js';
 import { SpecialDex } from '../../executor/types';
 
-const BLACKLIST_CACHE_PREFIX = `lo_blacklist`;
-
 export class ParaSwapLimitOrders
   extends LimitOrderExchange<ParaSwapOrderResponse, ParaSwapOrderBookResponse>
   implements IDex<ParaSwapLimitOrdersData>
@@ -81,17 +79,6 @@ export class ParaSwapLimitOrders
   getIdentifier(srcToken: Address, destToken: Address) {
     // Expected lowered Addresses
     return `${this.dexKey.toLowerCase()}_${srcToken}_${destToken}`;
-  }
-
-  async isBlacklisted(userAddress: string): Promise<boolean> {
-    const value = await this.dexHelper.cache.rawget(
-      `${BLACKLIST_CACHE_PREFIX}_${userAddress}`.toLowerCase(),
-    );
-    if (value) {
-      return true;
-    }
-
-    return false;
   }
 
   async getPoolIdentifiers(
@@ -175,7 +162,7 @@ export class ParaSwapLimitOrders
             orderInfos: null,
             maxOrdersCount,
           },
-          poolIdentifier: expectedIdentifier,
+          poolIdentifiers: [expectedIdentifier],
           exchange: this.dexKey,
           gasCost: gasCosts.map(v => Number(v)),
           poolAddresses: [this.augustusRFQAddress],

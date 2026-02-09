@@ -18,10 +18,12 @@ export const SUBGRAPH_TIMEOUT = 30 * 1000;
 
 export const POOL_CACHE_REFRESH_INTERVAL = 60 * 60 * 24; // 24 hours
 
+export const POOL_CACHE_STORE_INTERVAL = 60 * 60 * 24 * 7; // 7 days
+
 export const SWAP_EVENT_MAX_CYCLES = 10_000;
 
 export const MAX_PRICING_COMPUTATION_STEPS_ALLOWED = 64;
 
 export const UNISWAPV4_EFFICIENCY_FACTOR = 3;
 
-export const POOL_MIN_TVL_USD = 50;
+export const POOL_MIN_TVL_USD = 10_000;

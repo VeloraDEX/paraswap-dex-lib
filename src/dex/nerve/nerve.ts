@@ -295,7 +295,7 @@ export class Nerve
             exchange: pool.address,
             deadline: (Math.floor(Date.now() / 1000) + 10 * 60).toString(),
           },
-          poolIdentifier: Nerve.getIdentifier(this.dexKey, pool.address),
+          poolIdentifiers: [Nerve.getIdentifier(this.dexKey, pool.address)],
           exchange: this.dexKey,
           gasCost: NERVE_GAS_COST,
           poolAddresses: [pool.address],

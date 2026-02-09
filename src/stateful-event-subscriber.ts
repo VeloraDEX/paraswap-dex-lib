@@ -40,6 +40,7 @@ export abstract class StatefulEventSubscriber<State>
 
   isTracking: () => boolean = () => false;
   isInactive: () => boolean = () => this.inactive;
+  isInvalid: () => boolean = () => this.invalid;
 
   public addressesSubscribed: string[] = [];
 
@@ -96,7 +97,6 @@ export abstract class StatefulEventSubscriber<State>
     if (options && options.state) {
       this.setState(options.state, blockNumber, 'initialize_1');
     } else if (options && options.forceRegenerate) {
-      // ZkEVM forces to always regenerate state when it is old
       this.logger.debug(
         `${this.parentName}: ${this.name}: forced to regenerate state`,
       );
@@ -177,6 +177,8 @@ export abstract class StatefulEventSubscriber<State>
       }
     }
 
+    this.addressesSubscribed = this.addressesSubscribed.filter(a => !!a);
+
     // always subscribeToLogs
     this.dexHelper.blockManager.subscribeToLogs(
       this,
@@ -184,6 +186,11 @@ export abstract class StatefulEventSubscriber<State>
       masterBn || blockNumber,
     );
     this.isInitialized = true;
+  }
+
+  async updatePoolState(blockNumber: number) {
+    const state = await this.generateState(blockNumber);
+    this.setState(state, blockNumber);
   }
 
   protected getPoolIdentifierData() {

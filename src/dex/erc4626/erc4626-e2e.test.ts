@@ -3,25 +3,27 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 import { testE2E } from '../../../tests/utils-e2e';
-import { Tokens, Holders } from '../../../tests/constants-e2e';
 import { Network, ContractMethod, SwapSide } from '../../constants';
 import { StaticJsonRpcProvider } from '@ethersproject/providers';
 import { generateConfig } from '../../config';
+import { ERC4626Config } from './config';
+import { BI_POWS } from '../../bigint-constants';
+import { Token } from '../../types';
 
 function testForNetwork(
   network: Network,
   dexKey: string,
-  tokenASymbol: string,
-  tokenBSymbol: string,
+  tokenA: Token,
+  tokenB: Token,
   tokenAAmount: string,
   tokenBAmount: string,
+  skipTokenAToTokenBForSell = false,
+  skipTokenAToTokenBForBuy = false,
 ) {
   const provider = new StaticJsonRpcProvider(
     generateConfig(network).privateHttpProvider,
     network,
   );
-  const tokens = Tokens[network];
-  const holders = Holders[network];
 
   const sideToContractMethods = new Map([
     [SwapSide.SELL, [ContractMethod.swapExactAmountIn]],
@@ -30,27 +32,32 @@ function testForNetwork(
 
   describe(`${network}`, () => {
     sideToContractMethods.forEach((contractMethods, side) =>
-      describe(`${side}`, () => {
+      describe(`${side}: ${dexKey}`, () => {
         contractMethods.forEach((contractMethod: ContractMethod) => {
           describe(`${contractMethod}`, () => {
-            it(`${tokenASymbol} -> ${tokenBSymbol}`, async () => {
+            if (
+              !(skipTokenAToTokenBForSell && side === SwapSide.SELL) &&
+              !(skipTokenAToTokenBForBuy && side === SwapSide.BUY)
+            ) {
+              it(`${tokenA.address} -> ${tokenB.address}`, async () => {
+                await testE2E(
+                  tokenA,
+                  tokenB,
+                  '',
+                  side === SwapSide.SELL ? tokenAAmount : tokenBAmount,
+                  side,
+                  dexKey,
+                  contractMethod,
+                  network,
+                  provider,
+                );
+              });
+            }
+            it(`${tokenB.address} -> ${tokenA.address}`, async () => {
               await testE2E(
-                tokens[tokenASymbol],
-                tokens[tokenBSymbol],
-                holders[tokenASymbol],
-                side === SwapSide.SELL ? tokenAAmount : tokenBAmount,
-                side,
-                dexKey,
-                contractMethod,
-                network,
-                provider,
-              );
-            });
-            it(`${tokenBSymbol} -> ${tokenASymbol}`, async () => {
-              await testE2E(
-                tokens[tokenBSymbol],
-                tokens[tokenASymbol],
-                holders[tokenBSymbol],
+                tokenB,
+                tokenA,
+                '',
                 side === SwapSide.SELL ? tokenBAmount : tokenAAmount,
                 side,
                 dexKey,
@@ -66,159 +73,27 @@ function testForNetwork(
   });
 }
 
-describe('MountainProtocol E2E', () => {
-  const dexKey = 'wUSDM';
+const config = ERC4626Config;
 
-  describe('Mainnet', () => {
-    const network = Network.MAINNET;
+for (const dexKey of Object.keys(ERC4626Config)) {
+  for (const net of Object.keys(ERC4626Config[dexKey])) {
+    const network = Number(net) as Network;
+    const { vault, asset, cooldownEnabled, withdrawDisabled, decimals } =
+      config[dexKey][network];
 
-    const tokenASymbol: string = 'wUSDM';
-    const tokenBSymbol: string = 'USDM';
-
-    const tokenAAmount: string = '500';
-    const tokenBAmount: string = '500';
-
-    testForNetwork(
-      network,
-      dexKey,
-      tokenASymbol,
-      tokenBSymbol,
-      tokenAAmount,
-      tokenBAmount,
-    );
-  });
-
-  describe('Optimism', () => {
-    const network = Network.OPTIMISM;
-
-    const tokenASymbol: string = 'wUSDM';
-    const tokenBSymbol: string = 'USDM';
-
-    const tokenAAmount: string = '500';
-    const tokenBAmount: string = '500';
+    const tokenA = { address: vault, decimals: decimals ?? 18 };
+    const tokenB = { address: asset, decimals: decimals ?? 18 };
 
     testForNetwork(
       network,
       dexKey,
-      tokenASymbol,
-      tokenBSymbol,
-      tokenAAmount,
-      tokenBAmount,
+      tokenA,
+      tokenB,
+      BI_POWS[tokenA.decimals].toString(),
+      BI_POWS[tokenB.decimals].toString(),
+      // if cooldown is enabled, we skip withdrawal swaps (vault -> asset)
+      !!cooldownEnabled,
+      !!cooldownEnabled || withdrawDisabled,
     );
-  });
-
-  describe('Arbitrum', () => {
-    const network = Network.ARBITRUM;
-
-    const tokenASymbol: string = 'wUSDM';
-    const tokenBSymbol: string = 'USDM';
-
-    const tokenAAmount: string = '500';
-    const tokenBAmount: string = '500';
-
-    testForNetwork(
-      network,
-      dexKey,
-      tokenASymbol,
-      tokenBSymbol,
-      tokenAAmount,
-      tokenBAmount,
-    );
-  });
-
-  describe('Base', () => {
-    const network = Network.BASE;
-
-    const tokenASymbol: string = 'wUSDM';
-    const tokenBSymbol: string = 'USDM';
-
-    const tokenAAmount: string = '500';
-    const tokenBAmount: string = '500';
-
-    testForNetwork(
-      network,
-      dexKey,
-      tokenASymbol,
-      tokenBSymbol,
-      tokenAAmount,
-      tokenBAmount,
-    );
-  });
-
-  describe('Polygon', () => {
-    const network = Network.POLYGON;
-
-    const tokenASymbol: string = 'wUSDM';
-    const tokenBSymbol: string = 'USDM';
-
-    const tokenAAmount: string = '500';
-    const tokenBAmount: string = '500';
-
-    testForNetwork(
-      network,
-      dexKey,
-      tokenASymbol,
-      tokenBSymbol,
-      tokenAAmount,
-      tokenBAmount,
-    );
-  });
-
-  describe('Gnosis', () => {
-    const network = Network.GNOSIS;
-
-    const tokenASymbol: string = 'sDAI';
-    const tokenBSymbol: string = 'WXDAI';
-
-    const tokenAAmount: string = '500000000000000000';
-    const tokenBAmount: string = '500000000000000000';
-
-    testForNetwork(
-      network,
-      'sDAI',
-      tokenASymbol,
-      tokenBSymbol,
-      tokenAAmount,
-      tokenBAmount,
-    );
-  });
-
-  describe('Gnosis with Native', () => {
-    const network = Network.GNOSIS;
-
-    const tokenASymbol: string = 'sDAI';
-    const tokenBSymbol: string = 'XDAI';
-
-    const tokenAAmount: string = '500000000000000000';
-    const tokenBAmount: string = '500000000000000000';
-
-    testForNetwork(
-      network,
-      'sDAI',
-      tokenASymbol,
-      tokenBSymbol,
-      tokenAAmount,
-      tokenBAmount,
-    );
-  });
-
-  describe('wUSDL', () => {
-    const network = Network.MAINNET;
-    const dexKey = 'wUSDL';
-
-    const tokenASymbol: string = 'wUSDL';
-    const tokenBSymbol: string = 'USDL';
-
-    const tokenAAmount: string = '1000000000000000000';
-    const tokenBAmount: string = '1000000000000000000';
-
-    testForNetwork(
-      network,
-      dexKey,
-      tokenASymbol,
-      tokenBSymbol,
-      tokenAAmount,
-      tokenBAmount,
-    );
-  });
-});
+  }
+}

@@ -67,7 +67,7 @@ function testForNetwork(
     network,
   );
   const tokens = Tokens[network];
-  const holders = Holders[network];
+  const holders = Holders[network] ?? {};
   const nativeTokenSymbol = NativeTokenSymbols[network];
 
   const poolIdentifiers = poolIds ? { [dexKey]: poolIds } : undefined;
@@ -300,6 +300,50 @@ describe('BalancerV3 E2E', () => {
     });
   });
 
+  describe('Plasma', () => {
+    const network = Network.PLASMA;
+
+    describe('Stable Path', () => {
+      const tokenASymbol: string = 'USDT0';
+      const tokenBSymbol: string = 'USDe';
+
+      const tokenAAmount: string = '1000000';
+      const tokenBAmount: string = '1000000000000000000';
+      const nativeTokenAmount = '1000000000000000000';
+
+      testForNetwork(
+        network,
+        dexKey,
+        tokenASymbol,
+        tokenBSymbol,
+        tokenAAmount,
+        tokenBAmount,
+        nativeTokenAmount,
+        true,
+      );
+    });
+
+    describe('reClamm Pool', () => {
+      const tokenASymbol: string = 'WXPL';
+      const tokenBSymbol: string = 'USDT0';
+
+      const tokenAAmount: string = '1000000000000000000';
+      const tokenBAmount: string = '1000000';
+      const nativeTokenAmount = '1000000000000000000';
+
+      testForNetwork(
+        network,
+        dexKey,
+        tokenASymbol,
+        tokenBSymbol,
+        tokenAAmount,
+        tokenBAmount,
+        nativeTokenAmount,
+        true,
+      );
+    });
+  });
+
   describe('Mainnet', () => {
     const network = Network.MAINNET;
 
@@ -346,6 +390,52 @@ describe('BalancerV3 E2E', () => {
         [reClammPool],
       );
     });
+
+    describe('quantAMM Pool', function () {
+      const tokenASymbol: string = 'USDC';
+      const tokenBSymbol: string = 'WBTC';
+
+      const tokenAAmount: string = '1000000';
+      const tokenBAmount: string = '1000000';
+      const nativeTokenAmount = '0';
+      // Filter to known quantAMM pool to make sure its picked up
+      // https://balancer.fi/pools/ethereum/v3/0x6b61d8680c4f9e560c8306807908553f95c749c5
+      const quantAMMPool = '0x6b61d8680c4f9e560c8306807908553f95c749c5';
+      testForNetwork(
+        network,
+        dexKey,
+        tokenASymbol,
+        tokenBSymbol,
+        tokenAAmount,
+        tokenBAmount,
+        nativeTokenAmount,
+        false,
+        [quantAMMPool],
+      );
+    });
+
+    describe('StableSurgeV2 Hook', function () {
+      const tokenASymbol: string = 'EUROC';
+      const tokenBSymbol: string = 'RLUSD';
+
+      const tokenAAmount: string = '1000000';
+      const tokenBAmount: string = '1000000000000000000';
+      const nativeTokenAmount = '0';
+      // Filter to known pool with stableSurgeV2 hook to make sure its picked up
+      // https://balancer.fi/pools/ethereum/v3/0x0629e9703f0447402158eedca5148fe98df6d7a3
+      const stableSurgeV2Pool = '0x0629e9703f0447402158eedca5148fe98df6d7a3';
+      testForNetwork(
+        network,
+        dexKey,
+        tokenASymbol,
+        tokenBSymbol,
+        tokenAAmount,
+        tokenBAmount,
+        nativeTokenAmount,
+        false,
+        [stableSurgeV2Pool],
+      );
+    });
   });
 
   describe('Arbitrum', () => {
@@ -388,6 +478,52 @@ describe('BalancerV3 E2E', () => {
         tokenBAmount,
         nativeTokenAmount,
         false,
+      );
+    });
+
+    describe('Akron Hook', function () {
+      const tokenASymbol: string = 'waArbWETH';
+      const tokenBSymbol: string = 'waArbUSDCn';
+
+      const tokenAAmount: string = '100000000000000000';
+      const tokenBAmount: string = '1000000';
+      const nativeTokenAmount = '0';
+      // Filter to known akronHook pool to make sure its picked up
+      // https://balancer.fi/pools/arbitrum/v3/0xecb3a2622cc80629134b893f6e6ade4ebd0aeb7c
+      const akronHookPool = '0xecb3a2622cc80629134b893f6e6ade4ebd0aeb7c';
+      testForNetwork(
+        network,
+        dexKey,
+        tokenASymbol,
+        tokenBSymbol,
+        tokenAAmount,
+        tokenBAmount,
+        nativeTokenAmount,
+        false,
+        [akronHookPool],
+      );
+    });
+
+    describe('StableSurgeV2 Hook', function () {
+      const tokenASymbol: string = 'USDai';
+      const tokenBSymbol: string = 'waArbUSDT';
+
+      const tokenAAmount: string = '1000000000000000000';
+      const tokenBAmount: string = '1000000';
+      const nativeTokenAmount = '0';
+      // Filter to known pool with stableSurgeV2 hook to make sure its picked up
+      // https://balancer.fi/pools/arbitrum/v3/0x8031a6f49e0610d8a71cdc8bb3d3266c1355e7e3
+      const stableSurgeV2Pool = '0x8031a6f49e0610d8a71cdc8bb3d3266c1355e7e3';
+      testForNetwork(
+        network,
+        dexKey,
+        tokenASymbol,
+        tokenBSymbol,
+        tokenAAmount,
+        tokenBAmount,
+        nativeTokenAmount,
+        false,
+        [stableSurgeV2Pool],
       );
     });
   });
@@ -566,6 +702,75 @@ describe('BalancerV3 E2E', () => {
         [reClammPool],
       );
     });
+
+    describe('Akron Hook', function () {
+      const tokenASymbol: string = 'waBasWETH';
+      const tokenBSymbol: string = 'waBasUSDC';
+
+      const tokenAAmount: string = '1000000000000000000';
+      const tokenBAmount: string = '1000000';
+      const nativeTokenAmount = '0';
+      // Filter to known akronHook pool to make sure its picked up
+      // https://balancer.fi/pools/base/v3/0x4fbb7870dbe7a7ef4866a33c0eed73d395730dc0
+      const akronHookPool = '0x4fbb7870dbe7a7ef4866a33c0eed73d395730dc0';
+      testForNetwork(
+        network,
+        dexKey,
+        tokenASymbol,
+        tokenBSymbol,
+        tokenAAmount,
+        tokenBAmount,
+        nativeTokenAmount,
+        false,
+        [akronHookPool],
+      );
+    });
+
+    describe('quantAMM Pool', function () {
+      const tokenASymbol: string = 'WETH';
+      const tokenBSymbol: string = 'cbBTC';
+
+      const tokenAAmount: string = '1000000000000000000';
+      const tokenBAmount: string = '1000000';
+      const nativeTokenAmount = '0';
+      // Filter to known quantAMM pool to make sure its picked up
+      // https://balancer.fi/pools/base/v3/0xb4161aea25bd6c5c8590ad50deb4ca752532f05d
+      const quantAMMPool = '0xb4161aea25bd6c5c8590ad50deb4ca752532f05d';
+      testForNetwork(
+        network,
+        dexKey,
+        tokenASymbol,
+        tokenBSymbol,
+        tokenAAmount,
+        tokenBAmount,
+        nativeTokenAmount,
+        false,
+        [quantAMMPool],
+      );
+    });
+
+    describe('StableSurgeV2 Hook', function () {
+      const tokenASymbol: string = 'yoBTC';
+      const tokenBSymbol: string = 'cbBTC';
+
+      const tokenAAmount: string = '1000000';
+      const tokenBAmount: string = '1000000';
+      const nativeTokenAmount = '0';
+      // Filter to known pool with stableSurgeV2 hook to make sure its picked up
+      // https://balancer.fi/pools/base/v3/0xe5556b41256d7efb2f0a17011ef8ab507a352141
+      const stableSurgeV2Pool = '0xe5556b41256d7efb2f0a17011ef8ab507a352141';
+      testForNetwork(
+        network,
+        dexKey,
+        tokenASymbol,
+        tokenBSymbol,
+        tokenAAmount,
+        tokenBAmount,
+        nativeTokenAmount,
+        false,
+        [stableSurgeV2Pool],
+      );
+    });
   });
 
   describe('Avalanche', () => {
@@ -642,6 +847,73 @@ describe('BalancerV3 E2E', () => {
       // https://balancer.fi/pools/optimism/v3/0x870c0af8a1af0b58b4b0bd31ce4fe72864ae45be
       const tokenASymbol: string = 'rETH';
       const tokenBSymbol: string = 'waOptWETH';
+
+      const tokenAAmount: string = '10000000000000000';
+      const tokenBAmount: string = '10000000000000000';
+      const nativeTokenAmount = '0';
+
+      testForNetwork(
+        network,
+        dexKey,
+        tokenASymbol,
+        tokenBSymbol,
+        tokenAAmount,
+        tokenBAmount,
+        nativeTokenAmount,
+        false,
+      );
+    });
+  });
+
+  describe('Sonic', () => {
+    const network = Network.SONIC;
+
+    describe('StableSurge Hook', () => {
+      // https://beets.fi/pools/sonic/v3/0x5cd1ab566d0f03c6aab84b96f6076a276390c0bd
+      const tokenASymbol: string = 'stS';
+      const tokenBSymbol: string = 'beS';
+
+      const tokenAAmount: string = '10000000000000000';
+      const tokenBAmount: string = '10000000000000000';
+      const nativeTokenAmount = '0';
+
+      testForNetwork(
+        network,
+        dexKey,
+        tokenASymbol,
+        tokenBSymbol,
+        tokenAAmount,
+        tokenBAmount,
+        nativeTokenAmount,
+        false,
+      );
+    });
+
+    describe('Boosted Path', () => {
+      // https://beets.fi/pools/sonic/v3/0x870c0af8a1af0b58b4b0bd31ce4fe72864ae45be
+      const tokenASymbol: string = 'anS';
+      const tokenBSymbol: string = 'SiloWS';
+
+      const tokenAAmount: string = '10000000000000000';
+      const tokenBAmount: string = '10000000000000000';
+      const nativeTokenAmount = '0';
+
+      testForNetwork(
+        network,
+        dexKey,
+        tokenASymbol,
+        tokenBSymbol,
+        tokenAAmount,
+        tokenBAmount,
+        nativeTokenAmount,
+        false,
+      );
+    });
+
+    describe('Weighted Path', () => {
+      // https://beets.fi/pools/sonic/v3/0xf0f59a4aaba7772fb7361793c3ffbe1111bb5a8b
+      const tokenASymbol: string = 'SHADOW';
+      const tokenBSymbol: string = 'BEETS';
 
       const tokenAAmount: string = '10000000000000000';
       const tokenBAmount: string = '10000000000000000';

@@ -33,7 +33,7 @@ import ERC20ABI from './abi/erc20.json';
 import { ExecutorDetector } from './executor/ExecutorDetector';
 import { ExecutorBytecodeBuilder } from './executor/ExecutorBytecodeBuilder';
 import { IDexTxBuilder } from './dex/idex';
-import { ParaSwapVersion, SwapSide } from '@paraswap/core';
+import { ContractMethod, ParaSwapVersion, SwapSide } from '@paraswap/core';
 
 const {
   utils: { hexlify, hexConcat, hexZeroPad },
@@ -316,12 +316,18 @@ export class GenericSwapTransactionBuilder {
     uuid: string,
     beneficiary: Address,
   ) {
+    const isRfqTryBatchFill =
+      priceRoute.contractMethod ===
+      ContractMethod.swapOnAugustusRFQTryBatchFill;
+
     if (
       priceRoute.bestRoute.length !== 1 ||
       priceRoute.bestRoute[0].percent !== 100 ||
       priceRoute.bestRoute[0].swaps.length !== 1 ||
-      priceRoute.bestRoute[0].swaps[0].swapExchanges.length !== 1 ||
-      priceRoute.bestRoute[0].swaps[0].swapExchanges[0].percent !== 100
+      (!isRfqTryBatchFill &&
+        priceRoute.bestRoute[0].swaps[0].swapExchanges.length !== 1) ||
+      (!isRfqTryBatchFill &&
+        priceRoute.bestRoute[0].swaps[0].swapExchanges[0].percent !== 100)
     )
       throw new Error(`DirectSwap invalid bestRoute`);
 
@@ -698,7 +704,9 @@ export class GenericSwapTransactionBuilder {
       srcToken: _src,
       destToken: _dest,
       recipient:
-        needToWithdrawAfterSwap || !isLastSwap
+        needToWithdrawAfterSwap ||
+        !isLastSwap ||
+        priceRoute.side === SwapSide.BUY
           ? executionContractAddress
           : this.dexAdapterService.dexHelper.config.data.augustusV6Address!,
       srcAmount: _srcAmount,

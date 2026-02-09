@@ -601,6 +601,67 @@ describe('BalancerV3 EventPool', function () {
     );
   });
 
+  describe.only('QuantAMM WeightsUpdated', function () {
+    const network = Network.MAINNET;
+    const dexHelper = new DummyDexHelper(network);
+    const logger = dexHelper.getLogger(dexKey);
+    let balancerV3Pool: BalancerV3EventPool;
+
+    // UpdateWeightRunner -> EventMappings
+    const eventsToTest: Record<Address, EventMappings> = {
+      [BalancerV3Config.BalancerV3[network].quantAmmUpdateWeightRunnerAddress!]:
+        {
+          WeightsUpdated: {
+            blockNumbers: [22371000, 22385295],
+            poolAddress: [
+              '0xd4ed17bbf48af09b87fd7d8c60970f5da79d4852',
+              '0xd4Ed17bBF48Af09B87fD7d8C60970f5Da79D4852',
+            ],
+          },
+        },
+    };
+
+    beforeEach(async () => {
+      balancerV3Pool = new BalancerV3EventPool(
+        dexKey,
+        network,
+        dexHelper,
+        logger,
+      );
+    });
+
+    Object.entries(eventsToTest).forEach(
+      ([weightRunnerAddress, events]: [string, EventMappings]) => {
+        describe(`Events for WeightRunner: ${weightRunnerAddress}`, () => {
+          Object.entries(events).forEach(
+            ([eventName, eventData]: [string, EventData]) => {
+              describe(`${eventName}`, () => {
+                eventData.blockNumbers.forEach((blockNumber: number, i) => {
+                  it(`Pool: ${eventData.poolAddress[i]} State after ${blockNumber}`, async function () {
+                    await testEventSubscriber(
+                      balancerV3Pool,
+                      balancerV3Pool.addressesSubscribed,
+                      (_blockNumber: number) =>
+                        fetchPoolState(
+                          balancerV3Pool,
+                          _blockNumber,
+                          eventData.poolAddress[i],
+                        ),
+                      blockNumber,
+                      `${dexKey}_${weightRunnerAddress}`,
+                      dexHelper.provider,
+                      stateCompare,
+                    );
+                  });
+                });
+              });
+            },
+          );
+        });
+      },
+    );
+  });
+
   // If need to run through block interval up to a block number
   // describe.skip('Base', function () {
   //   const network = Network.BASE;

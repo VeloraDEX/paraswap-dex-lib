@@ -152,6 +152,10 @@ export class RateFetcher {
   }
 
   private handlePricesResponse(resp: BebopPricingResponse): void {
+    this.logger.log(
+      `Received Bebop pricing update for ${Object.keys(resp).length} pairs`,
+    );
+
     const normalizedPrices: BebopPricingResponse = {};
     for (const [pair, levels] of Object.entries(resp)) {
       normalizedPrices[pair.toLowerCase()] = levels;

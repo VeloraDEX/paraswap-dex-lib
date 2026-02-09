@@ -1,25 +1,16 @@
 import { Address, NumberAsString } from '../../types';
+import { HookConstructor } from './hooks/types';
 
 export type ModifyLiquidityParams = {
   liquidityDelta: bigint;
   tickLower: bigint;
   tickUpper: bigint;
-  owner: string;
   tickSpacing: bigint;
-  salt: string;
 };
 
 export type TickInfo = {
   liquidityGross: bigint;
   liquidityNet: bigint;
-  feeGrowthOutside0X128: bigint;
-  feeGrowthOutside1X128: bigint;
-};
-
-export type PositionState = {
-  liquidity: bigint;
-  feeGrowthInside0LastX128: bigint;
-  feeGrowthInside1LastX128: bigint;
 };
 
 export type PoolManagerState = Record<string, never>;
@@ -36,7 +27,6 @@ export type PoolState = {
   slot0: Slot0;
   tickSpacing: number;
   ticks: Record<NumberAsString, TickInfo>;
-  positions: Record<string, PositionState>;
   tickBitmap: Record<NumberAsString, bigint>;
   isValid: boolean;
 };
@@ -87,6 +77,9 @@ export type SubgraphConnectorPool = {
     address: string;
     decimals: string;
   };
+  fee: string;
+  tickSpacing: string;
+  hooks: string;
 };
 
 export type SubgraphTick = {
@@ -106,9 +99,7 @@ export type SubgraphPool = {
   token1: {
     address: string;
   };
-  tick: string;
   tickSpacing: string;
-  ticks: SubgraphTick[];
 };
 
 export type DexParams = {
@@ -118,6 +109,8 @@ export type DexParams = {
   subgraphURL: string;
   stateView: string;
   skipPoolsWithUnconventionalFees?: boolean;
+  stateMulticall: string;
+  supportedHooks?: HookConstructor[];
 };
 
 export type PoolKey = {

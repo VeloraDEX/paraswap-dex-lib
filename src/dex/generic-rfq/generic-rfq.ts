@@ -17,6 +17,7 @@ import { ParaSwapLimitOrdersData } from '../paraswap-limit-orders/types';
 import { ONE_ORDER_GASCOST } from '../paraswap-limit-orders/constant';
 import { RateFetcher } from './rate-fetcher';
 import {
+  BlacklistError,
   PriceAndAmountBigNumber,
   RFQConfig,
   RFQDirectPayload,
@@ -32,7 +33,7 @@ import {
 import { BI_MAX_UINT256 } from '../../bigint-constants';
 import { SpecialDex } from '../../executor/types';
 import { hexConcat, hexZeroPad, hexlify } from 'ethers/lib/utils';
-import { isETHAddress, uuidToBytes16 } from '../../utils';
+import { isAxiosError, isETHAddress, uuidToBytes16 } from '../../utils';
 
 export const OVERORDER_BPS = 100;
 export const BPS_MAX_VALUE = 10000n;
@@ -62,7 +63,13 @@ export class GenericRFQ extends ParaSwapLimitOrders {
     private config: RFQConfig,
   ) {
     super(network, dexKey, dexHelper);
-    this.rateFetcher = new RateFetcher(dexHelper, config, dexKey, this.logger);
+    this.rateFetcher = new RateFetcher(
+      dexHelper,
+      config,
+      dexKey,
+      this.logger,
+      this.setBlacklist.bind(this),
+    );
   }
 
   async initializePricing(blockNumber: number): Promise<void> {
@@ -205,7 +212,7 @@ export class GenericRFQ extends ParaSwapLimitOrders {
       {
         gasCost: Number(ONE_ORDER_GASCOST),
         exchange: this.dexKey,
-        poolIdentifier: expectedIdentifier,
+        poolIdentifiers: [expectedIdentifier],
         prices: outputs,
         unit,
         data: {
@@ -317,7 +324,7 @@ export class GenericRFQ extends ParaSwapLimitOrders {
     };
   }
 
-  async preProcessTransaction?(
+  async preProcessTransaction(
     optimalSwapExchange: OptimalSwapExchange<ParaSwapLimitOrdersData>,
     srcToken: Token,
     destToken: Token,
@@ -325,118 +332,135 @@ export class GenericRFQ extends ParaSwapLimitOrders {
     options: PreprocessTransactionOptions,
   ): Promise<[OptimalSwapExchange<ParaSwapLimitOrdersData>, ExchangeTxInfo]> {
     if (await this.isBlacklisted(options.txOrigin)) {
-      this.logger.warn(
-        `${this.dexKey}-${this.network}: blacklisted TX Origin address '${options.txOrigin}' trying to build a transaction. Bailing...`,
-      );
-      throw new Error(
-        `${this.dexKey}-${this.network}: user=${options.txOrigin} is blacklisted`,
-      );
+      throw new BlacklistError(this.dexKey, this.network, options.txOrigin);
     }
 
     if (
       options.userAddress !== options.txOrigin &&
       (await this.isBlacklisted(options.userAddress))
     ) {
-      this.logger.warn(
-        `${this.dexKey}-${this.network}: blacklisted user address '${options.userAddress}' trying to build a transaction. Bailing...`,
-      );
-      throw new Error(
-        `${this.dexKey}-${this.network}: user=${options.userAddress} is blacklisted`,
-      );
+      throw new BlacklistError(this.dexKey, this.network, options.userAddress);
     }
 
-    const isSell = side === SwapSide.SELL;
+    try {
+      const isSell = side === SwapSide.SELL;
 
-    const order = await this.rateFetcher.getFirmRate(
-      srcToken,
-      destToken,
-      isSell
-        ? overOrder(optimalSwapExchange.srcAmount, OVERORDER_BPS)
-        : overOrder(optimalSwapExchange.destAmount, 1),
-      side,
-      options.executionContractAddress,
-      options.userAddress,
-      options.partner,
-      options.special,
-    );
-
-    const expiryAsBigInt = BigInt(order.order.expiry);
-    const minDeadline = expiryAsBigInt > 0 ? expiryAsBigInt : BI_MAX_UINT256;
-
-    const makerAssetAmount = BigInt(order.order.makerAmount);
-    const takerAssetAmount = BigInt(order.order.takerAmount);
-
-    const srcAmount = BigInt(optimalSwapExchange.srcAmount);
-    const destAmount = BigInt(optimalSwapExchange.destAmount);
-
-    const slippageFactor = options.slippageFactor;
-
-    if (side === SwapSide.SELL) {
-      const makerAssetAmountFilled =
-        takerAssetAmount > srcAmount
-          ? (makerAssetAmount * srcAmount) / takerAssetAmount
-          : makerAssetAmount;
-
-      const requiredAmountWithSlippage = new BigNumber(destAmount.toString())
-        .multipliedBy(slippageFactor)
-        .toFixed(0);
-
-      if (makerAssetAmountFilled < BigInt(requiredAmountWithSlippage)) {
-        throw new SlippageCheckError(
-          this.dexKey,
-          this.network,
-          side,
-          requiredAmountWithSlippage,
-          makerAssetAmountFilled.toString(),
-          slippageFactor,
-        );
-      }
-    } else {
-      if (makerAssetAmount < destAmount) {
-        throw new SlippageCheckError(
-          this.dexKey,
-          this.network,
-          side,
-          destAmount.toString(),
-          makerAssetAmount.toString(),
-          slippageFactor,
-          true,
-        );
-      }
-
-      const requiredAmountWithSlippage = new BigNumber(srcAmount.toString())
-        .multipliedBy(slippageFactor)
-        .toFixed(0);
-
-      if (takerAssetAmount > BigInt(requiredAmountWithSlippage)) {
-        throw new SlippageCheckError(
-          this.dexKey,
-          this.network,
-          side,
-          requiredAmountWithSlippage,
-          takerAssetAmount.toString(),
-          slippageFactor,
-        );
-      }
-    }
-
-    let isApproved = false;
-
-    // isApproved is only used in direct method and available only for v6, then no need to check approve for v5
-    // because it's either done in getSimpleParam or approve call in the adapter smart contract
-    if (options.version === ParaSwapVersion.V6 && options.isDirectMethod) {
-      isApproved = await this.dexHelper.augustusApprovals.hasApproval(
+      const order = await this.rateFetcher.getFirmRate(
+        srcToken,
+        destToken,
+        isSell
+          ? overOrder(optimalSwapExchange.srcAmount, OVERORDER_BPS)
+          : overOrder(optimalSwapExchange.destAmount, 1),
+        side,
         options.executionContractAddress,
-        // ETH always need to be wrapped for RFQ
-        this.dexHelper.config.wrapETH(srcToken).address,
-        this.augustusRFQAddress,
+        options.userAddress,
+        options.partner,
+        options.special,
       );
-    }
 
-    return [
-      { ...optimalSwapExchange, data: { orderInfos: [order], isApproved } },
-      { deadline: minDeadline },
-    ];
+      const expiryAsBigInt = BigInt(order.order.expiry);
+      const minDeadline = expiryAsBigInt > 0 ? expiryAsBigInt : BI_MAX_UINT256;
+
+      const makerAssetAmount = BigInt(order.order.makerAmount);
+      const takerAssetAmount = BigInt(order.order.takerAmount);
+
+      const srcAmount = BigInt(optimalSwapExchange.srcAmount);
+      const destAmount = BigInt(optimalSwapExchange.destAmount);
+
+      const slippageFactor = options.slippageFactor;
+
+      if (side === SwapSide.SELL) {
+        const makerAssetAmountFilled =
+          takerAssetAmount > srcAmount
+            ? (makerAssetAmount * srcAmount) / takerAssetAmount
+            : makerAssetAmount;
+
+        const requiredAmountWithSlippage = new BigNumber(destAmount.toString())
+          .multipliedBy(slippageFactor)
+          .toFixed(0);
+
+        if (makerAssetAmountFilled < BigInt(requiredAmountWithSlippage)) {
+          throw new SlippageCheckError(
+            this.dexKey,
+            this.network,
+            side,
+            requiredAmountWithSlippage,
+            makerAssetAmountFilled.toString(),
+            slippageFactor,
+          );
+        }
+      } else {
+        if (makerAssetAmount < destAmount) {
+          throw new SlippageCheckError(
+            this.dexKey,
+            this.network,
+            side,
+            destAmount.toString(),
+            makerAssetAmount.toString(),
+            slippageFactor,
+            true,
+          );
+        }
+
+        const requiredAmountWithSlippage = new BigNumber(srcAmount.toString())
+          .multipliedBy(slippageFactor)
+          .toFixed(0);
+
+        if (takerAssetAmount > BigInt(requiredAmountWithSlippage)) {
+          throw new SlippageCheckError(
+            this.dexKey,
+            this.network,
+            side,
+            requiredAmountWithSlippage,
+            takerAssetAmount.toString(),
+            slippageFactor,
+          );
+        }
+      }
+
+      let isApproved = false;
+
+      // isApproved is only used in direct method and available only for v6, then no need to check approve for v5
+      // because it's either done in getSimpleParam or approve call in the adapter smart contract
+      if (options.version === ParaSwapVersion.V6 && options.isDirectMethod) {
+        isApproved = await this.dexHelper.augustusApprovals.hasApproval(
+          options.executionContractAddress,
+          // ETH always need to be wrapped for RFQ
+          this.dexHelper.config.wrapETH(srcToken).address,
+          this.augustusRFQAddress,
+        );
+      }
+
+      return [
+        { ...optimalSwapExchange, data: { orderInfos: [order], isApproved } },
+        { deadline: minDeadline },
+      ];
+    } catch (e) {
+      if (isAxiosError(e) && e.response?.status === 403) {
+        await this.addBlacklistedAddress(options.userAddress);
+        this.logger.warn(
+          `${this.dexKey}-${this.network}: encountered blacklisted user=${options.userAddress}. Adding to local blacklist cache`,
+        );
+        throw new BlacklistError(
+          this.dexKey,
+          this.network,
+          options.userAddress,
+        );
+      }
+
+      if (e instanceof SlippageCheckError) {
+        this.logger.warn(
+          `${this.dexKey}-${this.network}: failed to build transaction on side ${side} with too strict slippage. Skipping restriction`,
+        );
+      } else {
+        this.logger.warn(
+          `${this.dexKey}-${this.network}: protocol is restricted for pair ${srcToken.address} -> ${destToken.address}`,
+        );
+        await this.restrictPair(srcToken.address, destToken.address);
+      }
+
+      throw e;
+    }
   }
 
   async getTopPoolsForToken(
@@ -455,22 +479,13 @@ export class GenericRFQ extends ParaSwapLimitOrders {
     }));
   }
 
-  async isBlacklisted(userAddress: string): Promise<boolean> {
-    return this.rateFetcher.isBlackListed(userAddress);
-  }
-
-  async setBlacklist(userAddress: string): Promise<boolean> {
-    await this.dexHelper.cache.hset(
-      this.rateFetcher.blackListCacheKey,
-      userAddress.toLowerCase(),
-      'true',
-    );
-    return true;
-  }
-
   releaseResources(): void {
     if (this.rateFetcher) {
       this.rateFetcher.stop();
     }
+  }
+
+  minUsdTradeValue() {
+    return this.config.minTradeUsd;
   }
 }
