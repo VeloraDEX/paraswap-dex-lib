@@ -1,0 +1,101 @@
+[
+  {
+    "type": "function",
+    "name": "allPairsLength",
+    "inputs": [],
+    "outputs": [{ "name": "", "type": "uint256", "internalType": "uint256" }],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "pairCount",
+    "inputs": [],
+    "outputs": [{ "name": "", "type": "uint256", "internalType": "uint256" }],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getPair",
+    "inputs": [
+      { "name": "tokenA", "type": "address", "internalType": "address" },
+      { "name": "tokenB", "type": "address", "internalType": "address" },
+      { "name": "userModule", "type": "address", "internalType": "address" },
+      { "name": "moduleMask", "type": "uint8", "internalType": "uint8" },
+      {
+        "name": "baseFeeConfig",
+        "type": "tuple",
+        "internalType": "struct BaseFeeConfig",
+        "components": [
+          { "name": "baseFee", "type": "uint32", "internalType": "uint32" },
+          { "name": "wToken0", "type": "uint32", "internalType": "uint32" },
+          { "name": "wToken1", "type": "uint32", "internalType": "uint32" }
+        ]
+      }
+    ],
+    "outputs": [
+      { "name": "pair", "type": "address", "internalType": "address" }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "poolById",
+    "inputs": [{ "name": "", "type": "bytes32", "internalType": "PoolId" }],
+    "outputs": [{ "name": "", "type": "address", "internalType": "address" }],
+    "stateMutability": "view"
+  },
+  {
+    "type": "event",
+    "name": "PairCreated",
+    "inputs": [
+      {
+        "name": "token0",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "token1",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "module",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "pair",
+        "type": "address",
+        "indexed": false,
+        "internalType": "address"
+      },
+      {
+        "name": "pairCount",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "moduleMask",
+        "type": "uint8",
+        "indexed": false,
+        "internalType": "uint8"
+      },
+      {
+        "name": "baseFeeConfig",
+        "type": "tuple",
+        "indexed": false,
+        "internalType": "struct BaseFeeConfig",
+        "components": [
+          { "name": "baseFee", "type": "uint32", "internalType": "uint32" },
+          { "name": "wToken0", "type": "uint32", "internalType": "uint32" },
+          { "name": "wToken1", "type": "uint32", "internalType": "uint32" }
+        ]
+      }
+    ],
+    "anonymous": false
+  }
+]
