@@ -1,5 +1,5 @@
 import { Interface } from '@ethersproject/abi';
-import { DeepReadonly } from 'ts-essentials';
+
 import {
   Logger,
   Token,
@@ -14,16 +14,17 @@ import { IDexHelper } from '../../dex-helper/idex-helper';
 import { IDex } from '../idex';
 import { SimpleExchange } from '../simple-exchange';
 import { ClearConfig } from './config';
-import { ClearData, ClearVault, DexParams, PreviewSwapCallInfo } from './types';
+import { ClearData, ClearVault, DexParams } from './types';
 import { Network, SwapSide } from '../../constants';
 import * as CALLDATA_GAS_COST from '../../calldata-gas-cost';
-import { getDexKeysWithNetwork } from '../../utils';
+import { getBigIntPow, getDexKeysWithNetwork } from '../../utils';
 import clearSwapAbi from '../../abi/clear/ClearSwap.json';
 import clearVaultAbi from '../../abi/clear/ClearVault.json';
 import { NumberAsString } from '@paraswap/core';
 import { MultiCallParams } from '../../lib/multi-wrapper';
 import { ClearFactory } from './clear-factory';
-import { uint256ToBigInt } from '../../lib/decoders';
+import { uint256ToBigInt, uint8ToNumber } from '../../lib/decoders';
+import { extractReturnAmountPosition } from '../../executor/utils';
 
 const CLEAR_GAS_COST = 150_000;
 
@@ -37,7 +38,6 @@ const CLEAR_GAS_COST = 150_000;
  * - Each (vault, tokenA, tokenB) combination = one "pool" for ParaSwap
  */
 export class Clear extends SimpleExchange implements IDex<ClearData> {
-  static dexKeys = ['clear'];
   logger: Logger;
   protected config: DexParams;
   protected factory: ClearFactory;
@@ -50,8 +50,6 @@ export class Clear extends SimpleExchange implements IDex<ClearData> {
 
   readonly clearSwapIface = new Interface(clearSwapAbi);
   readonly clearVaultIface = new Interface(clearVaultAbi);
-
-  // Vault cache - updated by factory subscriber or updatePoolState
   private vaults: ClearVault[] = [];
 
   constructor(
@@ -63,24 +61,12 @@ export class Clear extends SimpleExchange implements IDex<ClearData> {
     this.config = ClearConfig[dexKey][network];
     this.logger = dexHelper.getLogger(dexKey);
 
-    // Initialize factory subscriber with callback to update vaults
     this.factory = new ClearFactory(
       dexKey,
       this.config,
       network,
       dexHelper,
       this.logger,
-      this.onVaultsUpdated.bind(this),
-    );
-  }
-
-  /**
-   * Callback when factory detects new vaults
-   */
-  private onVaultsUpdated(vaults: DeepReadonly<ClearVault[]>): void {
-    this.vaults = vaults as ClearVault[];
-    this.logger.info(
-      `${this.dexKey}: Vaults updated, count: ${this.vaults.length}`,
     );
   }
 
@@ -89,149 +75,27 @@ export class Clear extends SimpleExchange implements IDex<ClearData> {
   }
 
   async initializePricing(blockNumber: number): Promise<void> {
-    // Initialize factory and fetch initial state
     await this.factory.initialize(blockNumber);
-    const vaults = await this.factory.getStateOrGenerate(blockNumber);
-    this.vaults = vaults as ClearVault[];
-    this.logger.info(
-      `${this.dexKey}: Initialized ${this.vaults.length} vaults`,
-    );
-  }
-
-  /**
-   * Fetch vaults with tokens, decimals and TVL for getTopPoolsForToken
-   * This method is called by PoolTracker service which doesn't call initializePricing
-   */
-  async updatePoolState(): Promise<void> {
-    if (this.vaults.length > 0) {
-      return; // Already have vaults
-    }
-
-    const blockNumber = await this.dexHelper.provider.getBlockNumber();
-    const vaults = await this.factory.getStateOrGenerate(blockNumber, true);
-
-    if (vaults.length === 0) {
-      this.logger.info(`${this.dexKey}: No vaults found in updatePoolState`);
-      return;
-    }
-
-    // Fetch totalAssets for each vault to get actual TVL
-    const totalAssetsCalls: MultiCallParams<bigint>[] = vaults.map(vault => ({
-      target: vault.address,
-      callData: this.clearVaultIface.encodeFunctionData('totalAssets'),
-      decodeFunction: uint256ToBigInt,
-    }));
-
-    const totalAssetsResults =
-      await this.dexHelper.multiWrapper.tryAggregate<bigint>(
-        false,
-        totalAssetsCalls,
-        blockNumber,
-        this.dexHelper.multiWrapper.defaultBatchSize,
-        false,
-      );
-
-    // Build vaults with TVL
-    this.vaults = vaults.map((vault, i) => {
-      const result = totalAssetsResults[i];
-      return {
-        id: vault.id,
-        address: vault.address,
-        tokens: vault.tokens.map(t => ({
-          id: t.id,
-          address: t.address,
-          symbol: t.symbol,
-          decimals: t.decimals,
-        })),
-        totalAssets: result.success ? result.returnData : undefined,
-      };
-    });
-
-    this.logger.info(
-      `${this.dexKey}: updatePoolState loaded ${this.vaults.length} vaults`,
-    );
-  }
-
-  private processMulticallResults(
-    results: {
-      success: boolean;
-      returnData: { amountOut: bigint; ious: bigint };
-    }[],
-    callInfos: PreviewSwapCallInfo[],
-    amountsLength: number,
-  ): Map<string, { poolIdentifier: string; prices: bigint[]; unit: bigint }> {
-    const vaultResults = new Map<
-      string,
-      { poolIdentifier: string; prices: bigint[]; unit: bigint }
-    >();
-
-    for (let i = 0; i < results.length; i++) {
-      const result = results[i];
-      const info = callInfos[i];
-
-      if (!vaultResults.has(info.vaultAddress)) {
-        vaultResults.set(info.vaultAddress, {
-          poolIdentifier: info.poolIdentifier,
-          prices: new Array(amountsLength).fill(0n),
-          unit: 0n,
-        });
-      }
-
-      if (!result.success) {
-        // Expected when no depeg exists - previewSwap reverts with AssetIsNotDepeg
-        this.logger.debug(
-          info.isUnit
-            ? `No price for vault ${info.vaultAddress} (no depeg)`
-            : `No swap available for amount index ${info.amountIndex} in vault ${info.vaultAddress}`,
-        );
-        continue;
-      }
-
-      const vaultData = vaultResults.get(info.vaultAddress)!;
-      if (info.isUnit) {
-        vaultData.unit = result.returnData.amountOut;
-        continue;
-      }
-      vaultData.prices[info.amountIndex] = result.returnData.amountOut;
-    }
-
-    return vaultResults;
-  }
-
-  private findVaultsForTokenPair(
-    srcToken: Address,
-    destToken: Address,
-  ): ClearVault[] {
-    return this.vaults.filter(vault => {
-      const tokenAddresses = vault.tokens.map(t => t.address.toLowerCase());
-      return (
-        tokenAddresses.includes(srcToken.toLowerCase()) &&
-        tokenAddresses.includes(destToken.toLowerCase())
-      );
-    });
   }
 
   async getPoolIdentifiers(
     srcToken: Token,
     destToken: Token,
-    _side: SwapSide,
-    _blockNumber: number,
+    side: SwapSide,
+    blockNumber: number,
   ): Promise<string[]> {
-    if (!this.config) {
-      this.logger.error(`No config for ${this.dexKey} on ${this.network}`);
-      return [];
-    }
+    if (side === SwapSide.BUY) return [];
 
-    const vaults = this.findVaultsForTokenPair(
-      srcToken.address,
-      destToken.address,
-    );
+    const allVaults = this.factory.getState(blockNumber) || [];
+    const src = srcToken.address.toLowerCase();
+    const dest = destToken.address.toLowerCase();
 
-    if (vaults.length === 0) {
-      return [];
-    }
+    const matchingVaults = allVaults.filter(vault => {
+      const addrs = vault.tokens.map(t => t.address);
+      return addrs.includes(src) && addrs.includes(dest);
+    });
 
-    return vaults.map(vault =>
+    return matchingVaults.map(vault =>
       `${this.dexKey}_${vault.address}_${srcToken.address}_${destToken.address}`.toLowerCase(),
     );
   }
@@ -244,99 +108,44 @@ export class Clear extends SimpleExchange implements IDex<ClearData> {
     blockNumber: number,
     limitPools?: string[],
   ): Promise<null | ExchangePrices<ClearData>> {
+    // Only SELL side supported
+    if (side === SwapSide.BUY) {
+      return null;
+    }
+
+    const poolIdentifiers =
+      limitPools ||
+      (await this.getPoolIdentifiers(srcToken, destToken, side, blockNumber));
+
+    if (poolIdentifiers.length === 0) {
+      return null;
+    }
+
     try {
-      if (!this.config) {
-        this.logger.debug(
-          `No config available for ${this.dexKey} on network ${this.network}`,
-        );
-        return null;
-      }
-
-      // Only SELL side supported
-      if (side === SwapSide.BUY) {
-        return null;
-      }
-
-      const poolIdentifiers =
-        limitPools ||
-        (await this.getPoolIdentifiers(srcToken, destToken, side, blockNumber));
-
-      if (poolIdentifiers.length === 0) {
-        this.logger.debug(
-          `No pools found for ${srcToken.symbol}-${destToken.symbol}`,
-        );
-        return null;
-      }
-
-      const unitAmount = BigInt(10) ** BigInt(srcToken.decimals);
-
-      const calls: MultiCallParams<{ amountOut: bigint; ious: bigint }>[] = [];
-      const callInfos: PreviewSwapCallInfo[] = [];
+      const calls: MultiCallParams<bigint>[] = [];
+      const vaultInfos = [];
 
       for (const poolIdentifier of poolIdentifiers) {
         const vaultAddress = poolIdentifier.split('_')[1];
+        const startIdx = calls.length;
 
-        for (let i = 0; i < amounts.length; i++) {
-          const callData = this.clearSwapIface.encodeFunctionData(
-            'previewSwap',
-            [vaultAddress, srcToken.address, destToken.address, amounts[i]],
-          );
-
+        for (const amount of amounts.slice(1)) {
           calls.push({
             target: this.config.swapAddress,
-            callData,
-            decodeFunction: (result: any) => {
-              const decoded = this.clearSwapIface.decodeFunctionResult(
-                'previewSwap',
-                result,
-              );
-              return {
-                amountOut: BigInt(decoded.amountOut.toString()),
-                ious: BigInt(decoded.ious.toString()),
-              };
-            },
-          });
-
-          callInfos.push({
-            vaultAddress,
-            poolIdentifier,
-            isUnit: false,
-            amountIndex: i,
+            callData: this.clearSwapIface.encodeFunctionData('previewSwap', [
+              vaultAddress,
+              srcToken.address,
+              destToken.address,
+              amount,
+            ]),
+            decodeFunction: (result: any) => result.amountOut.toBigInt(),
           });
         }
 
-        const unitCallData = this.clearSwapIface.encodeFunctionData(
-          'previewSwap',
-          [vaultAddress, srcToken.address, destToken.address, unitAmount],
-        );
-
-        calls.push({
-          target: this.config.swapAddress,
-          callData: unitCallData,
-          decodeFunction: (result: any) => {
-            const decoded = this.clearSwapIface.decodeFunctionResult(
-              'previewSwap',
-              result,
-            );
-            return {
-              amountOut: BigInt(decoded.amountOut.toString()),
-              ious: BigInt(decoded.ious.toString()),
-            };
-          },
-        });
-
-        callInfos.push({
-          vaultAddress,
-          poolIdentifier,
-          isUnit: true,
-          amountIndex: -1,
-        });
+        vaultInfos.push({ address: vaultAddress, poolIdentifier, startIdx });
       }
 
-      const results = await this.dexHelper.multiWrapper.tryAggregate<{
-        amountOut: bigint;
-        ious: bigint;
-      }>(
+      const results = await this.dexHelper.multiWrapper.tryAggregate<bigint>(
         false,
         calls,
         blockNumber,
@@ -344,58 +153,33 @@ export class Clear extends SimpleExchange implements IDex<ClearData> {
         false,
       );
 
-      const vaultResults = this.processMulticallResults(
-        results,
-        callInfos,
-        amounts.length,
-      );
-
       const poolPrices: PoolPrices<ClearData>[] = [];
 
-      for (const [vaultAddress, vaultData] of vaultResults) {
-        if (vaultData.prices.every(p => p === 0n)) {
-          // Expected when no depeg - skip this vault
-          continue;
-        }
+      for (const { address, poolIdentifier, startIdx } of vaultInfos) {
+        const prices = [
+          0n,
+          ...amounts.slice(1).map((_, i) => {
+            const r = results[startIdx + i];
+            return r.success ? r.returnData : 0n;
+          }),
+        ];
 
-        let unit = vaultData.unit;
-        if (unit === 0n) {
-          // Fallback: find first valid amount/price pair to calculate unit
-          for (let i = 0; i < amounts.length; i++) {
-            if (amounts[i] > 0n && vaultData.prices[i] > 0n) {
-              unit = (vaultData.prices[i] * unitAmount) / amounts[i];
-              break;
-            }
-          }
-        }
-
-        // Skip pool if we couldn't calculate a valid unit
-        if (unit === 0n) {
-          continue;
-        }
+        if (prices.every(p => p === 0n)) continue;
 
         poolPrices.push({
-          prices: vaultData.prices,
-          unit,
-          data: {
-            vault: vaultAddress,
-            router: this.config.swapAddress,
-          },
-          poolIdentifiers: [vaultData.poolIdentifier],
+          prices,
+          unit: getBigIntPow(destToken.decimals),
+          data: { vault: address },
+          poolIdentifiers: [poolIdentifier],
           exchange: this.dexKey,
           gasCost: this.config.poolGasCost || CLEAR_GAS_COST,
-          poolAddresses: [vaultAddress],
+          poolAddresses: [address],
         });
       }
 
-      if (poolPrices.length === 0) {
-        // Expected when no depeg exists
-        return null;
-      }
-
-      return poolPrices;
+      return poolPrices.length > 0 ? poolPrices : null;
     } catch (error) {
-      this.logger.error('Error in getPricesVolume:', error);
+      this.logger.error(`getPricesVolume error: ${error}`);
       return null;
     }
   }
@@ -432,8 +216,12 @@ export class Clear extends SimpleExchange implements IDex<ClearData> {
       needWrapNative: this.needWrapNative,
       dexFuncHasRecipient: true,
       exchangeData,
-      targetExchange: data.router,
-      returnAmountPos: undefined,
+      targetExchange: this.config.swapAddress,
+      returnAmountPos: extractReturnAmountPosition(
+        this.clearSwapIface,
+        'swap',
+        'amountOut',
+      ),
     };
   }
 
@@ -454,44 +242,102 @@ export class Clear extends SimpleExchange implements IDex<ClearData> {
     );
   }
 
+  /**
+   * Fetch vaults with tokens, decimals and TVL for getTopPoolsForToken
+   * This method is called by PoolTracker service which doesn't call initializePricing
+   */
+  async updatePoolState(): Promise<void> {
+    const blockNumber = await this.dexHelper.provider.getBlockNumber();
+    const vaults = await this.factory.getStateOrGenerate(blockNumber);
+
+    if (vaults.length === 0) {
+      return this.logger.info(
+        `${this.dexKey}: No vaults found in updatePoolState`,
+      );
+    }
+
+    const uniqueTokens = [
+      ...new Set(vaults.flatMap(v => v.tokens.map(t => t.address))),
+    ];
+
+    const decimalCalls: MultiCallParams<bigint>[] = uniqueTokens.map(token => ({
+      target: token,
+      callData: '0x313ce567', // decimals()
+      decodeFunction: (result: any) => BigInt(uint8ToNumber(result)),
+    }));
+
+    const totalAssetsCalls: MultiCallParams<bigint>[] = vaults.map(vault => ({
+      target: vault.address,
+      callData: this.clearVaultIface.encodeFunctionData('totalAssets'),
+      decodeFunction: uint256ToBigInt,
+    }));
+
+    const results = await this.dexHelper.multiWrapper.tryAggregate<bigint>(
+      false,
+      [...decimalCalls, ...totalAssetsCalls],
+      blockNumber,
+      this.dexHelper.multiWrapper.defaultBatchSize,
+      false,
+    );
+
+    const callsOffset = uniqueTokens.length;
+
+    const tokenDecimals: Record<string, number> = {};
+    for (let i = 0; i < callsOffset; i++) {
+      const result = results[i];
+      tokenDecimals[uniqueTokens[i]] = result.success
+        ? Number(result.returnData)
+        : 18;
+    }
+
+    this.vaults = vaults.map((vault, i) => {
+      const result = results[callsOffset + i];
+
+      return {
+        address: vault.address,
+        tokens: vault.tokens.map(t => ({
+          address: t.address,
+          decimals: tokenDecimals[t.address.toLowerCase()] ?? 18,
+        })),
+        totalAssets: result.success ? result.returnData : undefined,
+      };
+    });
+  }
+
   async getTopPoolsForToken(
     tokenAddress: Address,
     limit: number,
   ): Promise<PoolLiquidity[]> {
+    const tokenAddrLower = tokenAddress.toLowerCase();
+
     const vaultsWithToken = this.vaults.filter(vault =>
-      vault.tokens.some(
-        t => t.address.toLowerCase() === tokenAddress.toLowerCase(),
-      ),
+      vault.tokens.some(t => t.address.toLowerCase() === tokenAddrLower),
     );
 
     if (vaultsWithToken.length === 0) {
       return [];
     }
 
-    const poolLiquidities: PoolLiquidity[] = vaultsWithToken
-      .map(vault => {
+    const usdAmounts = await this.dexHelper.getUsdTokenAmounts(
+      vaultsWithToken.map(vault => [tokenAddress, vault.totalAssets ?? null]),
+    );
+
+    const poolLiquidities = vaultsWithToken
+      .map((vault, i) => {
         const connectorTokens = vault.tokens
-          .filter(t => t.address.toLowerCase() !== tokenAddress.toLowerCase())
+          .filter(t => t.address.toLowerCase() !== tokenAddrLower)
           .map(t => ({
             address: t.address,
-            decimals: parseInt(t.decimals, 10),
+            decimals: t.decimals ?? 18,
           }));
 
-        if (connectorTokens.length === 0) {
-          return null;
-        }
-
-        // Use totalAssets as TVL - stablecoins are ~$1 each
-        // totalAssets is in vault decimals (typically 18 for stablecoin vaults)
-        const liquidityUSD = vault.totalAssets
-          ? Number(vault.totalAssets) / 1e18
-          : 0;
+        if (connectorTokens.length === 0) return null;
 
         return {
           exchange: this.dexKey,
           address: vault.address,
           connectorTokens,
-          liquidityUSD,
+          liquidityUSD: usdAmounts[i],
         };
       })
       .filter((p): p is PoolLiquidity => p !== null);
