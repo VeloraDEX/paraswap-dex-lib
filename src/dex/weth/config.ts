@@ -44,6 +44,11 @@ export const WethConfig: DexConfigMap<DexParams> = {
       poolGasCost: WethGasCost,
     },
   },
+  Wxpl: {
+    [Network.PLASMA]: {
+      poolGasCost: WethGasCost,
+    },
+  },
   Wavax: {
     [Network.AVALANCHE]: {
       poolGasCost: WethGasCost,

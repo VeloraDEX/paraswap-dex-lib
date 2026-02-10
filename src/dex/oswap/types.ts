@@ -9,6 +9,14 @@ export type OSwapPoolState = {
   balance1: string;
   withdrawsQueued: string;
   withdrawsClaimed: string;
+  // ERC4626 vault state (only for pools that use ERC4626 conversion)
+  totalAssets?: string;
+  totalShares?: string;
+};
+
+export type OSwapERC4626Config = {
+  assetToken: Address;
+  vaultToken: Address;
 };
 
 // OSwapPoolState is the state of the event subscriber. It is the minimum
@@ -24,8 +32,9 @@ export type OSwapPool = {
   address: Address;
   token0: Address;
   token1: Address;
+  erc4626?: OSwapERC4626Config;
 };
 
 export type DexParams = {
-  pools: [OSwapPool];
+  pools: OSwapPool[];
 };

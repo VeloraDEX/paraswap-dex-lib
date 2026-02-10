@@ -16,6 +16,7 @@ import {
   encodeReClammOnChainData,
   decodeReClammOnChainData,
 } from './reClammPool';
+import { Logger } from 'log4js';
 
 // Encoding & Decoding for onchain calls to fetch mutable pool data
 // Each supported pool type should have its own specific calls if needed
@@ -505,6 +506,7 @@ export async function getOnChainState(
     [name: string]: Interface;
   },
   blockNumber?: number,
+  logger?: Logger,
 ): Promise<PoolStateMap> {
   const erc4626MultiCallData = getErc4626MultiCallData(
     interfaces['ERC4626'],
@@ -557,42 +559,61 @@ export async function getOnChainState(
 
   let i = 0;
   const poolStateMap = Object.fromEntries(
-    Object.entries(immutablePoolStateMap).map(([address, pool]) => {
-      const commonMutableData = poolOnChain['COMMON'].decode(
-        interfaces['VAULT'],
-        address,
-        dataResultPools,
-        i,
-      ) as CommonMutableState;
-      i = i + poolOnChain['COMMON'].count;
-      const poolMutableData = poolOnChain[pool.poolType].decode(
-        interfaces[pool.poolType],
-        address,
-        dataResultPools,
-        i,
-      );
-      i = i + poolOnChain[pool.poolType].count;
-      return [
-        address,
-        {
-          ...pool,
-          ...commonMutableData,
-          ...poolMutableData,
-          erc4626Rates: pool.tokens.map(t => {
-            if (!tokensWithRates[t]) return null;
-            return tokensWithRates[t].rate;
-          }),
-          erc4626MaxDeposit: pool.tokens.map(t => {
-            if (!tokensWithRates[t]) return null;
-            return tokensWithRates[t].maxDeposit;
-          }),
-          erc4626MaxMint: pool.tokens.map(t => {
-            if (!tokensWithRates[t]) return null;
-            return tokensWithRates[t].maxMint;
-          }),
-        },
-      ];
-    }),
+    Object.entries(immutablePoolStateMap)
+      .map(([address, pool]) => {
+        const startIndex = i;
+        try {
+          const commonMutableData = poolOnChain['COMMON'].decode(
+            interfaces['VAULT'],
+            address,
+            dataResultPools,
+            i,
+          ) as CommonMutableState;
+          i = i + poolOnChain['COMMON'].count;
+          const poolMutableData = poolOnChain[pool.poolType].decode(
+            interfaces[pool.poolType],
+            address,
+            dataResultPools,
+            i,
+          );
+          i = i + poolOnChain[pool.poolType].count;
+          return [
+            address,
+            {
+              ...pool,
+              ...commonMutableData,
+              ...poolMutableData,
+              erc4626Rates: pool.tokens.map(t => {
+                if (!tokensWithRates[t]) return null;
+                return tokensWithRates[t].rate;
+              }),
+              erc4626MaxDeposit: pool.tokens.map(t => {
+                if (!tokensWithRates[t]) return null;
+                return tokensWithRates[t].maxDeposit;
+              }),
+              erc4626MaxMint: pool.tokens.map(t => {
+                if (!tokensWithRates[t]) return null;
+                return tokensWithRates[t].maxMint;
+              }),
+            },
+          ];
+        } catch (error) {
+          logger?.error(
+            `Error decoding onchain data for pool ${address}: ${
+              (error as Error).message
+            }`,
+          );
+
+          // Ensure index is set to skip all data for this pool
+          i =
+            startIndex +
+            poolOnChain['COMMON'].count +
+            poolOnChain[pool.poolType].count;
+
+          return null;
+        }
+      })
+      .filter(t => t !== null),
   );
   return poolStateMap;
 }

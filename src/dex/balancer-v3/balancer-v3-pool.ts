@@ -177,11 +177,9 @@ export class BalancerV3EventPool extends StatefulEventSubscriber<PoolStateMap> {
   async generateState(
     blockNumber: number,
   ): Promise<DeepReadonly<PoolStateMap>> {
-    const block = await this.dexHelper.provider.getBlock(blockNumber);
     const apiPoolStateMap = await getPoolsApi(
       this.network,
       this.hooksConfigMap,
-      block.timestamp,
     );
     const allOnChainPools = await getOnChainState(
       this.network,
@@ -189,6 +187,7 @@ export class BalancerV3EventPool extends StatefulEventSubscriber<PoolStateMap> {
       this.dexHelper,
       this.interfaces,
       blockNumber,
+      this.logger,
     );
 
     // Filter out all paused pools
@@ -220,6 +219,7 @@ export class BalancerV3EventPool extends StatefulEventSubscriber<PoolStateMap> {
       this.dexHelper,
       this.interfaces,
       blockNumber,
+      this.logger,
     );
 
     return latestOnChainPools;
@@ -641,7 +641,7 @@ export class BalancerV3EventPool extends StatefulEventSubscriber<PoolStateMap> {
     );
 
     // Update state
-    const blockNumber = await this.dexHelper.provider.getBlockNumber();
+    const blockNumber = this.dexHelper.blockManager.getLatestBlockNumber();
     this.setState(poolState, blockNumber);
   }
 

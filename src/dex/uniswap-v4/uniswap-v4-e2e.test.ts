@@ -283,6 +283,23 @@ describe('UniswapV4 E2E', () => {
   describe('Avalanche', () => {
     const network = Network.AVALANCHE;
 
+    describe('WAVAX -> WLBOND', () => {
+      const tokenASymbol: string = 'WAVAX';
+      const tokenBSymbol: string = 'WLBOND';
+
+      const tokenAAmount: string = '100000000000000';
+      const tokenBAmount: string = '100000000000000';
+
+      testForNetwork(
+        network,
+        dexKey,
+        tokenASymbol,
+        tokenBSymbol,
+        tokenAAmount,
+        tokenBAmount,
+      );
+    });
+
     describe('AVAX -> USDC', () => {
       const tokenASymbol: string = 'AVAX';
       const tokenBSymbol: string = 'USDC';

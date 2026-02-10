@@ -35,6 +35,7 @@ type BaseConfig = {
   dexalotAuthToken?: string;
   bebopAuthName?: string;
   bebopAuthToken?: string;
+  nativeApiKey?: string;
   forceRpcFallbackDexs: string[];
 };
 
@@ -76,12 +77,14 @@ const baseConfigs: { [network: number]: BaseConfig } = {
     hashFlowAuthToken: process.env.API_KEY_HASHFLOW_AUTH_TOKEN || '',
     bebopAuthName: process.env.API_KEY_BEBOP_AUTH_NAME || '',
     bebopAuthToken: process.env.API_KEY_BEBOP_AUTH_TOKEN || '',
+    nativeApiKey: process.env.API_KEY_NATIVE || '',
     hashFlowDisabledMMs:
       process.env[`HASHFLOW_DISABLED_MMS_1`]?.split(',') || [],
     uniswapV3EventLoggingSampleRate: 0,
     rfqConfigs: {
       DummyParaSwapPool: {
         maker: process.env.TEST_ADDRESS!,
+        minTradeUsd: null,
         tokensConfig: {
           reqParams: {
             url: `http://localhost:${PORT_TEST_SERVER}/tokens`,
@@ -157,6 +160,7 @@ const baseConfigs: { [network: number]: BaseConfig } = {
     },
     hashFlowAuthToken: process.env.API_KEY_HASHFLOW_AUTH_TOKEN || '',
     swaapV2AuthToken: process.env.API_KEY_SWAAP_V2_AUTH_TOKEN || '',
+    nativeApiKey: process.env.API_KEY_NATIVE || '',
     hashFlowDisabledMMs:
       process.env[`HASHFLOW_DISABLED_MMS_56`]?.split(',') || [],
     adapterAddresses: {
@@ -191,6 +195,8 @@ const baseConfigs: { [network: number]: BaseConfig } = {
       Executor02: '0x00C600b30fb0400701010F4b080409018B9006E0',
       Executor03: '0x0e5891850bb3f03090f03010000806f080040100',
     },
+    bebopAuthName: process.env.API_KEY_BEBOP_AUTH_NAME || '',
+    bebopAuthToken: process.env.API_KEY_BEBOP_AUTH_TOKEN || '',
     hashFlowAuthToken: process.env.API_KEY_HASHFLOW_AUTH_TOKEN || '',
     hashFlowDisabledMMs:
       process.env[`HASHFLOW_DISABLED_MMS_137`]?.split(',') || [],
@@ -222,6 +228,8 @@ const baseConfigs: { [network: number]: BaseConfig } = {
     tokenTransferProxyAddress: '0x216b4b4ba9f3e719726886d34a177484278bfcae',
     multicallV2Address: '0xd7Fc8aD069f95B6e2835f4DEff03eF84241cF0E1',
     privateHttpProvider: process.env.HTTP_PROVIDER_43114,
+    bebopAuthName: process.env.API_KEY_BEBOP_AUTH_NAME || '',
+    bebopAuthToken: process.env.API_KEY_BEBOP_AUTH_TOKEN || '',
     hashFlowAuthToken: process.env.API_KEY_HASHFLOW_AUTH_TOKEN || '',
     hashFlowDisabledMMs:
       process.env[`HASHFLOW_DISABLED_MMS_43114`]?.split(',') || [],
@@ -290,6 +298,7 @@ const baseConfigs: { [network: number]: BaseConfig } = {
     privateHttpProvider: process.env.HTTP_PROVIDER_42161,
     hashFlowAuthToken: process.env.API_KEY_HASHFLOW_AUTH_TOKEN || '',
     swaapV2AuthToken: process.env.API_KEY_SWAAP_V2_AUTH_TOKEN || '',
+    nativeApiKey: process.env.API_KEY_NATIVE || '',
     hashFlowDisabledMMs:
       process.env[`HASHFLOW_DISABLED_MMS_42161`]?.split(',') || [],
     augustusV6Address: '0x6a000f20005980200259b80c5102003040001068',
@@ -401,6 +410,7 @@ const baseConfigs: { [network: number]: BaseConfig } = {
     bebopAuthToken: process.env.API_KEY_BEBOP_AUTH_TOKEN || '',
     hashFlowAuthToken: process.env.API_KEY_HASHFLOW_AUTH_TOKEN || '',
     swaapV2AuthToken: process.env.API_KEY_SWAAP_V2_AUTH_TOKEN || '',
+    nativeApiKey: process.env.API_KEY_NATIVE || '',
     hashFlowDisabledMMs: [],
     augustusV6Address: '0x6a000f20005980200259b80c5102003040001068',
     executorsAddresses: {
@@ -420,6 +430,35 @@ const baseConfigs: { [network: number]: BaseConfig } = {
     rpcPollingMaxAllowedStateDelayInBlocks: 5,
     rpcPollingBlocksBackToTriggerUpdate: 3,
     forceRpcFallbackDexs: [],
+  },
+  [Network.PLASMA]: {
+    network: Network.PLASMA,
+    networkName: 'Plasma',
+    isTestnet: false,
+    nativeTokenName: 'Plasma',
+    nativeTokenSymbol: 'XPL',
+    wrappedNativeTokenAddress: '0x6100e367285b01f48d07953803a2d8dca5d19873',
+    hasEIP1559: true,
+    augustusAddress: '0x0000000000000000000000000000000000000000',
+    tokenTransferProxyAddress: '0x0000000000000000000000000000000000000000',
+    multicallV2Address: '0xcA11bde05977b3631167028862bE2a173976CA11',
+    privateHttpProvider: process.env.HTTP_PROVIDER_9745,
+    adapterAddresses: {},
+    augustusRFQAddress: '0x92EaD5bACf6F0E995FA46Ad8215A9b11f67ca241',
+    augustusV6Address: '0x6a000f20005980200259b80c5102003040001068',
+    executorsAddresses: {
+      Executor01: '0x000010036C0190E009a000d0fc3541100A07380A',
+      Executor02: '0x00C600b30fb0400701010F4b080409018B9006E0',
+      Executor03: '0x0e5891850bb3f03090f03010000806f080040100',
+    },
+    rpcPollingMaxAllowedStateDelayInBlocks: 0,
+    rpcPollingBlocksBackToTriggerUpdate: 0,
+    hashFlowDisabledMMs: [],
+    uniswapV3EventLoggingSampleRate: 0,
+    rfqConfigs: {},
+    forceRpcFallbackDexs: [],
+    uniswapV2ExchangeRouterAddress:
+      '0x0000000000000000000000000000000000000000',
   },
   [Network.SEPOLIA]: {
     network: Network.SEPOLIA,
@@ -525,6 +564,7 @@ export function generateConfig(network: number): Config {
     dexalotAuthToken: baseConfig.dexalotAuthToken,
     bebopAuthName: baseConfig.bebopAuthName,
     bebopAuthToken: baseConfig.bebopAuthToken,
+    nativeApiKey: baseConfig.nativeApiKey,
     hashFlowDisabledMMs: baseConfig.hashFlowDisabledMMs,
     forceRpcFallbackDexs: baseConfig.forceRpcFallbackDexs,
     apiKeyTheGraph: process.env.API_KEY_THE_GRAPH || '',

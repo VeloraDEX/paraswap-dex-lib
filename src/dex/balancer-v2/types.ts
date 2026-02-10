@@ -198,6 +198,16 @@ export type BalancerV2Data = {
   poolId: string;
 };
 
+export type FallbackPool = {
+  id: string;
+  address: string;
+  poolType: BalancerPoolTypes;
+  poolTypeVersion: number;
+  tokens: SubgraphToken[];
+  mainIndex: number;
+  wrappedIndex: number;
+};
+
 export type DexParams = {
   subgraphURL: string;
   vaultAddress: Address;

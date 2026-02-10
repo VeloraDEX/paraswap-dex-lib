@@ -61,11 +61,11 @@ function _closeTo(a: bigint, b: bigint, target: bigint) {
 }
 
 export class SolidlyStablePool {
-  static async getSellPrice(
+  static getSellPrice(
     priceParams: SolidlyPoolOrderedParams,
     srcAmount: bigint,
     feeFactor: number,
-  ): Promise<bigint> {
+  ): bigint {
     const { reservesIn, reservesOut, decimalsIn, decimalsOut, fee } =
       priceParams;
 

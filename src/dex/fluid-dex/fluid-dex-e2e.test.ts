@@ -132,6 +132,27 @@ describe('FluidDex E2E', () => {
     });
   });
 
+  describe('BSC', () => {
+    const network = Network.BSC;
+
+    describe('USDT -> USDC', () => {
+      const tokenASymbol: string = 'USDT';
+      const tokenBSymbol: string = 'USDC';
+
+      const tokenAAmount: string = '10000000000000000';
+      const tokenBAmount: string = '10000000000000000';
+
+      testForNetwork(
+        network,
+        dexKey,
+        tokenASymbol,
+        tokenBSymbol,
+        tokenAAmount,
+        tokenBAmount,
+      );
+    });
+  });
+
   describe('Arbitrum', () => {
     const network = Network.ARBITRUM;
 
@@ -217,6 +238,44 @@ describe('FluidDex E2E', () => {
 
       const tokenAAmount: string = '100000000000000';
       const tokenBAmount: string = '100000000000000';
+
+      testForNetwork(
+        network,
+        dexKey,
+        tokenASymbol,
+        tokenBSymbol,
+        tokenAAmount,
+        tokenBAmount,
+      );
+    });
+  });
+
+  describe('Plasma', () => {
+    const network = Network.PLASMA;
+
+    describe('USDT0 -> sUSDe', () => {
+      const tokenASymbol: string = 'USDT0';
+      const tokenBSymbol: string = 'sUSDe';
+
+      const tokenAAmount: string = '1000000';
+      const tokenBAmount: string = '1000000000000000000';
+
+      testForNetwork(
+        network,
+        dexKey,
+        tokenASymbol,
+        tokenBSymbol,
+        tokenAAmount,
+        tokenBAmount,
+      );
+    });
+
+    describe('WETH -> wrsETH', () => {
+      const tokenBSymbol: string = 'WETH';
+      const tokenASymbol: string = 'wrsETH';
+
+      const tokenAAmount: string = '1000000000000000000';
+      const tokenBAmount: string = '1000000000000000000';
 
       testForNetwork(
         network,

@@ -1,3 +1,4 @@
+import { AbiItem } from 'web3-utils';
 import {
   UniswapV2Data,
   UniswapV2PoolOrderedParams,
@@ -31,6 +32,8 @@ export interface DexParams extends Omit<UniswapV2DexParams, 'feeCode'> {
   stableFee?: number;
   volatileFee?: number;
   feeFactor?: number;
+  factoryAbi?: AbiItem[];
+  getPairMethodName?: string;
 }
 
 export interface SolidlyPair extends UniswapV2Pair {

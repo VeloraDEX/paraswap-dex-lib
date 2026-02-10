@@ -21,6 +21,13 @@ export const CONVERGENCE_ERROR_PREFIX = 'didnt_converge';
 
 // Pooltracker relevant variables
 export const CURVE_API_URL = 'https://api.curve.finance/v1/getPools';
+export const CURVE_CORE_API_URL = 'https://api-core.curve.finance/v1/getPools';
+export const CURVE_API_BY_NETWORK: Record<number, string> = {
+  [Network.PLASMA]: CURVE_CORE_API_URL,
+};
+export const CURVE_API_SLUGS_BY_NETWORK: Record<number, string[]> = {
+  [Network.PLASMA]: ['/factory-stable-ng'],
+};
 export const NETWORK_ID_TO_NAME: Record<number, string> = {
   [Network.MAINNET]: 'ethereum',
   [Network.POLYGON]: 'polygon',
@@ -29,6 +36,7 @@ export const NETWORK_ID_TO_NAME: Record<number, string> = {
   [Network.ARBITRUM]: 'arbitrum',
   [Network.OPTIMISM]: 'optimism',
   [Network.BASE]: 'base',
+  [Network.PLASMA]: 'plasma',
   [Network.GNOSIS]: 'xdai',
 };
 

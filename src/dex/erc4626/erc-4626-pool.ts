@@ -37,24 +37,37 @@ export class ERC4626EventPool extends StatefulEventSubscriber<ERC4626PoolState> 
     log: Readonly<Log>,
     blockHeader: Readonly<BlockHeader>,
   ): Promise<DeepReadonly<ERC4626PoolState> | null> {
+    const topic0 = log.topics[0];
+
     try {
-      const event = this.logDecoder(log);
-      if (
-        log.topics[0] === this.transferTopic &&
-        log.address.toLowerCase() === this.asset &&
-        event.args.to.toLowerCase() === this.vault
-      ) {
-        return this.handleAssetTransferToVault(event, state, log);
+      if (topic0 === this.transferTopic) {
+        if (log.address.toLowerCase() !== this.asset) {
+          return null;
+        }
+
+        const event = this.logDecoder(log);
+        if (event.args.to.toLowerCase() === this.vault) {
+          return this.handleAssetTransferToVault(event, state, log);
+        }
+
+        return null;
       }
-      if (log.topics[0] === this.depositTopic) {
+
+      if (topic0 === this.depositTopic) {
+        const event = this.logDecoder(log);
         return this.handleDeposit(event, state, log);
       }
-      if (log.topics[0] === this.withdrawTopic) {
+
+      if (topic0 === this.withdrawTopic) {
+        const event = this.logDecoder(log);
         return this.handleWithdraw(event, state, log);
       }
+
       return null;
     } catch (error) {
-      this.logger.error(`Error processing log: ${log}, error: ${error}`);
+      this.logger.error(
+        `Error processing log: ${JSON.stringify(log)}, error: ${error}`,
+      );
       return null;
     }
   }

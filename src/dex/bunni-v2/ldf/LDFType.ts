@@ -1,5 +1,0 @@
-export enum LDFType {
-  STATIC,
-  DYNAMIC_NOT_STATEFUL,
-  DYNAMIC_AND_STATEFUL,
-}

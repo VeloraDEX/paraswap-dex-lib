@@ -38,6 +38,8 @@ import { queryAvailablePoolsForToken } from './subgraph';
 import _ from 'lodash';
 import { UNISWAPV4_EFFICIENCY_FACTOR } from './constants';
 import { PoolsRegistryHashKey } from '../uniswap-v3/uniswap-v3';
+import { calculateTotalPoolLiquidity } from './liquidity';
+import { IBaseHook } from './hooks/types';
 
 export class UniswapV4 extends SimpleExchange implements IDex<UniswapV4Data> {
   readonly hasConstantPriceLargeAmounts = false;
@@ -54,6 +56,7 @@ export class UniswapV4 extends SimpleExchange implements IDex<UniswapV4Data> {
     getDexKeysWithNetwork(UniswapV4Config);
 
   private wethAddress: string;
+  private supportedHooks: IBaseHook[] = [];
 
   constructor(
     protected network: Network,
@@ -70,11 +73,18 @@ export class UniswapV4 extends SimpleExchange implements IDex<UniswapV4Data> {
     this.wethAddress =
       this.dexHelper.config.data.wrappedNativeTokenAddress.toLowerCase();
 
+    const dexConfig = UniswapV4Config[dexKey][network];
+    this.supportedHooks =
+      dexConfig.supportedHooks?.map(
+        Hook => new Hook(this.dexHelper, network, this.logger),
+      ) ?? [];
+
     this.poolManager = new UniswapV4PoolManager(
       dexHelper,
       dexKey,
       network,
-      UniswapV4Config[dexKey][network],
+      dexConfig,
+      this.supportedHooks,
       this.logger,
       this.cacheStateKey,
     );
@@ -82,6 +92,12 @@ export class UniswapV4 extends SimpleExchange implements IDex<UniswapV4Data> {
 
   async initializePricing(blockNumber: number) {
     await this.poolManager.initialize(blockNumber);
+
+    await Promise.all(
+      this.supportedHooks.map(async hook => {
+        await hook.initialize(blockNumber);
+      }),
+    );
   }
 
   async addMasterPool(poolKey: string, blockNumber: number): Promise<boolean> {
@@ -134,6 +150,7 @@ export class UniswapV4 extends SimpleExchange implements IDex<UniswapV4Data> {
     amounts: bigint[],
     zeroForOne: boolean,
     side: SwapSide,
+    hook?: IBaseHook,
   ): bigint[] | null {
     try {
       const outputsResult = uniswapV4PoolMath.queryOutputs(
@@ -142,6 +159,7 @@ export class UniswapV4 extends SimpleExchange implements IDex<UniswapV4Data> {
         amounts,
         zeroForOne,
         side,
+        hook,
       );
 
       if (
@@ -208,7 +226,14 @@ export class UniswapV4 extends SimpleExchange implements IDex<UniswapV4Data> {
 
       let prices: bigint[] | null;
       if (poolState !== null && poolState.isValid) {
-        prices = this._getOutputs(pool, poolState, amounts, zeroForOne, side);
+        prices = this._getOutputs(
+          pool,
+          poolState,
+          amounts,
+          zeroForOne,
+          side,
+          eventPool?.hook,
+        );
       } else {
         this.logger.warn(
           `${this.dexKey}-${this.network}: pool ${poolId} state was not found...falling back to rpc`,
@@ -323,21 +348,27 @@ export class UniswapV4 extends SimpleExchange implements IDex<UniswapV4Data> {
   }
 
   async getTopPoolsForToken(
-    tokenAddress: Address,
+    _tokenAddress: Address,
     limit: number,
   ): Promise<PoolLiquidity[]> {
-    let _tokenAddress = tokenAddress.toLowerCase();
-    if (isETHAddress(_tokenAddress)) _tokenAddress = NULL_ADDRESS;
+    let tokenAddress = _tokenAddress.toLowerCase();
+    if (isETHAddress(tokenAddress)) tokenAddress = NULL_ADDRESS;
+
     const poolIds = UniswapV4PoolsList[this.network]?.map(p => p.id);
+
+    const hooksToQuery = this.supportedHooks
+      .map(hook => hook.address.toLowerCase())
+      .concat(NULL_ADDRESS);
 
     const { pools0, pools1 } = await queryAvailablePoolsForToken(
       this.dexHelper,
       this.logger,
       this.dexKey,
       UniswapV4Config[this.dexKey][this.network].subgraphURL,
-      _tokenAddress,
+      tokenAddress,
       limit,
       poolIds,
+      hooksToQuery,
     );
 
     if (!(pools0 || pools1)) {
@@ -347,45 +378,72 @@ export class UniswapV4 extends SimpleExchange implements IDex<UniswapV4Data> {
       return [];
     }
 
-    const connectors0: PoolLiquidity[] = _.map(pools0, pool => ({
-      exchange: this.dexKey,
-      address: this.poolManagerAddress,
-      connectorTokens: [
-        {
-          address:
-            pool.token1.address.toLowerCase() === NULL_ADDRESS
-              ? ETHER_ADDRESS
-              : pool.token1.address.toLowerCase(),
-          decimals: parseInt(pool.token1.decimals),
-        },
-      ],
-      liquidityUSD: parseFloat(pool.volumeUSD) * UNISWAPV4_EFFICIENCY_FACTOR,
-    }));
+    if (pools0.length === 0 && pools1.length === 0) {
+      return [];
+    }
 
-    const connectors1: PoolLiquidity[] = _.map(pools1, pool => ({
-      exchange: this.dexKey,
-      address: this.poolManagerAddress,
-      connectorTokens: [
-        {
-          address:
-            pool.token0.address.toLowerCase() === NULL_ADDRESS
-              ? ETHER_ADDRESS
-              : pool.token0.address.toLowerCase(),
-          decimals: parseInt(pool.token0.decimals),
-        },
-      ],
-      liquidityUSD: parseFloat(pool.volumeUSD) * UNISWAPV4_EFFICIENCY_FACTOR,
-    }));
+    const blockNumber = await this.dexHelper.provider.getBlockNumber();
 
-    const pools: PoolLiquidity[] = _.slice(
-      _.sortBy(_.concat(connectors0, connectors1), [
-        pool => -1 * pool.liquidityUSD,
-      ]),
-      0,
-      limit,
+    const pools = pools0.concat(pools1);
+    const poolStates = await this.poolManager.generateMultiplePoolStates(
+      pools,
+      blockNumber,
     );
 
-    return pools;
+    const validPoolStates = poolStates.filter(t => t !== null);
+
+    const tokenAmounts: [token: Address, amount: bigint][] = [];
+
+    for (const poolState of validPoolStates) {
+      const { totalAmount0, totalAmount1 } =
+        calculateTotalPoolLiquidity(poolState);
+
+      tokenAmounts.push([poolState!.token0, totalAmount0]);
+      tokenAmounts.push([poolState!.token1, totalAmount1]);
+    }
+
+    const usdTokenAmounts = await this.dexHelper.getUsdTokenAmounts(
+      tokenAmounts.map(t => [
+        t[0] === NULL_ADDRESS ? ETHER_ADDRESS : t[0],
+        t[1],
+      ]),
+    );
+
+    const allTokens = pools.map(pool => [pool.token0, pool.token1]).flat();
+
+    const liquidityPools: PoolLiquidity[] = [];
+
+    for (let i = 0; i < validPoolStates.length; i++) {
+      const poolState = validPoolStates[i];
+      const isToken0 = poolState.token0 === tokenAddress;
+      const connector = isToken0 ? poolState.token1 : poolState.token0;
+
+      const connectorToken = allTokens.find(t => t.address === connector)!;
+
+      const token0UsdAmount = usdTokenAmounts[i * 2];
+      const token1UsdAmount = usdTokenAmounts[i * 2 + 1];
+
+      liquidityPools.push({
+        exchange: this.dexKey,
+        address: poolState.id, // should be safe to put pool id here
+        connectorTokens: [
+          {
+            address: connectorToken.address,
+            decimals: Number(connectorToken.decimals),
+            liquidityUSD: isToken0
+              ? ((token1UsdAmount * UNISWAPV4_EFFICIENCY_FACTOR) as number)
+              : ((token0UsdAmount * UNISWAPV4_EFFICIENCY_FACTOR) as number),
+          },
+        ],
+        liquidityUSD:
+          (isToken0 ? token0UsdAmount : token1UsdAmount) *
+          UNISWAPV4_EFFICIENCY_FACTOR,
+      });
+    }
+
+    liquidityPools.sort((a, b) => b.liquidityUSD - a.liquidityUSD);
+
+    return liquidityPools.slice(0, limit);
   }
 
   async queryPriceFromRpc(

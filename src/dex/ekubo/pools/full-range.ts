@@ -65,6 +65,9 @@ export class FullRangePool extends EkuboPool<FullRangePoolState.Object> {
   public async generateState(
     blockNumber?: number | 'latest',
   ): Promise<DeepReadonly<FullRangePoolState.Object>> {
+    this.logger.info(
+      `Fetching FullRange quote data for pool ${this.key.stringId}`,
+    );
     const data = await this.dataFetcher.getQuoteData([this.key.toAbi()], 0, {
       blockTag: blockNumber,
     });
