@@ -1,72 +1,242 @@
+/* eslint-disable no-console */
 import dotenv from 'dotenv';
 dotenv.config();
 
-import { DummyDexHelper } from '../../dex-helper';
+import { Interface, Result } from '@ethersproject/abi';
+import { DummyDexHelper } from '../../dex-helper/index';
 import { Network, SwapSide } from '../../constants';
 import { BI_POWS } from '../../bigint-constants';
 import { Clear } from './clear';
+import { ClearConfig } from './config';
+import { checkPoolPrices, checkPoolsLiquidity } from '../../../tests/utils';
 import { Tokens } from '../../../tests/constants-e2e';
+import clearSwapAbi from '../../abi/clear/ClearSwap.json';
 
-/**
- * Clear Integration Tests
- *
- * Note: Clear is a depeg arbitrage protocol. Swaps only work when tokens
- * are depegged (>0.05% difference). These tests verify the integration
- * works correctly regardless of market conditions:
- * - Pool discovery works (getPoolIdentifiers finds vaults)
- * - Pricing calls don't throw (getPricesVolume handles depeg/no-depeg)
- * - Returns null or prices based on market state
- */
-describe('Clear Integration', function () {
-  const dexKey = 'clear';
-  const network = Network.MAINNET;
-  const dexHelper = new DummyDexHelper(network);
-  const tokens = Tokens[network];
+/*
+  Clear Integration Tests
 
+  Clear is a depeg arbitrage protocol - swaps only yield prices when
+  stablecoins are depegged (>0.05% difference). Tests handle both
+  depeg and no-depeg market conditions gracefully.
+
+  Run with:
+  `npx jest src/dex/clear/clear-integration.test.ts`
+*/
+
+const clearSwapIface = new Interface(clearSwapAbi);
+
+function getReaderCalldata(
+  exchangeAddress: string,
+  readerIface: Interface,
+  amounts: bigint[],
+  funcName: string,
+  vaultAddress: string,
+  srcToken: string,
+  destToken: string,
+) {
+  return amounts.map(amount => ({
+    target: exchangeAddress,
+    callData: readerIface.encodeFunctionData(funcName, [
+      vaultAddress,
+      srcToken,
+      destToken,
+      amount,
+    ]),
+  }));
+}
+
+function decodeReaderResult(
+  results: Result,
+  readerIface: Interface,
+  funcName: string,
+) {
+  return results.map(result => {
+    const parsed = readerIface.decodeFunctionResult(funcName, result);
+    return BigInt(parsed.amountOut.toString());
+  });
+}
+
+async function checkOnChainPricing(
+  clear: Clear,
+  funcName: string,
+  blockNumber: number,
+  prices: bigint[],
+  amounts: bigint[],
+  vaultAddress: string,
+  srcToken: string,
+  destToken: string,
+) {
+  const exchangeAddress = ClearConfig['clear'][Network.MAINNET].swapAddress;
+
+  const readerCallData = getReaderCalldata(
+    exchangeAddress,
+    clearSwapIface,
+    amounts.slice(1),
+    funcName,
+    vaultAddress,
+    srcToken,
+    destToken,
+  );
+
+  const readerResult = (
+    await clear.dexHelper.multiContract.methods
+      .aggregate(readerCallData)
+      .call({}, blockNumber)
+  ).returnData;
+
+  const expectedPrices = [0n].concat(
+    decodeReaderResult(readerResult, clearSwapIface, funcName),
+  );
+
+  expect(prices).toEqual(expectedPrices);
+}
+
+async function testPricingOnNetwork(
+  clear: Clear,
+  network: Network,
+  dexKey: string,
+  blockNumber: number,
+  srcTokenSymbol: string,
+  destTokenSymbol: string,
+  side: SwapSide,
+  amounts: bigint[],
+  funcNameToCheck: string,
+) {
+  const networkTokens = Tokens[network];
+
+  const pools = await clear.getPoolIdentifiers(
+    networkTokens[srcTokenSymbol],
+    networkTokens[destTokenSymbol],
+    side,
+    blockNumber,
+  );
+  console.log(
+    `${srcTokenSymbol} <> ${destTokenSymbol} Pool Identifiers: `,
+    pools,
+  );
+
+  expect(pools.length).toBeGreaterThan(0);
+
+  const poolPrices = await clear.getPricesVolume(
+    networkTokens[srcTokenSymbol],
+    networkTokens[destTokenSymbol],
+    amounts,
+    side,
+    blockNumber,
+    pools,
+  );
+  console.log(
+    `${srcTokenSymbol} <> ${destTokenSymbol} Pool Prices: `,
+    poolPrices,
+  );
+
+  // Clear is depeg-dependent: null means no depeg exists
+  if (poolPrices === null) {
+    console.log(
+      'No depeg detected - prices are null (expected for stable market)',
+    );
+    return;
+  }
+
+  expect(poolPrices).not.toBeNull();
+  checkPoolPrices(poolPrices!, amounts, side, dexKey);
+
+  // Check if on-chain pricing equals calculated ones
+  const vaultAddress = pools[0].split('_')[1];
+  await checkOnChainPricing(
+    clear,
+    funcNameToCheck,
+    blockNumber,
+    poolPrices![0].prices,
+    amounts,
+    vaultAddress,
+    networkTokens[srcTokenSymbol].address,
+    networkTokens[destTokenSymbol].address,
+  );
+}
+
+describe('Clear', function () {
+  const dexKey = 'Clear';
   let blockNumber: number;
   let clear: Clear;
 
-  const tokenPairs = [
-    { src: 'USDC', dest: 'GHO' },
-    { src: 'GHO', dest: 'USDC' },
-  ];
+  describe('Mainnet', () => {
+    const network = Network.MAINNET;
+    const dexHelper = new DummyDexHelper(network);
 
-  beforeAll(async () => {
-    blockNumber = await dexHelper.web3Provider.eth.getBlockNumber();
-    clear = new Clear(network, dexKey, dexHelper);
-    if (clear.initializePricing) {
-      await clear.initializePricing(blockNumber);
-    }
-  });
+    const tokens = Tokens[network];
 
-  afterAll(() => {
-    // Cleanup handled automatically by StatefulEventSubscriber
-  });
+    const srcTokenSymbol = 'USDC';
+    const destTokenSymbol = 'GHO';
 
-  describe('Pool Discovery', () => {
-    tokenPairs.forEach(({ src, dest }) => {
-      it(`should find vault for ${src} -> ${dest}`, async () => {
-        const pools = await clear.getPoolIdentifiers(
-          tokens[src],
-          tokens[dest],
-          SwapSide.SELL,
-          blockNumber,
-        );
+    const amountsForSell = [
+      0n,
+      1n * BI_POWS[tokens[srcTokenSymbol].decimals],
+      2n * BI_POWS[tokens[srcTokenSymbol].decimals],
+      3n * BI_POWS[tokens[srcTokenSymbol].decimals],
+      4n * BI_POWS[tokens[srcTokenSymbol].decimals],
+      5n * BI_POWS[tokens[srcTokenSymbol].decimals],
+      6n * BI_POWS[tokens[srcTokenSymbol].decimals],
+      7n * BI_POWS[tokens[srcTokenSymbol].decimals],
+      8n * BI_POWS[tokens[srcTokenSymbol].decimals],
+      9n * BI_POWS[tokens[srcTokenSymbol].decimals],
+      10n * BI_POWS[tokens[srcTokenSymbol].decimals],
+    ];
 
-        console.log(`${src} -> ${dest} pools:`, pools);
-
-        expect(pools.length).toBeGreaterThan(0);
-        expect(pools[0]).toContain('clear_');
-        expect(pools[0].toLowerCase()).toContain(
-          tokens[src].address.toLowerCase(),
-        );
-        expect(pools[0].toLowerCase()).toContain(
-          tokens[dest].address.toLowerCase(),
-        );
-      });
+    beforeAll(async () => {
+      blockNumber = await dexHelper.web3Provider.eth.getBlockNumber();
+      clear = new Clear(network, dexKey, dexHelper);
+      if (clear.initializePricing) {
+        await clear.initializePricing(blockNumber);
+      }
     });
 
-    it('should return empty array for unsupported pair', async () => {
+    it('getPoolIdentifiers and getPricesVolume SELL', async function () {
+      await testPricingOnNetwork(
+        clear,
+        network,
+        dexKey,
+        blockNumber,
+        srcTokenSymbol,
+        destTokenSymbol,
+        SwapSide.SELL,
+        amountsForSell,
+        'previewSwap',
+      );
+    });
+
+    it('getPoolIdentifiers and getPricesVolume SELL reverse', async function () {
+      await testPricingOnNetwork(
+        clear,
+        network,
+        dexKey,
+        blockNumber,
+        destTokenSymbol,
+        srcTokenSymbol,
+        SwapSide.SELL,
+        [
+          0n,
+          1n * BI_POWS[tokens[destTokenSymbol].decimals],
+          2n * BI_POWS[tokens[destTokenSymbol].decimals],
+          3n * BI_POWS[tokens[destTokenSymbol].decimals],
+        ],
+        'previewSwap',
+      );
+    });
+
+    it('BUY side should return null (not supported)', async function () {
+      const poolPrices = await clear.getPricesVolume(
+        tokens[srcTokenSymbol],
+        tokens[destTokenSymbol],
+        [0n, 1n * BI_POWS[tokens[destTokenSymbol].decimals]],
+        SwapSide.BUY,
+        blockNumber,
+      );
+
+      expect(poolPrices).toBeNull();
+    });
+
+    it('should return empty for unsupported pair', async function () {
       const pools = await clear.getPoolIdentifiers(
         tokens['WETH'],
         tokens['DAI'],
@@ -76,55 +246,25 @@ describe('Clear Integration', function () {
 
       expect(pools.length).toBe(0);
     });
-  });
 
-  describe('Pricing', () => {
-    tokenPairs.forEach(({ src, dest }) => {
-      it(`should handle ${src} -> ${dest} pricing without throwing`, async () => {
-        const srcToken = tokens[src];
-        const amounts = [
-          0n,
-          1n * BI_POWS[srcToken.decimals],
-          100n * BI_POWS[srcToken.decimals],
-        ];
-
-        const pools = await clear.getPoolIdentifiers(
-          tokens[src],
-          tokens[dest],
-          SwapSide.SELL,
-          blockNumber,
-        );
-
-        // Should not throw - returns null if no depeg, prices if depeg
-        const prices = await clear.getPricesVolume(
-          tokens[src],
-          tokens[dest],
-          amounts,
-          SwapSide.SELL,
-          blockNumber,
-          pools,
-        );
-
-        console.log(`${src} -> ${dest} prices:`, prices);
-
-        // Either null (no depeg) or valid prices array
-        if (prices !== null) {
-          expect(prices.length).toBeGreaterThan(0);
-          expect(prices[0].prices.length).toBe(amounts.length);
-        }
-      });
-    });
-
-    it('should return null for BUY side (not supported)', async () => {
-      const prices = await clear.getPricesVolume(
-        tokens['USDC'],
-        tokens['GHO'],
-        [0n, 1000000n],
-        SwapSide.BUY,
-        blockNumber,
+    it('getTopPoolsForToken', async function () {
+      const newClear = new Clear(network, dexKey, dexHelper);
+      if (newClear.updatePoolState) {
+        await newClear.updatePoolState();
+      }
+      const poolLiquidity = await newClear.getTopPoolsForToken(
+        tokens[srcTokenSymbol].address,
+        10,
       );
+      console.log(`${srcTokenSymbol} Top Pools:`, poolLiquidity);
 
-      expect(prices).toBeNull();
+      if (!newClear.hasConstantPriceLargeAmounts) {
+        checkPoolsLiquidity(
+          poolLiquidity,
+          Tokens[network][srcTokenSymbol].address,
+          dexKey,
+        );
+      }
     });
   });
 });
