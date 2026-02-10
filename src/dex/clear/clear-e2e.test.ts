@@ -2,7 +2,7 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 import { testE2E } from '../../../tests/utils-e2e';
-import { Tokens, Holders } from '../../../tests/constants-e2e';
+import { Tokens } from '../../../tests/constants-e2e';
 import { Network, ContractMethod, SwapSide } from '../../constants';
 import { StaticJsonRpcProvider } from '@ethersproject/providers';
 import { generateConfig } from '../../config';
@@ -15,7 +15,6 @@ function testForNetwork(network: Network, dexKey: string, pairs: Pairs) {
     network,
   );
   const tokens = Tokens[network];
-  const holders = Holders[network];
 
   const sideToContractMethods = new Map([
     [SwapSide.SELL, [ContractMethod.swapExactAmountIn]],
@@ -30,7 +29,7 @@ function testForNetwork(network: Network, dexKey: string, pairs: Pairs) {
               await testE2E(
                 tokens[pair[0].name],
                 tokens[pair[1].name],
-                holders[pair[0].name],
+                '',
                 side === SwapSide.SELL ? pair[0].sellAmount : pair[0].buyAmount,
                 side,
                 dexKey,
@@ -44,7 +43,7 @@ function testForNetwork(network: Network, dexKey: string, pairs: Pairs) {
               await testE2E(
                 tokens[pair[1].name],
                 tokens[pair[0].name],
-                holders[pair[1].name],
+                '',
                 side === SwapSide.SELL ? pair[1].sellAmount : pair[1].buyAmount,
                 side,
                 dexKey,
@@ -61,7 +60,7 @@ function testForNetwork(network: Network, dexKey: string, pairs: Pairs) {
 }
 
 describe('Clear E2E', () => {
-  const dexKey = 'clear';
+  const dexKey = 'Clear';
 
   describe('Mainnet', () => {
     const network = Network.MAINNET;
