@@ -521,7 +521,9 @@ export class UniswapV3
     if (pools.length === 0) {
       return null;
     }
-    this.logger.warn(`fallback to rpc for ${pools.length} pool(s)`);
+    this.logger.warn(
+      `fallback to rpc for ${pools.length} pool(s) for tokens ${from.address}/${to.address}`,
+    );
 
     const unitVolume = getBigIntPow(
       (side === SwapSide.SELL ? from : to).decimals,
