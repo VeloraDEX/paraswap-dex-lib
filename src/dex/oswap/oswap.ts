@@ -409,8 +409,8 @@ export class OSwap extends SimpleExchange implements IDex<OSwapData> {
     let method: string;
     let args: any;
     let returnAmountPos: number | undefined = undefined;
-
     const deadline = getLocalDeadlineAsFriendlyPlaceholder();
+
     if (side === SwapSide.SELL) {
       method = 'swapExactTokensForTokens';
       returnAmountPos = extractReturnAmountPosition(
@@ -442,7 +442,13 @@ export class OSwap extends SimpleExchange implements IDex<OSwapData> {
   // getTopPoolsForToken. It is optional for a DEX
   // to implement this
   async updatePoolState(): Promise<void> {
-    return Promise.resolve();
+    const blockNumber = await this.dexHelper.web3Provider.eth.getBlockNumber();
+    await Promise.all(
+      Object.values(this.eventPools).map(async pool => {
+        const state = await pool.generateState(blockNumber);
+        pool.setState(state, blockNumber);
+      }),
+    );
   }
 
   // Returns a list of top pools based on liquidity. Max
@@ -455,39 +461,36 @@ export class OSwap extends SimpleExchange implements IDex<OSwapData> {
     const pools = this.getPoolsByTokenAddress(tokenAddress);
     if (!pools.length) return [];
 
-    const results = await Promise.all<PoolLiquidity>(
-      pools.map(async pool => {
-        // Get the pool's balance and its USD value.
-        const eventPool = this.eventPools[pool.id];
-        const blockNumber =
-          await this.dexHelper.web3Provider.eth.getBlockNumber();
-        const state = await eventPool.getStateOrGenerate(blockNumber);
+    const tokenAmounts: [string, bigint | null][] = [];
+    const validPools: OSwapPool[] = [];
 
-        const usd0 = await this.dexHelper.getTokenUSDPrice(
-          { address: pool.token0, decimals: 18 },
-          BigInt(state.balance0),
-        );
-        const usd1 = await this.dexHelper.getTokenUSDPrice(
-          { address: pool.token1, decimals: 18 },
-          BigInt(state.balance1),
-        );
+    for (const pool of pools) {
+      const eventPool = this.eventPools[pool.id];
+      const state = eventPool.getStaleState();
+      if (!state) continue;
 
-        // Get the other token in the pair.
-        const pairedToken =
+      validPools.push(pool);
+      tokenAmounts.push(
+        [pool.token0, BigInt(state.balance0)],
+        [pool.token1, BigInt(state.balance1)],
+      );
+    }
+
+    if (!validPools.length) return [];
+
+    const usdAmounts = await this.dexHelper.getUsdTokenAmounts(tokenAmounts);
+
+    return validPools
+      .map((pool, i) => ({
+        exchange: this.dexKey,
+        address: pool.address,
+        connectorTokens: [
           pool.token0 === tokenAddress.toLowerCase()
             ? { address: pool.token1, decimals: 18 }
-            : { address: pool.token0, decimals: 18 };
-
-        return {
-          exchange: this.dexKey,
-          address: pool.address,
-          connectorTokens: [pairedToken],
-          liquidityUSD: usd0 + usd1,
-        };
-      }),
-    );
-    return results
-      .filter(r => r)
+            : { address: pool.token0, decimals: 18 },
+        ],
+        liquidityUSD: usdAmounts[i * 2] + usdAmounts[i * 2 + 1],
+      }))
       .sort((a, b) => a.liquidityUSD - b.liquidityUSD)
       .slice(0, limit);
   }

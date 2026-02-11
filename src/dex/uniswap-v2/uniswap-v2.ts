@@ -415,36 +415,14 @@ export class UniswapV2
       return cachedPair;
     }
 
-    this.logger.info(
-      `Fetching pair on-chain for ${token0.address}/${token1.address}` +
-        (cachedPair
-          ? ` (cache expired, checkExistenceAfter=${
-              cachedPair.checkExistenceAfter
-            }, now=${Date.now()})`
-          : ' (not in cache)'),
-    );
-
     const exchange = await this.factory.methods
       .getPair(token0.address, token1.address)
       .call();
-
-    this.logger.info(
-      `getPair result for ${token0.address}/${token1.address}: ${
-        exchange === NULL_ADDRESS ? 'NULL_ADDRESS' : exchange
-      }`,
-    );
 
     if (exchange === NULL_ADDRESS) {
       // if the pool has been newly created to not allow this op as we can run into race condition between pool discovery and concurrent pricing request touching this pool
       if (!this.newlyCreatedPoolKeys.has(key)) {
         pair = { token0, token1 };
-        this.logger.info(
-          `Pair ${token0.address}/${token1.address} does not exist on-chain`,
-        );
-      } else {
-        this.logger.info(
-          `Pair ${token0.address}/${token1.address} returned NULL but is in newlyCreatedPoolKeys, skipping`,
-        );
       }
     } else {
       pair = { token0, token1, exchange };
@@ -529,18 +507,8 @@ export class UniswapV2
       const pair = await this.findPair(_pair[0], _pair[1]);
       if (!(pair && pair.exchange)) continue;
       if (!pair.pool) {
-        this.logger.info(`Pool not initialized for ${pair.exchange}`);
         pairsToFetch.push(pair);
       } else if (!pair.pool.getState(blockNumber)) {
-        const staleState = pair.pool.getStaleState();
-        const stateBlockNumber = pair.pool.getStateBlockNumber();
-        const isTracking = pair.pool.isTracking();
-        const isInvalid = pair.pool.isInvalid();
-        this.logger.info(
-          `State miss for ${pair.exchange} - ` +
-            `hasState=${!!staleState}, stateBlock=${stateBlockNumber}, ` +
-            `requestedBlock=${blockNumber}, isTracking=${isTracking}, isInvalid=${isInvalid}`,
-        );
         pairsToFetch.push(pair);
       }
     }
