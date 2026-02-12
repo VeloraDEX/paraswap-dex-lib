@@ -7,6 +7,7 @@ import {
   PoolPrices,
   AdapterExchangeParam,
   PoolLiquidity,
+  ConnectorToken,
   ExchangePrices,
   DexExchangeParam,
 } from '../../types';
@@ -91,7 +92,7 @@ export class Clear extends SimpleExchange implements IDex<ClearData> {
     const dest = destToken.address.toLowerCase();
 
     const matchingVaults = allVaults.filter(vault => {
-      const addrs = vault.tokens.map(t => t.address);
+      const addrs = vault.tokens;
       return addrs.includes(src) && addrs.includes(dest);
     });
 
@@ -256,9 +257,7 @@ export class Clear extends SimpleExchange implements IDex<ClearData> {
       );
     }
 
-    const uniqueTokens = [
-      ...new Set(vaults.flatMap(v => v.tokens.map(t => t.address))),
-    ];
+    const uniqueTokens = [...new Set(vaults.flatMap(v => v.tokens))];
 
     const decimalCalls: MultiCallParams<bigint>[] = uniqueTokens.map(token => ({
       target: token,
@@ -266,42 +265,59 @@ export class Clear extends SimpleExchange implements IDex<ClearData> {
       decodeFunction: (result: any) => BigInt(uint8ToNumber(result)),
     }));
 
-    const totalAssetsCalls: MultiCallParams<bigint>[] = vaults.map(vault => ({
-      target: vault.address,
-      callData: this.clearVaultIface.encodeFunctionData('totalAssets'),
-      decodeFunction: uint256ToBigInt,
-    }));
+    // Build tokenAssets(tokenAddress) calls for each token in each vault
+    const tokenAssetsCalls: MultiCallParams<bigint>[] = [];
+    const tokenAssetsMap: { vaultIdx: number; tokenAddress: string }[] = [];
+    for (let i = 0; i < vaults.length; i++) {
+      for (const token of vaults[i].tokens) {
+        tokenAssetsCalls.push({
+          target: vaults[i].address,
+          callData: this.clearVaultIface.encodeFunctionData('tokenAssets', [
+            token,
+          ]),
+          decodeFunction: uint256ToBigInt,
+        });
+        tokenAssetsMap.push({ vaultIdx: i, tokenAddress: token });
+      }
+    }
 
     const results = await this.dexHelper.multiWrapper.tryAggregate<bigint>(
       false,
-      [...decimalCalls, ...totalAssetsCalls],
+      [...decimalCalls, ...tokenAssetsCalls],
       blockNumber,
       this.dexHelper.multiWrapper.defaultBatchSize,
       false,
     );
 
-    const callsOffset = uniqueTokens.length;
+    const decimalsOffset = uniqueTokens.length;
 
     const tokenDecimals: Record<string, number> = {};
-    for (let i = 0; i < callsOffset; i++) {
+    for (let i = 0; i < decimalsOffset; i++) {
       const result = results[i];
       tokenDecimals[uniqueTokens[i]] = result.success
         ? Number(result.returnData)
         : 18;
     }
 
-    this.vaults = vaults.map((vault, i) => {
-      const result = results[callsOffset + i];
+    // Group tokenAssets results by vault index
+    const vaultTokenAssets: Record<string, bigint>[] = vaults.map(() => ({}));
+    for (let i = 0; i < tokenAssetsMap.length; i++) {
+      const { vaultIdx, tokenAddress } = tokenAssetsMap[i];
+      const result = results[decimalsOffset + i];
+      if (result.success) {
+        vaultTokenAssets[vaultIdx][tokenAddress.toLowerCase()] =
+          result.returnData;
+      }
+    }
 
-      return {
-        address: vault.address,
-        tokens: vault.tokens.map(t => ({
-          address: t.address,
-          decimals: tokenDecimals[t.address.toLowerCase()] ?? 18,
-        })),
-        totalAssets: result.success ? result.returnData : undefined,
-      };
-    });
+    this.vaults = vaults.map((vault, i) => ({
+      address: vault.address,
+      tokens: vault.tokens.map(t => ({
+        address: t,
+        decimals: tokenDecimals[t.toLowerCase()] ?? 18,
+      })),
+      tokenAssets: vaultTokenAssets[i],
+    }));
   }
 
   async getTopPoolsForToken(
@@ -318,17 +334,39 @@ export class Clear extends SimpleExchange implements IDex<ClearData> {
       return [];
     }
 
+    // Build a flat list of [tokenAddress, assets] for all tokens across all vaults
+    const tokenAmountPairs: [Address, bigint | null][] = [];
+    const vaultTokenCounts: number[] = [];
+    for (const vault of vaultsWithToken) {
+      vaultTokenCounts.push(vault.tokens.length);
+      for (const t of vault.tokens) {
+        const addr = t.address.toLowerCase();
+        tokenAmountPairs.push([t.address, vault.tokenAssets[addr] ?? null]);
+      }
+    }
+
     const usdAmounts = await this.dexHelper.getUsdTokenAmounts(
-      vaultsWithToken.map(vault => [tokenAddress, vault.totalAssets ?? null]),
+      tokenAmountPairs,
     );
 
+    // Map per-token USD amounts to PoolLiquidity entries
+    let offset = 0;
     const poolLiquidities = vaultsWithToken
       .map((vault, i) => {
-        const connectorTokens = vault.tokens
+        const count = vaultTokenCounts[i];
+        const tokenUsdMap: Record<string, number> = {};
+        for (let j = 0; j < count; j++) {
+          const addr = vault.tokens[j].address.toLowerCase();
+          tokenUsdMap[addr] = usdAmounts[offset + j];
+        }
+        offset += count;
+
+        const connectorTokens: ConnectorToken[] = vault.tokens
           .filter(t => t.address.toLowerCase() !== tokenAddrLower)
           .map(t => ({
             address: t.address,
             decimals: t.decimals ?? 18,
+            liquidityUSD: tokenUsdMap[t.address.toLowerCase()],
           }));
 
         if (connectorTokens.length === 0) return null;
@@ -337,7 +375,7 @@ export class Clear extends SimpleExchange implements IDex<ClearData> {
           exchange: this.dexKey,
           address: vault.address,
           connectorTokens,
-          liquidityUSD: usdAmounts[i],
+          liquidityUSD: tokenUsdMap[tokenAddrLower] ?? 0,
         };
       })
       .filter((p): p is PoolLiquidity => p !== null);
