@@ -52,6 +52,13 @@ const routerIface = new Interface(LunarRouterABI);
 const erc20Iface = new Interface(erc20ABI);
 const coreModuleIface = new Interface(LunarCoreModuleABI);
 
+type LunarBasePoolSelector = {
+  baseFeeConfig?: Partial<BaseFeeConfig>;
+  userModule?: Address;
+  moduleMask?: number;
+  exchange?: Address;
+};
+
 export class LunarBase
   extends SimpleExchange
   implements IDex<LunarBaseData, any>
@@ -171,17 +178,72 @@ export class LunarBase
   protected getPoolIdentifier(
     token0: string,
     token1: string,
-    baseFee?: number,
+    selector?: LunarBasePoolSelector,
   ): string {
     const [_token0, _token1] =
       token0.toLowerCase() < token1.toLowerCase()
-        ? [token0, token1]
-        : [token1, token0];
+        ? [token0.toLowerCase(), token1.toLowerCase()]
+        : [token1.toLowerCase(), token0.toLowerCase()];
 
-    const feeStr = baseFee
-      ? `_${baseFee}`
-      : `_${LUNAR_BASE_DEFAULT_FEE_CONFIG.baseFee}`;
-    return `${this.dexKey}_${_token0}_${_token1}${feeStr}`.toLowerCase();
+    const feeConfig = {
+      baseFee:
+        selector?.baseFeeConfig?.baseFee ??
+        LUNAR_BASE_DEFAULT_FEE_CONFIG.baseFee,
+      wToken0:
+        selector?.baseFeeConfig?.wToken0 ??
+        LUNAR_BASE_DEFAULT_FEE_CONFIG.wToken0,
+      wToken1:
+        selector?.baseFeeConfig?.wToken1 ??
+        LUNAR_BASE_DEFAULT_FEE_CONFIG.wToken1,
+    };
+    const userModule = (
+      selector?.userModule || LUNAR_BASE_ZERO_ADDRESS
+    ).toLowerCase();
+    const moduleMask = selector?.moduleMask ?? LUNAR_BASE_DEFAULT_MODULE_MASK;
+    const exchangeSuffix = selector?.exchange
+      ? `_${selector.exchange.toLowerCase()}`
+      : '';
+
+    return `${this.dexKey}_${_token0}_${_token1}_${feeConfig.baseFee}_${feeConfig.wToken0}_${feeConfig.wToken1}_${userModule}_${moduleMask}${exchangeSuffix}`.toLowerCase();
+  }
+
+  private parsePoolIdentifier(
+    poolIdentifier: string,
+  ): LunarBasePoolSelector | undefined {
+    const parts = poolIdentifier.toLowerCase().split('_');
+    const dexKey = this.dexKey.toLowerCase();
+
+    if (parts.length >= 8 && parts[0] === dexKey) {
+      const baseFee = Number(parts[3]);
+      const wToken0 = Number(parts[4]);
+      const wToken1 = Number(parts[5]);
+      const userModule = parts[6];
+      const moduleMask = Number(parts[7]);
+      const exchange = parts[8];
+
+      if (
+        Number.isFinite(baseFee) &&
+        Number.isFinite(wToken0) &&
+        Number.isFinite(wToken1) &&
+        Number.isFinite(moduleMask)
+      ) {
+        return {
+          baseFeeConfig: { baseFee, wToken0, wToken1 },
+          userModule,
+          moduleMask,
+          exchange,
+        };
+      }
+    }
+
+    if (parts.length >= 4 && parts[0] === dexKey) {
+      const baseFee = Number(parts[3]);
+      if (Number.isFinite(baseFee)) {
+        return { baseFeeConfig: { baseFee } };
+      }
+    }
+
+    return undefined;
   }
 
   async getPoolIdentifiers(
@@ -202,7 +264,7 @@ export class LunarBase
       const fromAddr = this.normalizeAddress(from.address);
       const toAddr = this.normalizeAddress(to.address);
 
-      const identifiers: string[] = [];
+      const identifiers = new Set<string>();
 
       for (const tokenPair of apiData.pools) {
         const t0 = this.normalizeAddress(tokenPair.token0.address);
@@ -214,19 +276,20 @@ export class LunarBase
         ) {
           for (const pool of tokenPair.pools) {
             const feeConfig = this.apiPoolToFeeConfig(pool);
-            identifiers.push(
-              this.getPoolIdentifier(
-                from.address,
-                to.address,
-                feeConfig.baseFee,
-              ),
+            identifiers.add(
+              this.getPoolIdentifier(from.address, to.address, {
+                baseFeeConfig: feeConfig,
+                userModule: LUNAR_BASE_ZERO_ADDRESS,
+                moduleMask: LUNAR_BASE_DEFAULT_MODULE_MASK,
+                exchange: pool.backend.pair_address.toLowerCase(),
+              }),
             );
           }
         }
       }
 
-      if (identifiers.length > 0) {
-        return identifiers;
+      if (identifiers.size > 0) {
+        return Array.from(identifiers);
       }
     }
 
@@ -236,7 +299,7 @@ export class LunarBase
   async findPair(
     from: Token,
     to: Token,
-    baseFee?: number,
+    selector?: LunarBasePoolSelector,
   ): Promise<LunarBasePair | null> {
     if (from.address.toLowerCase() === to.address.toLowerCase()) return null;
 
@@ -245,7 +308,11 @@ export class LunarBase
         ? [from, to]
         : [to, from];
 
-    const key = this.getPoolIdentifier(token0.address, token1.address, baseFee);
+    const key = this.getPoolIdentifier(
+      token0.address,
+      token1.address,
+      selector,
+    );
     let pair = this.pairs[key];
     if (pair) return pair;
 
@@ -262,9 +329,36 @@ export class LunarBase
           for (const pool of tokenPair.pools) {
             const feeConfig = this.apiPoolToFeeConfig(pool);
 
-            if (baseFee !== undefined && feeConfig.baseFee !== baseFee) {
+            if (
+              selector?.exchange &&
+              pool.backend.pair_address.toLowerCase() !==
+                selector.exchange.toLowerCase()
+            ) {
               continue;
             }
+
+            if (
+              selector?.baseFeeConfig?.baseFee !== undefined &&
+              feeConfig.baseFee !== selector.baseFeeConfig.baseFee
+            ) {
+              continue;
+            }
+            if (
+              selector?.baseFeeConfig?.wToken0 !== undefined &&
+              feeConfig.wToken0 !== selector.baseFeeConfig.wToken0
+            ) {
+              continue;
+            }
+            if (
+              selector?.baseFeeConfig?.wToken1 !== undefined &&
+              feeConfig.wToken1 !== selector.baseFeeConfig.wToken1
+            ) {
+              continue;
+            }
+
+            const userModule = selector?.userModule || LUNAR_BASE_ZERO_ADDRESS;
+            const moduleMask =
+              selector?.moduleMask ?? LUNAR_BASE_DEFAULT_MODULE_MASK;
 
             pair = {
               token0: {
@@ -277,8 +371,8 @@ export class LunarBase
               },
               exchange: pool.backend.pair_address.toLowerCase(),
               baseFeeConfig: feeConfig,
-              userModule: LUNAR_BASE_ZERO_ADDRESS,
-              moduleMask: LUNAR_BASE_DEFAULT_MODULE_MASK,
+              userModule,
+              moduleMask,
               hasNativeToken0:
                 tokenPair.token0.address.toLowerCase() ===
                 LUNAR_BASE_ZERO_ADDRESS,
@@ -293,29 +387,42 @@ export class LunarBase
       }
     }
 
-    const feeConfig = baseFee
-      ? { ...LUNAR_BASE_DEFAULT_FEE_CONFIG, baseFee }
-      : LUNAR_BASE_DEFAULT_FEE_CONFIG;
+    const feeConfig: BaseFeeConfig = {
+      baseFee:
+        selector?.baseFeeConfig?.baseFee ??
+        LUNAR_BASE_DEFAULT_FEE_CONFIG.baseFee,
+      wToken0:
+        selector?.baseFeeConfig?.wToken0 ??
+        LUNAR_BASE_DEFAULT_FEE_CONFIG.wToken0,
+      wToken1:
+        selector?.baseFeeConfig?.wToken1 ??
+        LUNAR_BASE_DEFAULT_FEE_CONFIG.wToken1,
+    };
+    const userModule = selector?.userModule || LUNAR_BASE_ZERO_ADDRESS;
+    const moduleMask = selector?.moduleMask ?? LUNAR_BASE_DEFAULT_MODULE_MASK;
 
     try {
       const exchange = await this.factory.methods
-        .getPair(
-          token0.address,
-          token1.address,
-          LUNAR_BASE_ZERO_ADDRESS, // userModule
-          LUNAR_BASE_DEFAULT_MODULE_MASK, // moduleMask
-          [feeConfig.baseFee, feeConfig.wToken0, feeConfig.wToken1],
-        )
+        .getPair(token0.address, token1.address, userModule, moduleMask, [
+          feeConfig.baseFee,
+          feeConfig.wToken0,
+          feeConfig.wToken1,
+        ])
         .call();
 
-      if (exchange && exchange !== NULL_ADDRESS) {
+      if (
+        exchange &&
+        exchange !== NULL_ADDRESS &&
+        (!selector?.exchange ||
+          exchange.toLowerCase() === selector.exchange.toLowerCase())
+      ) {
         pair = {
           token0: { address: token0.address, decimals: token0.decimals },
           token1: { address: token1.address, decimals: token1.decimals },
           exchange,
           baseFeeConfig: feeConfig,
-          userModule: LUNAR_BASE_ZERO_ADDRESS,
-          moduleMask: LUNAR_BASE_DEFAULT_MODULE_MASK,
+          userModule,
+          moduleMask,
         };
         this.pairs[key] = pair;
         return pair;
@@ -547,13 +654,13 @@ export class LunarBase
   async batchCatchUpPairs(
     pairs: [Token, Token][],
     blockNumber: number,
-    baseFee?: number,
+    selector?: LunarBasePoolSelector,
   ) {
     if (!blockNumber) return;
 
     const pairsToFetch: LunarBasePair[] = [];
     for (const [from, to] of pairs) {
-      const pair = await this.findPair(from, to, baseFee);
+      const pair = await this.findPair(from, to, selector);
       if (!(pair && pair.exchange)) continue;
       if (!pair.pool) {
         pairsToFetch.push(pair);
@@ -565,10 +672,21 @@ export class LunarBase
     if (!pairsToFetch.length) return;
 
     const reserves = await this.getManyPoolReserves(pairsToFetch, blockNumber);
+    if (reserves.length !== pairsToFetch.length) {
+      this.logger.warn(
+        `${this.dexKey}: Reserves length mismatch. expected=${pairsToFetch.length}, received=${reserves.length}`,
+      );
+    }
 
     for (let i = 0; i < pairsToFetch.length; i++) {
       const pairState = reserves[i];
       const pair = pairsToFetch[i];
+      if (!pairState) {
+        this.logger.warn(
+          `${this.dexKey}: Missing reserve state for pool ${pair.exchange}`,
+        );
+        continue;
+      }
       if (!pair.pool) {
         await this.addPool(
           pair,
@@ -713,9 +831,9 @@ export class LunarBase
     from: Token,
     to: Token,
     blockNumber: number,
-    baseFee?: number,
+    selector?: LunarBasePoolSelector,
   ): Promise<LunarBasePoolOrderedParams | null> {
-    const pair = await this.findPair(from, to, baseFee);
+    const pair = await this.findPair(from, to, selector);
     if (!(pair && pair.pool && pair.exchange)) return null;
 
     const pairState = pair.pool.getState(blockNumber);
@@ -782,6 +900,8 @@ export class LunarBase
 
       const wethAddr =
         this.dexHelper.config.data.wrappedNativeTokenAddress.toLowerCase();
+      const srcIsWETH =
+        !isETHAddress(_from.address) && from.address.toLowerCase() === wethAddr;
       const destIsWETH =
         !isETHAddress(_to.address) && to.address.toLowerCase() === wethAddr;
 
@@ -810,19 +930,18 @@ export class LunarBase
       }> = [];
 
       for (const poolIdentifier of poolIdentifiers) {
-        const parts = poolIdentifier.split('_');
-        const baseFee = parts.length >= 4 ? parseInt(parts[3]) : undefined;
+        const poolSelector = this.parsePoolIdentifier(poolIdentifier);
 
-        const pair = await this.findPair(from, to, baseFee);
+        const pair = await this.findPair(from, to, poolSelector);
         if (!pair || !pair.exchange) continue;
 
-        await this.batchCatchUpPairs([[from, to]], blockNumber, baseFee);
+        await this.batchCatchUpPairs([[from, to]], blockNumber, poolSelector);
 
         const pairParam = await this.getPairOrderedParams(
           from,
           to,
           blockNumber,
-          baseFee,
+          poolSelector,
         );
         if (!pairParam) continue;
 
@@ -856,6 +975,9 @@ export class LunarBase
           : pair.hasNativeToken0;
 
         if (isNativeOutput && destIsWETH) {
+          continue;
+        }
+        if (isNativeInput && srcIsWETH) {
           continue;
         }
 
@@ -969,19 +1091,22 @@ export class LunarBase
       throw new Error(`${this.dexKey}: No pool data available`);
     }
 
-    const wethAddr =
-      this.dexHelper.config.data.wrappedNativeTokenAddress.toLowerCase();
-    const srcIsNative =
-      isETHAddress(srcToken) || srcToken.toLowerCase() === wethAddr;
+    const srcIsNative = isETHAddress(srcToken);
+    const destIsNative = isETHAddress(destToken);
+    const shouldUseRouter =
+      side === SwapSide.BUY || pool.isNativeInput || pool.isNativeOutput;
 
-    if (pool.isNativeInput || pool.isNativeOutput) {
+    if (shouldUseRouter) {
       return this.getDexParamViaRouter(
         srcToken,
         destToken,
         srcAmount,
+        destAmount,
         recipient,
         pool,
+        side,
         srcIsNative,
+        destIsNative,
       );
     }
 
@@ -989,10 +1114,8 @@ export class LunarBase
       srcToken,
       destToken,
       srcAmount,
-      destAmount,
       recipient,
       pool,
-      side,
     );
   }
 
@@ -1000,42 +1123,76 @@ export class LunarBase
     srcToken: Address,
     destToken: Address,
     srcAmount: NumberAsString,
+    destAmount: NumberAsString,
     recipient: Address,
     pool: LunarBaseData['pools'][0],
+    side: SwapSide,
     srcIsNative: boolean,
+    destIsNative: boolean,
   ): DexExchangeParam {
-    const tokenInForRouter = pool.isNativeInput
-      ? LUNAR_BASE_ZERO_ADDRESS
-      : srcToken;
-    const tokenOutForRouter = pool.isNativeOutput
-      ? LUNAR_BASE_ZERO_ADDRESS
-      : destToken;
+    const wethAddr = this.dexHelper.config.data.wrappedNativeTokenAddress;
+    const tokenInForRouter =
+      pool.isNativeInput && srcIsNative
+        ? LUNAR_BASE_ZERO_ADDRESS
+        : isETHAddress(srcToken)
+        ? wethAddr
+        : srcToken;
+    const tokenOutForRouter =
+      pool.isNativeOutput && destIsNative
+        ? LUNAR_BASE_ZERO_ADDRESS
+        : isETHAddress(destToken)
+        ? wethAddr
+        : destToken;
 
-    const swapData = routerIface.encodeFunctionData('swapExactInputSingle', [
-      {
-        tokenIn: tokenInForRouter,
-        tokenOut: tokenOutForRouter,
-        amountIn: srcAmount,
-        amountOutMinimum: '0',
-        to: recipient,
-        userModule: pool.userModule,
-        moduleMask: pool.moduleMask,
-        baseFeeConfig: {
-          baseFee: pool.baseFeeConfig.baseFee,
-          wToken0: pool.baseFeeConfig.wToken0,
-          wToken1: pool.baseFeeConfig.wToken1,
-        },
-        data: '0x',
-      },
-    ]);
+    const swapData =
+      side === SwapSide.SELL
+        ? routerIface.encodeFunctionData('swapExactInputSingle', [
+            {
+              tokenIn: tokenInForRouter,
+              tokenOut: tokenOutForRouter,
+              amountIn: srcAmount,
+              amountOutMinimum: '0',
+              to: recipient,
+              userModule: pool.userModule,
+              moduleMask: pool.moduleMask,
+              baseFeeConfig: {
+                baseFee: pool.baseFeeConfig.baseFee,
+                wToken0: pool.baseFeeConfig.wToken0,
+                wToken1: pool.baseFeeConfig.wToken1,
+              },
+              data: '0x',
+            },
+          ])
+        : routerIface.encodeFunctionData('swapExactOutputSingle', [
+            {
+              tokenIn: tokenInForRouter,
+              tokenOut: tokenOutForRouter,
+              amountOut: destAmount,
+              amountInMaximum: srcAmount,
+              to: recipient,
+              userModule: pool.userModule,
+              moduleMask: pool.moduleMask,
+              baseFeeConfig: {
+                baseFee: pool.baseFeeConfig.baseFee,
+                wToken0: pool.baseFeeConfig.wToken0,
+                wToken1: pool.baseFeeConfig.wToken1,
+              },
+              data: '0x',
+            },
+          ]);
+
+    const needsWrappedInput = srcIsNative && !pool.isNativeInput;
+    const needsWrappedOutput = destIsNative && !pool.isNativeOutput;
+    const needWrapNative = needsWrappedInput || needsWrappedOutput;
 
     return {
-      needWrapNative: this.needWrapNative,
+      needWrapNative,
       sendEthButSupportsInsertFromAmount: true,
       dexFuncHasRecipient: true,
       exchangeData: swapData,
       targetExchange: this.routerAddress,
-      spender: srcIsNative ? undefined : this.routerAddress,
+      spender:
+        pool.isNativeInput && srcIsNative ? undefined : this.routerAddress,
       returnAmountPos: undefined,
     };
   }
@@ -1044,33 +1201,26 @@ export class LunarBase
     srcToken: Address,
     destToken: Address,
     srcAmount: NumberAsString,
-    destAmount: NumberAsString,
     recipient: Address,
     pool: LunarBaseData['pools'][0],
-    side: SwapSide,
   ): DexExchangeParam {
-    let outputAmount: bigint;
-    if (side === SwapSide.SELL) {
-      const pairParam: LunarBasePoolOrderedParams = {
-        tokenIn: srcToken,
-        tokenOut: destToken,
-        reservesIn: pool.reservesIn,
-        reservesOut: pool.reservesOut,
-        fee: pool.fee.toString(),
-        direction: pool.direction,
-        exchange: pool.address,
-        baseFeeConfig: pool.baseFeeConfig,
-        userModule: pool.userModule,
-        moduleMask: pool.moduleMask,
-      };
-      outputAmount = this.getSellAmountOutForSwap(
-        pairParam,
-        BigInt(srcAmount),
-        pool.dynamicFeeQuote,
-      );
-    } else {
-      outputAmount = BigInt(destAmount);
-    }
+    const pairParam: LunarBasePoolOrderedParams = {
+      tokenIn: srcToken,
+      tokenOut: destToken,
+      reservesIn: pool.reservesIn,
+      reservesOut: pool.reservesOut,
+      fee: pool.fee.toString(),
+      direction: pool.direction,
+      exchange: pool.address,
+      baseFeeConfig: pool.baseFeeConfig,
+      userModule: pool.userModule,
+      moduleMask: pool.moduleMask,
+    };
+    const outputAmount = this.getSellAmountOutForSwap(
+      pairParam,
+      BigInt(srcAmount),
+      pool.dynamicFeeQuote,
+    );
 
     const swapData = poolIface.encodeFunctionData('swap', [
       pool.direction ? 0 : outputAmount.toString(),
@@ -1080,7 +1230,7 @@ export class LunarBase
     ]);
 
     return {
-      needWrapNative: this.needWrapNative,
+      needWrapNative: isETHAddress(srcToken),
       dexFuncHasRecipient: true,
       exchangeData: swapData,
       targetExchange: pool.address,
