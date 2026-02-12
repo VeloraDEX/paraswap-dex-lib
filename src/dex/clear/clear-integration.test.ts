@@ -57,6 +57,8 @@ function decodeReaderResult(
 }
 
 async function checkOnChainPricing(
+  dexKey: string,
+  network: Network,
   clear: Clear,
   funcName: string,
   blockNumber: number,
@@ -66,7 +68,7 @@ async function checkOnChainPricing(
   srcToken: string,
   destToken: string,
 ) {
-  const exchangeAddress = ClearConfig['clear'][Network.MAINNET].swapAddress;
+  const exchangeAddress = ClearConfig[dexKey][network].swapAddress;
 
   const readerCallData = getReaderCalldata(
     exchangeAddress,
@@ -144,6 +146,8 @@ async function testPricingOnNetwork(
   // Check if on-chain pricing equals calculated ones
   const vaultAddress = pools[0].split('_')[1];
   await checkOnChainPricing(
+    dexKey,
+    network,
     clear,
     funcNameToCheck,
     blockNumber,
@@ -169,18 +173,18 @@ describe('Clear', function () {
     const srcTokenSymbol = 'USDC';
     const destTokenSymbol = 'GHO';
 
-    const amountsForSell = [
+    const buildAmounts = (decimals: number) => [
       0n,
-      1n * BI_POWS[tokens[srcTokenSymbol].decimals],
-      2n * BI_POWS[tokens[srcTokenSymbol].decimals],
-      3n * BI_POWS[tokens[srcTokenSymbol].decimals],
-      4n * BI_POWS[tokens[srcTokenSymbol].decimals],
-      5n * BI_POWS[tokens[srcTokenSymbol].decimals],
-      6n * BI_POWS[tokens[srcTokenSymbol].decimals],
-      7n * BI_POWS[tokens[srcTokenSymbol].decimals],
-      8n * BI_POWS[tokens[srcTokenSymbol].decimals],
-      9n * BI_POWS[tokens[srcTokenSymbol].decimals],
-      10n * BI_POWS[tokens[srcTokenSymbol].decimals],
+      1n * BI_POWS[decimals],
+      2n * BI_POWS[decimals],
+      3n * BI_POWS[decimals],
+      4n * BI_POWS[decimals],
+      5n * BI_POWS[decimals],
+      6n * BI_POWS[decimals],
+      7n * BI_POWS[decimals],
+      8n * BI_POWS[decimals],
+      9n * BI_POWS[decimals],
+      10n * BI_POWS[decimals],
     ];
 
     beforeAll(async () => {
@@ -200,7 +204,7 @@ describe('Clear', function () {
         srcTokenSymbol,
         destTokenSymbol,
         SwapSide.SELL,
-        amountsForSell,
+        buildAmounts(tokens[srcTokenSymbol].decimals),
         'previewSwap',
       );
     });
@@ -214,12 +218,7 @@ describe('Clear', function () {
         destTokenSymbol,
         srcTokenSymbol,
         SwapSide.SELL,
-        [
-          0n,
-          1n * BI_POWS[tokens[destTokenSymbol].decimals],
-          2n * BI_POWS[tokens[destTokenSymbol].decimals],
-          3n * BI_POWS[tokens[destTokenSymbol].decimals],
-        ],
+        buildAmounts(tokens[destTokenSymbol].decimals),
         'previewSwap',
       );
     });
@@ -228,7 +227,7 @@ describe('Clear', function () {
       const poolPrices = await clear.getPricesVolume(
         tokens[srcTokenSymbol],
         tokens[destTokenSymbol],
-        [0n, 1n * BI_POWS[tokens[destTokenSymbol].decimals]],
+        buildAmounts(tokens[destTokenSymbol].decimals),
         SwapSide.BUY,
         blockNumber,
       );
