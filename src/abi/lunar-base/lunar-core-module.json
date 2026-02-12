@@ -1,0 +1,84 @@
+[
+  {
+    "type": "function",
+    "name": "previewFee",
+    "inputs": [
+      { "name": "pair", "type": "address", "internalType": "address" },
+      {
+        "name": "ctx",
+        "type": "tuple",
+        "internalType": "struct LunarSwapContext",
+        "components": [
+          { "name": "tokenIn", "type": "address", "internalType": "address" },
+          { "name": "tokenOut", "type": "address", "internalType": "address" },
+          { "name": "amountIn", "type": "uint256", "internalType": "uint256" },
+          { "name": "amountOut", "type": "uint256", "internalType": "uint256" },
+          { "name": "reserveIn", "type": "uint112", "internalType": "uint112" },
+          {
+            "name": "reserveOut",
+            "type": "uint112",
+            "internalType": "uint112"
+          },
+          { "name": "data", "type": "bytes", "internalType": "bytes" }
+        ]
+      }
+    ],
+    "outputs": [
+      {
+        "name": "q",
+        "type": "tuple",
+        "internalType": "struct LunarFeeQuote",
+        "components": [
+          { "name": "inBps", "type": "uint32", "internalType": "uint32" },
+          { "name": "outBps", "type": "uint32", "internalType": "uint32" },
+          {
+            "name": "protocolShareBps",
+            "type": "uint32",
+            "internalType": "uint32"
+          }
+        ]
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "poolBaseFeeConfig",
+    "inputs": [{ "name": "", "type": "address", "internalType": "address" }],
+    "outputs": [
+      { "name": "baseFee", "type": "uint32", "internalType": "uint32" },
+      { "name": "wToken0", "type": "uint32", "internalType": "uint32" },
+      { "name": "wToken1", "type": "uint32", "internalType": "uint32" }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "defaultDynCfg",
+    "inputs": [],
+    "outputs": [
+      { "name": "maxCapBps", "type": "uint32", "internalType": "uint32" },
+      { "name": "halfLife", "type": "uint40", "internalType": "uint40" },
+      { "name": "enabled", "type": "bool", "internalType": "bool" }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "poolDynCfg",
+    "inputs": [{ "name": "", "type": "address", "internalType": "address" }],
+    "outputs": [
+      { "name": "maxCapBps", "type": "uint32", "internalType": "uint32" },
+      { "name": "halfLife", "type": "uint40", "internalType": "uint40" },
+      { "name": "enabled", "type": "bool", "internalType": "bool" }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "poolDynCfgSet",
+    "inputs": [{ "name": "", "type": "address", "internalType": "address" }],
+    "outputs": [{ "name": "", "type": "bool", "internalType": "bool" }],
+    "stateMutability": "view"
+  }
+]
