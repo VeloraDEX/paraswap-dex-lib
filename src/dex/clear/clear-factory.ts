@@ -7,7 +7,7 @@ import { StatefulEventSubscriber } from '../../stateful-event-subscriber';
 import { IDexHelper } from '../../dex-helper';
 import { MultiCallParams } from '../../lib/multi-wrapper';
 import { Address } from '../../types';
-import { ClearVault, DexParams, PoolState } from './types';
+import { DexParams, PoolState } from './types';
 import ClearFactoryABI from '../../abi/clear/ClearFactory.json';
 import ClearVaultABI from '../../abi/clear/ClearVault.json';
 import { addressArrayDecode } from '../../lib/decoders';
