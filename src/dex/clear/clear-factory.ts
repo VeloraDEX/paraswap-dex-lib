@@ -7,18 +7,18 @@ import { StatefulEventSubscriber } from '../../stateful-event-subscriber';
 import { IDexHelper } from '../../dex-helper';
 import { MultiCallParams } from '../../lib/multi-wrapper';
 import { Address } from '../../types';
-import { ClearVault, DexParams } from './types';
+import { ClearVault, DexParams, PoolState } from './types';
 import ClearFactoryABI from '../../abi/clear/ClearFactory.json';
 import ClearVaultABI from '../../abi/clear/ClearVault.json';
 import { addressArrayDecode } from '../../lib/decoders';
 
-export class ClearFactory extends StatefulEventSubscriber<ClearVault[]> {
+export class ClearFactory extends StatefulEventSubscriber<PoolState> {
   handlers: {
     [event: string]: (
       event: any,
-      state: DeepReadonly<ClearVault[]>,
+      state: DeepReadonly<PoolState>,
       log: Readonly<Log>,
-    ) => Promise<DeepReadonly<ClearVault[]> | null>;
+    ) => Promise<DeepReadonly<PoolState> | null>;
   } = {};
 
   logDecoder: (log: Log) => any;
@@ -51,9 +51,9 @@ export class ClearFactory extends StatefulEventSubscriber<ClearVault[]> {
 
   async handleNewClearVault(
     event: any,
-    state: DeepReadonly<ClearVault[]>,
+    state: DeepReadonly<PoolState>,
     log: Readonly<Log>,
-  ): Promise<DeepReadonly<ClearVault[]> | null> {
+  ): Promise<DeepReadonly<PoolState> | null> {
     const vaultAddress = event.args.vault.toLowerCase();
 
     const [tokenResult] = await this.dexHelper.multiWrapper.tryAggregate<
@@ -77,20 +77,19 @@ export class ClearFactory extends StatefulEventSubscriber<ClearVault[]> {
       return null;
     }
 
-    const newVault: ClearVault = {
-      address: vaultAddress,
-      tokens: tokenResult.returnData.map(addr => ({
-        address: addr.toLowerCase(),
-      })),
-    };
-
-    return [...state, newVault];
+    return [
+      ...state,
+      {
+        address: vaultAddress,
+        tokens: tokenResult.returnData.map(addr => addr.toLowerCase()),
+      },
+    ];
   }
 
   async processLog(
-    state: DeepReadonly<ClearVault[]>,
+    state: DeepReadonly<PoolState>,
     log: Readonly<Log>,
-  ): Promise<DeepReadonly<ClearVault[]> | null> {
+  ): Promise<DeepReadonly<PoolState> | null> {
     try {
       const event = this.logDecoder(log);
       if (event.name in this.handlers) {
@@ -105,7 +104,7 @@ export class ClearFactory extends StatefulEventSubscriber<ClearVault[]> {
 
   async getStateOrGenerate(
     blockNumber: number,
-  ): Promise<DeepReadonly<ClearVault[]>> {
+  ): Promise<DeepReadonly<PoolState>> {
     let state = this.getState(blockNumber);
     if (!state) {
       state = await this.generateState(blockNumber);
@@ -120,9 +119,7 @@ export class ClearFactory extends StatefulEventSubscriber<ClearVault[]> {
    * 2. getBatchVaultAddresses() -> all addresses
    * 3. tokens() on each vault -> supported tokens
    */
-  async generateState(
-    blockNumber: number,
-  ): Promise<DeepReadonly<ClearVault[]>> {
+  async generateState(blockNumber: number): Promise<DeepReadonly<PoolState>> {
     // Step 1: Get total number of vaults
     const vaultsLengthBN = await this.factoryContract.vaultsLength({
       blockTag: blockNumber,
@@ -154,7 +151,7 @@ export class ClearFactory extends StatefulEventSubscriber<ClearVault[]> {
     >(false, tokenCalls, blockNumber);
 
     // Collect all valid vault data first
-    const vaults: ClearVault[] = vaultAddresses
+    const vaults: PoolState = vaultAddresses
       .map((address, i) => {
         const result = tokenResults[i];
         if (!result.success || !result.returnData) {
@@ -166,12 +163,10 @@ export class ClearFactory extends StatefulEventSubscriber<ClearVault[]> {
 
         return {
           address,
-          tokens: result.returnData.map(addr => ({
-            address: addr.toLowerCase(),
-          })),
+          tokens: result.returnData.map(addr => addr.toLowerCase()),
         };
       })
-      .filter(Boolean) as ClearVault[];
+      .filter(Boolean) as PoolState;
 
     this.logger.info(
       `${this.parentName}: Generated state with ${vaults.length} vaults`,
