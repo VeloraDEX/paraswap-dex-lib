@@ -10,7 +10,11 @@ import CoreABI from '../../abi/ekubo-v3/core.json';
 import QuoteDataFetcherABI from '../../abi/ekubo-v3/quote-data-fetcher.json';
 import TwammDataFetcherABI from '../../abi/ekubo-v3/twamm-data-fetcher.json';
 import TwammABI from '../../abi/ekubo-v3/twamm.json';
+import BoostedFeesDataFetcherABI from '../../abi/ekubo-v3/boosted-fees-data-fetcher.json';
+import BoostedFeesABI from '../../abi/ekubo-v3/boosted-fees.json';
 import {
+  BOOSTED_FEES_CONCENTRATED_ADDRESS,
+  BOOSTED_FEES_DATA_FETCHER_ADDRESS,
   CORE_ADDRESS,
   QUOTE_DATA_FETCHER_ADDRESS,
   TWAMM_ADDRESS,
@@ -57,6 +61,19 @@ export function ekuboContracts(provider: Provider): EkuboContracts {
       quoteDataFetcher: new Contract(
         TWAMM_DATA_FETCHER_ADDRESS,
         TwammDataFetcherABI,
+        provider,
+      ),
+    },
+    boostedFees: {
+      contract: new Contract(
+        BOOSTED_FEES_CONCENTRATED_ADDRESS,
+        BoostedFeesABI,
+        provider,
+      ),
+      interface: new Interface(BoostedFeesABI),
+      quoteDataFetcher: new Contract(
+        BOOSTED_FEES_DATA_FETCHER_ADDRESS,
+        BoostedFeesDataFetcherABI,
         provider,
       ),
     },

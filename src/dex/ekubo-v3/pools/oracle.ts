@@ -3,8 +3,8 @@ import { FullRangePool, FullRangePoolState } from './full-range';
 import { PoolKeyed, Quote } from './pool';
 import { StableswapPoolTypeConfig } from './utils';
 
-// TODO
-const BASE_GAS_COST_OF_ONE_ORACLE_SWAP = 32_000;
+// This assumes a snapshot is always inserted
+const GAS_COST_OF_ONE_ORACLE_SWAP = 23_828;
 
 export class OraclePool extends FullRangePool {
   protected override _quote(
@@ -23,7 +23,7 @@ export class OraclePool extends FullRangePool {
     state: DeepReadonly<FullRangePoolState.Object>,
     sqrtRatioLimit?: bigint,
   ): Quote {
-    const fullRangeQuote = FullRangePool.prototype.quoteFullRange.call(
+    const quote = FullRangePool.prototype.quoteFullRange.call(
       this,
       amount,
       isToken1,
@@ -31,8 +31,8 @@ export class OraclePool extends FullRangePool {
       sqrtRatioLimit,
     );
 
-    fullRangeQuote.gasConsumed = BASE_GAS_COST_OF_ONE_ORACLE_SWAP;
+    quote.gasConsumed = GAS_COST_OF_ONE_ORACLE_SWAP;
 
-    return fullRangeQuote;
+    return quote;
   }
 }

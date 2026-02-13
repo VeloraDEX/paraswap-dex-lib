@@ -6,11 +6,17 @@ import {
   EkuboContracts,
   PoolInitializationState,
 } from '../types';
-import { EkuboPool, NamedEventHandlers, PoolKeyed, Quote } from './pool';
+import {
+  AnonymousEventHandler,
+  EkuboPool,
+  NamedEventHandlers,
+  PoolKeyed,
+  Quote,
+} from './pool';
 import { floatSqrtRatioToFixed } from './math/sqrt-ratio';
 import { computeStep, isPriceIncreasing } from './math/swap';
 import {
-  approximateNumberOfTickSpacingsCrossed,
+  approximateSqrtRatioToTick,
   MAX_SQRT_RATIO,
   MAX_TICK,
   MIN_SQRT_RATIO,
@@ -29,16 +35,18 @@ import { BigNumber } from 'ethers';
 
 const GAS_COST_OF_ONE_CL_SWAP = 19_632;
 
-// TODO Estimates are still from v2
 const GAS_COST_OF_ONE_INITIALIZED_TICK_CROSSED = 13_700;
 export const GAS_COST_OF_ONE_EXTRA_BITMAP_SLOAD = 2_000;
-const GAS_COST_OF_ONE_EXTRA_MATH_ROUND = 5_750;
+const GAS_COST_OF_ONE_EXTRA_MATH_ROUND = 4_076;
+
+const TICK_BITMAP_STORAGE_OFFSET = 89_421_695;
+const MAX_SKIP_AHEAD = 0x7fffffff;
 
 export class BasePool extends EkuboPool<
   ConcentratedPoolTypeConfig,
   BasePoolState.Object
 > {
-  private readonly quoteDataFetcher;
+  protected readonly quoteDataFetcher;
 
   public constructor(
     parentName: string,
@@ -47,6 +55,14 @@ export class BasePool extends EkuboPool<
     contracts: EkuboContracts,
     initBlockNumber: number,
     key: PoolKey<ConcentratedPoolTypeConfig>,
+    extraNamedEventHandlers: Record<
+      string,
+      NamedEventHandlers<BasePoolState.Object>
+    > = {},
+    extraAnonymousEventHandlers: Record<
+      string,
+      AnonymousEventHandler<BasePoolState.Object>
+    > = {},
   ) {
     const {
       contract: { address },
@@ -79,10 +95,12 @@ export class BasePool extends EkuboPool<
             );
           },
         }),
+        ...extraNamedEventHandlers,
       },
       {
         [address]: (data, oldState) =>
           BasePoolState.fromSwappedEvent(oldState, parseSwappedEvent(data)),
+        ...extraAnonymousEventHandlers,
       },
     );
 
@@ -180,11 +198,12 @@ export class BasePool extends EkuboPool<
       }
     }
 
-    const tickSpacingsCrossed = approximateNumberOfTickSpacingsCrossed(
-      startingSqrtRatio,
-      sqrtRatio,
-      this.key.config.poolTypeConfig.tickSpacing,
-    );
+    const extraDistinctBitmapLookups =
+      approximateExtraDistinctTickBitmapLookups(
+        startingSqrtRatio,
+        sqrtRatio,
+        this.key.config.poolTypeConfig.tickSpacing,
+      );
 
     return {
       consumedAmount: amount - amountRemaining,
@@ -192,13 +211,13 @@ export class BasePool extends EkuboPool<
       gasConsumed:
         GAS_COST_OF_ONE_CL_SWAP +
         initializedTicksCrossedGasCosts(initializedTicksCrossed) +
-        (tickSpacingsCrossed / 256) *
+        extraDistinctBitmapLookups *
           (GAS_COST_OF_ONE_EXTRA_MATH_ROUND +
             GAS_COST_OF_ONE_EXTRA_BITMAP_SLOAD),
-      skipAhead:
-        initializedTicksCrossed === 0
-          ? 0
-          : Math.floor(tickSpacingsCrossed / initializedTicksCrossed),
+      skipAhead: suggestedSkipAhead(
+        initializedTicksCrossed,
+        extraDistinctBitmapLookups,
+      ),
       stateAfter: {
         sqrtRatio,
         liquidity,
@@ -212,6 +231,41 @@ export class BasePool extends EkuboPool<
   ): [bigint, bigint] {
     return BasePoolState.computeTvl(state);
   }
+}
+
+function approximateExtraDistinctTickBitmapLookups(
+  startingSqrtRatio: bigint,
+  endingSqrtRatio: bigint,
+  tickSpacing: number,
+): number {
+  const startWord = bitmapWordFromSqrtRatio(startingSqrtRatio, tickSpacing);
+  const endWord = bitmapWordFromSqrtRatio(endingSqrtRatio, tickSpacing);
+
+  return Math.abs(endWord - startWord);
+}
+
+function bitmapWordFromSqrtRatio(
+  sqrtRatio: bigint,
+  tickSpacing: number,
+): number {
+  const tick = approximateSqrtRatioToTick(sqrtRatio);
+
+  let compressedTick = Math.trunc(tick / tickSpacing);
+  if (tick % tickSpacing < 0) {
+    compressedTick--;
+  }
+
+  return (compressedTick + TICK_BITMAP_STORAGE_OFFSET) >> 8;
+}
+
+function suggestedSkipAhead(
+  initializedTicksCrossed: number,
+  extraDistinctBitmapLookups: number,
+): number {
+  const denominator =
+    initializedTicksCrossed === 0 ? 1 : initializedTicksCrossed;
+  const skipAhead = Math.floor(extraDistinctBitmapLookups / denominator);
+  return Math.min(skipAhead, MAX_SKIP_AHEAD);
 }
 
 export function initializedTicksCrossedGasCosts(

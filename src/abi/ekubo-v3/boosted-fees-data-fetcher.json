@@ -1,0 +1,108 @@
+[
+  {
+    "type": "constructor",
+    "inputs": [
+      {
+        "name": "core",
+        "type": "address",
+        "internalType": "contract ICore"
+      }
+    ],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "getPoolState",
+    "inputs": [
+      {
+        "name": "poolKey",
+        "type": "tuple",
+        "internalType": "struct PoolKey",
+        "components": [
+          {
+            "name": "token0",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "token1",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "config",
+            "type": "bytes32",
+            "internalType": "PoolConfig"
+          }
+        ]
+      }
+    ],
+    "outputs": [
+      {
+        "name": "state",
+        "type": "tuple",
+        "internalType": "struct BoostedPoolState",
+        "components": [
+          {
+            "name": "sqrtRatio",
+            "type": "uint96",
+            "internalType": "SqrtRatio"
+          },
+          {
+            "name": "tick",
+            "type": "int32",
+            "internalType": "int32"
+          },
+          {
+            "name": "liquidity",
+            "type": "uint128",
+            "internalType": "uint128"
+          },
+          {
+            "name": "lastDonateTime",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "donateRateToken0",
+            "type": "uint112",
+            "internalType": "uint112"
+          },
+          {
+            "name": "donateRateToken1",
+            "type": "uint112",
+            "internalType": "uint112"
+          },
+          {
+            "name": "donateRateDeltas",
+            "type": "tuple[]",
+            "internalType": "struct BoostedTimeDonateRateInfo[]",
+            "components": [
+              {
+                "name": "time",
+                "type": "uint64",
+                "internalType": "uint64"
+              },
+              {
+                "name": "donateRateDelta0",
+                "type": "int128",
+                "internalType": "int128"
+              },
+              {
+                "name": "donateRateDelta1",
+                "type": "int128",
+                "internalType": "int128"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "error",
+    "name": "CoreOnly",
+    "inputs": []
+  }
+]
