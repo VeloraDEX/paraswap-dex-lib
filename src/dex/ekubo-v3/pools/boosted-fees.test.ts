@@ -1,6 +1,6 @@
 import { DeepReadonly } from 'ts-essentials';
 import { BoostedFeesPool, BoostedFeesPoolState } from './boosted-fees';
-import { BasePoolState } from './base';
+import { ConcentratedPoolState } from './concentrated';
 import { MAX_TICK, MIN_TICK, toSqrtRatio } from './math/tick';
 import { ConcentratedPoolTypeConfig, PoolConfig, PoolKey } from './utils';
 
@@ -196,7 +196,7 @@ describe('Boosted fees state compatibility', () => {
     );
 
     expect(updated).not.toBeNull();
-    const next = updated as BasePoolState.Object & {
+    const next = updated as ConcentratedPoolState.Object & {
       timedPoolState: {
         token0Rate: bigint;
         token1Rate: bigint;

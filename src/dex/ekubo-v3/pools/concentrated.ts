@@ -42,10 +42,23 @@ const GAS_COST_OF_ONE_EXTRA_MATH_ROUND = 4_076;
 const TICK_BITMAP_STORAGE_OFFSET = 89_421_695;
 const MAX_SKIP_AHEAD = 0x7fffffff;
 
-export class BasePool extends EkuboPool<
-  ConcentratedPoolTypeConfig,
-  BasePoolState.Object
+interface ConcentratedPoolCoreEventHandlers<
+  S extends ConcentratedPoolState.Object,
 > {
+  fromPositionUpdatedEvent(
+    oldState: DeepReadonly<S>,
+    ticks: [number, number],
+    liquidityDelta: bigint,
+  ): DeepReadonly<S> | null;
+  fromSwappedEvent(
+    oldState: DeepReadonly<S>,
+    ev: SwappedEvent,
+  ): DeepReadonly<S> | null;
+}
+
+export abstract class ConcentratedPoolBase<
+  S extends ConcentratedPoolState.Object,
+> extends EkuboPool<ConcentratedPoolTypeConfig, S> {
   protected readonly quoteDataFetcher;
 
   public constructor(
@@ -55,20 +68,17 @@ export class BasePool extends EkuboPool<
     contracts: EkuboContracts,
     initBlockNumber: number,
     key: PoolKey<ConcentratedPoolTypeConfig>,
-    extraNamedEventHandlers: Record<
-      string,
-      NamedEventHandlers<BasePoolState.Object>
-    > = {},
-    extraAnonymousEventHandlers: Record<
-      string,
-      AnonymousEventHandler<BasePoolState.Object>
-    > = {},
+    coreEventHandlers: ConcentratedPoolCoreEventHandlers<S>,
+    extraNamedEventHandlers: Record<string, NamedEventHandlers<S>> = {},
+    extraAnonymousEventHandlers: Record<string, AnonymousEventHandler<S>> = {},
   ) {
     const {
       contract: { address },
       interface: iface,
       quoteDataFetcher,
     } = contracts.core;
+    const positionUpdatedHandler = coreEventHandlers.fromPositionUpdatedEvent;
+    const swappedHandler = coreEventHandlers.fromSwappedEvent;
 
     super(
       parentName,
@@ -88,7 +98,7 @@ export class BasePool extends EkuboPool<
                 .toNumber(),
             ];
 
-            return BasePoolState.fromPositionUpdatedEvent(
+            return positionUpdatedHandler(
               oldState,
               [lower, upper],
               args.liquidityDelta.toBigInt(),
@@ -99,7 +109,7 @@ export class BasePool extends EkuboPool<
       },
       {
         [address]: (data, oldState) =>
-          BasePoolState.fromSwappedEvent(oldState, parseSwappedEvent(data)),
+          swappedHandler(oldState, parseSwappedEvent(data)),
         ...extraAnonymousEventHandlers,
       },
     );
@@ -107,36 +117,26 @@ export class BasePool extends EkuboPool<
     this.quoteDataFetcher = quoteDataFetcher;
   }
 
-  public async generateState(
-    blockNumber: number,
-  ): Promise<DeepReadonly<BasePoolState.Object>> {
-    const data = await this.quoteDataFetcher.getQuoteData(
-      [this.key.toAbi()],
-      10,
-      {
-        blockTag: blockNumber,
-      },
-    );
-    return BasePoolState.fromQuoter(data[0]);
-  }
-
   protected _quote(
     amount: bigint,
     isToken1: boolean,
-    state: DeepReadonly<BasePoolState.Object>,
+    state: DeepReadonly<S>,
     sqrtRatioLimit?: bigint,
   ): Quote {
-    return this.quoteBase(amount, isToken1, state, sqrtRatioLimit);
+    return this.quoteConcentrated(amount, isToken1, state, sqrtRatioLimit);
   }
 
-  public quoteBase(
+  public quoteConcentrated(
     this: PoolKeyed<ConcentratedPoolTypeConfig>,
     amount: bigint,
     isToken1: boolean,
-    state: DeepReadonly<BasePoolState.Object>,
+    state: DeepReadonly<S>,
     sqrtRatioLimit?: bigint,
   ): Quote<
-    Pick<BasePoolState.Object, 'activeTickIndex' | 'sqrtRatio' | 'liquidity'>
+    Pick<
+      ConcentratedPoolState.Object,
+      'activeTickIndex' | 'sqrtRatio' | 'liquidity'
+    >
   > {
     const isIncreasing = isPriceIncreasing(amount, isToken1);
 
@@ -226,10 +226,56 @@ export class BasePool extends EkuboPool<
     };
   }
 
-  protected override _computeTvl(
-    state: BasePoolState.Object,
-  ): [bigint, bigint] {
-    return BasePoolState.computeTvl(state);
+  protected override _computeTvl(state: DeepReadonly<S>): [bigint, bigint] {
+    return ConcentratedPoolState.computeTvl(state);
+  }
+}
+
+export class ConcentratedPool extends ConcentratedPoolBase<ConcentratedPoolState.Object> {
+  public constructor(
+    parentName: string,
+    dexHelper: IDexHelper,
+    logger: Logger,
+    contracts: EkuboContracts,
+    initBlockNumber: number,
+    key: PoolKey<ConcentratedPoolTypeConfig>,
+    extraNamedEventHandlers: Record<
+      string,
+      NamedEventHandlers<ConcentratedPoolState.Object>
+    > = {},
+    extraAnonymousEventHandlers: Record<
+      string,
+      AnonymousEventHandler<ConcentratedPoolState.Object>
+    > = {},
+  ) {
+    super(
+      parentName,
+      dexHelper,
+      logger,
+      contracts,
+      initBlockNumber,
+      key,
+      {
+        fromPositionUpdatedEvent:
+          ConcentratedPoolState.fromPositionUpdatedEvent,
+        fromSwappedEvent: ConcentratedPoolState.fromSwappedEvent,
+      },
+      extraNamedEventHandlers,
+      extraAnonymousEventHandlers,
+    );
+  }
+
+  public override async generateState(
+    blockNumber: number,
+  ): Promise<DeepReadonly<ConcentratedPoolState.Object>> {
+    const data = await this.quoteDataFetcher.getQuoteData(
+      [this.key.toAbi()],
+      10,
+      {
+        blockTag: blockNumber,
+      },
+    );
+    return ConcentratedPoolState.fromQuoter(data[0]);
   }
 }
 
@@ -318,7 +364,7 @@ export function findNearestInitializedTickIndex(
   return null;
 }
 
-export namespace BasePoolState {
+export namespace ConcentratedPoolState {
   // Needs to be serializiable, therefore can't make it a class
   export type Object = {
     sqrtRatio: bigint;
@@ -416,7 +462,7 @@ export namespace BasePoolState {
     return clonedState;
   }
 
-  export function addLiquidityCutoffs(state: BasePoolState.Object) {
+  export function addLiquidityCutoffs(state: ConcentratedPoolState.Object) {
     const { sortedTicks, liquidity, activeTick } = state;
 
     let activeTickIndex = undefined;

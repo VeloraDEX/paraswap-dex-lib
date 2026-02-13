@@ -13,7 +13,7 @@ import {
 } from './math/tick';
 import { parseSwappedEvent, PoolKey, StableswapPoolTypeConfig } from './utils';
 import { amount0Delta, amount1Delta } from './math/delta';
-import { initializedTicksCrossedGasCosts } from './base';
+import { initializedTicksCrossedGasCosts } from './concentrated';
 import { FullRangePoolState } from './full-range';
 
 const GAS_COST_OF_ONE_STABLESWAP_SWAP = 16_818;

@@ -1,4 +1,3 @@
-import { BigNumber } from 'ethers';
 import { hexDataSlice } from 'ethers/lib/utils';
 import { Logger } from 'log4js';
 import { DeepReadonly, DeepWritable } from 'ts-essentials';
@@ -10,17 +9,12 @@ import {
   PoolInitializationState,
 } from '../types';
 import {
-  BasePool,
-  BasePoolState,
+  ConcentratedPoolBase,
+  ConcentratedPoolState,
   GAS_COST_OF_ONE_EXTRA_BITMAP_SLOAD,
-} from './base';
+} from './concentrated';
 import { NamedEventHandlers, Quote } from './pool';
-import {
-  ConcentratedPoolTypeConfig,
-  parseSwappedEvent,
-  PoolKey,
-  SwappedEvent,
-} from './utils';
+import { ConcentratedPoolTypeConfig, PoolKey, SwappedEvent } from './utils';
 import {
   approximateExtraDistinctTimeBitmapLookups,
   estimatedCurrentTime,
@@ -33,7 +27,7 @@ const GAS_COST_OF_EXECUTING_VIRTUAL_DONATIONS = 6_814;
 const GAS_COST_OF_ONE_VIRTUAL_DONATE_DELTA = 4_271;
 const GAS_COST_OF_BOOSTED_FEES_FEE_ACCUMULATION = 19_279;
 
-export class BoostedFeesPool extends BasePool {
+export class BoostedFeesPool extends ConcentratedPoolBase<BoostedFeesPoolState.Object> {
   private readonly boostedFeesDataFetcher;
 
   public constructor(
@@ -44,10 +38,6 @@ export class BoostedFeesPool extends BasePool {
     initBlockNumber: number,
     key: PoolKey<ConcentratedPoolTypeConfig>,
   ) {
-    const {
-      contract: { address: coreAddress },
-      interface: coreIface,
-    } = contracts.core;
     const {
       contract: { address: boostedFeesAddress },
       interface: boostedFeesIface,
@@ -62,45 +52,26 @@ export class BoostedFeesPool extends BasePool {
       initBlockNumber,
       key,
       {
-        [coreAddress]: new NamedEventHandlers(coreIface, {
-          PositionUpdated: (args, oldState) => {
-            const [lower, upper] = [
-              BigNumber.from(hexDataSlice(args.positionId, 24, 28))
-                .fromTwos(32)
-                .toNumber(),
-              BigNumber.from(hexDataSlice(args.positionId, 28, 32))
-                .fromTwos(32)
-                .toNumber(),
-            ];
-
-            return BoostedFeesPoolState.fromPositionUpdatedEvent(
-              oldState as DeepReadonly<BoostedFeesPoolState.Object>,
-              [lower, upper],
-              args.liquidityDelta.toBigInt(),
-            ) as BasePoolState.Object | null;
-          },
-        }),
+        fromPositionUpdatedEvent: BoostedFeesPoolState.fromPositionUpdatedEvent,
+        fromSwappedEvent: BoostedFeesPoolState.fromSwappedEvent,
+      },
+      {
         [boostedFeesAddress]: new NamedEventHandlers(boostedFeesIface, {
           PoolBoosted: (args, oldState) =>
             BoostedFeesPoolState.fromPoolBoostedEvent(
-              oldState as DeepReadonly<BoostedFeesPoolState.Object>,
+              oldState,
               [args.startTime.toBigInt(), args.endTime.toBigInt()],
               [args.rate0.toBigInt(), args.rate1.toBigInt()],
-            ) as BasePoolState.Object | null,
+            ),
         }),
       },
       {
-        [coreAddress]: (data, oldState) =>
-          BoostedFeesPoolState.fromSwappedEvent(
-            oldState as DeepReadonly<BoostedFeesPoolState.Object>,
-            parseSwappedEvent(data),
-          ) as BasePoolState.Object,
         [boostedFeesAddress]: (data, oldState, blockHeader) =>
           BoostedFeesPoolState.fromFeesDonatedEvent(
-            oldState as DeepReadonly<BoostedFeesPoolState.Object>,
+            oldState,
             parseFeesDonatedEvent(data),
             BigInt(blockHeader.timestamp),
-          ) as BasePoolState.Object | null,
+          ),
       },
     );
 
@@ -109,7 +80,7 @@ export class BoostedFeesPool extends BasePool {
 
   public override async generateState(
     blockNumber?: number | 'latest',
-  ): Promise<DeepReadonly<BasePoolState.Object>> {
+  ): Promise<DeepReadonly<BoostedFeesPoolState.Object>> {
     const [quoteData, boostedFeesData] = await Promise.all([
       this.quoteDataFetcher.getQuoteData([this.key.toAbi()], 10, {
         blockTag: blockNumber,
@@ -125,15 +96,10 @@ export class BoostedFeesPool extends BasePool {
   protected override _quote(
     amount: bigint,
     isToken1: boolean,
-    state: DeepReadonly<BasePoolState.Object>,
+    state: DeepReadonly<BoostedFeesPoolState.Object>,
     sqrtRatioLimit?: bigint,
   ): Quote {
-    return this.quoteBoostedFees(
-      amount,
-      isToken1,
-      state as DeepReadonly<BoostedFeesPoolState.Object>,
-      sqrtRatioLimit,
-    );
+    return this.quoteBoostedFees(amount, isToken1, state, sqrtRatioLimit);
   }
 
   public quoteBoostedFees(
@@ -144,7 +110,7 @@ export class BoostedFeesPool extends BasePool {
     overrideTime?: bigint,
   ): Quote<
     Pick<
-      BasePoolState.Object,
+      ConcentratedPoolState.Object,
       'activeTickIndex' | 'sqrtRatio' | 'liquidity'
     > & {
       timedPoolState: TimedPoolState.Object;
@@ -197,7 +163,7 @@ export class BoostedFeesPool extends BasePool {
       virtualDonateDeltaTimesCrossed++;
     }
 
-    const quote = BasePool.prototype.quoteBase.call(
+    const quote = ConcentratedPoolBase.prototype.quoteConcentrated.call(
       this,
       amount,
       isToken1,
@@ -236,7 +202,7 @@ export class BoostedFeesPool extends BasePool {
 export namespace BoostedFeesPoolState {
   export type DonateRateDelta = TimedPoolState.TimeRateDelta;
 
-  export interface Object extends BasePoolState.Object {
+  export interface Object extends ConcentratedPoolState.Object {
     timedPoolState: TimedPoolState.Object;
   }
 
@@ -244,7 +210,7 @@ export namespace BoostedFeesPoolState {
     state: PoolInitializationState,
   ): DeepReadonly<Object> {
     return {
-      ...BasePoolState.fromPoolInitialization(state),
+      ...ConcentratedPoolState.fromPoolInitialization(state),
       timedPoolState: {
         token0Rate: 0n,
         token1Rate: 0n,
@@ -259,7 +225,7 @@ export namespace BoostedFeesPoolState {
     boostedData: BoostedFeesQuoteData,
   ): DeepReadonly<Object> {
     return {
-      ...BasePoolState.fromQuoter(quoteData),
+      ...ConcentratedPoolState.fromQuoter(quoteData),
       timedPoolState: TimedPoolState.fromQuoter(
         boostedData.donateRateToken0.toBigInt(),
         boostedData.donateRateToken1.toBigInt(),
@@ -278,7 +244,7 @@ export namespace BoostedFeesPoolState {
     ev: SwappedEvent,
   ): Object {
     return {
-      ...BasePoolState.fromSwappedEvent(oldState, ev),
+      ...ConcentratedPoolState.fromSwappedEvent(oldState, ev),
       timedPoolState: structuredClone(
         oldState.timedPoolState,
       ) as TimedPoolState.Object,
@@ -290,17 +256,17 @@ export namespace BoostedFeesPoolState {
     ticks: [number, number],
     liquidityDelta: bigint,
   ): Object | null {
-    const baseState = BasePoolState.fromPositionUpdatedEvent(
+    const concentratedState = ConcentratedPoolState.fromPositionUpdatedEvent(
       oldState,
       ticks,
       liquidityDelta,
     );
-    if (baseState === null) {
+    if (concentratedState === null) {
       return null;
     }
 
     return {
-      ...baseState,
+      ...concentratedState,
       timedPoolState: structuredClone(
         oldState.timedPoolState,
       ) as TimedPoolState.Object,

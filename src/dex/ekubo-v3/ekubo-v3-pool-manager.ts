@@ -26,7 +26,7 @@ import {
 } from './config';
 import { FullRangePool, FullRangePoolState } from './pools/full-range';
 import { StableswapPool } from './pools/stableswap';
-import { BasePool, BasePoolState } from './pools/base';
+import { ConcentratedPool, ConcentratedPoolState } from './pools/concentrated';
 import { OraclePool } from './pools/oracle';
 import { MevCapturePool } from './pools/mev-capture';
 import { TwammPool, TwammPoolState } from './pools/twamm';
@@ -577,8 +577,8 @@ export class EkuboV3PoolManager implements EventSubscriber {
                     switch (extType) {
                       case ExtensionType.NoSwapCallPoints:
                         await addPool(
-                          BasePool,
-                          BasePoolState.fromQuoter(data),
+                          ConcentratedPool,
+                          ConcentratedPoolState.fromQuoter(data),
                           initBlockNumber,
                           poolKey,
                         );
@@ -586,7 +586,7 @@ export class EkuboV3PoolManager implements EventSubscriber {
                       case ExtensionType.MevCapture:
                         await addPool(
                           MevCapturePool,
-                          BasePoolState.fromQuoter(data),
+                          ConcentratedPoolState.fromQuoter(data),
                           initBlockNumber,
                           poolKey,
                         );
@@ -651,10 +651,7 @@ export class EkuboV3PoolManager implements EventSubscriber {
 
           await addPool(
             BoostedFeesPool,
-            BoostedFeesPoolState.fromQuoter(
-              quoteData[0],
-              boostedFeesData,
-            ) as DeepReadonly<BasePoolState.Object>,
+            BoostedFeesPoolState.fromQuoter(quoteData[0], boostedFeesData),
             initBlockNumber,
             key,
           );
@@ -777,20 +774,19 @@ export class EkuboV3PoolManager implements EventSubscriber {
           );
       }
     } else if (isConcentratedKey(poolKey)) {
-      const basePoolState = BasePoolState.fromPoolInitialization(state);
+      const concentratedPoolState =
+        ConcentratedPoolState.fromPoolInitialization(state);
 
       switch (extensionType(extension)) {
         case ExtensionType.NoSwapCallPoints:
-          return addPool(BasePool, poolKey, basePoolState);
+          return addPool(ConcentratedPool, poolKey, concentratedPoolState);
         case ExtensionType.MevCapture:
-          return addPool(MevCapturePool, poolKey, basePoolState);
+          return addPool(MevCapturePool, poolKey, concentratedPoolState);
         case ExtensionType.BoostedFeesConcentrated:
           return addPool(
             BoostedFeesPool,
             poolKey,
-            BoostedFeesPoolState.fromPoolInitialization(
-              state,
-            ) as DeepReadonly<BasePoolState.Object>,
+            BoostedFeesPoolState.fromPoolInitialization(state),
           );
         default:
           this.logger.debug(

@@ -1,6 +1,6 @@
 import { DeepReadonly } from 'ts-essentials';
 import { PoolKeyed, Quote } from './pool';
-import { BasePool, BasePoolState } from './base';
+import { ConcentratedPool, ConcentratedPoolState } from './concentrated';
 import { approximateSqrtRatioToTick } from './math/tick';
 import { BI_MAX_UINT64 } from '../../../bigint-constants';
 import { amountBeforeFee, computeFee } from './math/swap';
@@ -9,11 +9,11 @@ import { ConcentratedPoolTypeConfig } from './utils';
 // This assumes fees are always accumulated
 const EXTRA_BASE_GAS_COST_OF_ONE_MEV_CAPTURE_SWAP = 32_258;
 
-export class MevCapturePool extends BasePool {
+export class MevCapturePool extends ConcentratedPool {
   protected override _quote(
     amount: bigint,
     isToken1: boolean,
-    state: DeepReadonly<BasePoolState.Object>,
+    state: DeepReadonly<ConcentratedPoolState.Object>,
     sqrtRatioLimit?: bigint,
   ): Quote {
     return this.quoteMevCapture(amount, isToken1, state, sqrtRatioLimit);
@@ -23,12 +23,15 @@ export class MevCapturePool extends BasePool {
     this: PoolKeyed<ConcentratedPoolTypeConfig>,
     amount: bigint,
     isToken1: boolean,
-    state: DeepReadonly<BasePoolState.Object>,
+    state: DeepReadonly<ConcentratedPoolState.Object>,
     sqrtRatioLimit?: bigint,
   ): Quote<
-    Pick<BasePoolState.Object, 'activeTickIndex' | 'sqrtRatio' | 'liquidity'>
+    Pick<
+      ConcentratedPoolState.Object,
+      'activeTickIndex' | 'sqrtRatio' | 'liquidity'
+    >
   > {
-    const quote = BasePool.prototype.quoteBase.call(
+    const quote = ConcentratedPool.prototype.quoteConcentrated.call(
       this,
       amount,
       isToken1,

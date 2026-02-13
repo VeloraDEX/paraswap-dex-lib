@@ -16,10 +16,10 @@ import {
   TWAMM_ADDRESS,
 } from './config';
 import {
-  BasePool,
-  BasePoolState,
+  ConcentratedPool,
+  ConcentratedPoolState,
   findNearestInitializedTickIndex,
-} from './pools/base';
+} from './pools/concentrated';
 import { EkuboPool } from './pools/pool';
 import { TwammPool } from './pools/twamm';
 import {
@@ -42,12 +42,14 @@ type AnyEkuboPool = EkuboPool<PoolTypeConfig, unknown>;
 type EventMappings = Record<string, [AnyEkuboPool, number][]>;
 
 // Rather incomplete but only used for tests
-function isBasePoolState(value: unknown): value is BasePoolState.Object {
+function isConcentratedPoolState(
+  value: unknown,
+): value is ConcentratedPoolState.Object {
   return typeof value === 'object' && value !== null && 'sortedTicks' in value;
 }
 
 function stateCompare(actual: unknown, expected: unknown) {
-  if (!isBasePoolState(actual) || !isBasePoolState(expected)) {
+  if (!isConcentratedPoolState(actual) || !isConcentratedPoolState(expected)) {
     expect(actual).toEqual(expected);
     return;
   }
@@ -192,12 +194,12 @@ const eventFixtures: Record<
     return {
       poolStateEvents: {
         Swapped: [
-          [newPool(BasePool, clEthUsdcPoolKey), 24175246], // https://etherscan.io/tx/0xee56e1f3bad803bd857fb118e55d7eabb5368a94ae8f11e83724278f474294ca
+          [newPool(ConcentratedPool, clEthUsdcPoolKey), 24175246], // https://etherscan.io/tx/0xee56e1f3bad803bd857fb118e55d7eabb5368a94ae8f11e83724278f474294ca
           [newPool(TwammPool, twammEthUsdcPoolKey), 24175264], // https://etherscan.io/tx/0x01c02e32ac563e3a761382cb8ef278cfed9ed9dc758b5a95f38dd44978e87b2e
         ],
         PositionUpdated: [
-          [newPool(BasePool, clEthUsdcPoolKey), 24169215], // Add liquidity https://etherscan.io/tx/0x52f469327de230f3da91eb7b77069852757d383450943307f5da63016476c0fb
-          [newPool(BasePool, clEthUsdcPoolKey), 24169222], // Withdraw liquidity https://etherscan.io/tx/0x00cfe35092d58aab347abc58345878092f87d37c7f0f0126fb1c890c791cdc02
+          [newPool(ConcentratedPool, clEthUsdcPoolKey), 24169215], // Add liquidity https://etherscan.io/tx/0x52f469327de230f3da91eb7b77069852757d383450943307f5da63016476c0fb
+          [newPool(ConcentratedPool, clEthUsdcPoolKey), 24169222], // Withdraw liquidity https://etherscan.io/tx/0x00cfe35092d58aab347abc58345878092f87d37c7f0f0126fb1c890c791cdc02
           [newPool(TwammPool, twammEthUsdcPoolKey), 24169228], // Add liquidity https://etherscan.io/tx/0x5fceec2c8fce56c7a73b8e3efca77f9ef8561b40a08b05785e9084cba684b5f8
           [newPool(TwammPool, twammEthUsdcPoolKey), 24169235], // Withdraw liquidity https://etherscan.io/tx/0x920f865071397a145e2e9558dfaedb7e138456d8fe43c1899187778a16b00c8b
         ],
@@ -239,7 +241,7 @@ const eventFixtures: Record<
     return {
       poolStateEvents: {
         PositionUpdated: [
-          [newPool(BasePool, clUsdcUsdtPoolKey), 419274779], // Withdraw liquidity https://arbiscan.io/tx/0x84271744e848a448748b3916c274461c0523b1f4a1c4ad59afd0f46867fe38a4#eventlog#8
+          [newPool(ConcentratedPool, clUsdcUsdtPoolKey), 419274779], // Withdraw liquidity https://arbiscan.io/tx/0x84271744e848a448748b3916c274461c0523b1f4a1c4ad59afd0f46867fe38a4#eventlog#8
         ],
       },
       poolInitializationEvent: {
