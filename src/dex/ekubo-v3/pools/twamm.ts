@@ -7,7 +7,7 @@ import {
   PoolInitializationState,
   TwammQuoteData,
 } from '../types';
-import { FullRangePoolBase, FullRangePoolState } from './full-range';
+import { FullRangePoolState, quoteFullRange } from './full-range';
 import { EkuboPool, NamedEventHandlers, Quote } from './pool';
 import { MAX_U32 } from './math/constants';
 import { floatSqrtRatioToFixed } from './math/sqrt-ratio';
@@ -118,127 +118,7 @@ export class TwammPool extends EkuboPool<
     isToken1: boolean,
     state: DeepReadonly<TwammPoolState.Object>,
   ): Quote {
-    return this.quoteTwamm(amount, isToken1, state);
-  }
-
-  public quoteTwamm(
-    amount: bigint,
-    isToken1: boolean,
-    state: DeepReadonly<TwammPoolState.Object>,
-    overrideTime?: bigint,
-  ): Quote {
-    const lastExecutionTime = state.timedPoolState.lastTime;
-    const currentTime = estimatedCurrentTime(lastExecutionTime, overrideTime);
-
-    const quoteFullRangePool =
-      FullRangePoolBase.prototype.quoteFullRange.bind(this);
-
-    const liquidity = state.fullRangePoolState.liquidity;
-    let nextSqrtRatio = state.fullRangePoolState.sqrtRatio;
-    let token0SaleRate = state.timedPoolState.token0Rate;
-    let token1SaleRate = state.timedPoolState.token1Rate;
-
-    let virtualOrderDeltaTimesCrossed = 0;
-
-    let fullRangePoolState = state.fullRangePoolState;
-
-    let time = lastExecutionTime;
-
-    for (const delta of [...state.timedPoolState.virtualDeltas, null]) {
-      let nextExecutionTime = currentTime;
-      let lastDelta = true;
-
-      if (delta !== null) {
-        if (delta.time <= lastExecutionTime) {
-          continue;
-        }
-
-        if (delta.time < currentTime) {
-          lastDelta = false;
-          nextExecutionTime = delta.time;
-        }
-      }
-
-      const timeElapsed = nextExecutionTime - time;
-      if (timeElapsed > MAX_U32) {
-        throw new Error('Too much time passed since last execution');
-      }
-
-      const [amount0, amount1] = [
-        (token0SaleRate * BigInt(timeElapsed)) >> 32n,
-        (token1SaleRate * BigInt(timeElapsed)) >> 32n,
-      ];
-
-      if (amount0 > 0n && amount1 > 0n) {
-        let currentSqrtRatio = nextSqrtRatio;
-        if (currentSqrtRatio > MAX_SQRT_RATIO) {
-          currentSqrtRatio = MAX_SQRT_RATIO;
-        } else if (currentSqrtRatio < MIN_SQRT_RATIO) {
-          currentSqrtRatio = MIN_SQRT_RATIO;
-        }
-
-        nextSqrtRatio = calculateNextSqrtRatio(
-          currentSqrtRatio,
-          liquidity,
-          token0SaleRate,
-          token1SaleRate,
-          timeElapsed,
-          this.key.config.fee,
-        );
-
-        const [virtualAmount, virtualIsToken1] =
-          currentSqrtRatio < nextSqrtRatio ? [amount1, true] : [amount0, false];
-
-        const quote = quoteFullRangePool(
-          virtualAmount,
-          virtualIsToken1,
-          fullRangePoolState,
-          nextSqrtRatio,
-        );
-
-        fullRangePoolState = quote.stateAfter;
-      } else if (amount0 > 0n || amount1 > 0n) {
-        const [virtualAmount, virtualIsToken1] =
-          amount0 !== 0n ? [amount0, false] : [amount1, true];
-
-        const quote = quoteFullRangePool(
-          virtualAmount,
-          virtualIsToken1,
-          fullRangePoolState,
-        );
-
-        fullRangePoolState = quote.stateAfter;
-        nextSqrtRatio = quote.stateAfter.sqrtRatio;
-      }
-
-      if (delta === null || lastDelta) {
-        break;
-      }
-
-      token0SaleRate += delta.delta0;
-      token1SaleRate += delta.delta1;
-      time = nextExecutionTime;
-      virtualOrderDeltaTimesCrossed++;
-    }
-
-    const finalQuote = quoteFullRangePool(amount, isToken1, fullRangePoolState);
-
-    return {
-      calculatedAmount: finalQuote.calculatedAmount,
-      consumedAmount: finalQuote.consumedAmount,
-      gasConsumed:
-        BASE_GAS_COST_OF_ONE_TWAMM_SWAP +
-        Number(currentTime > lastExecutionTime) *
-          GAS_COST_OF_EXECUTING_VIRTUAL_ORDERS +
-        virtualOrderDeltaTimesCrossed *
-          GAS_COST_OF_CROSSING_ONE_VIRTUAL_ORDER_DELTA +
-        approximateExtraDistinctTimeBitmapLookups(
-          lastExecutionTime,
-          currentTime,
-        ) *
-          GAS_COST_OF_ONE_COLD_SLOAD,
-      skipAhead: finalQuote.skipAhead,
-    };
+    return quoteTwamm(this.key, amount, isToken1, state);
   }
 
   protected _computeTvl(state: TwammPoolState.Object): [bigint, bigint] {
@@ -261,6 +141,138 @@ export class TwammPool extends EkuboPool<
   ): DeepReadonly<TwammPoolState.Object> | null {
     return TwammPoolState.fromSwappedEvent(oldState, ev);
   }
+}
+
+export function quoteTwamm(
+  key: PoolKey<StableswapPoolTypeConfig>,
+  amount: bigint,
+  isToken1: boolean,
+  state: DeepReadonly<TwammPoolState.Object>,
+  overrideTime?: bigint,
+): Quote {
+  const lastExecutionTime = state.timedPoolState.lastTime;
+  const currentTime = estimatedCurrentTime(lastExecutionTime, overrideTime);
+
+  const quoteFullRangePool = (
+    quoteAmount: bigint,
+    quoteIsToken1: boolean,
+    quoteState: DeepReadonly<FullRangePoolState.Object>,
+    quoteSqrtRatioLimit?: bigint,
+  ) =>
+    quoteFullRange(
+      key,
+      quoteAmount,
+      quoteIsToken1,
+      quoteState,
+      quoteSqrtRatioLimit,
+    );
+
+  const liquidity = state.fullRangePoolState.liquidity;
+  let nextSqrtRatio = state.fullRangePoolState.sqrtRatio;
+  let token0SaleRate = state.timedPoolState.token0Rate;
+  let token1SaleRate = state.timedPoolState.token1Rate;
+
+  let virtualOrderDeltaTimesCrossed = 0;
+
+  let fullRangePoolState = state.fullRangePoolState;
+
+  let time = lastExecutionTime;
+
+  for (const delta of [...state.timedPoolState.virtualDeltas, null]) {
+    let nextExecutionTime = currentTime;
+    let lastDelta = true;
+
+    if (delta !== null) {
+      if (delta.time <= lastExecutionTime) {
+        continue;
+      }
+
+      if (delta.time < currentTime) {
+        lastDelta = false;
+        nextExecutionTime = delta.time;
+      }
+    }
+
+    const timeElapsed = nextExecutionTime - time;
+    if (timeElapsed > MAX_U32) {
+      throw new Error('Too much time passed since last execution');
+    }
+
+    const [amount0, amount1] = [
+      (token0SaleRate * BigInt(timeElapsed)) >> 32n,
+      (token1SaleRate * BigInt(timeElapsed)) >> 32n,
+    ];
+
+    if (amount0 > 0n && amount1 > 0n) {
+      let currentSqrtRatio = nextSqrtRatio;
+      if (currentSqrtRatio > MAX_SQRT_RATIO) {
+        currentSqrtRatio = MAX_SQRT_RATIO;
+      } else if (currentSqrtRatio < MIN_SQRT_RATIO) {
+        currentSqrtRatio = MIN_SQRT_RATIO;
+      }
+
+      nextSqrtRatio = calculateNextSqrtRatio(
+        currentSqrtRatio,
+        liquidity,
+        token0SaleRate,
+        token1SaleRate,
+        timeElapsed,
+        key.config.fee,
+      );
+
+      const [virtualAmount, virtualIsToken1] =
+        currentSqrtRatio < nextSqrtRatio ? [amount1, true] : [amount0, false];
+
+      const quote = quoteFullRangePool(
+        virtualAmount,
+        virtualIsToken1,
+        fullRangePoolState,
+        nextSqrtRatio,
+      );
+
+      fullRangePoolState = quote.stateAfter;
+    } else if (amount0 > 0n || amount1 > 0n) {
+      const [virtualAmount, virtualIsToken1] =
+        amount0 !== 0n ? [amount0, false] : [amount1, true];
+
+      const quote = quoteFullRangePool(
+        virtualAmount,
+        virtualIsToken1,
+        fullRangePoolState,
+      );
+
+      fullRangePoolState = quote.stateAfter;
+      nextSqrtRatio = quote.stateAfter.sqrtRatio;
+    }
+
+    if (delta === null || lastDelta) {
+      break;
+    }
+
+    token0SaleRate += delta.delta0;
+    token1SaleRate += delta.delta1;
+    time = nextExecutionTime;
+    virtualOrderDeltaTimesCrossed++;
+  }
+
+  const finalQuote = quoteFullRangePool(amount, isToken1, fullRangePoolState);
+
+  return {
+    calculatedAmount: finalQuote.calculatedAmount,
+    consumedAmount: finalQuote.consumedAmount,
+    gasConsumed:
+      BASE_GAS_COST_OF_ONE_TWAMM_SWAP +
+      Number(currentTime > lastExecutionTime) *
+        GAS_COST_OF_EXECUTING_VIRTUAL_ORDERS +
+      virtualOrderDeltaTimesCrossed *
+        GAS_COST_OF_CROSSING_ONE_VIRTUAL_ORDER_DELTA +
+      approximateExtraDistinctTimeBitmapLookups(
+        lastExecutionTime,
+        currentTime,
+      ) *
+        GAS_COST_OF_ONE_COLD_SLOAD,
+    skipAhead: finalQuote.skipAhead,
+  };
 }
 
 interface VirtualOrdersExecutedEvent {

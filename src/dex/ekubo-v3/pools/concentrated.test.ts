@@ -1,8 +1,8 @@
 import { BigNumber } from 'ethers';
 import {
-  ConcentratedPool,
   ConcentratedPoolState,
   findNearestInitializedTickIndex,
+  quoteConcentrated,
   Tick,
 } from './concentrated';
 import { TWO_POW_128 } from './math/constants';
@@ -49,7 +49,7 @@ function poolState(
   };
 }
 
-describe(ConcentratedPool.prototype.quoteConcentrated, () => {
+describe(quoteConcentrated, () => {
   function quote(
     amount: bigint,
     isToken1: boolean,
@@ -57,14 +57,12 @@ describe(ConcentratedPool.prototype.quoteConcentrated, () => {
     fee: bigint,
     tickSpacing: number,
   ) {
-    return ConcentratedPool.prototype.quoteConcentrated.call(
-      {
-        key: new PoolKey(
-          0n,
-          1n,
-          new PoolConfig(0n, fee, new ConcentratedPoolTypeConfig(tickSpacing)),
-        ),
-      },
+    return quoteConcentrated(
+      new PoolKey(
+        0n,
+        1n,
+        new PoolConfig(0n, fee, new ConcentratedPoolTypeConfig(tickSpacing)),
+      ),
       amount,
       isToken1,
       state,

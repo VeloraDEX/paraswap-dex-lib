@@ -1,19 +1,22 @@
 import { DeepReadonly } from 'ts-essentials';
 import { ConcentratedPoolState } from './concentrated';
-import { Quote } from './pool';
 import { MAX_TICK, MIN_TICK, toSqrtRatio } from './math/tick';
-import { MevCapturePool } from './mev-capture';
+import { quoteMevCapture } from './mev-capture';
 import { ConcentratedPoolTypeConfig, PoolConfig, PoolKey } from './utils';
 
-describe(MevCapturePool.prototype.quoteMevCapture, () => {
+describe(quoteMevCapture, () => {
   function quoteFn(tickSpacing: number, fee: bigint) {
-    return MevCapturePool.prototype.quoteMevCapture.bind({
-      key: new PoolKey(
-        1n,
-        2n,
-        new PoolConfig(1n, fee, new ConcentratedPoolTypeConfig(tickSpacing)),
-      ),
-    });
+    const key = new PoolKey(
+      1n,
+      2n,
+      new PoolConfig(1n, fee, new ConcentratedPoolTypeConfig(tickSpacing)),
+    );
+    return (
+      amount: bigint,
+      isToken1: boolean,
+      state: DeepReadonly<ConcentratedPoolState.Object>,
+      sqrtRatioLimit?: bigint,
+    ) => quoteMevCapture(key, amount, isToken1, state, sqrtRatioLimit);
   }
 
   test('input amount token0', () => {

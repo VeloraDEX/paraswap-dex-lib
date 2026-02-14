@@ -1,27 +1,25 @@
 import { DeepReadonly } from 'ts-essentials';
 import { Quote } from './pool';
 import { MAX_SQRT_RATIO, MIN_SQRT_RATIO, toSqrtRatio } from './math/tick';
-import { TwammPool, TwammPoolState } from './twamm';
+import { quoteTwamm, TwammPoolState } from './twamm';
 import { PoolConfig, PoolKey, StableswapPoolTypeConfig } from './utils';
 import { TWO_POW_128 } from './math/constants';
 import { BigNumber } from 'ethers';
 import { fixedSqrtRatioToFloat } from './math/sqrt-ratio';
 
-describe(TwammPool.prototype.quoteTwamm, () => {
+describe(quoteTwamm, () => {
   function quote(
     amount: bigint,
     isToken1: boolean,
     state: DeepReadonly<TwammPoolState.Object>,
     timestamp: bigint,
   ): Quote {
-    return TwammPool.prototype.quoteTwamm.call(
-      {
-        key: new PoolKey(
-          1n,
-          2n,
-          new PoolConfig(3n, 0n, StableswapPoolTypeConfig.fullRangeConfig()),
-        ),
-      },
+    return quoteTwamm(
+      new PoolKey(
+        1n,
+        2n,
+        new PoolConfig(3n, 0n, StableswapPoolTypeConfig.fullRangeConfig()),
+      ),
       amount,
       isToken1,
       state,

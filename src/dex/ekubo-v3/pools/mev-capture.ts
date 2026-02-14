@@ -1,11 +1,15 @@
 import { Result } from '@ethersproject/abi';
 import { DeepReadonly } from 'ts-essentials';
-import { PoolKeyed, Quote } from './pool';
-import { ConcentratedPoolBase, ConcentratedPoolState } from './concentrated';
+import { Quote } from './pool';
+import {
+  ConcentratedPoolBase,
+  ConcentratedPoolState,
+  quoteConcentrated,
+} from './concentrated';
 import { approximateSqrtRatioToTick } from './math/tick';
 import { BI_MAX_UINT64 } from '../../../bigint-constants';
 import { amountBeforeFee, computeFee } from './math/swap';
-import { ConcentratedPoolTypeConfig, SwappedEvent } from './utils';
+import { ConcentratedPoolTypeConfig, PoolKey, SwappedEvent } from './utils';
 import { BigNumber } from 'ethers';
 import { hexDataSlice } from 'ethers/lib/utils';
 
@@ -32,63 +36,7 @@ export class MevCapturePool extends ConcentratedPoolBase<ConcentratedPoolState.O
     state: DeepReadonly<ConcentratedPoolState.Object>,
     sqrtRatioLimit?: bigint,
   ): Quote {
-    return this.quoteMevCapture(amount, isToken1, state, sqrtRatioLimit);
-  }
-
-  public quoteMevCapture(
-    this: PoolKeyed<ConcentratedPoolTypeConfig>,
-    amount: bigint,
-    isToken1: boolean,
-    state: DeepReadonly<ConcentratedPoolState.Object>,
-    sqrtRatioLimit?: bigint,
-  ): Quote<
-    Pick<
-      ConcentratedPoolState.Object,
-      'activeTickIndex' | 'sqrtRatio' | 'liquidity'
-    >
-  > {
-    const quote = ConcentratedPoolBase.prototype.quoteConcentrated.call(
-      this,
-      amount,
-      isToken1,
-      state,
-      sqrtRatioLimit,
-    );
-
-    const tickAfterSwap = approximateSqrtRatioToTick(
-      quote.stateAfter.sqrtRatio,
-    );
-    const poolConfig = this.key.config;
-    const approximateFeeMultiplier =
-      (Math.abs(tickAfterSwap - state.activeTick) + 1) /
-      poolConfig.poolTypeConfig.tickSpacing;
-
-    let fixedPointAdditionalFee = BigInt(
-      Math.round(approximateFeeMultiplier * Number(poolConfig.fee)),
-    );
-
-    if (fixedPointAdditionalFee > BI_MAX_UINT64) {
-      fixedPointAdditionalFee = BI_MAX_UINT64;
-    }
-
-    let calculatedAmount = quote.calculatedAmount;
-
-    if (amount >= 0n) {
-      // Exact input, remove the additional fee from the output
-      calculatedAmount -= computeFee(calculatedAmount, fixedPointAdditionalFee);
-    } else {
-      const inputAmountFee = computeFee(calculatedAmount, poolConfig.fee);
-      const inputAmount = calculatedAmount - inputAmountFee;
-
-      const bf = amountBeforeFee(inputAmount, fixedPointAdditionalFee);
-      const fee = bf - inputAmount;
-      calculatedAmount += fee;
-    }
-
-    quote.gasConsumed += EXTRA_BASE_GAS_COST_OF_ONE_MEV_CAPTURE_SWAP;
-    quote.calculatedAmount = calculatedAmount;
-
-    return quote;
+    return quoteMevCapture(this.key, amount, isToken1, state, sqrtRatioLimit);
   }
 
   protected override handlePositionUpdated(
@@ -117,4 +65,52 @@ export class MevCapturePool extends ConcentratedPoolBase<ConcentratedPoolState.O
   ): DeepReadonly<ConcentratedPoolState.Object> | null {
     return ConcentratedPoolState.fromSwappedEvent(oldState, ev);
   }
+}
+
+export function quoteMevCapture(
+  key: PoolKey<ConcentratedPoolTypeConfig>,
+  amount: bigint,
+  isToken1: boolean,
+  state: DeepReadonly<ConcentratedPoolState.Object>,
+  sqrtRatioLimit?: bigint,
+): Quote<
+  Pick<
+    ConcentratedPoolState.Object,
+    'activeTickIndex' | 'sqrtRatio' | 'liquidity'
+  >
+> {
+  const quote = quoteConcentrated(key, amount, isToken1, state, sqrtRatioLimit);
+
+  const tickAfterSwap = approximateSqrtRatioToTick(quote.stateAfter.sqrtRatio);
+  const poolConfig = key.config;
+  const approximateFeeMultiplier =
+    (Math.abs(tickAfterSwap - state.activeTick) + 1) /
+    poolConfig.poolTypeConfig.tickSpacing;
+
+  let fixedPointAdditionalFee = BigInt(
+    Math.round(approximateFeeMultiplier * Number(poolConfig.fee)),
+  );
+
+  if (fixedPointAdditionalFee > BI_MAX_UINT64) {
+    fixedPointAdditionalFee = BI_MAX_UINT64;
+  }
+
+  let calculatedAmount = quote.calculatedAmount;
+
+  if (amount >= 0n) {
+    // Exact input, remove the additional fee from the output
+    calculatedAmount -= computeFee(calculatedAmount, fixedPointAdditionalFee);
+  } else {
+    const inputAmountFee = computeFee(calculatedAmount, poolConfig.fee);
+    const inputAmount = calculatedAmount - inputAmountFee;
+
+    const bf = amountBeforeFee(inputAmount, fixedPointAdditionalFee);
+    const fee = bf - inputAmount;
+    calculatedAmount += fee;
+  }
+
+  quote.gasConsumed += EXTRA_BASE_GAS_COST_OF_ONE_MEV_CAPTURE_SWAP;
+  quote.calculatedAmount = calculatedAmount;
+
+  return quote;
 }

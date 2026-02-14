@@ -1,24 +1,22 @@
 import { DeepReadonly } from 'ts-essentials';
-import { OraclePool } from './oracle';
+import { quoteOracle } from './oracle';
 import { FullRangePoolState } from './full-range';
 import { PoolConfig, PoolKey, StableswapPoolTypeConfig } from './utils';
 import { Quote } from './pool';
 import { TWO_POW_128 } from './math/constants';
 
-describe(OraclePool.prototype.quoteOracle, () => {
+describe(quoteOracle, () => {
   function quote(
     amount: bigint,
     isToken1: boolean,
     state: DeepReadonly<FullRangePoolState.Object>,
   ): Quote {
-    return OraclePool.prototype.quoteOracle.call(
-      {
-        key: new PoolKey(
-          0n,
-          1n,
-          new PoolConfig(1n, 0n, StableswapPoolTypeConfig.fullRangeConfig()),
-        ),
-      },
+    return quoteOracle(
+      new PoolKey(
+        0n,
+        1n,
+        new PoolConfig(1n, 0n, StableswapPoolTypeConfig.fullRangeConfig()),
+      ),
       amount,
       isToken1,
       state,

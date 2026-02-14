@@ -19,13 +19,8 @@ export type Quote<StateAfter = undefined> = {
   skipAhead: number;
 } & (StateAfter extends undefined ? {} : { stateAfter: StateAfter });
 
-export interface PoolKeyed<C extends PoolTypeConfig> {
+export interface IEkuboPool<C extends PoolTypeConfig> extends EventSubscriber {
   key: PoolKey<C>;
-}
-
-export interface IEkuboPool<C extends PoolTypeConfig>
-  extends PoolKeyed<C>,
-    EventSubscriber {
   initializationBlockNumber(): number;
   quote(amount: bigint, token: bigint, blockNumber: number): Quote;
   updateState(blockNumber: number): Promise<void>;

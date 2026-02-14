@@ -3,7 +3,7 @@ import { Result } from '@ethersproject/abi';
 import { IDexHelper } from '../../../dex-helper/idex-helper';
 import { Logger } from '../../../types';
 import { EkuboContracts } from '../types';
-import { EkuboPool, PoolKeyed, Quote } from './pool';
+import { EkuboPool, Quote } from './pool';
 import { computeStep, isPriceIncreasing } from './math/swap';
 import {
   MAX_SQRT_RATIO,
@@ -55,88 +55,7 @@ export abstract class StableswapPoolBase<
     state: DeepReadonly<S>,
     sqrtRatioLimit?: bigint,
   ): Quote {
-    return this.quoteStableswap(amount, isToken1, state, sqrtRatioLimit);
-  }
-
-  public quoteStableswap(
-    this: PoolKeyed<StableswapPoolTypeConfig> & StableswapBounds,
-    amount: bigint,
-    isToken1: boolean,
-    state: DeepReadonly<S>,
-    sqrtRatioLimit?: bigint,
-  ): Quote<Pick<FullRangePoolState.Object, 'sqrtRatio' | 'liquidity'>> {
-    const isIncreasing = isPriceIncreasing(amount, isToken1);
-
-    let { sqrtRatio, liquidity } = state;
-
-    sqrtRatioLimit ??= isIncreasing ? MAX_SQRT_RATIO : MIN_SQRT_RATIO;
-
-    let calculatedAmount = 0n;
-    let amountRemaining = amount;
-    let movedOutOfBoundary = false;
-
-    while (amountRemaining !== 0n && sqrtRatio !== sqrtRatioLimit) {
-      let stepLiquidity = liquidity;
-      const inRange =
-        sqrtRatio <= this.upperPrice &&
-        sqrtRatio >= this.lowerPrice &&
-        !movedOutOfBoundary;
-
-      let nextTickSqrtRatio = null;
-      if (inRange) {
-        nextTickSqrtRatio = isIncreasing ? this.upperPrice : this.lowerPrice;
-      } else {
-        stepLiquidity = 0n;
-
-        if (!movedOutOfBoundary) {
-          if (sqrtRatio < this.lowerPrice) {
-            if (isIncreasing) {
-              nextTickSqrtRatio = this.lowerPrice;
-            }
-          } else if (!isIncreasing) {
-            nextTickSqrtRatio = this.upperPrice;
-          }
-        }
-      }
-
-      const stepSqrtRatioLimit =
-        nextTickSqrtRatio === null ||
-        nextTickSqrtRatio < sqrtRatioLimit !== isIncreasing
-          ? sqrtRatioLimit
-          : nextTickSqrtRatio;
-
-      const step = computeStep({
-        fee: this.key.config.fee,
-        sqrtRatio,
-        liquidity: stepLiquidity,
-        isToken1,
-        sqrtRatioLimit: stepSqrtRatioLimit,
-        amount: amountRemaining,
-      });
-
-      amountRemaining -= step.consumedAmount;
-      calculatedAmount += step.calculatedAmount;
-      sqrtRatio = step.sqrtRatioNext;
-
-      if (
-        sqrtRatio === nextTickSqrtRatio &&
-        ((sqrtRatio === this.upperPrice && isIncreasing) ||
-          (sqrtRatio === this.lowerPrice && !isIncreasing))
-      ) {
-        movedOutOfBoundary = true;
-      }
-    }
-
-    return {
-      consumedAmount: amount - amountRemaining,
-      calculatedAmount,
-      gasConsumed: GAS_COST_OF_ONE_STABLESWAP_SWAP,
-      skipAhead: 0,
-      stateAfter: {
-        sqrtRatio,
-        liquidity,
-      },
-    };
+    return quoteStableswap(this.key, amount, isToken1, state, sqrtRatioLimit);
   }
 
   protected _computeTvl(state: DeepReadonly<S>): [bigint, bigint] {
@@ -153,6 +72,90 @@ export abstract class StableswapPoolBase<
 
     return [amount0, amount1];
   }
+}
+
+export function quoteStableswap(
+  key: PoolKey<StableswapPoolTypeConfig>,
+  amount: bigint,
+  isToken1: boolean,
+  state: DeepReadonly<
+    Pick<FullRangePoolState.Object, 'sqrtRatio' | 'liquidity'>
+  >,
+  sqrtRatioLimit?: bigint,
+): Quote<Pick<FullRangePoolState.Object, 'sqrtRatio' | 'liquidity'>> {
+  const { lowerPrice, upperPrice } = computeStableswapBounds(
+    key.config.poolTypeConfig,
+  );
+  const isIncreasing = isPriceIncreasing(amount, isToken1);
+
+  let { sqrtRatio, liquidity } = state;
+
+  sqrtRatioLimit ??= isIncreasing ? MAX_SQRT_RATIO : MIN_SQRT_RATIO;
+
+  let calculatedAmount = 0n;
+  let amountRemaining = amount;
+  let movedOutOfBoundary = false;
+
+  while (amountRemaining !== 0n && sqrtRatio !== sqrtRatioLimit) {
+    let stepLiquidity = liquidity;
+    const inRange =
+      sqrtRatio <= upperPrice && sqrtRatio >= lowerPrice && !movedOutOfBoundary;
+
+    let nextTickSqrtRatio = null;
+    if (inRange) {
+      nextTickSqrtRatio = isIncreasing ? upperPrice : lowerPrice;
+    } else {
+      stepLiquidity = 0n;
+
+      if (!movedOutOfBoundary) {
+        if (sqrtRatio < lowerPrice) {
+          if (isIncreasing) {
+            nextTickSqrtRatio = lowerPrice;
+          }
+        } else if (!isIncreasing) {
+          nextTickSqrtRatio = upperPrice;
+        }
+      }
+    }
+
+    const stepSqrtRatioLimit =
+      nextTickSqrtRatio === null ||
+      nextTickSqrtRatio < sqrtRatioLimit !== isIncreasing
+        ? sqrtRatioLimit
+        : nextTickSqrtRatio;
+
+    const step = computeStep({
+      fee: key.config.fee,
+      sqrtRatio,
+      liquidity: stepLiquidity,
+      isToken1,
+      sqrtRatioLimit: stepSqrtRatioLimit,
+      amount: amountRemaining,
+    });
+
+    amountRemaining -= step.consumedAmount;
+    calculatedAmount += step.calculatedAmount;
+    sqrtRatio = step.sqrtRatioNext;
+
+    if (
+      sqrtRatio === nextTickSqrtRatio &&
+      ((sqrtRatio === upperPrice && isIncreasing) ||
+        (sqrtRatio === lowerPrice && !isIncreasing))
+    ) {
+      movedOutOfBoundary = true;
+    }
+  }
+
+  return {
+    consumedAmount: amount - amountRemaining,
+    calculatedAmount,
+    gasConsumed: GAS_COST_OF_ONE_STABLESWAP_SWAP,
+    skipAhead: 0,
+    stateAfter: {
+      sqrtRatio,
+      liquidity,
+    },
+  };
 }
 
 export class StableswapPool extends StableswapPoolBase<FullRangePoolState.Object> {

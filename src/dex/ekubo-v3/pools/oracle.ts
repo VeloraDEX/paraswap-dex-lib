@@ -1,8 +1,12 @@
 import { DeepReadonly } from 'ts-essentials';
 import { Result } from '@ethersproject/abi';
-import { FullRangePoolBase, FullRangePoolState } from './full-range';
-import { PoolKeyed, Quote } from './pool';
-import { StableswapPoolTypeConfig, SwappedEvent } from './utils';
+import {
+  FullRangePoolBase,
+  FullRangePoolState,
+  quoteFullRange,
+} from './full-range';
+import { Quote } from './pool';
+import { PoolKey, StableswapPoolTypeConfig, SwappedEvent } from './utils';
 
 // This assumes a snapshot is always inserted
 const GAS_COST_OF_ONE_ORACLE_SWAP = 23_828;
@@ -27,27 +31,7 @@ export class OraclePool extends FullRangePoolBase<FullRangePoolState.Object> {
     state: DeepReadonly<FullRangePoolState.Object>,
     sqrtRatioLimit?: bigint,
   ): Quote {
-    return this.quoteOracle(amount, isToken1, state, sqrtRatioLimit);
-  }
-
-  public quoteOracle(
-    this: PoolKeyed<StableswapPoolTypeConfig>,
-    amount: bigint,
-    isToken1: boolean,
-    state: DeepReadonly<FullRangePoolState.Object>,
-    sqrtRatioLimit?: bigint,
-  ): Quote {
-    const quote = FullRangePoolBase.prototype.quoteFullRange.call(
-      this,
-      amount,
-      isToken1,
-      state,
-      sqrtRatioLimit,
-    );
-
-    quote.gasConsumed = GAS_COST_OF_ONE_ORACLE_SWAP;
-
-    return quote;
+    return quoteOracle(this.key, amount, isToken1, state, sqrtRatioLimit);
   }
 
   protected override handlePositionUpdated(
@@ -66,4 +50,18 @@ export class OraclePool extends FullRangePoolBase<FullRangePoolState.Object> {
   ): DeepReadonly<FullRangePoolState.Object> | null {
     return FullRangePoolState.fromSwappedEvent(ev);
   }
+}
+
+export function quoteOracle(
+  key: PoolKey<StableswapPoolTypeConfig>,
+  amount: bigint,
+  isToken1: boolean,
+  state: DeepReadonly<FullRangePoolState.Object>,
+  sqrtRatioLimit?: bigint,
+): Quote {
+  const quote = quoteFullRange(key, amount, isToken1, state, sqrtRatioLimit);
+
+  quote.gasConsumed = GAS_COST_OF_ONE_ORACLE_SWAP;
+
+  return quote;
 }

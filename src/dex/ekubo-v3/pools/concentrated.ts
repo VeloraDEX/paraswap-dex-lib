@@ -11,7 +11,6 @@ import {
   AnonymousEventHandler,
   EkuboPool,
   NamedEventHandlers,
-  PoolKeyed,
   Quote,
 } from './pool';
 import { floatSqrtRatioToFixed } from './math/sqrt-ratio';
@@ -80,112 +79,115 @@ export abstract class ConcentratedPoolBase<
     state: DeepReadonly<S>,
     sqrtRatioLimit?: bigint,
   ): Quote {
-    return this.quoteConcentrated(amount, isToken1, state, sqrtRatioLimit);
-  }
-
-  public quoteConcentrated(
-    this: PoolKeyed<ConcentratedPoolTypeConfig>,
-    amount: bigint,
-    isToken1: boolean,
-    state: DeepReadonly<S>,
-    sqrtRatioLimit?: bigint,
-  ): Quote<
-    Pick<
-      ConcentratedPoolState.Object,
-      'activeTickIndex' | 'sqrtRatio' | 'liquidity'
-    >
-  > {
-    const isIncreasing = isPriceIncreasing(amount, isToken1);
-
-    let { sqrtRatio, liquidity, activeTickIndex, sortedTicks } = state;
-
-    sqrtRatioLimit ??= isIncreasing ? MAX_SQRT_RATIO : MIN_SQRT_RATIO;
-
-    let calculatedAmount = 0n;
-    let initializedTicksCrossed = 0;
-    let amountRemaining = amount;
-
-    const startingSqrtRatio = sqrtRatio;
-
-    while (amountRemaining !== 0n && sqrtRatio !== sqrtRatioLimit) {
-      const nextInitializedTick =
-        (isIncreasing
-          ? sortedTicks[activeTickIndex === null ? 0 : activeTickIndex + 1]
-          : activeTickIndex === null
-          ? null
-          : sortedTicks[activeTickIndex]) ?? null;
-
-      const nextInitializedTickSqrtRatio = nextInitializedTick
-        ? toSqrtRatio(nextInitializedTick.number)
-        : null;
-
-      const stepSqrtRatioLimit =
-        nextInitializedTickSqrtRatio === null
-          ? sqrtRatioLimit
-          : nextInitializedTickSqrtRatio < sqrtRatioLimit === isIncreasing
-          ? nextInitializedTickSqrtRatio
-          : sqrtRatioLimit;
-
-      const step = computeStep({
-        fee: this.key.config.fee,
-        sqrtRatio,
-        liquidity,
-        isToken1,
-        sqrtRatioLimit: stepSqrtRatioLimit,
-        amount: amountRemaining,
-      });
-
-      amountRemaining -= step.consumedAmount;
-      calculatedAmount += step.calculatedAmount;
-      sqrtRatio = step.sqrtRatioNext;
-
-      // Cross the tick if the price moved all the way to the next initialized tick price
-      if (nextInitializedTick && sqrtRatio === nextInitializedTickSqrtRatio) {
-        activeTickIndex = isIncreasing
-          ? activeTickIndex === null
-            ? 0
-            : activeTickIndex + 1
-          : activeTickIndex
-          ? activeTickIndex - 1
-          : null;
-        initializedTicksCrossed++;
-        liquidity += isIncreasing
-          ? nextInitializedTick.liquidityDelta
-          : -nextInitializedTick.liquidityDelta;
-      }
-    }
-
-    const extraDistinctBitmapLookups =
-      approximateExtraDistinctTickBitmapLookups(
-        startingSqrtRatio,
-        sqrtRatio,
-        this.key.config.poolTypeConfig.tickSpacing,
-      );
-
-    return {
-      consumedAmount: amount - amountRemaining,
-      calculatedAmount,
-      gasConsumed:
-        GAS_COST_OF_ONE_CL_SWAP +
-        initializedTicksCrossedGasCosts(initializedTicksCrossed) +
-        extraDistinctBitmapLookups *
-          (GAS_COST_OF_ONE_EXTRA_MATH_ROUND +
-            GAS_COST_OF_ONE_EXTRA_BITMAP_SLOAD),
-      skipAhead: suggestedSkipAhead(
-        initializedTicksCrossed,
-        extraDistinctBitmapLookups,
-      ),
-      stateAfter: {
-        sqrtRatio,
-        liquidity,
-        activeTickIndex,
-      },
-    };
+    return quoteConcentrated(this.key, amount, isToken1, state, sqrtRatioLimit);
   }
 
   protected override _computeTvl(state: DeepReadonly<S>): [bigint, bigint] {
     return ConcentratedPoolState.computeTvl(state);
   }
+}
+
+export function quoteConcentrated(
+  key: PoolKey<ConcentratedPoolTypeConfig>,
+  amount: bigint,
+  isToken1: boolean,
+  state: DeepReadonly<
+    Pick<
+      ConcentratedPoolState.Object,
+      'activeTickIndex' | 'sqrtRatio' | 'liquidity' | 'sortedTicks'
+    >
+  >,
+  sqrtRatioLimit?: bigint,
+): Quote<
+  Pick<
+    ConcentratedPoolState.Object,
+    'activeTickIndex' | 'sqrtRatio' | 'liquidity'
+  >
+> {
+  const isIncreasing = isPriceIncreasing(amount, isToken1);
+
+  let { sqrtRatio, liquidity, activeTickIndex, sortedTicks } = state;
+
+  sqrtRatioLimit ??= isIncreasing ? MAX_SQRT_RATIO : MIN_SQRT_RATIO;
+
+  let calculatedAmount = 0n;
+  let initializedTicksCrossed = 0;
+  let amountRemaining = amount;
+
+  const startingSqrtRatio = sqrtRatio;
+
+  while (amountRemaining !== 0n && sqrtRatio !== sqrtRatioLimit) {
+    const nextInitializedTick =
+      (isIncreasing
+        ? sortedTicks[activeTickIndex === null ? 0 : activeTickIndex + 1]
+        : activeTickIndex === null
+        ? null
+        : sortedTicks[activeTickIndex]) ?? null;
+
+    const nextInitializedTickSqrtRatio = nextInitializedTick
+      ? toSqrtRatio(nextInitializedTick.number)
+      : null;
+
+    const stepSqrtRatioLimit =
+      nextInitializedTickSqrtRatio === null
+        ? sqrtRatioLimit
+        : nextInitializedTickSqrtRatio < sqrtRatioLimit === isIncreasing
+        ? nextInitializedTickSqrtRatio
+        : sqrtRatioLimit;
+
+    const step = computeStep({
+      fee: key.config.fee,
+      sqrtRatio,
+      liquidity,
+      isToken1,
+      sqrtRatioLimit: stepSqrtRatioLimit,
+      amount: amountRemaining,
+    });
+
+    amountRemaining -= step.consumedAmount;
+    calculatedAmount += step.calculatedAmount;
+    sqrtRatio = step.sqrtRatioNext;
+
+    // Cross the tick if the price moved all the way to the next initialized tick price
+    if (nextInitializedTick && sqrtRatio === nextInitializedTickSqrtRatio) {
+      activeTickIndex = isIncreasing
+        ? activeTickIndex === null
+          ? 0
+          : activeTickIndex + 1
+        : activeTickIndex
+        ? activeTickIndex - 1
+        : null;
+      initializedTicksCrossed++;
+      liquidity += isIncreasing
+        ? nextInitializedTick.liquidityDelta
+        : -nextInitializedTick.liquidityDelta;
+    }
+  }
+
+  const extraDistinctBitmapLookups = approximateExtraDistinctTickBitmapLookups(
+    startingSqrtRatio,
+    sqrtRatio,
+    key.config.poolTypeConfig.tickSpacing,
+  );
+
+  return {
+    consumedAmount: amount - amountRemaining,
+    calculatedAmount,
+    gasConsumed:
+      GAS_COST_OF_ONE_CL_SWAP +
+      initializedTicksCrossedGasCosts(initializedTicksCrossed) +
+      extraDistinctBitmapLookups *
+        (GAS_COST_OF_ONE_EXTRA_MATH_ROUND + GAS_COST_OF_ONE_EXTRA_BITMAP_SLOAD),
+    skipAhead: suggestedSkipAhead(
+      initializedTicksCrossed,
+      extraDistinctBitmapLookups,
+    ),
+    stateAfter: {
+      sqrtRatio,
+      liquidity,
+      activeTickIndex,
+    },
+  };
 }
 
 export class ConcentratedPool extends ConcentratedPoolBase<ConcentratedPoolState.Object> {

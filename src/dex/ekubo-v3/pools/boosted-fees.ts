@@ -14,6 +14,7 @@ import {
   ConcentratedPoolBase,
   ConcentratedPoolState,
   GAS_COST_OF_ONE_EXTRA_BITMAP_SLOAD,
+  quoteConcentrated,
 } from './concentrated';
 import { NamedEventHandlers, Quote } from './pool';
 import { ConcentratedPoolTypeConfig, PoolKey, SwappedEvent } from './utils';
@@ -97,7 +98,7 @@ export class BoostedFeesPool extends ConcentratedPoolBase<BoostedFeesPoolState.O
     state: DeepReadonly<BoostedFeesPoolState.Object>,
     sqrtRatioLimit?: bigint,
   ): Quote {
-    return this.quoteBoostedFees(amount, isToken1, state, sqrtRatioLimit);
+    return quoteBoostedFees(this.key, amount, isToken1, state, sqrtRatioLimit);
   }
 
   protected override handlePositionUpdated(
@@ -126,102 +127,91 @@ export class BoostedFeesPool extends ConcentratedPoolBase<BoostedFeesPoolState.O
   ): DeepReadonly<BoostedFeesPoolState.Object> | null {
     return BoostedFeesPoolState.fromSwappedEvent(oldState, ev);
   }
+}
 
-  public quoteBoostedFees(
-    amount: bigint,
-    isToken1: boolean,
-    state: DeepReadonly<BoostedFeesPoolState.Object>,
-    sqrtRatioLimit?: bigint,
-    overrideTime?: bigint,
-  ): Quote<
-    Pick<
-      ConcentratedPoolState.Object,
-      'activeTickIndex' | 'sqrtRatio' | 'liquidity'
-    > & {
-      timedPoolState: TimedPoolState.Object;
-    }
-  > {
-    const lastDonateTime = state.timedPoolState.lastTime;
-    const currentTime = estimatedCurrentTime(lastDonateTime, overrideTime);
-
-    let donateRate0 = state.timedPoolState.token0Rate;
-    let donateRate1 = state.timedPoolState.token1Rate;
-    let feesAccumulated = false;
-    let virtualDonateDeltaTimesCrossed = 0;
-
-    const truncatedLastDonateTime = BigInt.asUintN(32, lastDonateTime);
-
-    const realLastDonateTime = realLastTime(
-      currentTime,
-      truncatedLastDonateTime,
-    );
-
-    let time = realLastDonateTime;
-
-    for (const delta of [...state.timedPoolState.virtualDeltas, null]) {
-      let nextDonateTime = currentTime;
-      let lastDelta = true;
-
-      if (delta !== null) {
-        if (delta.time <= realLastDonateTime) {
-          continue;
-        }
-
-        if (delta.time < currentTime) {
-          lastDelta = false;
-          nextDonateTime = delta.time;
-        }
-      }
-
-      const timeDiff = nextDonateTime - time;
-      feesAccumulated ||=
-        (donateRate0 * timeDiff) >> 32n !== 0n ||
-        (donateRate1 * timeDiff) >> 32n !== 0n;
-
-      if (delta === null || lastDelta) {
-        break;
-      }
-
-      donateRate0 += delta.delta0;
-      donateRate1 += delta.delta1;
-      time = delta.time;
-      virtualDonateDeltaTimesCrossed++;
-    }
-
-    const quote = ConcentratedPoolBase.prototype.quoteConcentrated.call(
-      this,
-      amount,
-      isToken1,
-      state,
-      sqrtRatioLimit,
-    );
-
-    quote.gasConsumed +=
-      EXTRA_BASE_GAS_COST_OF_ONE_BOOSTED_FEES_SWAP +
-      Number(currentTime !== realLastDonateTime) *
-        GAS_COST_OF_EXECUTING_VIRTUAL_DONATIONS +
-      Number(feesAccumulated) * GAS_COST_OF_BOOSTED_FEES_FEE_ACCUMULATION +
-      approximateExtraDistinctTimeBitmapLookups(
-        realLastDonateTime,
-        currentTime,
-      ) *
-        GAS_COST_OF_ONE_EXTRA_BITMAP_SLOAD +
-      virtualDonateDeltaTimesCrossed * GAS_COST_OF_ONE_VIRTUAL_DONATE_DELTA;
-
-    return {
-      ...quote,
-      stateAfter: {
-        ...quote.stateAfter,
-        timedPoolState: {
-          token0Rate: donateRate0,
-          token1Rate: donateRate1,
-          lastTime: currentTime,
-          virtualDeltas: state.timedPoolState
-            .virtualDeltas as TimedPoolState.TimeRateDelta[],
-        },
-      },
-    };
+export function quoteBoostedFees(
+  key: PoolKey<ConcentratedPoolTypeConfig>,
+  amount: bigint,
+  isToken1: boolean,
+  state: DeepReadonly<BoostedFeesPoolState.Object>,
+  sqrtRatioLimit?: bigint,
+  overrideTime?: bigint,
+): Quote<
+  Pick<
+    ConcentratedPoolState.Object,
+    'activeTickIndex' | 'sqrtRatio' | 'liquidity'
+  > & {
+    timedPoolState: TimedPoolState.Object;
   }
+> {
+  const lastDonateTime = state.timedPoolState.lastTime;
+  const currentTime = estimatedCurrentTime(lastDonateTime, overrideTime);
+
+  let donateRate0 = state.timedPoolState.token0Rate;
+  let donateRate1 = state.timedPoolState.token1Rate;
+  let feesAccumulated = false;
+  let virtualDonateDeltaTimesCrossed = 0;
+
+  const truncatedLastDonateTime = BigInt.asUintN(32, lastDonateTime);
+
+  const realLastDonateTime = realLastTime(currentTime, truncatedLastDonateTime);
+
+  let time = realLastDonateTime;
+
+  for (const delta of [...state.timedPoolState.virtualDeltas, null]) {
+    let nextDonateTime = currentTime;
+    let lastDelta = true;
+
+    if (delta !== null) {
+      if (delta.time <= realLastDonateTime) {
+        continue;
+      }
+
+      if (delta.time < currentTime) {
+        lastDelta = false;
+        nextDonateTime = delta.time;
+      }
+    }
+
+    const timeDiff = nextDonateTime - time;
+    feesAccumulated ||=
+      (donateRate0 * timeDiff) >> 32n !== 0n ||
+      (donateRate1 * timeDiff) >> 32n !== 0n;
+
+    if (delta === null || lastDelta) {
+      break;
+    }
+
+    donateRate0 += delta.delta0;
+    donateRate1 += delta.delta1;
+    time = delta.time;
+    virtualDonateDeltaTimesCrossed++;
+  }
+
+  const quote = quoteConcentrated(key, amount, isToken1, state, sqrtRatioLimit);
+
+  quote.gasConsumed +=
+    EXTRA_BASE_GAS_COST_OF_ONE_BOOSTED_FEES_SWAP +
+    Number(currentTime !== realLastDonateTime) *
+      GAS_COST_OF_EXECUTING_VIRTUAL_DONATIONS +
+    Number(feesAccumulated) * GAS_COST_OF_BOOSTED_FEES_FEE_ACCUMULATION +
+    approximateExtraDistinctTimeBitmapLookups(realLastDonateTime, currentTime) *
+      GAS_COST_OF_ONE_EXTRA_BITMAP_SLOAD +
+    virtualDonateDeltaTimesCrossed * GAS_COST_OF_ONE_VIRTUAL_DONATE_DELTA;
+
+  return {
+    ...quote,
+    stateAfter: {
+      ...quote.stateAfter,
+      timedPoolState: {
+        token0Rate: donateRate0,
+        token1Rate: donateRate1,
+        lastTime: currentTime,
+        virtualDeltas: state.timedPoolState
+          .virtualDeltas as TimedPoolState.TimeRateDelta[],
+      },
+    },
+  };
 }
 
 export namespace BoostedFeesPoolState {

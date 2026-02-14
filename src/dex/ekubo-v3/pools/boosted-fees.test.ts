@@ -1,5 +1,5 @@
 import { DeepReadonly } from 'ts-essentials';
-import { BoostedFeesPool, BoostedFeesPoolState } from './boosted-fees';
+import { BoostedFeesPoolState, quoteBoostedFees } from './boosted-fees';
 import { ConcentratedPoolState } from './concentrated';
 import { MAX_TICK, MIN_TICK, toSqrtRatio } from './math/tick';
 import { ConcentratedPoolTypeConfig, PoolConfig, PoolKey } from './utils';
@@ -211,21 +211,19 @@ describe('Boosted fees state compatibility', () => {
   });
 });
 
-describe(BoostedFeesPool.prototype.quoteBoostedFees, () => {
+describe(quoteBoostedFees, () => {
   function quote(
     amount: bigint,
     isToken1: boolean,
     quoteState: DeepReadonly<BoostedFeesPoolState.Object>,
     timestamp: bigint,
   ) {
-    return BoostedFeesPool.prototype.quoteBoostedFees.call(
-      {
-        key: new PoolKey(
-          0n,
-          1n,
-          new PoolConfig(0n, 0n, new ConcentratedPoolTypeConfig(1)),
-        ),
-      },
+    return quoteBoostedFees(
+      new PoolKey(
+        0n,
+        1n,
+        new PoolConfig(0n, 0n, new ConcentratedPoolTypeConfig(1)),
+      ),
       amount,
       isToken1,
       quoteState,
