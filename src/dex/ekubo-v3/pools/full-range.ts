@@ -1,4 +1,5 @@
 import { DeepReadonly, DeepWritable } from 'ts-essentials';
+import { Result } from '@ethersproject/abi';
 import { IDexHelper } from '../../../dex-helper/idex-helper';
 import { Logger } from '../../../types';
 import {
@@ -6,25 +7,19 @@ import {
   EkuboContracts,
   PoolInitializationState,
 } from '../types';
-import { EkuboPool, NamedEventHandlers, PoolKeyed, Quote } from './pool';
+import { EkuboPool, PoolKeyed, Quote } from './pool';
 import { floatSqrtRatioToFixed } from './math/sqrt-ratio';
 import { computeStep, isPriceIncreasing } from './math/swap';
 import { MAX_SQRT_RATIO, MIN_SQRT_RATIO } from './math/tick';
-import {
-  parseSwappedEvent,
-  PoolKey,
-  StableswapPoolTypeConfig,
-  SwappedEvent,
-} from './utils';
+import { PoolKey, StableswapPoolTypeConfig, SwappedEvent } from './utils';
 import { amount0Delta, amount1Delta } from './math/delta';
 
 const GAS_COST_OF_ONE_FULL_RANGE_SWAP = 14_774;
 
-export class FullRangePool extends EkuboPool<
-  StableswapPoolTypeConfig,
-  FullRangePoolState.Object
-> {
-  private readonly quoteDataFetcher;
+export abstract class FullRangePoolBase<
+  S extends FullRangePoolState.Object,
+> extends EkuboPool<StableswapPoolTypeConfig, S> {
+  protected readonly quoteDataFetcher;
 
   public constructor(
     parentName: string,
@@ -40,48 +35,15 @@ export class FullRangePool extends EkuboPool<
       quoteDataFetcher,
     } = contracts.core;
 
-    super(
-      parentName,
-      dexHelper,
-      logger,
-      initBlockNumber,
-      key,
-
-      {
-        [address]: new NamedEventHandlers(iface, {
-          PositionUpdated: (args, oldState) =>
-            FullRangePoolState.fromPositionUpdatedEvent(
-              oldState,
-              args.liquidityDelta.toBigInt(),
-            ),
-        }),
-      },
-      {
-        [address]: data =>
-          FullRangePoolState.fromSwappedEvent(parseSwappedEvent(data)),
-      },
-    );
+    super(parentName, dexHelper, logger, initBlockNumber, key, address, iface);
 
     this.quoteDataFetcher = quoteDataFetcher;
-  }
-
-  public async generateState(
-    blockNumber?: number | 'latest',
-  ): Promise<DeepReadonly<FullRangePoolState.Object>> {
-    const data = await this.quoteDataFetcher.getQuoteData(
-      [this.key.toAbi()],
-      0,
-      {
-        blockTag: blockNumber,
-      },
-    );
-    return FullRangePoolState.fromQuoter(data[0]);
   }
 
   protected override _quote(
     amount: bigint,
     isToken1: boolean,
-    state: DeepReadonly<FullRangePoolState.Object>,
+    state: DeepReadonly<S>,
     sqrtRatioLimit?: bigint,
   ): Quote {
     return this.quoteFullRange(amount, isToken1, state, sqrtRatioLimit);
@@ -91,9 +53,9 @@ export class FullRangePool extends EkuboPool<
     this: PoolKeyed<StableswapPoolTypeConfig>,
     amount: bigint,
     isToken1: boolean,
-    state: DeepReadonly<FullRangePoolState.Object>,
+    state: DeepReadonly<S>,
     sqrtRatioLimit?: bigint,
-  ): Quote<FullRangePoolState.Object> {
+  ): Quote<Pick<FullRangePoolState.Object, 'sqrtRatio' | 'liquidity'>> {
     const isIncreasing = isPriceIncreasing(amount, isToken1);
 
     let sqrtRatio = state.sqrtRatio;
@@ -122,8 +84,40 @@ export class FullRangePool extends EkuboPool<
     };
   }
 
-  protected _computeTvl(state: FullRangePoolState.Object): [bigint, bigint] {
+  protected _computeTvl(state: DeepReadonly<S>): [bigint, bigint] {
     return FullRangePoolState.computeTvl(state);
+  }
+}
+
+export class FullRangePool extends FullRangePoolBase<FullRangePoolState.Object> {
+  public override async generateState(
+    blockNumber?: number | 'latest',
+  ): Promise<DeepReadonly<FullRangePoolState.Object>> {
+    const data = await this.quoteDataFetcher.getQuoteData(
+      [this.key.toAbi()],
+      0,
+      {
+        blockTag: blockNumber,
+      },
+    );
+    return FullRangePoolState.fromQuoter(data[0]);
+  }
+
+  protected override handlePositionUpdated(
+    args: Result,
+    oldState: DeepReadonly<FullRangePoolState.Object>,
+  ): DeepReadonly<FullRangePoolState.Object> | null {
+    return FullRangePoolState.fromPositionUpdatedEvent(
+      oldState,
+      args.liquidityDelta.toBigInt(),
+    );
+  }
+
+  protected override handleSwappedEvent(
+    ev: SwappedEvent,
+    _oldState: DeepReadonly<FullRangePoolState.Object>,
+  ): DeepReadonly<FullRangePoolState.Object> | null {
+    return FullRangePoolState.fromSwappedEvent(ev);
   }
 }
 

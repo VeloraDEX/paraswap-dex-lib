@@ -1,4 +1,5 @@
 import { Logger } from 'log4js';
+import { Result } from '@ethersproject/abi';
 import { DeepReadonly, DeepWritable } from 'ts-essentials';
 import { IDexHelper } from '../../../dex-helper/idex-helper';
 import {
@@ -6,18 +7,13 @@ import {
   PoolInitializationState,
   TwammQuoteData,
 } from '../types';
-import { FullRangePool, FullRangePoolState } from './full-range';
+import { FullRangePoolBase, FullRangePoolState } from './full-range';
 import { EkuboPool, NamedEventHandlers, Quote } from './pool';
 import { MAX_U32 } from './math/constants';
 import { floatSqrtRatioToFixed } from './math/sqrt-ratio';
 import { MAX_SQRT_RATIO, MIN_SQRT_RATIO } from './math/tick';
 import { calculateNextSqrtRatio } from './math/twamm/sqrt-ratio';
-import {
-  parseSwappedEvent,
-  PoolKey,
-  StableswapPoolTypeConfig,
-  SwappedEvent,
-} from './utils';
+import { PoolKey, StableswapPoolTypeConfig, SwappedEvent } from './utils';
 import { hexDataSlice } from 'ethers/lib/utils';
 import {
   approximateExtraDistinctTimeBitmapLookups,
@@ -60,14 +56,9 @@ export class TwammPool extends EkuboPool<
       logger,
       initBlockNumber,
       key,
+      coreAddress,
+      coreIface,
       {
-        [coreAddress]: new NamedEventHandlers(coreIface, {
-          PositionUpdated: (args, oldState) =>
-            TwammPoolState.fromPositionUpdatedEvent(
-              oldState,
-              args.liquidityDelta.toBigInt(),
-            ),
-        }),
         [twammAddress]: new NamedEventHandlers(twammIface, {
           OrderUpdated: (args, oldState) => {
             const orderKey = args.orderKey;
@@ -97,8 +88,6 @@ export class TwammPool extends EkuboPool<
         }),
       },
       {
-        [coreAddress]: (data, oldState) =>
-          TwammPoolState.fromSwappedEvent(oldState, parseSwappedEvent(data)),
         [twammAddress]: (data, oldState, blockHeader) =>
           TwammPoolState.fromVirtualOrdersExecutedEvent(
             oldState,
@@ -142,7 +131,7 @@ export class TwammPool extends EkuboPool<
     const currentTime = estimatedCurrentTime(lastExecutionTime, overrideTime);
 
     const quoteFullRangePool =
-      FullRangePool.prototype.quoteFullRange.bind(this);
+      FullRangePoolBase.prototype.quoteFullRange.bind(this);
 
     const liquidity = state.fullRangePoolState.liquidity;
     let nextSqrtRatio = state.fullRangePoolState.sqrtRatio;
@@ -254,6 +243,23 @@ export class TwammPool extends EkuboPool<
 
   protected _computeTvl(state: TwammPoolState.Object): [bigint, bigint] {
     return FullRangePoolState.computeTvl(state.fullRangePoolState);
+  }
+
+  protected override handlePositionUpdated(
+    args: Result,
+    oldState: DeepReadonly<TwammPoolState.Object>,
+  ): DeepReadonly<TwammPoolState.Object> | null {
+    return TwammPoolState.fromPositionUpdatedEvent(
+      oldState,
+      args.liquidityDelta.toBigInt(),
+    );
+  }
+
+  protected override handleSwappedEvent(
+    ev: SwappedEvent,
+    oldState: DeepReadonly<TwammPoolState.Object>,
+  ): DeepReadonly<TwammPoolState.Object> | null {
+    return TwammPoolState.fromSwappedEvent(oldState, ev);
   }
 }
 

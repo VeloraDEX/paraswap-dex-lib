@@ -1,15 +1,31 @@
+import { Result } from '@ethersproject/abi';
 import { DeepReadonly } from 'ts-essentials';
 import { PoolKeyed, Quote } from './pool';
-import { ConcentratedPool, ConcentratedPoolState } from './concentrated';
+import { ConcentratedPoolBase, ConcentratedPoolState } from './concentrated';
 import { approximateSqrtRatioToTick } from './math/tick';
 import { BI_MAX_UINT64 } from '../../../bigint-constants';
 import { amountBeforeFee, computeFee } from './math/swap';
-import { ConcentratedPoolTypeConfig } from './utils';
+import { ConcentratedPoolTypeConfig, SwappedEvent } from './utils';
+import { BigNumber } from 'ethers';
+import { hexDataSlice } from 'ethers/lib/utils';
 
 // This assumes fees are always accumulated
 const EXTRA_BASE_GAS_COST_OF_ONE_MEV_CAPTURE_SWAP = 32_258;
 
-export class MevCapturePool extends ConcentratedPool {
+export class MevCapturePool extends ConcentratedPoolBase<ConcentratedPoolState.Object> {
+  public override async generateState(
+    blockNumber: number,
+  ): Promise<DeepReadonly<ConcentratedPoolState.Object>> {
+    const data = await this.quoteDataFetcher.getQuoteData(
+      [this.key.toAbi()],
+      10,
+      {
+        blockTag: blockNumber,
+      },
+    );
+    return ConcentratedPoolState.fromQuoter(data[0]);
+  }
+
   protected override _quote(
     amount: bigint,
     isToken1: boolean,
@@ -31,7 +47,7 @@ export class MevCapturePool extends ConcentratedPool {
       'activeTickIndex' | 'sqrtRatio' | 'liquidity'
     >
   > {
-    const quote = ConcentratedPool.prototype.quoteConcentrated.call(
+    const quote = ConcentratedPoolBase.prototype.quoteConcentrated.call(
       this,
       amount,
       isToken1,
@@ -73,5 +89,32 @@ export class MevCapturePool extends ConcentratedPool {
     quote.calculatedAmount = calculatedAmount;
 
     return quote;
+  }
+
+  protected override handlePositionUpdated(
+    args: Result,
+    oldState: DeepReadonly<ConcentratedPoolState.Object>,
+  ): DeepReadonly<ConcentratedPoolState.Object> | null {
+    const [lower, upper] = [
+      BigNumber.from(hexDataSlice(args.positionId, 24, 28))
+        .fromTwos(32)
+        .toNumber(),
+      BigNumber.from(hexDataSlice(args.positionId, 28, 32))
+        .fromTwos(32)
+        .toNumber(),
+    ];
+
+    return ConcentratedPoolState.fromPositionUpdatedEvent(
+      oldState,
+      [lower, upper],
+      args.liquidityDelta.toBigInt(),
+    );
+  }
+
+  protected override handleSwappedEvent(
+    ev: SwappedEvent,
+    oldState: DeepReadonly<ConcentratedPoolState.Object>,
+  ): DeepReadonly<ConcentratedPoolState.Object> | null {
+    return ConcentratedPoolState.fromSwappedEvent(oldState, ev);
   }
 }

@@ -4,7 +4,12 @@ import { DeepReadonly } from 'ts-essentials';
 import { IDexHelper } from '../../../dex-helper/idex-helper';
 import { StatefulEventSubscriber } from '../../../stateful-event-subscriber';
 import { BlockHeader, Log } from '../../../types';
-import { PoolKey, PoolTypeConfig } from './utils';
+import {
+  parseSwappedEvent,
+  PoolKey,
+  PoolTypeConfig,
+  SwappedEvent,
+} from './utils';
 import { EventSubscriber } from '../../../dex-helper';
 
 export type Quote<StateAfter = undefined> = {
@@ -66,22 +71,41 @@ export abstract class EkuboPool<C extends PoolTypeConfig, S>
     logger: Logger,
     private readonly initBlockNumber: number,
     public readonly key: PoolKey<C>,
-    private readonly namedEventHandlers: Record<string, NamedEventHandlers<S>>,
-    private readonly anonymousEventHandlers: Record<
-      string,
-      AnonymousEventHandler<S>
-    >,
+    coreAddress: string,
+    coreIface: Interface,
+    extraNamedEventHandlers: Record<string, NamedEventHandlers<S>> = {},
+    extraAnonymousEventHandlers: Record<string, AnonymousEventHandler<S>> = {},
   ) {
     super(parentName, key.stringId, dexHelper, logger);
 
+    this.namedEventHandlers = {
+      ...extraNamedEventHandlers,
+      [coreAddress]: new NamedEventHandlers(coreIface, {
+        PositionUpdated: (args, oldState) =>
+          this.handlePositionUpdated(args, oldState),
+      }),
+    };
+
+    this.anonymousEventHandlers = {
+      ...extraAnonymousEventHandlers,
+      [coreAddress]: (data, oldState) =>
+        this.handleSwappedEvent(parseSwappedEvent(data), oldState),
+    };
+
     this.addressesSubscribed = [
       ...new Set(
-        Object.keys(namedEventHandlers).concat(
-          Object.keys(anonymousEventHandlers),
+        Object.keys(this.namedEventHandlers).concat(
+          Object.keys(this.anonymousEventHandlers),
         ),
       ),
     ];
   }
+
+  private readonly namedEventHandlers: Record<string, NamedEventHandlers<S>>;
+  private readonly anonymousEventHandlers: Record<
+    string,
+    AnonymousEventHandler<S>
+  >;
 
   public initializationBlockNumber(): number {
     return this.initBlockNumber;
@@ -170,4 +194,14 @@ export abstract class EkuboPool<C extends PoolTypeConfig, S>
   ): Quote;
 
   protected abstract _computeTvl(state: DeepReadonly<S>): [bigint, bigint];
+
+  protected abstract handlePositionUpdated(
+    args: Result,
+    oldState: DeepReadonly<S>,
+  ): DeepReadonly<S> | null;
+
+  protected abstract handleSwappedEvent(
+    ev: SwappedEvent,
+    oldState: DeepReadonly<S>,
+  ): DeepReadonly<S> | null;
 }

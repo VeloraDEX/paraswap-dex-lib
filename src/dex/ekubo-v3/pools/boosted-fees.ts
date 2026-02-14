@@ -1,5 +1,7 @@
 import { hexDataSlice } from 'ethers/lib/utils';
 import { Logger } from 'log4js';
+import { Result } from '@ethersproject/abi';
+import { BigNumber } from 'ethers';
 import { DeepReadonly, DeepWritable } from 'ts-essentials';
 import { IDexHelper } from '../../../dex-helper/idex-helper';
 import {
@@ -52,10 +54,6 @@ export class BoostedFeesPool extends ConcentratedPoolBase<BoostedFeesPoolState.O
       initBlockNumber,
       key,
       {
-        fromPositionUpdatedEvent: BoostedFeesPoolState.fromPositionUpdatedEvent,
-        fromSwappedEvent: BoostedFeesPoolState.fromSwappedEvent,
-      },
-      {
         [boostedFeesAddress]: new NamedEventHandlers(boostedFeesIface, {
           PoolBoosted: (args, oldState) =>
             BoostedFeesPoolState.fromPoolBoostedEvent(
@@ -100,6 +98,33 @@ export class BoostedFeesPool extends ConcentratedPoolBase<BoostedFeesPoolState.O
     sqrtRatioLimit?: bigint,
   ): Quote {
     return this.quoteBoostedFees(amount, isToken1, state, sqrtRatioLimit);
+  }
+
+  protected override handlePositionUpdated(
+    args: Result,
+    oldState: DeepReadonly<BoostedFeesPoolState.Object>,
+  ): DeepReadonly<BoostedFeesPoolState.Object> | null {
+    const [lower, upper] = [
+      BigNumber.from(hexDataSlice(args.positionId, 24, 28))
+        .fromTwos(32)
+        .toNumber(),
+      BigNumber.from(hexDataSlice(args.positionId, 28, 32))
+        .fromTwos(32)
+        .toNumber(),
+    ];
+
+    return BoostedFeesPoolState.fromPositionUpdatedEvent(
+      oldState,
+      [lower, upper],
+      args.liquidityDelta.toBigInt(),
+    );
+  }
+
+  protected override handleSwappedEvent(
+    ev: SwappedEvent,
+    oldState: DeepReadonly<BoostedFeesPoolState.Object>,
+  ): DeepReadonly<BoostedFeesPoolState.Object> | null {
+    return BoostedFeesPoolState.fromSwappedEvent(oldState, ev);
   }
 
   public quoteBoostedFees(

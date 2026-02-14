@@ -1,4 +1,5 @@
 import { DeepReadonly, DeepWritable } from 'ts-essentials';
+import { Result } from '@ethersproject/abi';
 import { IDexHelper } from '../../../dex-helper/idex-helper';
 import { Logger } from '../../../types';
 import {
@@ -23,12 +24,7 @@ import {
   MIN_TICK,
   toSqrtRatio,
 } from './math/tick';
-import {
-  ConcentratedPoolTypeConfig,
-  parseSwappedEvent,
-  PoolKey,
-  SwappedEvent,
-} from './utils';
+import { ConcentratedPoolTypeConfig, PoolKey, SwappedEvent } from './utils';
 import { amount0Delta, amount1Delta } from './math/delta';
 import { hexDataSlice } from 'ethers/lib/utils';
 import { BigNumber } from 'ethers';
@@ -42,20 +38,6 @@ const GAS_COST_OF_ONE_EXTRA_MATH_ROUND = 4_076;
 const TICK_BITMAP_STORAGE_OFFSET = 89_421_695;
 const MAX_SKIP_AHEAD = 0x7fffffff;
 
-interface ConcentratedPoolCoreEventHandlers<
-  S extends ConcentratedPoolState.Object,
-> {
-  fromPositionUpdatedEvent(
-    oldState: DeepReadonly<S>,
-    ticks: [number, number],
-    liquidityDelta: bigint,
-  ): DeepReadonly<S> | null;
-  fromSwappedEvent(
-    oldState: DeepReadonly<S>,
-    ev: SwappedEvent,
-  ): DeepReadonly<S> | null;
-}
-
 export abstract class ConcentratedPoolBase<
   S extends ConcentratedPoolState.Object,
 > extends EkuboPool<ConcentratedPoolTypeConfig, S> {
@@ -68,7 +50,6 @@ export abstract class ConcentratedPoolBase<
     contracts: EkuboContracts,
     initBlockNumber: number,
     key: PoolKey<ConcentratedPoolTypeConfig>,
-    coreEventHandlers: ConcentratedPoolCoreEventHandlers<S>,
     extraNamedEventHandlers: Record<string, NamedEventHandlers<S>> = {},
     extraAnonymousEventHandlers: Record<string, AnonymousEventHandler<S>> = {},
   ) {
@@ -77,8 +58,6 @@ export abstract class ConcentratedPoolBase<
       interface: iface,
       quoteDataFetcher,
     } = contracts.core;
-    const positionUpdatedHandler = coreEventHandlers.fromPositionUpdatedEvent;
-    const swappedHandler = coreEventHandlers.fromSwappedEvent;
 
     super(
       parentName,
@@ -86,32 +65,10 @@ export abstract class ConcentratedPoolBase<
       logger,
       initBlockNumber,
       key,
-      {
-        [address]: new NamedEventHandlers(iface, {
-          PositionUpdated: (args, oldState) => {
-            const [lower, upper] = [
-              BigNumber.from(hexDataSlice(args.positionId, 24, 28))
-                .fromTwos(32)
-                .toNumber(),
-              BigNumber.from(hexDataSlice(args.positionId, 28, 32))
-                .fromTwos(32)
-                .toNumber(),
-            ];
-
-            return positionUpdatedHandler(
-              oldState,
-              [lower, upper],
-              args.liquidityDelta.toBigInt(),
-            );
-          },
-        }),
-        ...extraNamedEventHandlers,
-      },
-      {
-        [address]: (data, oldState) =>
-          swappedHandler(oldState, parseSwappedEvent(data)),
-        ...extraAnonymousEventHandlers,
-      },
+      address,
+      iface,
+      extraNamedEventHandlers,
+      extraAnonymousEventHandlers,
     );
 
     this.quoteDataFetcher = quoteDataFetcher;
@@ -232,39 +189,6 @@ export abstract class ConcentratedPoolBase<
 }
 
 export class ConcentratedPool extends ConcentratedPoolBase<ConcentratedPoolState.Object> {
-  public constructor(
-    parentName: string,
-    dexHelper: IDexHelper,
-    logger: Logger,
-    contracts: EkuboContracts,
-    initBlockNumber: number,
-    key: PoolKey<ConcentratedPoolTypeConfig>,
-    extraNamedEventHandlers: Record<
-      string,
-      NamedEventHandlers<ConcentratedPoolState.Object>
-    > = {},
-    extraAnonymousEventHandlers: Record<
-      string,
-      AnonymousEventHandler<ConcentratedPoolState.Object>
-    > = {},
-  ) {
-    super(
-      parentName,
-      dexHelper,
-      logger,
-      contracts,
-      initBlockNumber,
-      key,
-      {
-        fromPositionUpdatedEvent:
-          ConcentratedPoolState.fromPositionUpdatedEvent,
-        fromSwappedEvent: ConcentratedPoolState.fromSwappedEvent,
-      },
-      extraNamedEventHandlers,
-      extraAnonymousEventHandlers,
-    );
-  }
-
   public override async generateState(
     blockNumber: number,
   ): Promise<DeepReadonly<ConcentratedPoolState.Object>> {
@@ -276,6 +200,33 @@ export class ConcentratedPool extends ConcentratedPoolBase<ConcentratedPoolState
       },
     );
     return ConcentratedPoolState.fromQuoter(data[0]);
+  }
+
+  protected override handlePositionUpdated(
+    args: Result,
+    oldState: DeepReadonly<ConcentratedPoolState.Object>,
+  ): DeepReadonly<ConcentratedPoolState.Object> | null {
+    const [lower, upper] = [
+      BigNumber.from(hexDataSlice(args.positionId, 24, 28))
+        .fromTwos(32)
+        .toNumber(),
+      BigNumber.from(hexDataSlice(args.positionId, 28, 32))
+        .fromTwos(32)
+        .toNumber(),
+    ];
+
+    return ConcentratedPoolState.fromPositionUpdatedEvent(
+      oldState,
+      [lower, upper],
+      args.liquidityDelta.toBigInt(),
+    );
+  }
+
+  protected override handleSwappedEvent(
+    ev: SwappedEvent,
+    oldState: DeepReadonly<ConcentratedPoolState.Object>,
+  ): DeepReadonly<ConcentratedPoolState.Object> | null {
+    return ConcentratedPoolState.fromSwappedEvent(oldState, ev);
   }
 }
 
