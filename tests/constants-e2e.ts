@@ -648,6 +648,10 @@ export const Tokens: {
       address: '0x88887bE419578051FF9F4eb6C858A951921D8888',
       decimals: 18,
     },
+    yoGOLD: {
+      address: '0x586675A3a46B008d8408933cf42d8ff6c9CC61a1',
+      decimals: 6,
+    },
   },
   [Network.POLYGON]: {
     jGBP: {
@@ -1680,6 +1684,10 @@ export const Tokens: {
     },
     yoUSD: {
       address: '0x0000000f2eb9f69274678c76222b35eec7588a65',
+      decimals: 6,
+    },
+    yoEUR: {
+      address: '0x50c749ae210d3977adc824ae11f3c7fd10c871e9',
       decimals: 6,
     },
     wstETH: {

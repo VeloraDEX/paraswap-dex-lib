@@ -791,12 +791,23 @@ export class TenderlySimulator {
       account,
       tokenSlots.isVyper,
     );
-    // add the balance override
-    const address = tokenSlots.stateProxy ? tokenSlots.stateProxy : token;
-    stateOverride[address] ||= {};
-    stateOverride[address].storage ||= {};
-    stateOverride[address].storage[slotToOverride] =
-      ethers.utils.defaultAbiCoder.encode(['uint'], [amount]);
+    const overrideAddresses = tokenSlots.stateProxy
+      ? [tokenSlots.stateProxy, token]
+      : [token];
+
+    const seen = new Set<string>();
+    for (const address of overrideAddresses) {
+      const tokenAddress = address.toLowerCase();
+      if (seen.has(tokenAddress)) {
+        continue;
+      }
+
+      seen.add(tokenAddress);
+      stateOverride[address] ||= {};
+      stateOverride[address].storage ||= {};
+      stateOverride[address].storage[slotToOverride] =
+        ethers.utils.defaultAbiCoder.encode(['uint'], [amount]);
+    }
 
     if (tokenSlots.additionalOverrides) {
       merge(stateOverride, tokenSlots.additionalOverrides);
@@ -829,12 +840,23 @@ export class TenderlySimulator {
       spender,
       tokenSlots.isVyper,
     );
-    // add the allowance override
-    const address = tokenSlots.stateProxy ? tokenSlots.stateProxy : token;
-    stateOverride[address] ||= {};
-    stateOverride[address].storage ||= {};
-    stateOverride[address].storage[slotToOverride] =
-      ethers.utils.defaultAbiCoder.encode(['uint'], [amount]);
+    const overrideAddresses = tokenSlots.stateProxy
+      ? [tokenSlots.stateProxy, token]
+      : [token];
+
+    const seen = new Set<string>();
+    for (const address of overrideAddresses) {
+      const tokenAddress = address.toLowerCase();
+      if (seen.has(tokenAddress)) {
+        continue;
+      }
+
+      seen.add(tokenAddress);
+      stateOverride[address] ||= {};
+      stateOverride[address].storage ||= {};
+      stateOverride[address].storage[slotToOverride] =
+        ethers.utils.defaultAbiCoder.encode(['uint'], [amount]);
+    }
 
     if (tokenSlots.additionalOverrides) {
       merge(stateOverride, tokenSlots.additionalOverrides);
