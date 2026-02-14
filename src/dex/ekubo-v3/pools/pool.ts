@@ -45,8 +45,8 @@ export type AnonymousEventHandler<State> = (
 
 export class NamedEventHandlers<State> {
   public constructor(
-    private readonly iface: Interface,
-    private readonly handlers: Record<string, NamedEventHandler<State>>,
+    public readonly iface: Interface,
+    public readonly handlers: Record<string, NamedEventHandler<State>>,
   ) {}
 
   public parseLog(
@@ -78,9 +78,13 @@ export abstract class EkuboPool<C extends PoolTypeConfig, S>
   ) {
     super(parentName, key.stringId, dexHelper, logger);
 
+    const coreNamedHandlers =
+      extraNamedEventHandlers[coreAddress]?.handlers ?? {};
+
     this.namedEventHandlers = {
       ...extraNamedEventHandlers,
       [coreAddress]: new NamedEventHandlers(coreIface, {
+        ...coreNamedHandlers,
         PositionUpdated: (args, oldState) =>
           this.handlePositionUpdated(args, oldState),
       }),
