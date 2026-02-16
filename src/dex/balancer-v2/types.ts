@@ -226,7 +226,6 @@ export type ApiV3Pool = {
   dynamicData: {
     totalLiquidity: string;
   };
-  root3Alpha: string | null;
 };
 
 export type DexParams = {

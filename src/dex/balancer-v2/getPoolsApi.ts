@@ -6,7 +6,7 @@ import { poolGetMainTokens } from './utils';
 
 interface ApiV3Response {
   data: {
-    aggregatorPools: ApiV3Pool[];
+    poolGetPools: ApiV3Pool[];
   };
 }
 
@@ -80,7 +80,7 @@ function createQuery(
 
   return `
     query FetchPools {
-      aggregatorPools(
+      poolGetPools(
         first: ${maxPoolCount},
         where: {${whereString}},
         orderBy: totalLiquidity,
@@ -99,7 +99,6 @@ function createQuery(
         dynamicData {
           totalLiquidity
         }
-        root3Alpha
       }
     }
   `;
@@ -131,12 +130,12 @@ export async function getPoolsApi(
   );
 
   if (
-    !(response.data && response.data.data && response.data.data.aggregatorPools)
+    !(response.data && response.data.data && response.data.data.poolGetPools)
   ) {
     throw new Error('Unable to fetch pools from the API v3');
   }
 
-  const apiPools = response.data.data.aggregatorPools;
+  const apiPools = response.data.data.poolGetPools;
   const allPools: SubgraphPoolBase[] = apiPools.map((pool: ApiV3Pool) => ({
     id: pool.id,
     address: pool.address,
@@ -160,7 +159,7 @@ export async function getPoolsApi(
     wrappedIndex: 0,
     mainTokens: [],
     // Gyro params - set defaults as these are fetched separately if needed
-    root3Alpha: pool.root3Alpha ?? '',
+    root3Alpha: '',
     alpha: '',
     beta: '',
     c: '',
