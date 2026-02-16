@@ -1,0 +1,216 @@
+[
+  {
+    "type": "constructor",
+    "inputs": [
+      {
+        "name": "core",
+        "type": "address",
+        "internalType": "contract ICore"
+      },
+      {
+        "name": "_twamm",
+        "type": "address",
+        "internalType": "contract TWAMM"
+      }
+    ],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "TWAMM_EXTENSION",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "contract TWAMM"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "executeVirtualOrdersAndGetPoolState",
+    "inputs": [
+      {
+        "name": "poolKey",
+        "type": "tuple",
+        "internalType": "struct PoolKey",
+        "components": [
+          {
+            "name": "token0",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "token1",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "config",
+            "type": "bytes32",
+            "internalType": "PoolConfig"
+          }
+        ]
+      }
+    ],
+    "outputs": [
+      {
+        "name": "state",
+        "type": "tuple",
+        "internalType": "struct PoolState",
+        "components": [
+          {
+            "name": "sqrtRatio",
+            "type": "uint96",
+            "internalType": "SqrtRatio"
+          },
+          {
+            "name": "tick",
+            "type": "int32",
+            "internalType": "int32"
+          },
+          {
+            "name": "liquidity",
+            "type": "uint128",
+            "internalType": "uint128"
+          },
+          {
+            "name": "lastVirtualOrderExecutionTime",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "saleRateToken0",
+            "type": "uint112",
+            "internalType": "uint112"
+          },
+          {
+            "name": "saleRateToken1",
+            "type": "uint112",
+            "internalType": "uint112"
+          },
+          {
+            "name": "saleRateDeltas",
+            "type": "tuple[]",
+            "internalType": "struct TimeSaleRateInfo[]",
+            "components": [
+              {
+                "name": "time",
+                "type": "uint64",
+                "internalType": "uint64"
+              },
+              {
+                "name": "saleRateDelta0",
+                "type": "int112",
+                "internalType": "int112"
+              },
+              {
+                "name": "saleRateDelta1",
+                "type": "int112",
+                "internalType": "int112"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "getPoolState",
+    "inputs": [
+      {
+        "name": "poolKey",
+        "type": "tuple",
+        "internalType": "struct PoolKey",
+        "components": [
+          {
+            "name": "token0",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "token1",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "config",
+            "type": "bytes32",
+            "internalType": "PoolConfig"
+          }
+        ]
+      }
+    ],
+    "outputs": [
+      {
+        "name": "state",
+        "type": "tuple",
+        "internalType": "struct PoolState",
+        "components": [
+          {
+            "name": "sqrtRatio",
+            "type": "uint96",
+            "internalType": "SqrtRatio"
+          },
+          {
+            "name": "tick",
+            "type": "int32",
+            "internalType": "int32"
+          },
+          {
+            "name": "liquidity",
+            "type": "uint128",
+            "internalType": "uint128"
+          },
+          {
+            "name": "lastVirtualOrderExecutionTime",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "saleRateToken0",
+            "type": "uint112",
+            "internalType": "uint112"
+          },
+          {
+            "name": "saleRateToken1",
+            "type": "uint112",
+            "internalType": "uint112"
+          },
+          {
+            "name": "saleRateDeltas",
+            "type": "tuple[]",
+            "internalType": "struct TimeSaleRateInfo[]",
+            "components": [
+              {
+                "name": "time",
+                "type": "uint64",
+                "internalType": "uint64"
+              },
+              {
+                "name": "saleRateDelta0",
+                "type": "int112",
+                "internalType": "int112"
+              },
+              {
+                "name": "saleRateDelta1",
+                "type": "int112",
+                "internalType": "int112"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "error",
+    "name": "CoreOnly",
+    "inputs": []
+  }
+]

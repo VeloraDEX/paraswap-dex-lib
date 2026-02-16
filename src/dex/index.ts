@@ -86,6 +86,7 @@ import { WrappedMM } from './usual/wrapped-m-m';
 import { UsualPP } from './usual-pp/usual-pp';
 import { AlgebraIntegral } from './algebra-integral/algebra-integral';
 import { Ekubo } from './ekubo/ekubo';
+import { EkuboV3 } from './ekubo-v3/ekubo-v3';
 import { UniswapV4 } from './uniswap-v4/uniswap-v4';
 import { PancakeSwapV2 } from './uniswap-v2/pancake-swap-v2';
 import { uniswapV4Merge } from './uniswap-v4/optimizer';
@@ -178,6 +179,7 @@ const Dexes = [
   UsualMUsd0,
   UsualPP,
   Ekubo,
+  EkuboV3,
   MiroMigrator,
   AaveV3PtRollOver,
   RingV2,
