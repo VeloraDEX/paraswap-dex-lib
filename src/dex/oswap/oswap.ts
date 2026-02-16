@@ -491,7 +491,7 @@ export class OSwap extends SimpleExchange implements IDex<OSwapData> {
         ],
         liquidityUSD: usdAmounts[i * 2] + usdAmounts[i * 2 + 1],
       }))
-      .sort((a, b) => a.liquidityUSD - b.liquidityUSD)
+      .sort((a, b) => b.liquidityUSD - a.liquidityUSD)
       .slice(0, limit);
   }
 
