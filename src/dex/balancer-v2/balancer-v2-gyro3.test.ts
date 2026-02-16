@@ -32,7 +32,7 @@ describe('BalancerV2', () => {
     dexKey,
     network,
     config.vaultAddress,
-    config.subgraphURL,
+    config.apiNetworkName,
     dexHelper,
     logger,
   );
