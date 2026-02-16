@@ -65,4 +65,28 @@ export const ERC4626Config: DexConfigMap<ERC4626Params> = {
       decimals: 6,
     },
   },
+  wOETH: {
+    [Network.MAINNET]: {
+      vault: '0xdcee70654261af21c44c093c300ed3bb97b78192', // wOETH
+      asset: '0x856c4efb76c1d1ae02e20ceb03a2a6a08b0b8dc3', // OETH
+    },
+  },
+  wOUSD: {
+    [Network.MAINNET]: {
+      vault: '0xd2af830e8cbdfed6cc11bab697bb25496ed6fa62', // wOUSD
+      asset: '0x2a8e1e676ec238d8a992307b495b45b3feaa5e86', // OUSD
+    },
+  },
+  wOS: {
+    [Network.SONIC]: {
+      vault: '0x9f0df7799f6fdad409300080cff680f5a23df4b1', // wOS
+      asset: '0xb1e25689d55734fd3fffc939c4c3eb52dff8a794', // OS
+    },
+  },
+  wsuperOETHb: {
+    [Network.BASE]: {
+      vault: '0x7fcd174e80f264448ebee8c88a7c4476aaf58ea6', // wsuperOETHb
+      asset: '0xdbfefd2e8460a6ee4955a68582f85708baea60a3', // superOETHb
+    },
+  },
 };
