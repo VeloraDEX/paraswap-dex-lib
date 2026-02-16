@@ -76,6 +76,9 @@ export class BasePool extends EkuboPool<BasePoolState.Object> {
   public async generateState(
     blockNumber: number,
   ): Promise<DeepReadonly<BasePoolState.Object>> {
+    this.logger.info(
+      `Fetching BasePool quote data for pool ${this.key.stringId}`,
+    );
     const data = await this.dataFetcher.getQuoteData([this.key.toAbi()], 10, {
       blockTag: blockNumber,
     });
