@@ -26,8 +26,8 @@ function createQuery(
   // Build the where clause conditionally
   const whereClause = {
     tokensIn: `["${tokenAddress.toLowerCase()}"]`,
-    chainIn: `[${apiNetworkName}]`,
-    protocolVersionIn: '[2]',
+    chainIn: apiNetworkName,
+    protocolVersionIn: 2,
     minTvl: minLiquidity,
   };
 
@@ -62,32 +62,28 @@ export async function getTopPoolsApi(
   tokenAddress: string,
   count: number,
 ): Promise<TopPool[]> {
-  try {
-    const query = createQuery(
-      apiNetworkName,
-      tokenAddress,
-      count,
-      Number(MIN_USD_LIQUIDITY_TO_FETCH),
-    );
+  const query = createQuery(
+    apiNetworkName,
+    tokenAddress,
+    count,
+    Number(MIN_USD_LIQUIDITY_TO_FETCH),
+  );
 
-    const response = await axios.post<QueryResponse>(
-      BALANCER_API_URL,
-      { query },
-      {
-        headers: { 'Content-Type': 'application/json' },
-        timeout: 30000,
-      },
-    );
+  const response = await axios.post<QueryResponse>(
+    BALANCER_API_URL,
+    { query },
+    {
+      headers: { 'Content-Type': 'application/json' },
+      timeout: 30000,
+    },
+  );
 
-    const { data } = response.data;
+  const { data } = response.data;
 
-    if (!data || !data.poolGetPools) {
-      throw new Error(`Failed to fetch top pools from Balancer API`);
-    }
-
-    // Pools are already filtered by minTvl in the query
-    return data.poolGetPools;
-  } catch (error) {
-    throw error;
+  if (!data || !data.poolGetPools) {
+    throw new Error(`Failed to fetch top pools from Balancer API`);
   }
+
+  // Pools are already filtered by minTvl in the query
+  return data.poolGetPools;
 }

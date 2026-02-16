@@ -6,7 +6,7 @@ import { poolGetMainTokens } from './utils';
 
 interface ApiV3Response {
   data: {
-    poolGetPools: ApiV3Pool[];
+    aggregatorPools: ApiV3Pool[];
   };
 }
 
@@ -66,8 +66,8 @@ function createQuery(
 
   // Build the where clause conditionally
   const whereClause = {
-    chainIn: `[${apiNetworkName}]`,
-    protocolVersionIn: '[2]',
+    chainIn: apiNetworkName,
+    protocolVersionIn: 2,
     ...(poolTypesString && { poolTypeIn: `[${poolTypesString}]` }),
     ...(disabledPoolIdsString && { idNotIn: `[${disabledPoolIdsString}]` }),
     minTvl: Number(MIN_USD_LIQUIDITY_TO_FETCH),
@@ -80,7 +80,7 @@ function createQuery(
 
   return `
     query FetchPools {
-      poolGetPools(
+      aggregatorPools(
         first: ${maxPoolCount},
         where: {${whereString}},
         orderBy: totalLiquidity,
@@ -99,6 +99,7 @@ function createQuery(
         dynamicData {
           totalLiquidity
         }
+        root3Alpha
       }
     }
   `;
@@ -113,78 +114,74 @@ export async function getPoolsApi(
   ],
   disabledPoolIds: string[] = [],
 ): Promise<SubgraphPoolBase[]> {
-  try {
-    const query = createQuery(
-      apiNetworkName,
-      enabledPoolTypes,
-      disabledPoolIds,
-      maxPoolCount,
-    );
+  const query = createQuery(
+    apiNetworkName,
+    enabledPoolTypes,
+    disabledPoolIds,
+    maxPoolCount,
+  );
 
-    const response = await axios.post<ApiV3Response>(
-      BALANCER_API_URL,
-      { query },
-      {
-        headers: { 'Content-Type': 'application/json' },
-        timeout: 30000,
-      },
-    );
+  const response = await axios.post<ApiV3Response>(
+    BALANCER_API_URL,
+    { query },
+    {
+      headers: { 'Content-Type': 'application/json' },
+      timeout: 30000,
+    },
+  );
 
-    if (
-      !(response.data && response.data.data && response.data.data.poolGetPools)
-    ) {
-      throw new Error('Unable to fetch pools from the API v3');
-    }
-
-    const apiPools = response.data.data.poolGetPools;
-    const allPools: SubgraphPoolBase[] = apiPools.map((pool: ApiV3Pool) => ({
-      id: pool.id,
-      address: pool.address,
-      poolType: mapPoolType(pool.type),
-      poolTypeVersion: pool.version,
-      tokens: pool.poolTokens.map(token => ({
-        address: token.address,
-        decimals: token.decimals,
-      })),
-      tokensMap: pool.poolTokens.reduce(
-        (acc, token) => ({
-          ...acc,
-          [token.address.toLowerCase()]: {
-            address: token.address,
-            decimals: token.decimals,
-          },
-        }),
-        {},
-      ),
-      mainIndex: 0,
-      wrappedIndex: 0,
-      mainTokens: [],
-      // Gyro params - set defaults as these are fetched separately if needed
-      root3Alpha: '',
-      alpha: '',
-      beta: '',
-      c: '',
-      s: '',
-      lambda: '',
-      tauAlphaX: '',
-      tauAlphaY: '',
-      tauBetaX: '',
-      tauBetaY: '',
-      u: '',
-      v: '',
-      w: '',
-      z: '',
-      dSq: '',
-    }));
-
-    // Calculate mainTokens after all pools are mapped
-    const poolsMap = keyBy(allPools, 'address');
-    allPools.forEach(pool => {
-      pool.mainTokens = poolGetMainTokens(pool, poolsMap);
-    });
-
-    return allPools;
-  } catch (error) {
-    throw error;
+  if (
+    !(response.data && response.data.data && response.data.data.aggregatorPools)
+  ) {
+    throw new Error('Unable to fetch pools from the API v3');
   }
+
+  const apiPools = response.data.data.aggregatorPools;
+  const allPools: SubgraphPoolBase[] = apiPools.map((pool: ApiV3Pool) => ({
+    id: pool.id,
+    address: pool.address,
+    poolType: mapPoolType(pool.type),
+    poolTypeVersion: pool.version,
+    tokens: pool.poolTokens.map(token => ({
+      address: token.address,
+      decimals: token.decimals,
+    })),
+    tokensMap: pool.poolTokens.reduce(
+      (acc, token) => ({
+        ...acc,
+        [token.address.toLowerCase()]: {
+          address: token.address,
+          decimals: token.decimals,
+        },
+      }),
+      {},
+    ),
+    mainIndex: 0,
+    wrappedIndex: 0,
+    mainTokens: [],
+    // Gyro params - set defaults as these are fetched separately if needed
+    root3Alpha: pool.root3Alpha ?? '',
+    alpha: '',
+    beta: '',
+    c: '',
+    s: '',
+    lambda: '',
+    tauAlphaX: '',
+    tauAlphaY: '',
+    tauBetaX: '',
+    tauBetaY: '',
+    u: '',
+    v: '',
+    w: '',
+    z: '',
+    dSq: '',
+  }));
+
+  // Calculate mainTokens after all pools are mapped
+  const poolsMap = keyBy(allPools, 'address');
+  allPools.forEach(pool => {
+    pool.mainTokens = poolGetMainTokens(pool, poolsMap);
+  });
+
+  return allPools;
 }
