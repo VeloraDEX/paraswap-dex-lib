@@ -600,11 +600,11 @@ export class EkuboV3PoolManager implements EventSubscriber {
     await Promise.all(promises);
   }
 
-  public async getQuotePools(
+  public getQuotePools(
     tokenA: Token,
     tokenB: Token,
     limitPools: string[] | undefined,
-  ): Promise<Iterable<IEkuboPool<PoolTypeConfig>>> {
+  ): Iterable<IEkuboPool<PoolTypeConfig>> {
     const [token0, token1] = convertAndSortTokens(tokenA, tokenB);
 
     let unfilteredPools: IteratorObject<IEkuboPool<PoolTypeConfig>>;

@@ -104,7 +104,7 @@ export class EkuboV3 extends SimpleExchange implements IDex<EkuboData> {
     blockNumber: number,
     limitPools?: string[],
   ): Promise<null | ExchangePrices<EkuboData>> {
-    const pools = await this.poolManager.getQuotePools(
+    const pools = this.poolManager.getQuotePools(
       srcToken,
       destToken,
       limitPools,
