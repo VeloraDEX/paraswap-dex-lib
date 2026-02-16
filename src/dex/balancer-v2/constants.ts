@@ -19,4 +19,4 @@ export enum DirectMethodsV6 {
   directBuy = 'swapExactAmountOutOnBalancerV2',
 }
 
-export const apiUrl = 'https://api-v3.balancer.fi/';
+export const BALANCER_API_URL = 'https://api-v3.balancer.fi/';

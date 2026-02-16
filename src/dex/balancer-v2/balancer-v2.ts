@@ -72,13 +72,13 @@ import {
   poolGetPathForTokenInOut,
 } from './utils';
 import {
-  apiUrl,
   DirectMethods,
   DirectMethodsV6,
-  MIN_USD_LIQUIDITY_TO_FETCH,
   STABLE_GAS_COST,
   VARIABLE_GAS_COST_PER_CYCLE,
 } from './constants';
+import { getPoolsApi } from './getPoolsApi';
+import { getTopPoolsApi } from './getTopPoolsApi';
 import { NumberAsString, OptimalSwapExchange } from '@paraswap/core';
 import { hexConcat, hexlify, hexZeroPad, solidityPack } from 'ethers/lib/utils';
 import BalancerVaultABI from '../../abi/balancer-v2/vault.json';
@@ -276,57 +276,6 @@ const disabledPoolIds = [
   /* END:2023-08-mitigation */
 ];
 
-const fetchAllPools = `query ($count: Int) {
-  pools: pools(
-    first: $count
-    orderBy: totalLiquidity
-    orderDirection: desc
-    where: {
-      and: [
-        { 
-          or: [
-            { isInRecoveryMode: false }
-            { isInRecoveryMode: null }
-          ]
-        },
-        {
-          totalLiquidity_gt: ${MIN_USD_LIQUIDITY_TO_FETCH.toString()},
-          totalShares_not_in: ["0", "0.000000000001"],
-          id_not_in: [
-            ${disabledPoolIds.map(p => `"${p}"`).join(', ')}
-          ],
-          address_not_in: [
-            "0x0afbd58beca09545e4fb67772faf3858e610bcd0",
-            "0x2ff1a9dbdacd55297452cfd8a4d94724bc22a5f7",
-            "0xbc0f2372008005471874e426e86ccfae7b4de79d",
-            "0xdba274b4d04097b90a72b62467d828cefd708037",
-            "0xf22ff21e17157340575158ad7394e068048dd98b",
-            "0xf71d0774b214c4cf51e33eb3d30ef98132e4dbaa",
-          ],
-          swapEnabled: true,
-          poolType_in: [
-            ${enabledPoolTypes.map(p => `"${p}"`).join(', ')}
-          ]
-        }
-      ]
-    }
-  ) {
-    id
-    address
-    poolType
-    poolTypeVersion
-    tokens (orderBy: index) {
-      address
-      decimals
-    }
-    mainIndex
-    wrappedIndex
-
-    root3Alpha
-  }
-}`;
-// skipping low liquidity composableStablePool (0xbd482ffb3e6e50dc1c437557c3bea2b68f3683ee0000000000000000000003c6) with oracle issues. Experimental.
-
 const fetchWeightUpdating = `query ($count: Int, $timestampPast: Int, $timestampFuture: Int) {
   gradualWeightUpdates(
     first: $count,
@@ -403,7 +352,7 @@ export class BalancerV2EventPool extends StatefulEventSubscriber<PoolStateMap> {
     parentName: string,
     protected network: number,
     public vaultAddress: Address,
-    protected subgraphURL: string,
+    protected apiNetworkName: string,
     protected dexHelper: IDexHelper,
     logger: Logger,
     protected fallbackPools: FallbackPool[] = [],
@@ -498,8 +447,8 @@ export class BalancerV2EventPool extends StatefulEventSubscriber<PoolStateMap> {
     }
   }
 
-  async fetchAllSubgraphPools(): Promise<SubgraphPoolBase[]> {
-    const cacheKey = 'BalancerV2SubgraphPools2';
+  async fetchAllApiPools(): Promise<SubgraphPoolBase[]> {
+    const cacheKey = 'BalancerV2ApiPools';
     const cachedPools = await this.dexHelper.cache.get(
       this.parentName,
       this.network,
@@ -514,32 +463,15 @@ export class BalancerV2EventPool extends StatefulEventSubscriber<PoolStateMap> {
     }
 
     this.logger.info(
-      `Fetching ${this.parentName}_${this.network} Pools from subgraph`,
+      `Fetching ${this.parentName}_${this.network} Pools from API`,
     );
 
     try {
-      const variables = {
-        count: MAX_POOL_CNT,
-      };
-      const { data } = await this.dexHelper.httpRequest.querySubgraph(
-        this.subgraphURL,
-        { query: fetchAllPools, variables },
-        { timeout: SUBGRAPH_TIMEOUT },
-      );
-
-      if (!(data && data.pools))
-        throw new Error('Unable to fetch pools from the subgraph');
-
-      const poolsMap = keyBy(data.pools, 'address');
-      const allPools: SubgraphPoolBase[] = data.pools.map(
-        (pool: Omit<SubgraphPoolBase, 'mainTokens'>) => ({
-          ...pool,
-          mainTokens: poolGetMainTokens(pool, poolsMap),
-          tokensMap: pool.tokens.reduce(
-            (acc, token) => ({ ...acc, [token.address.toLowerCase()]: token }),
-            {},
-          ),
-        }),
+      const allPools = await getPoolsApi(
+        this.apiNetworkName,
+        MAX_POOL_CNT,
+        enabledPoolTypes,
+        disabledPoolIds,
       );
 
       this.dexHelper.cache.setex(
@@ -551,14 +483,14 @@ export class BalancerV2EventPool extends StatefulEventSubscriber<PoolStateMap> {
       );
 
       this.logger.info(
-        `Got ${allPools.length} ${this.parentName}_${this.network} pools from subgraph`,
+        `Got ${allPools.length} ${this.parentName}_${this.network} pools from API`,
       );
 
       return allPools;
     } catch (e) {
       if (this.fallbackPools.length > 0) {
         this.logger.warn(
-          `Subgraph unavailable for ${this.parentName}_${this.network}, using ${this.fallbackPools.length} fallback pools`,
+          `API unavailable for ${this.parentName}_${this.network}, using ${this.fallbackPools.length} fallback pools`,
         );
         return this.buildPoolsFromFallback();
       }
@@ -603,7 +535,7 @@ export class BalancerV2EventPool extends StatefulEventSubscriber<PoolStateMap> {
   }
 
   async generateState(blockNumber: number): Promise<Readonly<PoolStateMap>> {
-    const allPools = await this.fetchAllSubgraphPools();
+    const allPools = await this.fetchAllApiPools();
     this.allPools = allPools;
 
     const eventSupportedPools = allPools.filter(
@@ -822,6 +754,8 @@ export class BalancerV2
     public dexHelper: IDexHelper,
     public vaultAddress: Address = BalancerConfig[dexKey][network].vaultAddress,
     protected subgraphURL: string = BalancerConfig[dexKey][network].subgraphURL,
+    protected apiNetworkName: string = BalancerConfig[dexKey][network]
+      .apiNetworkName,
     protected adapters = Adapters[network],
     protected fallbackPools: FallbackPool[] = FallbackPoolsConfig[dexKey]?.[
       network
@@ -835,7 +769,7 @@ export class BalancerV2
       dexKey,
       network,
       vaultAddress,
-      subgraphURL,
+      apiNetworkName,
       dexHelper,
       this.logger,
       this.fallbackPools,
@@ -1800,7 +1734,7 @@ export class BalancerV2
   }
 
   async updatePoolState(): Promise<void> {
-    this.eventPools.allPools = await this.eventPools.fetchAllSubgraphPools();
+    this.eventPools.allPools = await this.eventPools.fetchAllApiPools();
   }
 
   async getTopPoolsForToken(
@@ -1817,55 +1751,15 @@ export class BalancerV2
       ),
     );
 
-    const query = `query MyQuery($tokenAddress: String!, $count: Int!) {
-      poolGetPools(
-        orderBy: totalLiquidity
-        orderDirection: desc
-        first: $count
-        where: {tokensIn: [$tokenAddress], protocolVersionIn: [2]}
-      ) {
-        id
-        poolTokens {
-          address
-        }
-        dynamicData {
-          totalLiquidity
-        }
-      }
-    }`;
-
-    const variables = {
-      tokenAddress: tokenAddress.toLowerCase(),
+    const topPools = await getTopPoolsApi(
+      this.apiNetworkName,
+      tokenAddress,
       count,
-    };
-
-    const { data } = await this.dexHelper.httpRequest.querySubgraph<{
-      data: {
-        poolGetPools: {
-          id: string;
-          poolTokens: { address: string }[];
-          dynamicData: {
-            totalLiquidity: string;
-          };
-        }[];
-      };
-    }>(
-      apiUrl,
-      {
-        query,
-        variables,
-      },
-      { timeout: SUBGRAPH_TIMEOUT },
     );
-
-    if (!(data && data.poolGetPools))
-      throw new Error(
-        `Error_${this.dexKey}_API: couldn't fetch the pools from Balancer API`,
-      );
 
     const results: PoolLiquidity[] = [];
 
-    for (const pool of data.poolGetPools) {
+    for (const pool of topPools) {
       const poolAddress = pool.id.slice(0, 42);
 
       const eventPool = poolsWithToken.find(p =>
@@ -1875,8 +1769,6 @@ export class BalancerV2
       if (!eventPool) continue;
 
       const liquidityUSD = parseFloat(pool.dynamicData.totalLiquidity);
-
-      if (liquidityUSD < MIN_USD_LIQUIDITY_TO_FETCH) continue;
 
       results.push({
         exchange: this.dexKey,
