@@ -7,36 +7,44 @@ export const BalancerConfig: DexConfigMap<DexParams> = {
     [Network.MAINNET]: {
       subgraphURL: 'C4ayEZP2yTXRAB8vSaTrgN4m9anTe9Mdm2ViyiAuV9TV',
       vaultAddress: '0xBA12222222228d8Ba445958a75a0704d566BF2C8',
+      apiNetworkName: 'MAINNET',
     },
     [Network.POLYGON]: {
       subgraphURL: 'H9oPAbXnobBRq1cB3HDmbZ1E8MWQyJYQjT1QDJMrdbNp',
       vaultAddress: '0xBA12222222228d8Ba445958a75a0704d566BF2C8',
+      apiNetworkName: 'POLYGON',
     },
     [Network.ARBITRUM]: {
       subgraphURL: '98cQDy6tufTJtshDCuhh9z2kWXsQWBHVh2bqnLHsGAeS',
       vaultAddress: '0xBA12222222228d8Ba445958a75a0704d566BF2C8',
+      apiNetworkName: 'ARBITRUM',
     },
     [Network.AVALANCHE]: {
       subgraphURL: '7asfmtQA1KYu6CP7YVm5kv4bGxVyfAHEiptt2HMFgkHu',
       vaultAddress: '0xBA12222222228d8Ba445958a75a0704d566BF2C8',
+      apiNetworkName: 'AVALANCHE',
     },
     [Network.BASE]: {
       subgraphURL: 'E7XyutxXVLrp8njmjF16Hh38PCJuHm12RRyMt5ma4ctX',
       vaultAddress: '0xBA12222222228d8Ba445958a75a0704d566BF2C8',
+      apiNetworkName: 'BASE',
     },
     [Network.GNOSIS]: {
       subgraphURL: 'EJezH1Cp31QkKPaBDerhVPRWsKVZLrDfzjrLqpmv6cGg',
       vaultAddress: '0xBA12222222228d8Ba445958a75a0704d566BF2C8',
+      apiNetworkName: 'GNOSIS',
     },
   },
   BeetsFi: {
     [Network.SONIC]: {
       subgraphURL: 'wwazpiPPt5oJMiTNnQ2VjVxKnKakGDuE2FfEZPD4TKj',
       vaultAddress: '0xBA12222222228d8Ba445958a75a0704d566BF2C8',
+      apiNetworkName: 'SONIC',
     },
     [Network.OPTIMISM]: {
       subgraphURL: 'F5jeL2nMXZt5LU6kSway7Vi2PTUcqDbw1gMQEbrmiVdJ',
       vaultAddress: '0xBA12222222228d8Ba445958a75a0704d566BF2C8',
+      apiNetworkName: 'OPTIMISM',
     },
   },
   // There is almost no liquidity: <12k$. Do not re-enable if protocol is not revived

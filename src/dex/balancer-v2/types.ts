@@ -208,9 +208,30 @@ export type FallbackPool = {
   wrappedIndex: number;
 };
 
+// API v3 response types
+export type ApiV3Token = {
+  address: string;
+  decimals: number;
+  symbol: string;
+  weight?: string | null;
+  priceRate?: string;
+};
+
+export type ApiV3Pool = {
+  id: string;
+  address: string;
+  type: string;
+  version: number;
+  poolTokens: ApiV3Token[];
+  dynamicData: {
+    totalLiquidity: string;
+  };
+};
+
 export type DexParams = {
   subgraphURL: string;
   vaultAddress: Address;
+  apiNetworkName: string;
 };
 
 export interface callData {
