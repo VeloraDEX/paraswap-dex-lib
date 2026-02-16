@@ -117,8 +117,14 @@ export class Fetcher<T> {
     });
 
     failures.forEach(i => {
+      const error = results[i];
+      const errorDetails =
+        error instanceof AggregateError
+          ? error.errors.map(e => String(e)).join('; ')
+          : String(error);
+
       this.logger.warn(
-        `failed polling ${this.requests[i].info.requestOptions.url} ${results[i]}`,
+        `failed polling ${this.requests[i].info.requestOptions.url} ${errorDetails}`,
       );
     });
 
