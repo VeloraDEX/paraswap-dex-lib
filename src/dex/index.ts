@@ -30,7 +30,6 @@ import { Thena } from './solidly/forks-override/thena';
 import { Velodrome } from './solidly/forks-override/velodrome';
 import { VelodromeV2 } from './solidly/forks-override/velodromeV2';
 import { SpiritSwapV2 } from './solidly/forks-override/spiritSwapV2';
-import { Synthetix } from './synthetix/synthetix';
 import { Equalizer } from './solidly/forks-override/equalizer';
 import { BalancerV1 } from './balancer-v1/balancer-v1';
 import { balancerV1Merge } from './balancer-v1/optimizer';
@@ -141,7 +140,6 @@ const Dexes = [
   Velodrome,
   VelodromeV2,
   Equalizer,
-  Synthetix,
   CurveV1Factory,
   CurveV1StableNg,
   WstETH,
