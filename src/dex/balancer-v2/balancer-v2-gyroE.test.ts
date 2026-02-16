@@ -45,7 +45,7 @@ describe('BalancerV2', () => {
       });
 
       it('should fetch GyroE Pool with correct fields from Subgraph', async function () {
-        const pools = await balancerPools.fetchAllSubgraphPools();
+        const pools = await balancerPools.fetchAllApiPools();
         // USDC/TUSD
         const GyroEPoolId =
           '0x97469e6236bd467cd147065f77752b00efadce8a0002000000000000000008c0';
@@ -216,7 +216,7 @@ describe('BalancerV2', () => {
         const tokenOut = tokens.TUSD.address;
         const amountIn = BigInt('1000000');
 
-        const pools = await balancerPools.fetchAllSubgraphPools();
+        const pools = await balancerPools.fetchAllApiPools();
         const poolSg = pools.filter(p => p.id === poolId)[0];
         const state = await balancerPools.getOnChainState(
           [poolSg],
@@ -252,7 +252,7 @@ describe('BalancerV2', () => {
         const tokenOut = tokens.TUSD.address;
         const amountOut = BigInt('2000000000000000000');
 
-        const pools = await balancerPools.fetchAllSubgraphPools();
+        const pools = await balancerPools.fetchAllApiPools();
         const poolSg = pools.filter(p => p.id === poolId)[0];
         const state = await balancerPools.getOnChainState(
           [poolSg],
@@ -285,7 +285,7 @@ describe('BalancerV2', () => {
   describe('GyroE Pool V2', () => {
     describe('Pool Fetching', () => {
       it('should fetch GyroE Pool with correct fields from Subgraph', async function () {
-        const pools = await balancerPools.fetchAllSubgraphPools();
+        const pools = await balancerPools.fetchAllApiPools();
         // wmatic/xmatic
         const GyroEPoolId =
           '0xee278d943584dd8640eaf4cc6c7a5c80c0073e85000200000000000000000bc7';
@@ -333,7 +333,7 @@ describe('BalancerV2', () => {
         const tokenOut = tokens.WMATIC.address;
         const amountIn = BigInt('110000000000000000');
 
-        const pools = await balancerPools.fetchAllSubgraphPools();
+        const pools = await balancerPools.fetchAllApiPools();
         const poolSg = pools.filter(p => p.id === poolId)[0];
         const state = await balancerPools.getOnChainState(
           [poolSg],
@@ -369,7 +369,7 @@ describe('BalancerV2', () => {
         const tokenOut = tokens.WMATIC.address;
         const amountOut = BigInt('2000000000000000000');
 
-        const pools = await balancerPools.fetchAllSubgraphPools();
+        const pools = await balancerPools.fetchAllApiPools();
         const poolSg = pools.filter(p => p.id === poolId)[0];
         const state = await balancerPools.getOnChainState(
           [poolSg],

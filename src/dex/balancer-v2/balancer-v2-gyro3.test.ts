@@ -47,7 +47,7 @@ describe('BalancerV2', () => {
       });
 
       it('should fetch Gyro3 Pool with correct fields from Subgraph', async function () {
-        const pools = await balancerPools.fetchAllSubgraphPools();
+        const pools = await balancerPools.fetchAllApiPools();
         // USDC/BUSD/USDT
         const Gyro3PoolId =
           '0x17f1ef81707811ea15d9ee7c741179bbe2a63887000100000000000000000799';
@@ -195,7 +195,7 @@ describe('BalancerV2', () => {
         const tokenOut = tokens.BUSD.address;
         const amountIn = BigInt('1000400');
 
-        const pools = await balancerPools.fetchAllSubgraphPools();
+        const pools = await balancerPools.fetchAllApiPools();
         const poolSg = pools.filter(p => p.id === poolId)[0];
         const state = await balancerPools.getOnChainState(
           [poolSg],
@@ -233,7 +233,7 @@ describe('BalancerV2', () => {
 
         const amountOut = BigInt('11000000');
 
-        const pools = await balancerPools.fetchAllSubgraphPools();
+        const pools = await balancerPools.fetchAllApiPools();
         const poolSg = pools.filter(p => p.id === poolId)[0];
         const state = await balancerPools.getOnChainState(
           [poolSg],
