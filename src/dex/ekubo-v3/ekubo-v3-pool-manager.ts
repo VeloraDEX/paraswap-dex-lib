@@ -365,12 +365,12 @@ export class EkuboV3PoolManager implements EventSubscriber {
       });
     } catch (err) {
       this.logger.error('Subgraph pool key retrieval failed:', err);
-    } finally {
-      return {
-        poolKeys,
-        subscribedBlockNumber,
-      };
     }
+
+    return {
+      poolKeys,
+      subscribedBlockNumber,
+    };
   }
 
   public async updatePools(
