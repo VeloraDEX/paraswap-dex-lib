@@ -1,6 +1,11 @@
 import { bigintMax } from '../utils';
+import { Network } from '../../../constants';
+import { EkuboSupportedNetwork } from '../config';
 
-const SLOT_DURATION_SECS = 12n;
+const SLOT_DURATION_SECS_BY_CHAIN_ID: Record<EkuboSupportedNetwork, bigint> = {
+  [Network.MAINNET]: 12n,
+  [Network.ARBITRUM]: 1n,
+};
 
 export type RateDeltaBoundary = readonly [
   time: bigint,
@@ -109,10 +114,13 @@ export namespace TimedPoolState {
   }
 }
 
-export function estimatedCurrentTime(last: bigint): bigint {
+export function estimatedCurrentTime(
+  last: bigint,
+  chainId: EkuboSupportedNetwork,
+): bigint {
   return bigintMax(
     BigInt(Math.floor(Date.now() / 1000)),
-    last + SLOT_DURATION_SECS,
+    last + SLOT_DURATION_SECS_BY_CHAIN_ID[chainId],
   );
 }
 

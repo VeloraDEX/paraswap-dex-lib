@@ -24,6 +24,8 @@ import {
   realLastTime,
   TimedPoolState,
 } from './timed';
+import { EkuboSupportedNetwork } from '../config';
+import { Network } from '../../../constants';
 
 const EXTRA_BASE_GAS_COST_OF_ONE_BOOSTED_FEES_SWAP = 2_743;
 const GAS_COST_OF_EXECUTING_VIRTUAL_DONATIONS = 6_814;
@@ -32,6 +34,7 @@ const GAS_COST_OF_BOOSTED_FEES_FEE_ACCUMULATION = 19_279;
 
 export class BoostedFeesPool extends ConcentratedPoolBase<BoostedFeesPoolState.Object> {
   private readonly boostedFeesDataFetcher;
+  private readonly chainId: EkuboSupportedNetwork;
 
   public constructor(
     parentName: string,
@@ -75,6 +78,7 @@ export class BoostedFeesPool extends ConcentratedPoolBase<BoostedFeesPoolState.O
     );
 
     this.boostedFeesDataFetcher = boostedFeesDataFetcher;
+    this.chainId = dexHelper.config.data.network;
   }
 
   public override async generateState(
@@ -98,7 +102,15 @@ export class BoostedFeesPool extends ConcentratedPoolBase<BoostedFeesPoolState.O
     state: DeepReadonly<BoostedFeesPoolState.Object>,
     sqrtRatioLimit?: bigint,
   ): Quote {
-    return quoteBoostedFees(this.key, amount, isToken1, state, sqrtRatioLimit);
+    return quoteBoostedFees(
+      this.key,
+      amount,
+      isToken1,
+      state,
+      sqrtRatioLimit,
+      undefined,
+      this.chainId,
+    );
   }
 
   protected override handlePositionUpdated(
@@ -136,6 +148,7 @@ export function quoteBoostedFees(
   state: DeepReadonly<BoostedFeesPoolState.Object>,
   sqrtRatioLimit?: bigint,
   overrideTime?: bigint,
+  chainId: EkuboSupportedNetwork = Network.MAINNET,
 ): Quote<
   Pick<
     ConcentratedPoolState.Object,
@@ -145,7 +158,8 @@ export function quoteBoostedFees(
   }
 > {
   const lastDonateTime = state.timedPoolState.lastTime;
-  const currentTime = overrideTime ?? estimatedCurrentTime(lastDonateTime);
+  const currentTime =
+    overrideTime ?? estimatedCurrentTime(lastDonateTime, chainId);
 
   let donateRate0 = state.timedPoolState.token0Rate;
   let donateRate1 = state.timedPoolState.token1Rate;

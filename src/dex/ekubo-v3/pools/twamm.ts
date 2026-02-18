@@ -20,6 +20,8 @@ import {
   estimatedCurrentTime,
   TimedPoolState,
 } from './timed';
+import { Network } from '../../../constants';
+import { EkuboSupportedNetwork } from '../config';
 
 const GAS_COST_OF_ONE_COLD_SLOAD = 2_000;
 const BASE_GAS_COST_OF_ONE_TWAMM_SWAP = 21_222;
@@ -31,6 +33,7 @@ export class TwammPool extends EkuboPool<
   TwammPoolState.Object
 > {
   private readonly twammDataFetcher;
+  private readonly chainId: EkuboSupportedNetwork;
 
   public constructor(
     parentName: string,
@@ -98,6 +101,7 @@ export class TwammPool extends EkuboPool<
     );
 
     this.twammDataFetcher = twammDataFetcher;
+    this.chainId = dexHelper.config.data.network;
   }
 
   public async generateState(
@@ -118,7 +122,14 @@ export class TwammPool extends EkuboPool<
     isToken1: boolean,
     state: DeepReadonly<TwammPoolState.Object>,
   ): Quote {
-    return quoteTwamm(this.key, amount, isToken1, state);
+    return quoteTwamm(
+      this.key,
+      amount,
+      isToken1,
+      state,
+      undefined,
+      this.chainId,
+    );
   }
 
   protected _computeTvl(state: TwammPoolState.Object): [bigint, bigint] {
@@ -149,9 +160,11 @@ export function quoteTwamm(
   isToken1: boolean,
   state: DeepReadonly<TwammPoolState.Object>,
   overrideTime?: bigint,
+  chainId: EkuboSupportedNetwork = Network.MAINNET,
 ): Quote {
   const lastExecutionTime = state.timedPoolState.lastTime;
-  const currentTime = overrideTime ?? estimatedCurrentTime(lastExecutionTime);
+  const currentTime =
+    overrideTime ?? estimatedCurrentTime(lastExecutionTime, chainId);
 
   const quoteFullRangePool = (
     quoteAmount: bigint,
