@@ -353,11 +353,7 @@ export class EkuboV3PoolManager implements EventSubscriber {
 
       poolInitializations.push(...page);
 
-      if (rawPage.length < SUBGRAPH_PAGE_SIZE) {
-        break;
-      }
-
-      const lastElem = rawPage.at(-1);
+      const lastElem = rawPage.at(SUBGRAPH_PAGE_SIZE - 1);
       if (typeof lastElem === 'undefined') {
         break;
       }
