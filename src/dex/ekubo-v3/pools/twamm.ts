@@ -151,7 +151,7 @@ export function quoteTwamm(
   overrideTime?: bigint,
 ): Quote {
   const lastExecutionTime = state.timedPoolState.lastTime;
-  const currentTime = estimatedCurrentTime(lastExecutionTime, overrideTime);
+  const currentTime = overrideTime ?? estimatedCurrentTime(lastExecutionTime);
 
   const quoteFullRangePool = (
     quoteAmount: bigint,

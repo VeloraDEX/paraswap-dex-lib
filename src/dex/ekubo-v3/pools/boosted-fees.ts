@@ -145,7 +145,7 @@ export function quoteBoostedFees(
   }
 > {
   const lastDonateTime = state.timedPoolState.lastTime;
-  const currentTime = estimatedCurrentTime(lastDonateTime, overrideTime);
+  const currentTime = overrideTime ?? estimatedCurrentTime(lastDonateTime);
 
   let donateRate0 = state.timedPoolState.token0Rate;
   let donateRate1 = state.timedPoolState.token1Rate;

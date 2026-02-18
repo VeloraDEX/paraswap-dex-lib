@@ -109,13 +109,10 @@ export namespace TimedPoolState {
   }
 }
 
-export function estimatedCurrentTime(
-  last: bigint,
-  override: bigint | undefined,
-): bigint {
+export function estimatedCurrentTime(last: bigint): bigint {
   return bigintMax(
-    override ?? BigInt(Math.floor(Date.now() / 1000)) + SLOT_DURATION_SECS,
-    last,
+    BigInt(Math.floor(Date.now() / 1000)),
+    last + SLOT_DURATION_SECS,
   );
 }
 
