@@ -12,7 +12,7 @@ export interface EventSubscriber {
   //implementers must not present states older than the latest/requested block
   //number to any query.
   //If isTracking() returns true, it is assumed that all logs up to the latest
-  //block have been processed, hence it is fine to return the last calculated
+  //block has been processed, hence it is fine to return the last calculated
   //state.
   isTracking: () => boolean;
 
@@ -32,7 +32,7 @@ export interface EventSubscriber {
     blockNumberForMissingStateRegen?: number,
   ): AsyncOrSync<void>;
 
-  //Will be called on a chain reorganisation prior to updating with new logs.
+  //Will be called on a chain reorganization prior to updating with new logs.
   //All state corresponding to blocks after the given number must be discarded,
   //except for the most recent state, if the invalid flag isn't still set.
   rollback(blockNumber: number): void;
