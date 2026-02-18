@@ -13,7 +13,7 @@ import { BlockHeader } from 'web3-eth';
 import { BN_0, BN_600, BN_POWS } from '../../../bignumber-constants';
 import { IDexHelper } from '../../../dex-helper';
 import { erc20Iface } from '../../../lib/tokens/utils';
-import { bigNumberify, stringify } from '../../../utils';
+import { bigNumberify, stringify, catchParseLogError } from '../../../utils';
 import { getManyPoolStates } from './getstate-multicall';
 
 export interface MetapoolState {
@@ -190,7 +190,7 @@ export abstract class CurveMetapool extends StatefulEventSubscriber<MetapoolStat
       }
       return _state;
     } catch (e) {
-      this.logger.error(`Error: unexpected error handling log:`, e);
+      catchParseLogError(e, this.logger);
     }
     return state;
   }
