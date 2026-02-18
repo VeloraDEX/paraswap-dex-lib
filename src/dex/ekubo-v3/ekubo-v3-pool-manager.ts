@@ -19,7 +19,6 @@ import { floatSqrtRatioToFixed } from './pools/math/sqrt-ratio';
 import { hexDataSlice, hexlify, hexValue, hexZeroPad } from 'ethers/lib/utils';
 import {
   BOOSTED_FEES_CONCENTRATED_ADDRESS,
-  CORE_ADDRESS,
   MEV_CAPTURE_ADDRESS,
   ORACLE_ADDRESS,
   TWAMM_ADDRESS,
@@ -33,7 +32,14 @@ import { TwammPool, TwammPoolState } from './pools/twamm';
 import { BoostedFeesPool, BoostedFeesPoolState } from './pools/boosted-fees';
 import { ExtensionType, extensionType } from './extension-type';
 
-const SUBGRAPH_QUERY = `query ($coreAddress: Bytes!, $extensions: [Bytes!]) {
+const SUBGRAPH_PAGE_SIZE = 1000;
+const SUBGRAPH_EXTENSIONS = [
+  ORACLE_ADDRESS,
+  TWAMM_ADDRESS,
+  MEV_CAPTURE_ADDRESS,
+  BOOSTED_FEES_CONCENTRATED_ADDRESS,
+];
+const SUBGRAPH_QUERY = `query ($lastId: Bytes!) {
   _meta {
     block {
       hash
@@ -41,18 +47,22 @@ const SUBGRAPH_QUERY = `query ($coreAddress: Bytes!, $extensions: [Bytes!]) {
     }
   }
   poolInitializations(
+    first: ${SUBGRAPH_PAGE_SIZE}
     where: {
       and: [
-        {coreAddress: $coreAddress}
+        {id_gte: $lastId}
         {or: [
-          {extension_in: $extensions}
+          {extension_in: [${SUBGRAPH_EXTENSIONS.map(
+            extension => `"${extension.toString()}"`,
+          ).join()}]}
           {extension_lte: "0x1fffffffffffffffffffffffffffffffffffffff"}
           {extension_gte: "0x8000000000000000000000000000000000000000", extension_lte: "0x9fffffffffffffffffffffffffffffffffffffff"}
         ]}
       ]
     }
-    orderBy: blockNumber
+    orderBy: id
   ) {
+    id
     blockNumber
     blockHash
     tickSpacing
@@ -71,6 +81,7 @@ const MAX_BATCH_SIZE = 100;
 
 const MAX_SUBGRAPH_RETRIES = 10;
 const SUBGRAPH_RETRY_INTERVAL_MS = 3000;
+const SUBGRAPH_INITIAL_LAST_ID = '0x00000000000000000000000000000000';
 
 type PoolKeyWithInitBlockNumber<C extends PoolTypeConfig> = {
   key: PoolKey<C>;
@@ -250,149 +261,196 @@ export class EkuboV3PoolManager implements EventSubscriber {
     maxBlockNumber: number,
     subscribeToBlockManager: boolean,
   ): Promise<{
-    poolKeys:
+    poolKeysRes:
       | PoolKeyWithInitBlockNumber<
           StableswapPoolTypeConfig | ConcentratedPoolTypeConfig
         >[]
-      | null;
+      | Error;
     subscribedBlockNumber: number | null;
   }> {
-    let poolKeys = null;
     let subscribedBlockNumber = null;
 
-    try {
-      const {
-        _meta: {
-          block: { number: subgraphBlockNumber, hash: subgraphBlockHash },
-        },
-        poolInitializations,
-      } = (
-        await this.dexHelper.httpRequest.querySubgraph<{
-          data: {
-            _meta: {
-              block: {
-                hash: string;
-                number: number;
-              };
-            };
-            poolInitializations: {
-              blockNumber: string;
-              blockHash: string;
-              tickSpacing: number | null;
-              stableswapCenterTick: number | null;
-              stableswapAmplification: number | null;
-              extension: string;
-              fee: string;
-              poolId: string;
-              token0: string;
-              token1: string;
-            }[];
-          };
-        }>(
-          this.subgraphId,
-          {
-            query: SUBGRAPH_QUERY,
-            variables: {
-              coreAddress: CORE_ADDRESS,
-              extensions: [
-                ORACLE_ADDRESS,
-                TWAMM_ADDRESS,
-                MEV_CAPTURE_ADDRESS,
-                BOOSTED_FEES_CONCENTRATED_ADDRESS,
-              ],
-            },
-          },
-          {},
-        )
-      ).data;
+    type PoolInitialization = {
+      id: string;
+      blockNumber: string;
+      blockHash: string;
+      tickSpacing: number | null;
+      stableswapCenterTick: number | null;
+      stableswapAmplification: number | null;
+      extension: string;
+      fee: string;
+      poolId: string;
+      token0: string;
+      token1: string;
+    };
+    type SubgraphData = {
+      _meta: {
+        block: {
+          hash: string;
+          number: number;
+        };
+      };
+      poolInitializations: PoolInitialization[];
+    };
 
-      if (subscribeToBlockManager) {
-        const blockNumber = Math.min(subgraphBlockNumber, maxBlockNumber);
+    const poolInitializations: PoolInitialization[] = [];
+    let subgraphBlockNumber, subgraphBlockHash;
+    let lastRowInfo: { id: string; blockHash: string | null } = {
+      id: SUBGRAPH_INITIAL_LAST_ID,
+      blockHash: null,
+    };
 
-        this.dexHelper.blockManager.subscribeToLogs(
-          this,
-          [
-            this.contracts.core.contract.address,
-            this.contracts.twamm.contract.address,
-            this.contracts.boostedFees.contract.address,
-          ],
-          blockNumber,
-        );
-
-        subscribedBlockNumber = blockNumber;
-      }
-
-      // Just check the existence of the latest known block by hash in the canonical chain.
-      // This, together with the pool manager being subscribed before this check, ensures that
-      // we can consistently transition from the subgraph to the RPC state.
+    while (true) {
+      let subgraphData;
       try {
-        await this.dexHelper.provider.getBlock(subgraphBlockHash);
+        subgraphData = (
+          await this.dexHelper.httpRequest.querySubgraph<{
+            data: SubgraphData;
+          }>(
+            this.subgraphId,
+            {
+              query: SUBGRAPH_QUERY,
+              variables: {
+                lastId: lastRowInfo.id,
+              },
+            },
+            {},
+          )
+        ).data;
       } catch (err) {
-        this.logger.warn(
-          'Failed to transition from subgraph to RPC state (possible reorg):',
-          err,
-        );
-
         return {
-          poolKeys: null,
+          poolKeysRes: new Error('Subgraph pool key retrieval failed', {
+            cause: err,
+          }),
           subscribedBlockNumber,
         };
       }
 
-      // Remove pools initialized at a block > maxBlockNumber
-      while (true) {
-        const lastElem = poolInitializations.at(-1);
+      const { _meta, poolInitializations: rawPage } = subgraphData;
+      subgraphBlockNumber = _meta.block.number;
+      subgraphBlockHash = _meta.block.hash;
+
+      let page;
+
+      if (lastRowInfo.blockHash !== null) {
+        const firstRow = rawPage.at(0);
+
         if (
-          typeof lastElem === 'undefined' ||
-          Number(lastElem.blockNumber) <= maxBlockNumber
+          typeof firstRow === 'undefined' ||
+          firstRow.id !== lastRowInfo.id ||
+          firstRow.blockHash !== lastRowInfo.blockHash
         ) {
-          break;
+          return {
+            poolKeysRes: new Error('Subgraph cursor continuity check failed'),
+            subscribedBlockNumber,
+          };
         }
-        poolInitializations.pop();
+
+        page = rawPage.slice(1);
+      } else {
+        page = rawPage;
       }
 
-      poolKeys = poolInitializations.flatMap(info => {
-        let poolTypeConfig;
+      poolInitializations.push(...page);
 
-        if (info.tickSpacing !== null) {
-          poolTypeConfig = new ConcentratedPoolTypeConfig(info.tickSpacing);
-        } else if (
-          info.stableswapAmplification !== null &&
-          info.stableswapCenterTick !== null
-        ) {
-          poolTypeConfig = new StableswapPoolTypeConfig(
-            info.stableswapCenterTick,
-            info.stableswapAmplification,
-          );
-        } else {
-          this.logger.error(
-            `Pool ${info.poolId} has an unknown pool type config`,
-          );
-          return [];
-        }
+      if (rawPage.length < SUBGRAPH_PAGE_SIZE) {
+        break;
+      }
 
-        return [
-          {
-            key: new PoolKey(
-              BigInt(info.token0),
-              BigInt(info.token1),
-              new PoolConfig(
-                BigInt(info.extension),
-                BigInt(info.fee),
-                poolTypeConfig,
-              ),
-              BigInt(info.poolId),
-            ),
-            initBlockNumber: Number(info.blockNumber),
-          },
-        ];
-      });
-    } catch (err) {
-      this.logger.error('Subgraph pool key retrieval failed:', err);
+      const lastElem = rawPage.at(-1);
+      if (typeof lastElem === 'undefined') {
+        break;
+      }
+
+      lastRowInfo = {
+        id: lastElem.id,
+        blockHash: lastElem.blockHash,
+      };
     }
 
+    if (subscribeToBlockManager) {
+      const blockNumber = Math.min(subgraphBlockNumber, maxBlockNumber);
+
+      this.dexHelper.blockManager.subscribeToLogs(
+        this,
+        [
+          this.contracts.core.contract.address,
+          this.contracts.twamm.contract.address,
+          this.contracts.boostedFees.contract.address,
+        ],
+        blockNumber,
+      );
+
+      subscribedBlockNumber = blockNumber;
+    }
+
+    // TODO there can now be events that are missed when the EventSubscriber (this instance) receives events for pools which should be initialized but aren't because the following reorg check fails
+    // Just check the existence of the latest known block by hash in the canonical chain.
+    // This, together with the pool manager being subscribed before this check, ensures that
+    // we can consistently transition from the subgraph to the RPC state.
+    try {
+      await this.dexHelper.provider.getBlock(subgraphBlockHash);
+    } catch (err) {
+      return {
+        poolKeysRes: new Error(
+          'Failed to transition from subgraph to RPC state (possible reorg)',
+          { cause: err },
+        ),
+        subscribedBlockNumber,
+      };
+    }
+
+    // Remove pools initialized at a block > maxBlockNumber
+    while (true) {
+      const lastElem = poolInitializations.at(-1);
+      if (
+        typeof lastElem === 'undefined' ||
+        Number(lastElem.blockNumber) <= maxBlockNumber
+      ) {
+        break;
+      }
+      poolInitializations.pop();
+    }
+
+    const poolKeys = poolInitializations.flatMap(info => {
+      let poolTypeConfig;
+
+      if (info.tickSpacing !== null) {
+        poolTypeConfig = new ConcentratedPoolTypeConfig(info.tickSpacing);
+      } else if (
+        info.stableswapAmplification !== null &&
+        info.stableswapCenterTick !== null
+      ) {
+        poolTypeConfig = new StableswapPoolTypeConfig(
+          info.stableswapCenterTick,
+          info.stableswapAmplification,
+        );
+      } else {
+        this.logger.error(
+          `Pool ${info.poolId} has an unknown pool type config`,
+        );
+        return [];
+      }
+
+      return [
+        {
+          key: new PoolKey(
+            BigInt(info.token0),
+            BigInt(info.token1),
+            new PoolConfig(
+              BigInt(info.extension),
+              BigInt(info.fee),
+              poolTypeConfig,
+            ),
+            BigInt(info.poolId),
+          ),
+          initBlockNumber: Number(info.blockNumber),
+        },
+      ];
+    });
+
     return {
-      poolKeys,
+      poolKeysRes: poolKeys,
       subscribedBlockNumber,
     };
   }
@@ -419,12 +477,16 @@ export class EkuboV3PoolManager implements EventSubscriber {
         maxBlockNumber = res.subscribedBlockNumber;
       }
 
-      if (res.poolKeys === null) {
+      if (res.poolKeysRes instanceof Error) {
+        this.logger.warn(
+          'Subgraph pool key retrieval failed:',
+          res.poolKeysRes,
+        );
         await new Promise(resolve =>
           setTimeout(resolve, SUBGRAPH_RETRY_INTERVAL_MS),
         );
       } else {
-        poolKeys = res.poolKeys;
+        poolKeys = res.poolKeysRes;
       }
     } while (poolKeys === null && attempt <= MAX_SUBGRAPH_RETRIES);
 
