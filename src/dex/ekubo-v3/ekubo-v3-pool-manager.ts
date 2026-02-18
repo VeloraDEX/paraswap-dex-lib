@@ -88,6 +88,32 @@ type PoolKeyWithInitBlockNumber<C extends PoolTypeConfig> = {
   initBlockNumber: number;
 };
 
+export type PoolInitialization = {
+  id: string;
+  blockNumber: string;
+  blockHash: string;
+  tickSpacing: number | null;
+  stableswapCenterTick: number | null;
+  stableswapAmplification: number | null;
+  extension: string;
+  fee: string;
+  poolId: string;
+  token0: string;
+  token1: string;
+};
+
+export type SubgraphData = {
+  data: {
+    _meta: {
+      block: {
+        hash: string;
+        number: number;
+      };
+    };
+    poolInitializations: PoolInitialization[];
+  };
+};
+
 // The only attached EventSubscriber of this integration that will forward all relevant logs to the pools and handle pool initialization events
 export class EkuboV3PoolManager implements EventSubscriber {
   public readonly name = 'PoolManager';
@@ -270,29 +296,6 @@ export class EkuboV3PoolManager implements EventSubscriber {
   }> {
     let subscribedBlockNumber = null;
 
-    type PoolInitialization = {
-      id: string;
-      blockNumber: string;
-      blockHash: string;
-      tickSpacing: number | null;
-      stableswapCenterTick: number | null;
-      stableswapAmplification: number | null;
-      extension: string;
-      fee: string;
-      poolId: string;
-      token0: string;
-      token1: string;
-    };
-    type SubgraphData = {
-      _meta: {
-        block: {
-          hash: string;
-          number: number;
-        };
-      };
-      poolInitializations: PoolInitialization[];
-    };
-
     const poolInitializations: PoolInitialization[] = [];
     let subgraphBlockNumber, subgraphBlockHash;
     let lastRowInfo: { id: string; blockHash: string | null } = {
@@ -303,10 +306,8 @@ export class EkuboV3PoolManager implements EventSubscriber {
     while (true) {
       let subgraphData;
       try {
-        subgraphData = (
-          await this.dexHelper.httpRequest.querySubgraph<{
-            data: SubgraphData;
-          }>(
+        subgraphData =
+          await this.dexHelper.httpRequest.querySubgraph<SubgraphData>(
             this.subgraphId,
             {
               query: SUBGRAPH_QUERY,
@@ -315,8 +316,7 @@ export class EkuboV3PoolManager implements EventSubscriber {
               },
             },
             {},
-          )
-        ).data;
+          );
       } catch (err) {
         return {
           poolKeysRes: new Error('Subgraph pool key retrieval failed', {
@@ -326,7 +326,7 @@ export class EkuboV3PoolManager implements EventSubscriber {
         };
       }
 
-      const { _meta, poolInitializations: rawPage } = subgraphData;
+      const { _meta, poolInitializations: rawPage } = subgraphData.data;
       subgraphBlockNumber = _meta.block.number;
       subgraphBlockHash = _meta.block.hash;
 
