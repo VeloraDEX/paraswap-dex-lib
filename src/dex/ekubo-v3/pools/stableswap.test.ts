@@ -18,7 +18,8 @@ function quote(
   fee: bigint = 0n,
 ): Quote<FullRangePoolState.Object> {
   return quoteStableswap(
-    new PoolKey(0n, 1n, new PoolConfig(0n, fee, poolTypeConfig)),
+    fee,
+    computeStableswapBounds(poolTypeConfig),
     amount,
     isToken1,
     state,

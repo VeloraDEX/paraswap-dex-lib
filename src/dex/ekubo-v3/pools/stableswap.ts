@@ -21,8 +21,7 @@ const GAS_COST_OF_ONE_STABLESWAP_SWAP = 16_818;
 export abstract class StableswapPoolBase<
   S extends FullRangePoolState.Object,
 > extends EkuboPool<StableswapPoolTypeConfig, S> {
-  public readonly lowerPrice;
-  public readonly upperPrice;
+  private readonly bounds;
 
   protected readonly quoteDataFetcher;
 
@@ -44,9 +43,7 @@ export abstract class StableswapPoolBase<
 
     this.quoteDataFetcher = quoteDataFetcher;
 
-    const bounds = computeStableswapBounds(key.config.poolTypeConfig);
-    this.lowerPrice = bounds.lowerPrice;
-    this.upperPrice = bounds.upperPrice;
+    this.bounds = computeStableswapBounds(key.config.poolTypeConfig);
   }
 
   protected override _quote(
@@ -55,19 +52,27 @@ export abstract class StableswapPoolBase<
     state: DeepReadonly<S>,
     sqrtRatioLimit?: bigint,
   ): Quote {
-    return quoteStableswap(this.key, amount, isToken1, state, sqrtRatioLimit);
+    return quoteStableswap(
+      this.key.config.fee,
+      this.bounds,
+      amount,
+      isToken1,
+      state,
+      sqrtRatioLimit,
+    );
   }
 
   protected _computeTvl(state: DeepReadonly<S>): [bigint, bigint] {
     const { sqrtRatio, liquidity } = state;
+    const { lowerPrice, upperPrice } = this.bounds;
 
     let [amount0, amount1] = [0n, 0n];
 
-    if (sqrtRatio < this.upperPrice) {
-      amount0 = amount0Delta(sqrtRatio, this.upperPrice, liquidity, false);
+    if (sqrtRatio < upperPrice) {
+      amount0 = amount0Delta(sqrtRatio, upperPrice, liquidity, false);
     }
-    if (sqrtRatio > this.lowerPrice) {
-      amount1 = amount1Delta(this.lowerPrice, sqrtRatio, liquidity, false);
+    if (sqrtRatio > lowerPrice) {
+      amount1 = amount1Delta(lowerPrice, sqrtRatio, liquidity, false);
     }
 
     return [amount0, amount1];
@@ -75,7 +80,8 @@ export abstract class StableswapPoolBase<
 }
 
 export function quoteStableswap(
-  key: PoolKey<StableswapPoolTypeConfig>,
+  fee: bigint,
+  { lowerPrice, upperPrice }: StableswapBounds,
   amount: bigint,
   isToken1: boolean,
   state: DeepReadonly<
@@ -83,9 +89,6 @@ export function quoteStableswap(
   >,
   sqrtRatioLimit?: bigint,
 ): Quote<Pick<FullRangePoolState.Object, 'sqrtRatio' | 'liquidity'>> {
-  const { lowerPrice, upperPrice } = computeStableswapBounds(
-    key.config.poolTypeConfig,
-  );
   const isIncreasing = isPriceIncreasing(amount, isToken1);
 
   let { sqrtRatio, liquidity } = state;
@@ -125,7 +128,7 @@ export function quoteStableswap(
         : nextTickSqrtRatio;
 
     const step = computeStep({
-      fee: key.config.fee,
+      fee,
       sqrtRatio,
       liquidity: stepLiquidity,
       isToken1,
