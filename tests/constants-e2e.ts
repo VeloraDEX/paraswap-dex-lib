@@ -94,6 +94,22 @@ export const Tokens: {
       address: '0x4c9edd5852cd905f086c759e8383e09bff1e68b3',
       decimals: 18,
     },
+    OETH: {
+      address: '0x856c4efb76c1d1ae02e20ceb03a2a6a08b0b8dc3',
+      decimals: 18,
+    },
+    wOETH: {
+      address: '0xdcee70654261af21c44c093c300ed3bb97b78192',
+      decimals: 18,
+    },
+    OUSD: {
+      address: '0x2a8e1e676ec238d8a992307b495b45b3feaa5e86',
+      decimals: 18,
+    },
+    wOUSD: {
+      address: '0xd2af830e8cbdfed6cc11bab697bb25496ed6fa62',
+      decimals: 18,
+    },
     ebUSD: {
       address: '0x09fD37d9AA613789c517e76DF1c53aEce2b60Df4',
       decimals: 18,
@@ -937,6 +953,10 @@ export const Tokens: {
     },
     OS: {
       address: '0xb1e25689d55734fd3fffc939c4c3eb52dff8a794',
+      decimals: 18,
+    },
+    wOS: {
+      address: '0x9f0df7799f6fdad409300080cff680f5a23df4b1',
       decimals: 18,
     },
   },
@@ -1832,6 +1852,14 @@ export const Tokens: {
     },
     rETH: {
       address: '0xB6fe221Fe9EeF5aBa221c348bA20A1Bf5e73624c',
+      decimals: 18,
+    },
+    superOETHb: {
+      address: '0xdbfefd2e8460a6ee4955a68582f85708baea60a3',
+      decimals: 18,
+    },
+    wsuperOETHb: {
+      address: '0x7fcd174e80f264448ebee8c88a7c4476aaf58ea6',
       decimals: 18,
     },
   },
