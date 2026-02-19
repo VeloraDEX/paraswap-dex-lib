@@ -13,33 +13,59 @@ import { DEX_KEY, EkuboSupportedNetwork } from './config';
 const testConfigs: Record<
   EkuboSupportedNetwork,
   {
-    pair: [
-      { symbol: string; amount: bigint },
-      { symbol: string; amount: bigint },
-    ];
+    tokensToTest: Array<{
+      pair: [
+        { symbol: string; amount: bigint },
+        { symbol: string; amount: bigint },
+      ];
+      limitPools?: string[];
+    }>;
   }
 > = {
   [Network.MAINNET]: {
-    pair: [
+    tokensToTest: [
       {
-        symbol: 'USDC',
-        amount: BI_POWS[5],
+        pair: [
+          {
+            symbol: 'USDC',
+            amount: BI_POWS[5],
+          },
+          {
+            symbol: 'USDT',
+            amount: BI_POWS[5],
+          },
+        ],
       },
       {
-        symbol: 'USDT',
-        amount: BI_POWS[5],
+        pair: [
+          {
+            symbol: 'USDC',
+            amount: BI_POWS[6],
+          },
+          {
+            symbol: 'EKUBO',
+            amount: BI_POWS[18],
+          },
+        ],
+        limitPools: [
+          'ekubov3_0x04c46e830bb56ce22735d5d8fc9cb90309317d0f_0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48_0xd4b54d0ca6979da05f25895e6e269e678ba00f9e_184467440737095516_concentrated_19802',
+        ],
       },
     ],
   },
   [Network.ARBITRUM]: {
-    pair: [
+    tokensToTest: [
       {
-        symbol: 'ETH',
-        amount: BI_POWS[18],
-      },
-      {
-        symbol: 'USDC',
-        amount: BI_POWS[8],
+        pair: [
+          {
+            symbol: 'ETH',
+            amount: BI_POWS[18],
+          },
+          {
+            symbol: 'USDC',
+            amount: BI_POWS[8],
+          },
+        ],
       },
     ],
   },
@@ -51,7 +77,6 @@ Object.entries(testConfigs).forEach(([networkStr, config]) => {
   describe(generateConfig(network).networkName, () => {
     const tokens = Tokens[network];
     const holders = Holders[network];
-    const [tokenA, tokenB] = config.pair;
 
     const provider = new StaticJsonRpcProvider(
       generateConfig(network).privateHttpProvider,
@@ -88,20 +113,31 @@ Object.entries(testConfigs).forEach(([networkStr, config]) => {
               );
             }
 
-            it(`${tokenA.symbol} -> ${tokenB.symbol}`, () =>
-              test(
-                tokenA.symbol,
-                tokenB.symbol,
-                String(side === SwapSide.SELL ? tokenA.amount : tokenB.amount),
-                side,
-              ));
-            it(`${tokenB.symbol} -> ${tokenA.symbol}`, () =>
-              test(
-                tokenB.symbol,
-                tokenA.symbol,
-                String(side === SwapSide.SELL ? tokenB.amount : tokenA.amount),
-                side,
-              ));
+            config.tokensToTest.forEach(
+              ({ pair: [tokenA, tokenB], limitPools }) => {
+                it(`${tokenA.symbol} -> ${tokenB.symbol}`, () =>
+                  test(
+                    tokenA.symbol,
+                    tokenB.symbol,
+                    String(
+                      side === SwapSide.SELL ? tokenA.amount : tokenB.amount,
+                    ),
+                    side,
+                    limitPools,
+                  ));
+
+                it(`${tokenB.symbol} -> ${tokenA.symbol}`, () =>
+                  test(
+                    tokenB.symbol,
+                    tokenA.symbol,
+                    String(
+                      side === SwapSide.SELL ? tokenB.amount : tokenA.amount,
+                    ),
+                    side,
+                    limitPools,
+                  ));
+              },
+            );
           });
         });
       }),
