@@ -58,7 +58,7 @@ export class PricingHelper {
       const errorDetails =
         error instanceof AggregateError
           ? error.errors.map(e => String(e)).join('; ')
-          : String(error);
+          : error;
 
       this.logger.error(`Error_startListening_${dexKey}:`, errorDetails);
       setTimeout(
