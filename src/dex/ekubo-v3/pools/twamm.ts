@@ -1,4 +1,5 @@
 import { Logger } from 'log4js';
+import { Result } from '@ethersproject/abi';
 import { DeepReadonly, DeepWritable } from 'ts-essentials';
 import { IDexHelper } from '../../../dex-helper/idex-helper';
 import {
@@ -6,37 +7,33 @@ import {
   PoolInitializationState,
   TwammQuoteData,
 } from '../types';
-import { FullRangePool, FullRangePoolState } from './full-range';
+import { FullRangePoolState, quoteFullRange } from './full-range';
 import { EkuboPool, NamedEventHandlers, Quote } from './pool';
 import { MAX_U32 } from './math/constants';
 import { floatSqrtRatioToFixed } from './math/sqrt-ratio';
 import { MAX_SQRT_RATIO, MIN_SQRT_RATIO } from './math/tick';
 import { calculateNextSqrtRatio } from './math/twamm/sqrt-ratio';
-import {
-  parseSwappedEvent,
-  PoolKey,
-  StableswapPoolTypeConfig,
-  SwappedEvent,
-} from './utils';
-import { GAS_COST_OF_ONE_EXTRA_BITMAP_SLOAD } from './base';
+import { PoolKey, StableswapPoolTypeConfig, SwappedEvent } from './utils';
 import { hexDataSlice } from 'ethers/lib/utils';
-import { bigintMax, bigintMin } from '../utils';
+import {
+  approximateExtraDistinctTimeBitmapLookups,
+  estimatedCurrentTime,
+  TimedPoolState,
+} from './timed';
+import { Network } from '../../../constants';
+import { EkuboSupportedNetwork } from '../config';
 
-const SLOT_DURATION_SECS = 12n;
-
-const BASE_GAS_COST_OF_ONE_TWAMM_SWAP = 30_716;
-
-// TODO
-const BASE_GAS_COST_OF_ONE_TWAMM_FULL_RANGE_SWAP = 19_000;
-const GAS_COST_OF_ONE_VIRTUAL_ORDER_DELTA = 7_500;
-
-const LOG_BASE_256 = Math.log(256);
+const GAS_COST_OF_ONE_COLD_SLOAD = 2_000;
+const BASE_GAS_COST_OF_ONE_TWAMM_SWAP = 21_222;
+const GAS_COST_OF_CROSSING_ONE_VIRTUAL_ORDER_DELTA = 19_980;
+const GAS_COST_OF_EXECUTING_VIRTUAL_ORDERS = 20_554;
 
 export class TwammPool extends EkuboPool<
   StableswapPoolTypeConfig,
   TwammPoolState.Object
 > {
   private readonly twammDataFetcher;
+  private readonly chainId: EkuboSupportedNetwork;
 
   public constructor(
     parentName: string,
@@ -62,14 +59,9 @@ export class TwammPool extends EkuboPool<
       logger,
       initBlockNumber,
       key,
+      coreAddress,
+      coreIface,
       {
-        [coreAddress]: new NamedEventHandlers(coreIface, {
-          PositionUpdated: (args, oldState) =>
-            TwammPoolState.fromPositionUpdatedEvent(
-              oldState,
-              args.liquidityDelta.toBigInt(),
-            ),
-        }),
         [twammAddress]: new NamedEventHandlers(twammIface, {
           OrderUpdated: (args, oldState) => {
             const orderKey = args.orderKey;
@@ -99,8 +91,6 @@ export class TwammPool extends EkuboPool<
         }),
       },
       {
-        [coreAddress]: (data, oldState) =>
-          TwammPoolState.fromSwappedEvent(oldState, parseSwappedEvent(data)),
         [twammAddress]: (data, oldState, blockHeader) =>
           TwammPoolState.fromVirtualOrdersExecutedEvent(
             oldState,
@@ -111,6 +101,7 @@ export class TwammPool extends EkuboPool<
     );
 
     this.twammDataFetcher = twammDataFetcher;
+    this.chainId = dexHelper.config.data.network;
   }
 
   public async generateState(
@@ -131,129 +122,170 @@ export class TwammPool extends EkuboPool<
     isToken1: boolean,
     state: DeepReadonly<TwammPoolState.Object>,
   ): Quote {
-    return this.quoteTwamm(amount, isToken1, state);
-  }
-
-  public quoteTwamm(
-    amount: bigint,
-    isToken1: boolean,
-    state: DeepReadonly<TwammPoolState.Object>,
-    overrideTime?: bigint,
-  ): Quote {
-    const currentTime =
-      overrideTime ??
-      bigintMax(
-        state.lastExecutionTime + SLOT_DURATION_SECS,
-        BigInt(Math.floor(Date.now() / 1000)),
-      );
-    const fee = this.key.config.fee;
-    const quoteFullRangePool =
-      FullRangePool.prototype.quoteFullRange.bind(this);
-
-    const liquidity = state.fullRangePoolState.liquidity;
-    let nextSqrtRatio = state.fullRangePoolState.sqrtRatio;
-    let token0SaleRate = state.token0SaleRate;
-    let token1SaleRate = state.token1SaleRate;
-    let lastExecutionTime = state.lastExecutionTime;
-
-    let virtualOrderDeltaTimesCrossed = 0;
-    let swapCount = 0;
-    let nextSaleRateDeltaIndex = state.virtualOrderDeltas.findIndex(
-      srd => srd.time > lastExecutionTime,
+    return quoteTwamm(
+      this.key,
+      amount,
+      isToken1,
+      state,
+      undefined,
+      this.chainId,
     );
-
-    let fullRangePoolState = state.fullRangePoolState;
-
-    while (lastExecutionTime != currentTime) {
-      const saleRateDelta = state.virtualOrderDeltas[nextSaleRateDeltaIndex];
-
-      const nextExecutionTime = saleRateDelta
-        ? bigintMin(saleRateDelta.time, currentTime)
-        : currentTime;
-
-      const timeElapsed = nextExecutionTime - lastExecutionTime;
-      if (timeElapsed > MAX_U32) {
-        throw new Error('Too much time passed since last execution');
-      }
-
-      const [amount0, amount1] = [
-        (token0SaleRate * BigInt(timeElapsed)) >> 32n,
-        (token1SaleRate * BigInt(timeElapsed)) >> 32n,
-      ];
-
-      if (amount0 > 0n && amount1 > 0n) {
-        let currentSqrtRatio = nextSqrtRatio;
-        if (currentSqrtRatio > MAX_SQRT_RATIO) {
-          currentSqrtRatio = MAX_SQRT_RATIO;
-        } else if (currentSqrtRatio < MIN_SQRT_RATIO) {
-          currentSqrtRatio = MIN_SQRT_RATIO;
-        }
-
-        nextSqrtRatio = calculateNextSqrtRatio(
-          currentSqrtRatio,
-          liquidity,
-          token0SaleRate,
-          token1SaleRate,
-          timeElapsed,
-          fee,
-        );
-
-        const [amount, isToken1] =
-          currentSqrtRatio < nextSqrtRatio ? [amount1, true] : [amount0, false];
-
-        const quote = quoteFullRangePool(
-          amount,
-          isToken1,
-          fullRangePoolState,
-          nextSqrtRatio,
-        );
-
-        swapCount++;
-        fullRangePoolState = quote.stateAfter;
-      } else if (amount0 > 0n || amount1 > 0n) {
-        const [amount, isToken1] =
-          amount0 !== 0n ? [amount0, false] : [amount1, true];
-
-        const quote = quoteFullRangePool(amount, isToken1, fullRangePoolState);
-
-        swapCount++;
-        fullRangePoolState = quote.stateAfter;
-
-        nextSqrtRatio = quote.stateAfter.sqrtRatio;
-      }
-
-      if (saleRateDelta) {
-        if (saleRateDelta.time === nextExecutionTime) {
-          token0SaleRate += saleRateDelta.saleRateDelta0;
-          token1SaleRate += saleRateDelta.saleRateDelta1;
-
-          nextSaleRateDeltaIndex++;
-          virtualOrderDeltaTimesCrossed++;
-        }
-      }
-
-      lastExecutionTime = nextExecutionTime;
-    }
-
-    const finalQuote = quoteFullRangePool(amount, isToken1, fullRangePoolState);
-
-    return {
-      calculatedAmount: finalQuote.calculatedAmount,
-      consumedAmount: finalQuote.consumedAmount,
-      gasConsumed:
-        BASE_GAS_COST_OF_ONE_TWAMM_SWAP +
-        swapCount * BASE_GAS_COST_OF_ONE_TWAMM_FULL_RANGE_SWAP +
-        virtualOrderDeltaTimesCrossed * GAS_COST_OF_ONE_VIRTUAL_ORDER_DELTA +
-        (Math.log(Number(currentTime - state.lastExecutionTime)) /
-          LOG_BASE_256) *
-          GAS_COST_OF_ONE_EXTRA_BITMAP_SLOAD,
-      skipAhead: finalQuote.skipAhead,
-    };
   }
 
   protected _computeTvl(state: TwammPoolState.Object): [bigint, bigint] {
     return FullRangePoolState.computeTvl(state.fullRangePoolState);
   }
+
+  protected override handlePositionUpdated(
+    args: Result,
+    oldState: DeepReadonly<TwammPoolState.Object>,
+  ): DeepReadonly<TwammPoolState.Object> | null {
+    return TwammPoolState.fromPositionUpdatedEvent(
+      oldState,
+      args.liquidityDelta.toBigInt(),
+    );
+  }
+
+  protected override handleSwappedEvent(
+    ev: SwappedEvent,
+    oldState: DeepReadonly<TwammPoolState.Object>,
+  ): DeepReadonly<TwammPoolState.Object> | null {
+    return TwammPoolState.fromSwappedEvent(oldState, ev);
+  }
+}
+
+export function quoteTwamm(
+  key: PoolKey<StableswapPoolTypeConfig>,
+  amount: bigint,
+  isToken1: boolean,
+  state: DeepReadonly<TwammPoolState.Object>,
+  overrideTime?: bigint,
+  chainId: EkuboSupportedNetwork = Network.MAINNET,
+): Quote {
+  const lastExecutionTime = state.timedPoolState.lastTime;
+  const currentTime =
+    overrideTime ?? estimatedCurrentTime(lastExecutionTime, chainId);
+
+  const quoteFullRangePool = (
+    quoteAmount: bigint,
+    quoteIsToken1: boolean,
+    quoteState: DeepReadonly<FullRangePoolState.Object>,
+    quoteSqrtRatioLimit?: bigint,
+  ) =>
+    quoteFullRange(
+      key,
+      quoteAmount,
+      quoteIsToken1,
+      quoteState,
+      quoteSqrtRatioLimit,
+    );
+
+  const liquidity = state.fullRangePoolState.liquidity;
+  let nextSqrtRatio = state.fullRangePoolState.sqrtRatio;
+  let token0SaleRate = state.timedPoolState.token0Rate;
+  let token1SaleRate = state.timedPoolState.token1Rate;
+
+  let virtualOrderDeltaTimesCrossed = 0;
+
+  let fullRangePoolState = state.fullRangePoolState;
+
+  let time = lastExecutionTime;
+
+  for (const delta of [...state.timedPoolState.virtualDeltas, null]) {
+    let nextExecutionTime = currentTime;
+    let lastDelta = true;
+
+    if (delta !== null) {
+      if (delta.time <= lastExecutionTime) {
+        continue;
+      }
+
+      if (delta.time < currentTime) {
+        lastDelta = false;
+        nextExecutionTime = delta.time;
+      }
+    }
+
+    const timeElapsed = nextExecutionTime - time;
+    if (timeElapsed > MAX_U32) {
+      throw new Error('Too much time passed since last execution');
+    }
+
+    const [amount0, amount1] = [
+      (token0SaleRate * BigInt(timeElapsed)) >> 32n,
+      (token1SaleRate * BigInt(timeElapsed)) >> 32n,
+    ];
+
+    if (amount0 > 0n && amount1 > 0n) {
+      let currentSqrtRatio = nextSqrtRatio;
+      if (currentSqrtRatio > MAX_SQRT_RATIO) {
+        currentSqrtRatio = MAX_SQRT_RATIO;
+      } else if (currentSqrtRatio < MIN_SQRT_RATIO) {
+        currentSqrtRatio = MIN_SQRT_RATIO;
+      }
+
+      nextSqrtRatio = calculateNextSqrtRatio(
+        currentSqrtRatio,
+        liquidity,
+        token0SaleRate,
+        token1SaleRate,
+        timeElapsed,
+        key.config.fee,
+      );
+
+      const [virtualAmount, virtualIsToken1] =
+        currentSqrtRatio < nextSqrtRatio ? [amount1, true] : [amount0, false];
+
+      const quote = quoteFullRangePool(
+        virtualAmount,
+        virtualIsToken1,
+        fullRangePoolState,
+        nextSqrtRatio,
+      );
+
+      fullRangePoolState = quote.stateAfter;
+    } else if (amount0 > 0n || amount1 > 0n) {
+      const [virtualAmount, virtualIsToken1] =
+        amount0 !== 0n ? [amount0, false] : [amount1, true];
+
+      const quote = quoteFullRangePool(
+        virtualAmount,
+        virtualIsToken1,
+        fullRangePoolState,
+      );
+
+      fullRangePoolState = quote.stateAfter;
+      nextSqrtRatio = quote.stateAfter.sqrtRatio;
+    }
+
+    if (delta === null || lastDelta) {
+      break;
+    }
+
+    token0SaleRate += delta.delta0;
+    token1SaleRate += delta.delta1;
+    time = nextExecutionTime;
+    virtualOrderDeltaTimesCrossed++;
+  }
+
+  const finalQuote = quoteFullRangePool(amount, isToken1, fullRangePoolState);
+
+  return {
+    calculatedAmount: finalQuote.calculatedAmount,
+    consumedAmount: finalQuote.consumedAmount,
+    gasConsumed:
+      BASE_GAS_COST_OF_ONE_TWAMM_SWAP +
+      Number(currentTime > lastExecutionTime) *
+        GAS_COST_OF_EXECUTING_VIRTUAL_ORDERS +
+      virtualOrderDeltaTimesCrossed *
+        GAS_COST_OF_CROSSING_ONE_VIRTUAL_ORDER_DELTA +
+      approximateExtraDistinctTimeBitmapLookups(
+        lastExecutionTime,
+        currentTime,
+      ) *
+        GAS_COST_OF_ONE_COLD_SLOAD,
+    skipAhead: finalQuote.skipAhead,
+  };
 }
 
 interface VirtualOrdersExecutedEvent {
@@ -278,19 +310,11 @@ function parseVirtualOrdersExecutedEvent(
 }
 
 export namespace TwammPoolState {
-  export interface SaleRateDelta {
-    time: bigint;
-    saleRateDelta0: bigint;
-    saleRateDelta1: bigint;
-  }
+  export type SaleRateDelta = TimedPoolState.TimeRateDelta;
 
-  // Needs to be serializiable, therefore can't make it a class
   export interface Object {
     fullRangePoolState: FullRangePoolState.Object;
-    token0SaleRate: bigint;
-    token1SaleRate: bigint;
-    lastExecutionTime: bigint;
-    virtualOrderDeltas: SaleRateDelta[];
+    timedPoolState: TimedPoolState.Object;
   }
 
   export function fromPoolInitialization(
@@ -298,10 +322,12 @@ export namespace TwammPoolState {
   ): DeepReadonly<Object> {
     return {
       fullRangePoolState: FullRangePoolState.fromPoolInitialization(state),
-      token0SaleRate: 0n,
-      token1SaleRate: 0n,
-      lastExecutionTime: BigInt(state.blockHeader.timestamp),
-      virtualOrderDeltas: [],
+      timedPoolState: {
+        token0Rate: 0n,
+        token1Rate: 0n,
+        lastTime: BigInt(state.blockHeader.timestamp),
+        virtualDeltas: [],
+      },
     };
   }
 
@@ -314,14 +340,16 @@ export namespace TwammPoolState {
         sqrtRatio: floatSqrtRatioToFixed(sqrtRatioFloat),
         liquidity,
       },
-      token0SaleRate: data.saleRateToken0.toBigInt(),
-      token1SaleRate: data.saleRateToken1.toBigInt(),
-      lastExecutionTime: data.lastVirtualOrderExecutionTime.toBigInt(),
-      virtualOrderDeltas: data.saleRateDeltas.map(srd => ({
-        time: srd.time.toBigInt(),
-        saleRateDelta0: srd.saleRateDelta0.toBigInt(),
-        saleRateDelta1: srd.saleRateDelta1.toBigInt(),
-      })),
+      timedPoolState: TimedPoolState.fromQuoter(
+        data.saleRateToken0.toBigInt(),
+        data.saleRateToken1.toBigInt(),
+        data.lastVirtualOrderExecutionTime.toBigInt(),
+        data.saleRateDeltas.map(srd => ({
+          time: srd.time.toBigInt(),
+          delta0: srd.saleRateDelta0.toBigInt(),
+          delta1: srd.saleRateDelta1.toBigInt(),
+        })),
+      ),
     };
   }
 
@@ -365,23 +393,13 @@ export namespace TwammPoolState {
       typeof oldState
     >;
 
-    clonedState.lastExecutionTime = timestamp;
-    clonedState.token0SaleRate = ev.token0SaleRate;
-    clonedState.token1SaleRate = ev.token1SaleRate;
+    const timed = clonedState.timedPoolState;
 
-    const virtualOrderDeltas = clonedState.virtualOrderDeltas;
+    timed.lastTime = timestamp;
+    timed.token0Rate = ev.token0SaleRate;
+    timed.token1Rate = ev.token1SaleRate;
 
-    for (
-      let virtualOrder = virtualOrderDeltas[0];
-      typeof virtualOrder !== 'undefined';
-      virtualOrder = virtualOrderDeltas[0]
-    ) {
-      if (virtualOrder.time > timestamp) {
-        break;
-      }
-
-      virtualOrderDeltas.shift();
-    }
+    TimedPoolState.pruneDeltasAtOrBefore(timed.virtualDeltas, timestamp);
 
     return clonedState;
   }
@@ -400,68 +418,19 @@ export namespace TwammPoolState {
       typeof oldState
     >;
 
-    const virtualOrderDeltas = clonedState.virtualOrderDeltas;
-    let startIndex = 0;
-
-    for (const [time, saleRateDelta] of [
-      [startTime, orderSaleRateDelta],
-      [endTime, -orderSaleRateDelta],
-    ] as const) {
-      if (time > clonedState.lastExecutionTime) {
-        let idx = findOrderIndex(virtualOrderDeltas, time, startIndex);
-
-        if (idx < 0) {
-          idx = ~idx;
-          virtualOrderDeltas.splice(idx, 0, {
-            time,
-            saleRateDelta0: 0n,
-            saleRateDelta1: 0n,
-          });
-        }
-
-        const virtualOrderDelta = virtualOrderDeltas[idx];
-
-        virtualOrderDelta[`saleRateDelta${isToken1 ? '1' : '0'}`] +=
-          saleRateDelta;
-
-        if (
-          virtualOrderDelta.saleRateDelta0 === 0n &&
-          virtualOrderDelta.saleRateDelta1 === 0n
-        ) {
-          virtualOrderDeltas.splice(idx, 1);
-          startIndex = idx;
-        } else {
-          startIndex = idx + 1;
-        }
-      } else {
-        clonedState[`token${isToken1 ? '1' : '0'}SaleRate`] += saleRateDelta;
-      }
-    }
+    TimedPoolState.applyRateDeltaBoundaries(clonedState.timedPoolState, [
+      [
+        startTime,
+        isToken1 ? 0n : orderSaleRateDelta,
+        isToken1 ? orderSaleRateDelta : 0n,
+      ],
+      [
+        endTime,
+        isToken1 ? 0n : -orderSaleRateDelta,
+        isToken1 ? -orderSaleRateDelta : 0n,
+      ],
+    ]);
 
     return clonedState;
-  }
-
-  function findOrderIndex(
-    virtualOrderDeltas: SaleRateDelta[],
-    searchTime: bigint,
-    startIndex = 0,
-  ): number {
-    let l = startIndex,
-      r = virtualOrderDeltas.length - 1;
-
-    while (l <= r) {
-      const mid = Math.floor((l + r) / 2);
-      const midOrderTime = virtualOrderDeltas[mid].time;
-
-      if (midOrderTime === searchTime) {
-        return mid;
-      } else if (midOrderTime < searchTime) {
-        l = mid + 1;
-      } else {
-        r = mid - 1;
-      }
-    }
-
-    return ~l; // Bitwise NOT of the insertion point
   }
 }

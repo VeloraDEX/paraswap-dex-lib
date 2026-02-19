@@ -1,26 +1,29 @@
 import { DeepReadonly } from 'ts-essentials';
-import { BasePoolState } from './base';
-import { Quote } from './pool';
+import { ConcentratedPoolState } from './concentrated';
 import { MAX_TICK, MIN_TICK, toSqrtRatio } from './math/tick';
-import { MevCapturePool } from './mev-capture';
+import { quoteMevCapture } from './mev-capture';
 import { ConcentratedPoolTypeConfig, PoolConfig, PoolKey } from './utils';
 
-describe(MevCapturePool.prototype.quoteMevCapture, () => {
+describe(quoteMevCapture, () => {
   function quoteFn(tickSpacing: number, fee: bigint) {
-    return MevCapturePool.prototype.quoteMevCapture.bind({
-      key: new PoolKey(
-        1n,
-        2n,
-        new PoolConfig(1n, fee, new ConcentratedPoolTypeConfig(tickSpacing)),
-      ),
-    });
+    const key = new PoolKey(
+      1n,
+      2n,
+      new PoolConfig(1n, fee, new ConcentratedPoolTypeConfig(tickSpacing)),
+    );
+    return (
+      amount: bigint,
+      isToken1: boolean,
+      state: DeepReadonly<ConcentratedPoolState.Object>,
+      sqrtRatioLimit?: bigint,
+    ) => quoteMevCapture(key, amount, isToken1, state, sqrtRatioLimit);
   }
 
   test('input amount token0', () => {
     const quote = quoteFn(20_000, (1n << 64n) / 100n);
 
     const liquidity = 28_898_102n;
-    const state: BasePoolState.Object = {
+    const state: ConcentratedPoolState.Object = {
       activeTick: 700_000,
       activeTickIndex: 0,
       checkedTicksBounds: [MIN_TICK, MAX_TICK],
@@ -61,7 +64,7 @@ describe(MevCapturePool.prototype.quoteMevCapture, () => {
     const quote = quoteFn(20_000, (1n << 64n) / 100n);
 
     const liquidity = 28_898_102n;
-    const state: BasePoolState.Object = {
+    const state: ConcentratedPoolState.Object = {
       activeTick: 700_000,
       activeTickIndex: 0,
       checkedTicksBounds: [MIN_TICK, MAX_TICK],
@@ -89,7 +92,7 @@ describe(MevCapturePool.prototype.quoteMevCapture, () => {
     const quote = quoteFn(1000, 9223372036854775n);
 
     const liquidity = 187957823162863064741n;
-    const state: BasePoolState.Object = {
+    const state: ConcentratedPoolState.Object = {
       activeTick: 8015514,
       activeTickIndex: 0,
       checkedTicksBounds: [MIN_TICK, MAX_TICK],
@@ -128,7 +131,7 @@ describe(MevCapturePool.prototype.quoteMevCapture, () => {
     const quote = quoteFn(1000, 9223372036854775n);
 
     const liquidity = 187957823162863064741n;
-    const state: BasePoolState.Object = {
+    const state: ConcentratedPoolState.Object = {
       activeTick: 8092285,
       activeTickIndex: 0,
       checkedTicksBounds: [MIN_TICK, MAX_TICK],

@@ -1,5 +1,5 @@
 import { DeepReadonly } from 'ts-essentials';
-import { FullRangePool, FullRangePoolState } from './full-range';
+import { FullRangePoolState, quoteFullRange } from './full-range';
 import { Quote } from './pool';
 import { PoolConfig, PoolKey, StableswapPoolTypeConfig } from './utils';
 import { TWO_POW_128 } from './math/constants';
@@ -7,21 +7,19 @@ import { MAX_TICK, MIN_TICK } from './math/tick';
 import { BigNumber } from 'ethers';
 import { ONE_FLOAT_SQRT_RATIO } from './math/sqrt-ratio';
 
-describe(FullRangePool.prototype.quoteFullRange, () => {
+describe(quoteFullRange, () => {
   function quote(
     amount: bigint,
     isToken1: boolean,
     state: DeepReadonly<FullRangePoolState.Object>,
     fee: bigint,
   ): Quote {
-    return FullRangePool.prototype.quoteFullRange.call(
-      {
-        key: new PoolKey(
-          1n,
-          2n,
-          new PoolConfig(0n, fee, StableswapPoolTypeConfig.fullRangeConfig()),
-        ),
-      },
+    return quoteFullRange(
+      new PoolKey(
+        1n,
+        2n,
+        new PoolConfig(0n, fee, StableswapPoolTypeConfig.fullRangeConfig()),
+      ),
       amount,
       isToken1,
       state,

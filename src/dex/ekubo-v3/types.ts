@@ -43,7 +43,23 @@ export type EkuboContract = {
   quoteDataFetcher: Contract;
 };
 
-export type EkuboContracts = Record<'core' | 'twamm', EkuboContract>;
+export type EkuboContracts = Record<
+  'core' | 'twamm' | 'boostedFees',
+  EkuboContract
+>;
+
+export type BoostedFeesQuoteData = {
+  sqrtRatio: BigNumber;
+  liquidity: BigNumber;
+  lastDonateTime: BigNumber;
+  donateRateToken0: BigNumber;
+  donateRateToken1: BigNumber;
+  donateRateDeltas: {
+    time: BigNumber;
+    donateRateDelta0: BigNumber;
+    donateRateDelta1: BigNumber;
+  }[];
+};
 
 export type AbiPoolKey = {
   token0: string;

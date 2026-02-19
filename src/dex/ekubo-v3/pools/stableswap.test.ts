@@ -4,7 +4,7 @@ import { MIN_TICK, MAX_TICK, toSqrtRatio } from './math/tick';
 import { FullRangePoolState } from './full-range';
 import { Quote } from './pool';
 import { PoolConfig, PoolKey, StableswapPoolTypeConfig } from './utils';
-import { computeStableswapBounds, StableswapPool } from './stableswap';
+import { computeStableswapBounds, quoteStableswap } from './stableswap';
 
 const POSITION_AMOUNT = 1_000_000_000_000_000_000n;
 const SMALL_AMOUNT = 1_000_000_000_000_000n;
@@ -17,14 +17,9 @@ function quote(
   poolTypeConfig: StableswapPoolTypeConfig,
   fee: bigint = 0n,
 ): Quote<FullRangePoolState.Object> {
-  const { lowerPrice, upperPrice } = computeStableswapBounds(poolTypeConfig);
-
-  return StableswapPool.prototype.quoteStableswap.call(
-    {
-      key: new PoolKey(0n, 1n, new PoolConfig(0n, fee, poolTypeConfig)),
-      lowerPrice,
-      upperPrice,
-    },
+  return quoteStableswap(
+    fee,
+    computeStableswapBounds(poolTypeConfig),
     amount,
     isToken1,
     state,
@@ -110,7 +105,7 @@ function stateFromTick(
   };
 }
 
-describe(StableswapPool.prototype.quoteStableswap, () => {
+describe(quoteStableswap, () => {
   test('amplification 26 token0 in', () => {
     const poolTypeConfig = new StableswapPoolTypeConfig(0, 26);
     const liquidity = mintedLiquidity(0, 26, 0);

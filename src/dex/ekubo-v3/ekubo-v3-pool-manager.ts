@@ -18,20 +18,35 @@ import { convertAndSortTokens } from './utils';
 import { floatSqrtRatioToFixed } from './pools/math/sqrt-ratio';
 import { hexDataSlice, hexlify, hexValue, hexZeroPad } from 'ethers/lib/utils';
 import {
+  BOOSTED_FEES_CONCENTRATED_ADDRESS,
   CORE_ADDRESS,
   MEV_CAPTURE_ADDRESS,
   ORACLE_ADDRESS,
   TWAMM_ADDRESS,
 } from './config';
-import { NULL_ADDRESS } from '../../constants';
 import { FullRangePool, FullRangePoolState } from './pools/full-range';
 import { StableswapPool } from './pools/stableswap';
-import { BasePool, BasePoolState } from './pools/base';
+import { ConcentratedPool, ConcentratedPoolState } from './pools/concentrated';
 import { OraclePool } from './pools/oracle';
 import { MevCapturePool } from './pools/mev-capture';
 import { TwammPool, TwammPoolState } from './pools/twamm';
+import { BoostedFeesPool, BoostedFeesPoolState } from './pools/boosted-fees';
+import { ExtensionType, extensionType } from './extension-type';
 
-const SUBGRAPH_QUERY = `query ($coreAddress: Bytes!, $extensions: [Bytes!]) {
+export const EVENT_EMITTERS = [
+  CORE_ADDRESS,
+  TWAMM_ADDRESS,
+  BOOSTED_FEES_CONCENTRATED_ADDRESS,
+];
+
+const SUBGRAPH_PAGE_SIZE = 1000;
+const SUBGRAPH_EXTENSIONS = [
+  ORACLE_ADDRESS,
+  TWAMM_ADDRESS,
+  MEV_CAPTURE_ADDRESS,
+  BOOSTED_FEES_CONCENTRATED_ADDRESS,
+];
+const SUBGRAPH_QUERY = `query ($lastId: Bytes!) {
   _meta {
     block {
       hash
@@ -39,8 +54,22 @@ const SUBGRAPH_QUERY = `query ($coreAddress: Bytes!, $extensions: [Bytes!]) {
     }
   }
   poolInitializations(
-    where: {coreAddress: $coreAddress, extension_in: $extensions}, orderBy: blockNumber
+    first: ${SUBGRAPH_PAGE_SIZE}
+    where: {
+      and: [
+        {id_gte: $lastId}
+        {or: [
+          {extension_in: [${SUBGRAPH_EXTENSIONS.map(
+            extension => `"${extension.toString()}"`,
+          ).join()}]}
+          {extension_lte: "0x1fffffffffffffffffffffffffffffffffffffff"}
+          {extension_gte: "0x8000000000000000000000000000000000000000", extension_lte: "0x9fffffffffffffffffffffffffffffffffffffff"}
+        ]}
+      ]
+    }
+    orderBy: id
   ) {
+    id
     blockNumber
     blockHash
     tickSpacing
@@ -59,10 +88,37 @@ const MAX_BATCH_SIZE = 100;
 
 const MAX_SUBGRAPH_RETRIES = 10;
 const SUBGRAPH_RETRY_INTERVAL_MS = 3000;
+const SUBGRAPH_INITIAL_LAST_ID = '0x00000000000000000000000000000000';
 
 type PoolKeyWithInitBlockNumber<C extends PoolTypeConfig> = {
   key: PoolKey<C>;
   initBlockNumber: number;
+};
+
+export type PoolInitialization = {
+  id: string;
+  blockNumber: string;
+  blockHash: string;
+  tickSpacing: number | null;
+  stableswapCenterTick: number | null;
+  stableswapAmplification: number | null;
+  extension: string;
+  fee: string;
+  poolId: string;
+  token0: string;
+  token1: string;
+};
+
+export type SubgraphData = {
+  data: {
+    _meta: {
+      block: {
+        hash: string;
+        number: number;
+      };
+    };
+    poolInitializations: PoolInitialization[];
+  };
 };
 
 // The only attached EventSubscriber of this integration that will forward all relevant logs to the pools and handle pool initialization events
@@ -91,6 +147,10 @@ export class EkuboV3PoolManager implements EventSubscriber {
     const {
       core: { contract: coreContract, interface: coreIface },
       twamm: { contract: twammContract, interface: twammIface },
+      boostedFees: {
+        contract: boostedFeesContract,
+        interface: boostedFeesIface,
+      },
     } = contracts;
 
     this.poolInitializedFragment = coreIface.getEvent('PoolInitialized');
@@ -121,6 +181,13 @@ export class EkuboV3PoolManager implements EventSubscriber {
                 StableswapPoolTypeConfig.fullRangeConfig(),
               ),
             ).stringId,
+        ],
+      ]),
+      [boostedFeesContract.address]: new Map([
+        ['', parsePoolIdByLogDataOffsetFn(0)],
+        [
+          boostedFeesIface.getEventTopic('PoolBoosted'),
+          parsePoolIdByLogDataOffsetFn(0),
         ],
       ]),
     };
@@ -227,148 +294,162 @@ export class EkuboV3PoolManager implements EventSubscriber {
     maxBlockNumber: number,
     subscribeToBlockManager: boolean,
   ): Promise<{
-    poolKeys:
+    poolKeysRes:
       | PoolKeyWithInitBlockNumber<
           StableswapPoolTypeConfig | ConcentratedPoolTypeConfig
         >[]
-      | null;
+      | Error;
     subscribedBlockNumber: number | null;
   }> {
-    let poolKeys = null;
     let subscribedBlockNumber = null;
 
-    try {
-      const {
-        _meta: {
-          block: { number: subgraphBlockNumber, hash: subgraphBlockHash },
-        },
-        poolInitializations,
-      } = (
-        await this.dexHelper.httpRequest.querySubgraph<{
-          data: {
-            _meta: {
-              block: {
-                hash: string;
-                number: number;
-              };
-            };
-            poolInitializations: {
-              blockNumber: string;
-              blockHash: string;
-              tickSpacing: number | null;
-              stableswapCenterTick: number | null;
-              stableswapAmplification: number | null;
-              extension: string;
-              fee: string;
-              poolId: string;
-              token0: string;
-              token1: string;
-            }[];
-          };
-        }>(
-          this.subgraphId,
-          {
-            query: SUBGRAPH_QUERY,
-            variables: {
-              coreAddress: CORE_ADDRESS,
-              extensions: [
-                NULL_ADDRESS,
-                ORACLE_ADDRESS,
-                TWAMM_ADDRESS,
-                MEV_CAPTURE_ADDRESS,
-              ],
-            },
-          },
-          {},
-        )
-      ).data;
+    const poolInitializations: PoolInitialization[] = [];
+    let subgraphBlockNumber, subgraphBlockHash;
+    let lastRowInfo: { id: string; blockHash: string | null } = {
+      id: SUBGRAPH_INITIAL_LAST_ID,
+      blockHash: null,
+    };
 
-      if (subscribeToBlockManager) {
-        const blockNumber = Math.min(subgraphBlockNumber, maxBlockNumber);
-
-        this.dexHelper.blockManager.subscribeToLogs(
-          this,
-          [
-            this.contracts.core.contract.address,
-            this.contracts.twamm.contract.address,
-          ],
-          blockNumber,
-        );
-
-        subscribedBlockNumber = blockNumber;
-      }
-
-      // Just check the existence of the latest known block by hash in the canonical chain.
-      // This, together with the pool manager being subscribed before this check, ensures that
-      // we can consistently transition from the subgraph to the RPC state.
+    while (true) {
+      let subgraphData;
       try {
-        await this.dexHelper.provider.getBlock(subgraphBlockHash);
+        subgraphData =
+          await this.dexHelper.httpRequest.querySubgraph<SubgraphData>(
+            this.subgraphId,
+            {
+              query: SUBGRAPH_QUERY,
+              variables: {
+                lastId: lastRowInfo.id,
+              },
+            },
+            {},
+          );
       } catch (err) {
-        this.logger.warn(
-          'Failed to transition from subgraph to RPC state (possible reorg):',
-          err,
-        );
-
         return {
-          poolKeys: null,
+          poolKeysRes: new Error('Subgraph pool key retrieval failed', {
+            cause: err,
+          }),
           subscribedBlockNumber,
         };
       }
 
-      // Remove pools initialized at a block > maxBlockNumber
-      while (true) {
-        const lastElem = poolInitializations.at(-1);
+      const { _meta, poolInitializations: rawPage } = subgraphData.data;
+      subgraphBlockNumber = _meta.block.number;
+      subgraphBlockHash = _meta.block.hash;
+
+      let page;
+
+      if (lastRowInfo.blockHash !== null) {
+        const firstRow = rawPage.at(0);
+
         if (
-          typeof lastElem === 'undefined' ||
-          Number(lastElem.blockNumber) <= maxBlockNumber
+          typeof firstRow === 'undefined' ||
+          firstRow.id !== lastRowInfo.id ||
+          firstRow.blockHash !== lastRowInfo.blockHash
         ) {
-          break;
+          return {
+            poolKeysRes: new Error('Subgraph cursor continuity check failed'),
+            subscribedBlockNumber,
+          };
         }
-        poolInitializations.pop();
+
+        page = rawPage.slice(1);
+      } else {
+        page = rawPage;
       }
 
-      poolKeys = poolInitializations.flatMap(info => {
-        let poolTypeConfig;
+      poolInitializations.push(...page);
 
-        if (info.tickSpacing !== null) {
-          poolTypeConfig = new ConcentratedPoolTypeConfig(info.tickSpacing);
-        } else if (
-          info.stableswapAmplification !== null &&
-          info.stableswapCenterTick !== null
-        ) {
-          poolTypeConfig = new StableswapPoolTypeConfig(
-            info.stableswapCenterTick,
-            info.stableswapAmplification,
-          );
-        } else {
-          this.logger.error(
-            `Pool ${info.poolId} has an unknown pool type config`,
-          );
-          return [];
-        }
+      const lastElem = rawPage.at(SUBGRAPH_PAGE_SIZE - 1);
+      if (typeof lastElem === 'undefined') {
+        break;
+      }
 
-        return [
-          {
-            key: new PoolKey(
-              BigInt(info.token0),
-              BigInt(info.token1),
-              new PoolConfig(
-                BigInt(info.extension),
-                BigInt(info.fee),
-                poolTypeConfig,
-              ),
-              BigInt(info.poolId),
-            ),
-            initBlockNumber: Number(info.blockNumber),
-          },
-        ];
-      });
-    } catch (err) {
-      this.logger.error('Subgraph pool key retrieval failed:', err);
+      lastRowInfo = {
+        id: lastElem.id,
+        blockHash: lastElem.blockHash,
+      };
     }
 
+    if (subscribeToBlockManager) {
+      const blockNumber = Math.min(subgraphBlockNumber, maxBlockNumber);
+
+      this.dexHelper.blockManager.subscribeToLogs(
+        this,
+        EVENT_EMITTERS,
+        blockNumber,
+      );
+
+      subscribedBlockNumber = blockNumber;
+    }
+
+    // TODO there can now be events that are missed when the EventSubscriber (this instance) receives events for pools which should be initialized but aren't because the following reorg check fails
+    // Just check the existence of the latest known block by hash in the canonical chain.
+    // This, together with the pool manager being subscribed before this check, ensures that
+    // we can consistently transition from the subgraph to the RPC state.
+    try {
+      await this.dexHelper.provider.getBlock(subgraphBlockHash);
+    } catch (err) {
+      return {
+        poolKeysRes: new Error(
+          'Failed to transition from subgraph to RPC state (possible reorg)',
+          { cause: err },
+        ),
+        subscribedBlockNumber,
+      };
+    }
+
+    // Remove pools initialized at a block > maxBlockNumber
+    while (true) {
+      const lastElem = poolInitializations.at(-1);
+      if (
+        typeof lastElem === 'undefined' ||
+        Number(lastElem.blockNumber) <= maxBlockNumber
+      ) {
+        break;
+      }
+      poolInitializations.pop();
+    }
+
+    const poolKeys = poolInitializations.flatMap(info => {
+      let poolTypeConfig;
+
+      if (info.tickSpacing !== null) {
+        poolTypeConfig = new ConcentratedPoolTypeConfig(info.tickSpacing);
+      } else if (
+        info.stableswapAmplification !== null &&
+        info.stableswapCenterTick !== null
+      ) {
+        poolTypeConfig = new StableswapPoolTypeConfig(
+          info.stableswapCenterTick,
+          info.stableswapAmplification,
+        );
+      } else {
+        this.logger.error(
+          `Pool ${info.poolId} has an unknown pool type config`,
+        );
+        return [];
+      }
+
+      return [
+        {
+          key: new PoolKey(
+            BigInt(info.token0),
+            BigInt(info.token1),
+            new PoolConfig(
+              BigInt(info.extension),
+              BigInt(info.fee),
+              poolTypeConfig,
+            ),
+            BigInt(info.poolId),
+          ),
+          initBlockNumber: Number(info.blockNumber),
+        },
+      ];
+    });
+
     return {
-      poolKeys,
+      poolKeysRes: poolKeys,
       subscribedBlockNumber,
     };
   }
@@ -395,12 +476,16 @@ export class EkuboV3PoolManager implements EventSubscriber {
         maxBlockNumber = res.subscribedBlockNumber;
       }
 
-      if (res.poolKeys === null) {
+      if (res.poolKeysRes instanceof Error) {
+        this.logger.warn(
+          'Subgraph pool key retrieval failed:',
+          res.poolKeysRes,
+        );
         await new Promise(resolve =>
           setTimeout(resolve, SUBGRAPH_RETRY_INTERVAL_MS),
         );
       } else {
-        poolKeys = res.poolKeys;
+        poolKeys = res.poolKeysRes;
       }
     } while (poolKeys === null && attempt <= MAX_SUBGRAPH_RETRIES);
 
@@ -415,29 +500,49 @@ export class EkuboV3PoolManager implements EventSubscriber {
       this.clearPools();
     }
 
-    const [twammPoolKeys, otherPoolKeys] = poolKeys.reduce<
+    const [twammPoolKeys, boostedFeesPoolKeys, otherPoolKeys] = poolKeys.reduce<
       [
         PoolKeyWithInitBlockNumber<StableswapPoolTypeConfig>[],
+        PoolKeyWithInitBlockNumber<ConcentratedPoolTypeConfig>[],
         PoolKeyWithInitBlockNumber<
           StableswapPoolTypeConfig | ConcentratedPoolTypeConfig
         >[],
       ]
     >(
-      ([twammPoolKeys, otherPoolKeys], poolKeyWithInitBlockNumber) => {
-        if (
-          poolKeyWithInitBlockNumber.key.config.extension ===
-          BigInt(TWAMM_ADDRESS)
+      (
+        [twammPoolKeys, boostedFeesPoolKeys, otherPoolKeys],
+        poolKeyWithInitBlockNumber,
+      ) => {
+        switch (
+          extensionType(poolKeyWithInitBlockNumber.key.config.extension)
         ) {
-          twammPoolKeys.push(
-            poolKeyWithInitBlockNumber as PoolKeyWithInitBlockNumber<StableswapPoolTypeConfig>,
-          );
-        } else {
-          otherPoolKeys.push(poolKeyWithInitBlockNumber);
+          case ExtensionType.Twamm:
+            twammPoolKeys.push(
+              poolKeyWithInitBlockNumber as PoolKeyWithInitBlockNumber<StableswapPoolTypeConfig>,
+            );
+            break;
+          case ExtensionType.BoostedFeesConcentrated:
+            boostedFeesPoolKeys.push(
+              poolKeyWithInitBlockNumber as PoolKeyWithInitBlockNumber<ConcentratedPoolTypeConfig>,
+            );
+            break;
+          case ExtensionType.NoSwapCallPoints:
+          case ExtensionType.Oracle:
+          case ExtensionType.MevCapture:
+            otherPoolKeys.push(poolKeyWithInitBlockNumber);
+            break;
+          default:
+            this.logger.debug(
+              `Ignoring unknown pool extension ${hexZeroPad(
+                hexlify(poolKeyWithInitBlockNumber.key.config.extension),
+                20,
+              )}`,
+            );
         }
 
-        return [twammPoolKeys, otherPoolKeys];
+        return [twammPoolKeys, boostedFeesPoolKeys, otherPoolKeys];
       },
-      [[], []],
+      [[], [], []],
     );
 
     const promises: Promise<void>[] = [];
@@ -495,14 +600,13 @@ export class EkuboV3PoolManager implements EventSubscriber {
           .then(async fetchedData => {
             await Promise.all(
               fetchedData.map(async (data, i) => {
-                const { key: poolKey, initBlockNumber } =
-                  otherPoolKeys[batchStart + i];
-                const { extension } = poolKey.config;
+                const { key: poolKey, initBlockNumber } = batch[i];
+                const extType = extensionType(poolKey.config.extension);
 
                 try {
                   if (isStableswapKey(poolKey)) {
-                    switch (extension) {
-                      case 0n:
+                    switch (extType) {
+                      case ExtensionType.NoSwapCallPoints:
                         poolKey.config.poolTypeConfig.isFullRange()
                           ? await addPool(
                               FullRangePool,
@@ -517,7 +621,7 @@ export class EkuboV3PoolManager implements EventSubscriber {
                               poolKey,
                             );
                         break;
-                      case BigInt(ORACLE_ADDRESS):
+                      case ExtensionType.Oracle:
                         await addPool(
                           OraclePool,
                           FullRangePoolState.fromQuoter(data),
@@ -527,36 +631,30 @@ export class EkuboV3PoolManager implements EventSubscriber {
                         break;
                       default:
                         throw new Error(
-                          `Unknown pool extension ${hexZeroPad(
-                            hexlify(extension),
-                            20,
-                          )}`,
+                          `Unexpected extension type ${extType} for stableswap pool`,
                         );
                     }
                   } else if (isConcentratedKey(poolKey)) {
-                    switch (extension) {
-                      case 0n:
+                    switch (extType) {
+                      case ExtensionType.NoSwapCallPoints:
                         await addPool(
-                          BasePool,
-                          BasePoolState.fromQuoter(data),
+                          ConcentratedPool,
+                          ConcentratedPoolState.fromQuoter(data),
                           initBlockNumber,
                           poolKey,
                         );
                         break;
-                      case BigInt(MEV_CAPTURE_ADDRESS):
+                      case ExtensionType.MevCapture:
                         await addPool(
                           MevCapturePool,
-                          BasePoolState.fromQuoter(data),
+                          ConcentratedPoolState.fromQuoter(data),
                           initBlockNumber,
                           poolKey,
                         );
                         break;
                       default:
                         throw new Error(
-                          `Unknown pool extension ${hexZeroPad(
-                            hexlify(extension),
-                            20,
-                          )}`,
+                          `Unexpected extension type ${extType} for concentrated pool`,
                         );
                     }
                   } else {
@@ -591,6 +689,33 @@ export class EkuboV3PoolManager implements EventSubscriber {
             TwammPoolState.Object,
             TwammPool
           >(TwammPool, undefined, initBlockNumber, key);
+        } catch (err) {
+          this.logger.error(`Failed to construct pool ${key.stringId}: ${err}`);
+        }
+      }),
+    );
+
+    promises.push(
+      ...boostedFeesPoolKeys.map(async ({ key, initBlockNumber }) => {
+        try {
+          const [quoteData, boostedFeesData] = await Promise.all([
+            this.contracts.core.quoteDataFetcher.getQuoteData(
+              [key.toAbi()],
+              MIN_BITMAPS_SEARCHED,
+              { blockTag: blockNumber },
+            ) as Promise<BasicQuoteData[]>,
+            this.contracts.boostedFees.quoteDataFetcher.getPoolState(
+              key.toAbi(),
+              { blockTag: blockNumber },
+            ),
+          ]);
+
+          await addPool(
+            BoostedFeesPool,
+            BoostedFeesPoolState.fromQuoter(quoteData[0], boostedFeesData),
+            initBlockNumber,
+            key,
+          );
         } catch (err) {
           this.logger.error(`Failed to construct pool ${key.stringId}: ${err}`);
         }
@@ -682,20 +807,20 @@ export class EkuboV3PoolManager implements EventSubscriber {
     };
 
     if (isStableswapKey(poolKey)) {
-      switch (extension) {
-        case 0n:
+      switch (extensionType(extension)) {
+        case ExtensionType.NoSwapCallPoints:
           const fullRangeState =
             FullRangePoolState.fromPoolInitialization(state);
           return poolKey.config.poolTypeConfig.isFullRange()
             ? addPool(FullRangePool, poolKey, fullRangeState)
             : addPool(StableswapPool, poolKey, fullRangeState);
-        case BigInt(ORACLE_ADDRESS):
+        case ExtensionType.Oracle:
           return addPool(
             OraclePool,
             poolKey,
             FullRangePoolState.fromPoolInitialization(state),
           );
-        case BigInt(TWAMM_ADDRESS):
+        case ExtensionType.Twamm:
           return addPool(
             TwammPool,
             poolKey,
@@ -710,13 +835,20 @@ export class EkuboV3PoolManager implements EventSubscriber {
           );
       }
     } else if (isConcentratedKey(poolKey)) {
-      const basePoolState = BasePoolState.fromPoolInitialization(state);
+      const concentratedPoolState =
+        ConcentratedPoolState.fromPoolInitialization(state);
 
-      switch (extension) {
-        case 0n:
-          return addPool(BasePool, poolKey, basePoolState);
-        case BigInt(MEV_CAPTURE_ADDRESS):
-          return addPool(MevCapturePool, poolKey, basePoolState);
+      switch (extensionType(extension)) {
+        case ExtensionType.NoSwapCallPoints:
+          return addPool(ConcentratedPool, poolKey, concentratedPoolState);
+        case ExtensionType.MevCapture:
+          return addPool(MevCapturePool, poolKey, concentratedPoolState);
+        case ExtensionType.BoostedFeesConcentrated:
+          return addPool(
+            BoostedFeesPool,
+            poolKey,
+            BoostedFeesPoolState.fromPoolInitialization(state),
+          );
         default:
           this.logger.debug(
             `Ignoring unknown pool extension ${hexZeroPad(

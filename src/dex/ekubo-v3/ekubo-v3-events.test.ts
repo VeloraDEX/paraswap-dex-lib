@@ -10,16 +10,17 @@ import { Network } from '../../constants';
 import { generateConfig } from '../../config';
 import { DummyDexHelper, IDexHelper } from '../../dex-helper/index';
 import {
+  BOOSTED_FEES_CONCENTRATED_ADDRESS,
   DEX_KEY,
   EKUBO_V3_CONFIG,
   EkuboSupportedNetwork,
   TWAMM_ADDRESS,
 } from './config';
 import {
-  BasePool,
-  BasePoolState,
+  ConcentratedPool,
+  ConcentratedPoolState,
   findNearestInitializedTickIndex,
-} from './pools/base';
+} from './pools/concentrated';
 import { EkuboPool } from './pools/pool';
 import { TwammPool } from './pools/twamm';
 import {
@@ -32,9 +33,10 @@ import {
 } from './pools/utils';
 import { ekuboContracts } from './utils';
 import { Tokens } from '../../../tests/constants-e2e';
-import { EkuboV3PoolManager } from './ekubo-v3-pool-manager';
+import { EkuboV3PoolManager, EVENT_EMITTERS } from './ekubo-v3-pool-manager';
 import { EkuboContracts } from './types';
 import { Logger, Token } from '../../types';
+import { BoostedFeesPool } from './pools/boosted-fees';
 
 jest.setTimeout(50 * 1000);
 
@@ -42,12 +44,14 @@ type AnyEkuboPool = EkuboPool<PoolTypeConfig, unknown>;
 type EventMappings = Record<string, [AnyEkuboPool, number][]>;
 
 // Rather incomplete but only used for tests
-function isBasePoolState(value: unknown): value is BasePoolState.Object {
+function isConcentratedPoolState(
+  value: unknown,
+): value is ConcentratedPoolState.Object {
   return typeof value === 'object' && value !== null && 'sortedTicks' in value;
 }
 
 function stateCompare(actual: unknown, expected: unknown) {
-  if (!isBasePoolState(actual) || !isBasePoolState(expected)) {
+  if (!isConcentratedPoolState(actual) || !isConcentratedPoolState(expected)) {
     expect(actual).toEqual(expected);
     return;
   }
@@ -168,6 +172,7 @@ const eventFixtures: Record<
 > = {
   [Network.MAINNET]: tokens => {
     const USDC = BigInt(tokens['USDC'].address);
+    const EKUBO = BigInt(tokens['EKUBO'].address);
 
     const clEthUsdcPoolKey = new PoolKey(
       NATIVE_TOKEN_ADDRESS,
@@ -189,15 +194,25 @@ const eventFixtures: Record<
       ),
     );
 
+    const boostedFeesEkuboUsdcPoolKey = new PoolKey(
+      EKUBO,
+      USDC,
+      new PoolConfig(
+        BigInt(BOOSTED_FEES_CONCENTRATED_ADDRESS),
+        184467440737095516n,
+        new ConcentratedPoolTypeConfig(19802),
+      ),
+    );
+
     return {
       poolStateEvents: {
         Swapped: [
-          [newPool(BasePool, clEthUsdcPoolKey), 24175246], // https://etherscan.io/tx/0xee56e1f3bad803bd857fb118e55d7eabb5368a94ae8f11e83724278f474294ca
+          [newPool(ConcentratedPool, clEthUsdcPoolKey), 24175246], // https://etherscan.io/tx/0xee56e1f3bad803bd857fb118e55d7eabb5368a94ae8f11e83724278f474294ca
           [newPool(TwammPool, twammEthUsdcPoolKey), 24175264], // https://etherscan.io/tx/0x01c02e32ac563e3a761382cb8ef278cfed9ed9dc758b5a95f38dd44978e87b2e
         ],
         PositionUpdated: [
-          [newPool(BasePool, clEthUsdcPoolKey), 24169215], // Add liquidity https://etherscan.io/tx/0x52f469327de230f3da91eb7b77069852757d383450943307f5da63016476c0fb
-          [newPool(BasePool, clEthUsdcPoolKey), 24169222], // Withdraw liquidity https://etherscan.io/tx/0x00cfe35092d58aab347abc58345878092f87d37c7f0f0126fb1c890c791cdc02
+          [newPool(ConcentratedPool, clEthUsdcPoolKey), 24169215], // Add liquidity https://etherscan.io/tx/0x52f469327de230f3da91eb7b77069852757d383450943307f5da63016476c0fb
+          [newPool(ConcentratedPool, clEthUsdcPoolKey), 24169222], // Withdraw liquidity https://etherscan.io/tx/0x00cfe35092d58aab347abc58345878092f87d37c7f0f0126fb1c890c791cdc02
           [newPool(TwammPool, twammEthUsdcPoolKey), 24169228], // Add liquidity https://etherscan.io/tx/0x5fceec2c8fce56c7a73b8e3efca77f9ef8561b40a08b05785e9084cba684b5f8
           [newPool(TwammPool, twammEthUsdcPoolKey), 24169235], // Withdraw liquidity https://etherscan.io/tx/0x920f865071397a145e2e9558dfaedb7e138456d8fe43c1899187778a16b00c8b
         ],
@@ -208,6 +223,12 @@ const eventFixtures: Record<
         VirtualOrdersExecuted: [
           [newPool(TwammPool, twammEthUsdcPoolKey), 24169245], // Create order https://etherscan.io/tx/0x67bb5ba44397d8b9d9ffe753e9c7f1b478eadfac22464a39521bdd3541f6a68f
           [newPool(TwammPool, twammEthUsdcPoolKey), 24169249], // Stop order https://etherscan.io/tx/0xde6812e959a49e245f15714d1b50571f43ca7711c91d2df1087178a38bc554b7
+        ],
+        PoolBoosted: [
+          [newPool(BoostedFeesPool, boostedFeesEkuboUsdcPoolKey), 24486286], // https://etherscan.io/tx/0xe8b84a98592609c8b49bfaeafa76b0187bd6afd90b8df27469f9435f4b17318e#eventlog#235
+        ],
+        FeesDonated: [
+          [newPool(BoostedFeesPool, boostedFeesEkuboUsdcPoolKey), 24486286], // https://etherscan.io/tx/0xe8b84a98592609c8b49bfaeafa76b0187bd6afd90b8df27469f9435f4b17318e#eventlog#234
         ],
       },
       poolInitializationEvent: {
@@ -239,7 +260,7 @@ const eventFixtures: Record<
     return {
       poolStateEvents: {
         PositionUpdated: [
-          [newPool(BasePool, clUsdcUsdtPoolKey), 419274779], // Withdraw liquidity https://arbiscan.io/tx/0x84271744e848a448748b3916c274461c0523b1f4a1c4ad59afd0f46867fe38a4#eventlog#8
+          [newPool(ConcentratedPool, clUsdcUsdtPoolKey), 419274779], // Withdraw liquidity https://arbiscan.io/tx/0x84271744e848a448748b3916c274461c0523b1f4a1c4ad59afd0f46867fe38a4#eventlog#8
         ],
       },
       poolInitializationEvent: {
@@ -285,7 +306,7 @@ Object.entries(eventFixtures).forEach(([networkStr, fixturesFactory]) => {
       const blockInfo = await getOrFetchBlockInfo(
         blockNumber,
         cacheKey,
-        [contracts.core.contract.address, contracts.twamm.contract.address],
+        EVENT_EMITTERS,
         dexHelper.provider,
       );
 

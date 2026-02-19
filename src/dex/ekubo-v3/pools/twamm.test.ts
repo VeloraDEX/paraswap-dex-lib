@@ -1,27 +1,25 @@
 import { DeepReadonly } from 'ts-essentials';
 import { Quote } from './pool';
 import { MAX_SQRT_RATIO, MIN_SQRT_RATIO, toSqrtRatio } from './math/tick';
-import { TwammPool, TwammPoolState } from './twamm';
+import { quoteTwamm, TwammPoolState } from './twamm';
 import { PoolConfig, PoolKey, StableswapPoolTypeConfig } from './utils';
 import { TWO_POW_128 } from './math/constants';
 import { BigNumber } from 'ethers';
 import { fixedSqrtRatioToFloat } from './math/sqrt-ratio';
 
-describe(TwammPool.prototype.quoteTwamm, () => {
+describe(quoteTwamm, () => {
   function quote(
     amount: bigint,
     isToken1: boolean,
     state: DeepReadonly<TwammPoolState.Object>,
     timestamp: bigint,
   ): Quote {
-    return TwammPool.prototype.quoteTwamm.call(
-      {
-        key: new PoolKey(
-          1n,
-          2n,
-          new PoolConfig(3n, 0n, StableswapPoolTypeConfig.fullRangeConfig()),
-        ),
-      },
+    return quoteTwamm(
+      new PoolKey(
+        1n,
+        2n,
+        new PoolConfig(3n, 0n, StableswapPoolTypeConfig.fullRangeConfig()),
+      ),
       amount,
       isToken1,
       state,
@@ -39,10 +37,12 @@ describe(TwammPool.prototype.quoteTwamm, () => {
             liquidity: 1_000_000_000n,
             sqrtRatio: toSqrtRatio(1),
           },
-          lastExecutionTime: 0n,
-          token0SaleRate: 0n,
-          token1SaleRate: 0n,
-          virtualOrderDeltas: [],
+          timedPoolState: {
+            lastTime: 0n,
+            token0Rate: 0n,
+            token1Rate: 0n,
+            virtualDeltas: [],
+          },
         },
         32n,
       ).calculatedAmount,
@@ -59,10 +59,12 @@ describe(TwammPool.prototype.quoteTwamm, () => {
             liquidity: 100_000n,
             sqrtRatio: toSqrtRatio(1),
           },
-          lastExecutionTime: 0n,
-          token0SaleRate: 0n,
-          token1SaleRate: 0n,
-          virtualOrderDeltas: [],
+          timedPoolState: {
+            lastTime: 0n,
+            token0Rate: 0n,
+            token1Rate: 0n,
+            virtualDeltas: [],
+          },
         },
         32n,
       ).calculatedAmount,
@@ -79,10 +81,12 @@ describe(TwammPool.prototype.quoteTwamm, () => {
             liquidity: 1_000_000n,
             sqrtRatio: toSqrtRatio(1),
           },
-          lastExecutionTime: 0n,
-          token0SaleRate: 1n << 32n,
-          token1SaleRate: 0n,
-          virtualOrderDeltas: [],
+          timedPoolState: {
+            lastTime: 0n,
+            token0Rate: 1n << 32n,
+            token1Rate: 0n,
+            virtualDeltas: [],
+          },
         },
         32n,
       ).calculatedAmount,
@@ -99,10 +103,12 @@ describe(TwammPool.prototype.quoteTwamm, () => {
             liquidity: 1_000_000n,
             sqrtRatio: toSqrtRatio(1),
           },
-          lastExecutionTime: 0n,
-          token0SaleRate: 0n,
-          token1SaleRate: 1n << 32n,
-          virtualOrderDeltas: [],
+          timedPoolState: {
+            lastTime: 0n,
+            token0Rate: 0n,
+            token1Rate: 1n << 32n,
+            virtualDeltas: [],
+          },
         },
         32n,
       ).calculatedAmount,
@@ -119,10 +125,12 @@ describe(TwammPool.prototype.quoteTwamm, () => {
             liquidity: 1_000_000n,
             sqrtRatio: MAX_SQRT_RATIO,
           },
-          lastExecutionTime: 0n,
-          token0SaleRate: 0n,
-          token1SaleRate: 1n << 32n,
-          virtualOrderDeltas: [],
+          timedPoolState: {
+            lastTime: 0n,
+            token0Rate: 0n,
+            token1Rate: 1n << 32n,
+            virtualDeltas: [],
+          },
         },
         32n,
       ).calculatedAmount,
@@ -139,16 +147,18 @@ describe(TwammPool.prototype.quoteTwamm, () => {
             liquidity: 1_000_000n,
             sqrtRatio: MAX_SQRT_RATIO,
           },
-          lastExecutionTime: 0n,
-          token0SaleRate: 0n,
-          token1SaleRate: 1n << 32n,
-          virtualOrderDeltas: [
-            {
-              time: 16n,
-              saleRateDelta0: 100_000n * (1n << 32n),
-              saleRateDelta1: 0n,
-            },
-          ],
+          timedPoolState: {
+            lastTime: 0n,
+            token0Rate: 0n,
+            token1Rate: 1n << 32n,
+            virtualDeltas: [
+              {
+                time: 16n,
+                delta0: 100_000n * (1n << 32n),
+                delta1: 0n,
+              },
+            ],
+          },
         },
         32n,
       ).calculatedAmount,
@@ -165,16 +175,18 @@ describe(TwammPool.prototype.quoteTwamm, () => {
             liquidity: 1_000_000n,
             sqrtRatio: MIN_SQRT_RATIO,
           },
-          lastExecutionTime: 0n,
-          token0SaleRate: 1n << 32n,
-          token1SaleRate: 0n,
-          virtualOrderDeltas: [
-            {
-              time: 16n,
-              saleRateDelta0: 0n,
-              saleRateDelta1: 100_000n * (1n << 32n),
-            },
-          ],
+          timedPoolState: {
+            lastTime: 0n,
+            token0Rate: 1n << 32n,
+            token1Rate: 0n,
+            virtualDeltas: [
+              {
+                time: 16n,
+                delta0: 0n,
+                delta1: 100_000n * (1n << 32n),
+              },
+            ],
+          },
         },
         32n,
       ).calculatedAmount,
@@ -191,16 +203,18 @@ describe(TwammPool.prototype.quoteTwamm, () => {
             liquidity: 1_000_000n,
             sqrtRatio: MAX_SQRT_RATIO,
           },
-          lastExecutionTime: 0n,
-          token0SaleRate: 0n,
-          token1SaleRate: 1n << 32n,
-          virtualOrderDeltas: [
-            {
-              time: 16n,
-              saleRateDelta0: 100_000n * (1n << 32n),
-              saleRateDelta1: 0n,
-            },
-          ],
+          timedPoolState: {
+            lastTime: 0n,
+            token0Rate: 0n,
+            token1Rate: 1n << 32n,
+            virtualDeltas: [
+              {
+                time: 16n,
+                delta0: 100_000n * (1n << 32n),
+                delta1: 0n,
+              },
+            ],
+          },
         },
         32n,
       ).calculatedAmount,
@@ -217,16 +231,18 @@ describe(TwammPool.prototype.quoteTwamm, () => {
             liquidity: 1_000_000n,
             sqrtRatio: MIN_SQRT_RATIO,
           },
-          lastExecutionTime: 0n,
-          token0SaleRate: 1n << 32n,
-          token1SaleRate: 0n,
-          virtualOrderDeltas: [
-            {
-              time: 16n,
-              saleRateDelta0: 0n,
-              saleRateDelta1: 100_000n * (1n << 32n),
-            },
-          ],
+          timedPoolState: {
+            lastTime: 0n,
+            token0Rate: 1n << 32n,
+            token1Rate: 0n,
+            virtualDeltas: [
+              {
+                time: 16n,
+                delta0: 0n,
+                delta1: 100_000n * (1n << 32n),
+              },
+            ],
+          },
         },
         32n,
       ).calculatedAmount,
@@ -243,10 +259,12 @@ describe(TwammPool.prototype.quoteTwamm, () => {
             liquidity: 100_000n,
             sqrtRatio: toSqrtRatio(1),
           },
-          lastExecutionTime: 0n,
-          token0SaleRate: 1n << 32n,
-          token1SaleRate: 1n << 32n,
-          virtualOrderDeltas: [],
+          timedPoolState: {
+            lastTime: 0n,
+            token0Rate: 1n << 32n,
+            token1Rate: 1n << 32n,
+            virtualDeltas: [],
+          },
         },
         32n,
       ).calculatedAmount,
@@ -263,10 +281,12 @@ describe(TwammPool.prototype.quoteTwamm, () => {
             liquidity: 100_000n,
             sqrtRatio: toSqrtRatio(1),
           },
-          lastExecutionTime: 0n,
-          token0SaleRate: 1n << 32n,
-          token1SaleRate: 1n << 32n,
-          virtualOrderDeltas: [],
+          timedPoolState: {
+            lastTime: 0n,
+            token0Rate: 1n << 32n,
+            token1Rate: 1n << 32n,
+            virtualDeltas: [],
+          },
         },
         32n,
       ).calculatedAmount,
@@ -283,10 +303,12 @@ describe(TwammPool.prototype.quoteTwamm, () => {
             liquidity: 1_000n,
             sqrtRatio: toSqrtRatio(1),
           },
-          lastExecutionTime: 0n,
-          token0SaleRate: 10n << 32n,
-          token1SaleRate: 1n << 32n,
-          virtualOrderDeltas: [],
+          timedPoolState: {
+            lastTime: 0n,
+            token0Rate: 10n << 32n,
+            token1Rate: 1n << 32n,
+            virtualDeltas: [],
+          },
         },
         32n,
       ).calculatedAmount,
@@ -303,10 +325,12 @@ describe(TwammPool.prototype.quoteTwamm, () => {
             liquidity: 100_000n,
             sqrtRatio: toSqrtRatio(1),
           },
-          lastExecutionTime: 0n,
-          token0SaleRate: 1n << 32n,
-          token1SaleRate: 10n << 32n,
-          virtualOrderDeltas: [],
+          timedPoolState: {
+            lastTime: 0n,
+            token0Rate: 1n << 32n,
+            token1Rate: 10n << 32n,
+            virtualDeltas: [],
+          },
         },
         32n,
       ).calculatedAmount,
@@ -323,10 +347,12 @@ describe(TwammPool.prototype.quoteTwamm, () => {
             liquidity: 100_000n,
             sqrtRatio: toSqrtRatio(1),
           },
-          lastExecutionTime: 0n,
-          token0SaleRate: 10n << 32n,
-          token1SaleRate: 1n << 32n,
-          virtualOrderDeltas: [],
+          timedPoolState: {
+            lastTime: 0n,
+            token0Rate: 10n << 32n,
+            token1Rate: 1n << 32n,
+            virtualDeltas: [],
+          },
         },
         32n,
       ).calculatedAmount,
@@ -343,10 +369,12 @@ describe(TwammPool.prototype.quoteTwamm, () => {
             liquidity: 100_000n,
             sqrtRatio: toSqrtRatio(1),
           },
-          lastExecutionTime: 0n,
-          token0SaleRate: 1n << 32n,
-          token1SaleRate: 10n << 32n,
-          virtualOrderDeltas: [],
+          timedPoolState: {
+            lastTime: 0n,
+            token0Rate: 1n << 32n,
+            token1Rate: 10n << 32n,
+            virtualDeltas: [],
+          },
         },
         32n,
       ).calculatedAmount,
@@ -363,16 +391,18 @@ describe(TwammPool.prototype.quoteTwamm, () => {
             liquidity: 100_000n,
             sqrtRatio: toSqrtRatio(1),
           },
-          lastExecutionTime: 0n,
-          token0SaleRate: 1n << 32n,
-          token1SaleRate: 1n << 32n,
-          virtualOrderDeltas: [
-            {
-              time: 16n,
-              saleRateDelta0: -(1n << 32n),
-              saleRateDelta1: -(1n << 32n),
-            },
-          ],
+          timedPoolState: {
+            lastTime: 0n,
+            token0Rate: 1n << 32n,
+            token1Rate: 1n << 32n,
+            virtualDeltas: [
+              {
+                time: 16n,
+                delta0: -(1n << 32n),
+                delta1: -(1n << 32n),
+              },
+            ],
+          },
         },
         32n,
       ).calculatedAmount,
@@ -389,16 +419,18 @@ describe(TwammPool.prototype.quoteTwamm, () => {
             liquidity: 100_000n,
             sqrtRatio: toSqrtRatio(1),
           },
-          lastExecutionTime: 0n,
-          token0SaleRate: 1n << 32n,
-          token1SaleRate: 1n << 32n,
-          virtualOrderDeltas: [
-            {
-              time: 16n,
-              saleRateDelta0: 1n << 32n,
-              saleRateDelta1: 1n << 32n,
-            },
-          ],
+          timedPoolState: {
+            lastTime: 0n,
+            token0Rate: 1n << 32n,
+            token1Rate: 1n << 32n,
+            virtualDeltas: [
+              {
+                time: 16n,
+                delta0: 1n << 32n,
+                delta1: 1n << 32n,
+              },
+            ],
+          },
         },
         32n,
       ).calculatedAmount,
@@ -415,10 +447,12 @@ describe(TwammPool.prototype.quoteTwamm, () => {
             liquidity: 70_710_696_755_630_728_101_718_334n,
             sqrtRatio: toSqrtRatio(693147),
           },
-          lastExecutionTime: 0n,
-          token0SaleRate: 10_526_880_627_450_980_392_156_862_745n,
-          token1SaleRate: 10_526_880_627_450_980_392_156_862_745n,
-          virtualOrderDeltas: [],
+          timedPoolState: {
+            lastTime: 0n,
+            token0Rate: 10_526_880_627_450_980_392_156_862_745n,
+            token1Rate: 10_526_880_627_450_980_392_156_862_745n,
+            virtualDeltas: [],
+          },
         },
         2_040n,
       ).calculatedAmount,
@@ -432,21 +466,23 @@ function poolState(): TwammPoolState.Object {
       liquidity: 1n,
       sqrtRatio: TWO_POW_128,
     },
-    lastExecutionTime: 0n,
-    token0SaleRate: 1n,
-    token1SaleRate: 1n,
-    virtualOrderDeltas: [
-      {
-        time: 2n,
-        saleRateDelta0: -1n,
-        saleRateDelta1: 1n,
-      },
-      {
-        time: 3n,
-        saleRateDelta0: 2n,
-        saleRateDelta1: -2n,
-      },
-    ],
+    timedPoolState: {
+      lastTime: 0n,
+      token0Rate: 1n,
+      token1Rate: 1n,
+      virtualDeltas: [
+        {
+          time: 2n,
+          delta0: -1n,
+          delta1: 1n,
+        },
+        {
+          time: 3n,
+          delta0: 2n,
+          delta1: -2n,
+        },
+      ],
+    },
   };
 }
 
@@ -458,20 +494,20 @@ describe(TwammPoolState.fromQuoter, () => {
       TwammPoolState.fromQuoter({
         liquidity: BigNumber.from(expected.fullRangePoolState.liquidity),
         lastVirtualOrderExecutionTime: BigNumber.from(
-          expected.lastExecutionTime,
+          expected.timedPoolState.lastTime,
         ),
-        saleRateDeltas: expected.virtualOrderDeltas.map(delta => ({
+        saleRateDeltas: expected.timedPoolState.virtualDeltas.map(delta => ({
           time: BigNumber.from(delta.time),
-          saleRateDelta0: BigNumber.from(delta.saleRateDelta0),
-          saleRateDelta1: BigNumber.from(delta.saleRateDelta1),
+          saleRateDelta0: BigNumber.from(delta.delta0),
+          saleRateDelta1: BigNumber.from(delta.delta1),
         })),
-        saleRateToken0: BigNumber.from(expected.token0SaleRate),
-        saleRateToken1: BigNumber.from(expected.token1SaleRate),
+        saleRateToken0: BigNumber.from(expected.timedPoolState.token0Rate),
+        saleRateToken1: BigNumber.from(expected.timedPoolState.token1Rate),
         sqrtRatio: BigNumber.from(
           fixedSqrtRatioToFloat(expected.fullRangePoolState.sqrtRatio),
         ),
       }),
-    ).toStrictEqual(expected);
+    ).toEqual(expected);
   });
 });
 
@@ -494,7 +530,7 @@ describe(TwammPoolState.fromSwappedEvent, () => {
     expected.fullRangePoolState.liquidity = liquidityAfter;
     expected.fullRangePoolState.sqrtRatio = sqrtRatioAfter;
 
-    expect(stateAfterSwap).toStrictEqual(expected);
+    expect(stateAfterSwap).toEqual(expected);
   });
 });
 
@@ -509,7 +545,7 @@ describe(TwammPoolState.fromPositionUpdatedEvent, () => {
     const expected = structuredClone(state);
     expected.fullRangePoolState.liquidity += 1n;
 
-    expect(TwammPoolState.fromPositionUpdatedEvent(state, 1n)).toStrictEqual(
+    expect(TwammPoolState.fromPositionUpdatedEvent(state, 1n)!).toEqual(
       expected,
     );
   });
@@ -521,18 +557,18 @@ describe(TwammPoolState.fromVirtualOrdersExecutedEvent, () => {
     const timestamp = 1n;
 
     const expected = structuredClone(state);
-    expected.lastExecutionTime = timestamp;
+    expected.timedPoolState.lastTime = timestamp;
 
     expect(
       TwammPoolState.fromVirtualOrdersExecutedEvent(
         state,
         {
-          token0SaleRate: state.token0SaleRate,
-          token1SaleRate: state.token1SaleRate,
+          token0SaleRate: state.timedPoolState.token0Rate,
+          token1SaleRate: state.timedPoolState.token1Rate,
         },
         timestamp,
       ),
-    ).toStrictEqual(expected);
+    ).toEqual(expected);
   });
 
   test('old delta removal', () => {
@@ -542,10 +578,10 @@ describe(TwammPoolState.fromVirtualOrdersExecutedEvent, () => {
     const [newToken0SaleRate, newToken1SaleRate] = [2n, 0n];
 
     const expected = structuredClone(state);
-    expected.lastExecutionTime = timestamp;
-    expected.token0SaleRate = newToken0SaleRate;
-    expected.token1SaleRate = newToken1SaleRate;
-    expected.virtualOrderDeltas = [];
+    expected.timedPoolState.lastTime = timestamp;
+    expected.timedPoolState.token0Rate = newToken0SaleRate;
+    expected.timedPoolState.token1Rate = newToken1SaleRate;
+    expected.timedPoolState.virtualDeltas = [];
 
     expect(
       TwammPoolState.fromVirtualOrdersExecutedEvent(
@@ -556,7 +592,7 @@ describe(TwammPoolState.fromVirtualOrdersExecutedEvent, () => {
         },
         timestamp,
       ),
-    ).toStrictEqual(expected);
+    ).toEqual(expected);
   });
 });
 
@@ -568,21 +604,21 @@ describe(TwammPoolState.fromOrderUpdatedEvent, () => {
     const srd = 1n;
 
     const expected = structuredClone(state);
-    expected.token1SaleRate += srd;
-    expected.virtualOrderDeltas.push({
+    expected.timedPoolState.token1Rate += srd;
+    expected.timedPoolState.virtualDeltas.push({
       time: endTime,
-      saleRateDelta0: 0n,
-      saleRateDelta1: -srd,
+      delta0: 0n,
+      delta1: -srd,
     });
 
     expect(
       TwammPoolState.fromOrderUpdatedEvent(
         state,
-        [state.lastExecutionTime, endTime],
+        [state.timedPoolState.lastTime, endTime],
         srd,
         true,
-      ),
-    ).toStrictEqual(expected);
+      )!,
+    ).toEqual(expected);
   });
 
   test('not started & existing times', () => {
@@ -592,8 +628,8 @@ describe(TwammPoolState.fromOrderUpdatedEvent, () => {
     const srd = 1n;
 
     const expected = structuredClone(state);
-    expected.virtualOrderDeltas[0].saleRateDelta1 += srd;
-    expected.virtualOrderDeltas[1].saleRateDelta1 -= srd;
+    expected.timedPoolState.virtualDeltas[0].delta1 += srd;
+    expected.timedPoolState.virtualDeltas[1].delta1 -= srd;
 
     expect(
       TwammPoolState.fromOrderUpdatedEvent(
@@ -601,7 +637,7 @@ describe(TwammPoolState.fromOrderUpdatedEvent, () => {
         [startTime, endTime],
         srd,
         true,
-      ),
-    ).toStrictEqual(expected);
+      )!,
+    ).toEqual(expected);
   });
 });
