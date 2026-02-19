@@ -19,6 +19,7 @@ import { floatSqrtRatioToFixed } from './pools/math/sqrt-ratio';
 import { hexDataSlice, hexlify, hexValue, hexZeroPad } from 'ethers/lib/utils';
 import {
   BOOSTED_FEES_CONCENTRATED_ADDRESS,
+  CORE_ADDRESS,
   MEV_CAPTURE_ADDRESS,
   ORACLE_ADDRESS,
   TWAMM_ADDRESS,
@@ -31,6 +32,12 @@ import { MevCapturePool } from './pools/mev-capture';
 import { TwammPool, TwammPoolState } from './pools/twamm';
 import { BoostedFeesPool, BoostedFeesPoolState } from './pools/boosted-fees';
 import { ExtensionType, extensionType } from './extension-type';
+
+export const EVENT_EMITTERS = [
+  CORE_ADDRESS,
+  TWAMM_ADDRESS,
+  BOOSTED_FEES_CONCENTRATED_ADDRESS,
+];
 
 const SUBGRAPH_PAGE_SIZE = 1000;
 const SUBGRAPH_EXTENSIONS = [
@@ -369,11 +376,7 @@ export class EkuboV3PoolManager implements EventSubscriber {
 
       this.dexHelper.blockManager.subscribeToLogs(
         this,
-        [
-          this.contracts.core.contract.address,
-          this.contracts.twamm.contract.address,
-          this.contracts.boostedFees.contract.address,
-        ],
+        EVENT_EMITTERS,
         blockNumber,
       );
 

@@ -10,6 +10,7 @@ import { Network } from '../../constants';
 import { generateConfig } from '../../config';
 import { DummyDexHelper, IDexHelper } from '../../dex-helper/index';
 import {
+  BOOSTED_FEES_CONCENTRATED_ADDRESS,
   DEX_KEY,
   EKUBO_V3_CONFIG,
   EkuboSupportedNetwork,
@@ -32,9 +33,10 @@ import {
 } from './pools/utils';
 import { ekuboContracts } from './utils';
 import { Tokens } from '../../../tests/constants-e2e';
-import { EkuboV3PoolManager } from './ekubo-v3-pool-manager';
+import { EkuboV3PoolManager, EVENT_EMITTERS } from './ekubo-v3-pool-manager';
 import { EkuboContracts } from './types';
 import { Logger, Token } from '../../types';
+import { BoostedFeesPool } from './pools/boosted-fees';
 
 jest.setTimeout(50 * 1000);
 
@@ -170,6 +172,7 @@ const eventFixtures: Record<
 > = {
   [Network.MAINNET]: tokens => {
     const USDC = BigInt(tokens['USDC'].address);
+    const EKUBO = BigInt(tokens['EKUBO'].address);
 
     const clEthUsdcPoolKey = new PoolKey(
       NATIVE_TOKEN_ADDRESS,
@@ -188,6 +191,16 @@ const eventFixtures: Record<
         BigInt(TWAMM_ADDRESS),
         55340232221128654n,
         StableswapPoolTypeConfig.fullRangeConfig(),
+      ),
+    );
+
+    const boostedFeesEkuboUsdcPoolKey = new PoolKey(
+      EKUBO,
+      USDC,
+      new PoolConfig(
+        BigInt(BOOSTED_FEES_CONCENTRATED_ADDRESS),
+        184467440737095516n,
+        new ConcentratedPoolTypeConfig(19802),
       ),
     );
 
@@ -210,6 +223,12 @@ const eventFixtures: Record<
         VirtualOrdersExecuted: [
           [newPool(TwammPool, twammEthUsdcPoolKey), 24169245], // Create order https://etherscan.io/tx/0x67bb5ba44397d8b9d9ffe753e9c7f1b478eadfac22464a39521bdd3541f6a68f
           [newPool(TwammPool, twammEthUsdcPoolKey), 24169249], // Stop order https://etherscan.io/tx/0xde6812e959a49e245f15714d1b50571f43ca7711c91d2df1087178a38bc554b7
+        ],
+        PoolBoosted: [
+          [newPool(BoostedFeesPool, boostedFeesEkuboUsdcPoolKey), 24486286], // https://etherscan.io/tx/0xe8b84a98592609c8b49bfaeafa76b0187bd6afd90b8df27469f9435f4b17318e#eventlog#235
+        ],
+        FeesDonated: [
+          [newPool(BoostedFeesPool, boostedFeesEkuboUsdcPoolKey), 24486286], // https://etherscan.io/tx/0xe8b84a98592609c8b49bfaeafa76b0187bd6afd90b8df27469f9435f4b17318e#eventlog#234
         ],
       },
       poolInitializationEvent: {
@@ -287,7 +306,7 @@ Object.entries(eventFixtures).forEach(([networkStr, fixturesFactory]) => {
       const blockInfo = await getOrFetchBlockInfo(
         blockNumber,
         cacheKey,
-        [contracts.core.contract.address, contracts.twamm.contract.address],
+        EVENT_EMITTERS,
         dexHelper.provider,
       );
 
