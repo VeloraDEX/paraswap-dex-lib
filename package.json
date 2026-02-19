@@ -1,6 +1,6 @@
 {
   "name": "@paraswap/dex-lib",
-  "version": "4.8.11",
+  "version": "4.8.12",
   "main": "build/index.js",
   "types": "build/index.d.ts",
   "repository": "https://github.com/paraswap/paraswap-dex-lib",
@@ -57,7 +57,7 @@
     "@ethersproject/abi": "^5.7.0",
     "@hashflow/sdk": "^2.2.7",
     "@hashflow/taker-js": "^0.4.1",
-    "@paraswap/core": "2.4.1",
+    "@paraswap/core": "2.4.2",
     "@types/ws": "^8.5.12",
     "async": "^3.2.4",
     "axios": "0.27.2",
