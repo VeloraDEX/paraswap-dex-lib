@@ -33,7 +33,12 @@ import ERC20ABI from './abi/erc20.json';
 import { ExecutorDetector } from './executor/ExecutorDetector';
 import { ExecutorBytecodeBuilder } from './executor/ExecutorBytecodeBuilder';
 import { IDexTxBuilder } from './dex/idex';
-import { ContractMethod, ParaSwapVersion, SwapSide } from '@paraswap/core';
+import {
+  ContractMethod,
+  ContractMethodV6,
+  ParaSwapVersion,
+  SwapSide,
+} from '@paraswap/core';
 
 const {
   utils: { hexlify, hexConcat, hexZeroPad },
@@ -288,10 +293,14 @@ export class GenericSwapTransactionBuilder {
       bytecode,
     ];
 
-    let method = isSell ? 'swapExactAmountIn' : 'swapExactAmountOut';
+    let method: ContractMethodV6 = isSell
+      ? ContractMethod.swapExactAmountIn
+      : ContractMethod.swapExactAmountOut;
 
     if (genericWithPartnerFee) {
-      method = isSell ? 'swapExactAmountInPro' : 'swapExactAmountOutPro';
+      method = isSell
+        ? ContractMethod.swapExactAmountInPro
+        : ContractMethod.swapExactAmountOutPro;
     }
 
     const encoder = (...params: any[]) =>
