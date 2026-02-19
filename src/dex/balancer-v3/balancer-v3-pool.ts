@@ -524,7 +524,7 @@ export class BalancerV3EventPool extends StatefulEventSubscriber<PoolStateMap> {
         hookState = hookStateMap[step.poolState.hookAddress];
         if (!hookState) {
           this.logger.error(
-            `getSwapResult hookState not found ${step.poolState.hookAddress}`,
+            `getSwapResult hookState not found ${step.poolState.poolAddress.toLowerCase()} hook ${step.poolState.hookAddress.toLowerCase()}`,
           );
           return 0n;
         }
@@ -551,7 +551,7 @@ export class BalancerV3EventPool extends StatefulEventSubscriber<PoolStateMap> {
           ];
           if (!poolHookState) {
             this.logger.error(
-              `getSwapResult StableSurge hookState not found ${step.poolState.hookAddress}`,
+              `getSwapResult StableSurge hookState not found ${step.poolState.poolAddress.toLowerCase()}`,
             );
             return 0n;
           }

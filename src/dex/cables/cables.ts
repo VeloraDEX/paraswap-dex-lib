@@ -599,13 +599,9 @@ export class Cables
       return result;
     } catch (e: unknown) {
       this.logger.error(
-        `Error in getPricesVolume`,
-        {
-          srcToken: srcToken.address || srcToken.symbol,
-          destToken: destToken.address || destToken.symbol,
-          side,
-        },
-        e,
+        `Error_getPricesVolume ${srcToken.symbol ?? srcToken.address}-${
+          destToken.symbol ?? destToken.address
+        } side ${side}: ${e}`,
       );
       return null;
     }
