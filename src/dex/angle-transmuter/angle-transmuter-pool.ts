@@ -157,7 +157,7 @@ export class AngleTransmuterEventPool extends ComposedEventSubscriber<PoolState>
 
     super(
       parentName,
-      'Transmuter',
+      `Transmuter_${config.transmuter}`,
       dexHelper.getLogger(`${parentName}-${network}`),
       dexHelper,
       [
