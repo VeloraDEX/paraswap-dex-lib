@@ -108,7 +108,7 @@ export async function getTopPoolsApi(
       },
     );
 
-    const disabled = disabledPoolIds.BalancerV3[networkId];
+    const disabled = disabledPoolIds.BalancerV3[networkId] ?? [];
     const pools = response.data.data.aggregatorPools
       .filter(pool => !disabled.includes(pool.address.toLowerCase()))
       .filter(

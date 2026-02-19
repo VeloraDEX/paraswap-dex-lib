@@ -230,7 +230,7 @@ export async function getPoolsApi(
       },
     );
 
-    const disabled = disabledPoolIds.BalancerV3[network];
+    const disabled = disabledPoolIds.BalancerV3[network] ?? [];
     const pools = response.data.data.aggregatorPools.filter(
       pool => !disabled.includes(pool.id.toLowerCase()),
     );
