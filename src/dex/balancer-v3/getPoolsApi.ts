@@ -45,9 +45,6 @@ function createQuery(
 ): string {
   const poolTypesString = poolTypes.map(type => `${type}`).join(', ');
   const networkString = BalancerV3Config.BalancerV3[networkId].apiNetworkName;
-  const disabledPoolIdsString = disabledPoolIds.BalancerV3[networkId]
-    ?.map(p => `"${p}"`)
-    .join(', ');
 
   // Build the where clause conditionally
   const whereClause = {
@@ -55,7 +52,6 @@ function createQuery(
     protocolVersionIn: 3,
     poolTypeIn: `[${poolTypesString}]`,
     ...(timestamp && { createTime: `{lt: ${timestamp}}` }),
-    ...(disabledPoolIdsString && { idNotIn: `[${disabledPoolIdsString}]` }),
     includeHooks: `[${hooks}]`,
   };
 
@@ -234,7 +230,10 @@ export async function getPoolsApi(
       },
     );
 
-    const pools = response.data.data.aggregatorPools;
+    const disabled = disabledPoolIds.BalancerV3[network];
+    const pools = response.data.data.aggregatorPools.filter(
+      pool => !disabled.includes(pool.id.toLowerCase()),
+    );
     return toImmutablePoolStateMap(pools, hooksConfigMap);
   } catch (error) {
     // console.error('Error executing GraphQL query:', error);

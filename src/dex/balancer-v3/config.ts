@@ -13,6 +13,7 @@ export enum SUPPORTED_POOLS {
 
 export const disabledPoolIds: Record<string, Record<number, string[]>> = {
   BalancerV3: {
+    [Network.MAINNET]: ['0xe388f1c31662a25b2c771fa7620682338f9eb667'],
     [Network.GNOSIS]: [],
   },
 };
