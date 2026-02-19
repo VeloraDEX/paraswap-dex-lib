@@ -40,6 +40,7 @@ export abstract class StatefulEventSubscriber<State>
 
   isTracking: () => boolean = () => false;
   isInactive: () => boolean = () => this.inactive;
+  isInvalid: () => boolean = () => this.invalid;
 
   public addressesSubscribed: string[] = [];
 

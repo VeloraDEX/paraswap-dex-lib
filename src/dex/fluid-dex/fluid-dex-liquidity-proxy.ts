@@ -95,12 +95,11 @@ export class FluidDexLiquidityProxy extends StatefulEventSubscriber<FluidDexLiqu
 
   async getStateOrGenerate(
     blockNumber: number,
-    readonly: boolean = false,
   ): Promise<FluidDexLiquidityProxyState> {
     let state = this.getState(blockNumber);
     if (!state) {
       state = await this.generateState(blockNumber);
-      if (!readonly) this.setState(state, blockNumber);
+      this.setState(state, blockNumber);
     }
     return state;
   }

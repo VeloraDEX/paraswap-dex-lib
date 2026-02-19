@@ -23,6 +23,7 @@ import {
 import { MultiResult } from '../../lib/multi-wrapper';
 import { NumberAsString } from '@paraswap/core';
 import { extractSuccessAndValue } from '../../lib/decoders';
+import { IBaseHook } from './hooks/types';
 
 export class UniswapV4Pool extends StatefulEventSubscriber<PoolState> {
   handlers: {
@@ -55,6 +56,7 @@ export class UniswapV4Pool extends StatefulEventSubscriber<PoolState> {
     public readonly fee: string,
     public readonly hooks: string,
     public tickSpacing: string,
+    public readonly hook?: IBaseHook,
   ) {
     super(parentName, poolId, dexHelper, logger, true, mapKey);
 

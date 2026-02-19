@@ -160,10 +160,10 @@ describe('CurveV1StableNG E2E', () => {
   describe('Arbitrum', () => {
     const network = Network.ARBITRUM;
 
-    const tokenASymbol: string = 'crvUSD';
-    const tokenBSymbol: string = 'USDCe';
+    const tokenASymbol: string = 'WETH';
+    const tokenBSymbol: string = 'USDC';
 
-    const tokenAAmount: string = '1000000000000000000';
+    const tokenAAmount: string = '50000000000000000';
     const tokenBAmount: string = '10000000';
 
     testForNetwork(

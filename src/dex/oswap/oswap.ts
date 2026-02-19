@@ -50,7 +50,7 @@ export class OSwap extends SimpleExchange implements IDex<OSwapData> {
 
   readonly iOSwap: Interface;
 
-  readonly pools: [OSwapPool];
+  readonly pools: OSwapPool[];
 
   constructor(
     readonly network: Network,
@@ -135,10 +135,58 @@ export class OSwap extends SimpleExchange implements IDex<OSwapData> {
     return pool ? [pool.id] : [];
   }
 
+  // Convert amount using pool-specific logic.
+  // For ERC4626 pools, uses convertToAssets/convertToShares calculated locally.
+  // For other pools, returns the amount as-is.
+  convertAmount(
+    pool: OSwapPool,
+    from: Address,
+    amount: bigint,
+    state: OSwapPoolState,
+  ): bigint {
+    const erc4626 = pool.erc4626;
+
+    if (erc4626) {
+      // Use ERC4626 conversion formula matching Solidity _convert function.
+      if (!state.totalAssets || !state.totalShares) {
+        this.logger.error(
+          `convertAmount: Missing ERC4626 state for pool ${pool.id}`,
+        );
+        return 0n;
+      }
+
+      const totalAssets = BigInt(state.totalAssets);
+      const totalShares = BigInt(state.totalShares);
+
+      if (totalAssets === 0n || totalShares === 0n) {
+        return 0n;
+      }
+
+      const fromAddress = from.toLowerCase();
+      const isFromAsset = fromAddress === erc4626.assetToken.toLowerCase();
+      const isFromVault = fromAddress === erc4626.vaultToken.toLowerCase();
+
+      if (!isFromAsset && !isFromVault) {
+        this.logger.error(
+          `convertAmount: Token ${from} not in ERC4626 pool ${pool.id}`,
+        );
+        return 0n;
+      }
+
+      if (isFromAsset) {
+        return (amount * totalShares) / totalAssets;
+      }
+
+      return (amount * totalAssets) / totalShares;
+    }
+
+    return amount;
+  }
+
   // Sell: Given "amount" of "from" token, how much of "to" token will be received by the trader.
   // Buy: Given "amount" of "dest" token, how much of "to" token is required from the trader.
   // Note: OSwap traderate is at precision 36.
-  calcPrice(
+  private calcPrice(
     pool: OSwapPool,
     state: OSwapPoolState,
     from: Token,
@@ -146,15 +194,41 @@ export class OSwap extends SimpleExchange implements IDex<OSwapData> {
     side: SwapSide,
     checkLiquidity = true,
   ): bigint {
+    // For BUY side, amount represents the destination token amount, so we need to convert
+    // based on the destination token direction, not the source token.
+    // For SELL side, amount represents the source token amount, so we convert based on from.
+    let convertedAmount: bigint;
+    if (side === SwapSide.BUY && pool.erc4626) {
+      // For BUY side on ERC4626 pools, amount is destToken amount.
+      // Convert the opposite direction to keep pricing in the source units.
+      const fromAddress = from.address.toLowerCase();
+      const assetToken = pool.erc4626.assetToken.toLowerCase();
+      const vaultToken = pool.erc4626.vaultToken.toLowerCase();
+
+      const tokenToConvert =
+        fromAddress === assetToken ? vaultToken : assetToken;
+      convertedAmount = this.convertAmount(pool, tokenToConvert, amount, state);
+    } else {
+      // For SELL side, amount is from token, convert normally
+      convertedAmount = this.convertAmount(pool, from.address, amount, state);
+    }
+
     const rate =
       from.address.toLowerCase() === pool.token0
         ? BigInt(state.traderate0)
         : BigInt(state.traderate1);
 
-    const price =
-      side === SwapSide.SELL
-        ? (amount * rate) / getBigIntPow(36)
-        : (amount * getBigIntPow(36)) / rate;
+    let price: bigint;
+
+    if (side === SwapSide.SELL) {
+      price = (convertedAmount * rate) / getBigIntPow(36);
+    } else {
+      if (convertedAmount === 0n) {
+        price = 0n;
+      } else {
+        price = (convertedAmount * getBigIntPow(36)) / rate + 3n;
+      }
+    }
 
     if (
       checkLiquidity &&
@@ -241,6 +315,7 @@ export class OSwap extends SimpleExchange implements IDex<OSwapData> {
         side,
         false,
       );
+
       const prices = amounts.map(amount =>
         this.calcPrice(pool, state, srcToken, amount, side),
       );
@@ -334,8 +409,8 @@ export class OSwap extends SimpleExchange implements IDex<OSwapData> {
     let method: string;
     let args: any;
     let returnAmountPos: number | undefined = undefined;
-
     const deadline = getLocalDeadlineAsFriendlyPlaceholder();
+
     if (side === SwapSide.SELL) {
       method = 'swapExactTokensForTokens';
       returnAmountPos = extractReturnAmountPosition(
@@ -367,7 +442,13 @@ export class OSwap extends SimpleExchange implements IDex<OSwapData> {
   // getTopPoolsForToken. It is optional for a DEX
   // to implement this
   async updatePoolState(): Promise<void> {
-    return Promise.resolve();
+    const blockNumber = await this.dexHelper.web3Provider.eth.getBlockNumber();
+    await Promise.all(
+      Object.values(this.eventPools).map(async pool => {
+        const state = await pool.generateState(blockNumber);
+        pool.setState(state, blockNumber);
+      }),
+    );
   }
 
   // Returns a list of top pools based on liquidity. Max
@@ -380,40 +461,37 @@ export class OSwap extends SimpleExchange implements IDex<OSwapData> {
     const pools = this.getPoolsByTokenAddress(tokenAddress);
     if (!pools.length) return [];
 
-    const results = await Promise.all<PoolLiquidity>(
-      pools.map(async pool => {
-        // Get the pool's balance and its USD value.
-        const eventPool = this.eventPools[pool.id];
-        const blockNumber =
-          await this.dexHelper.web3Provider.eth.getBlockNumber();
-        const state = await eventPool.getStateOrGenerate(blockNumber);
+    const tokenAmounts: [string, bigint | null][] = [];
+    const validPools: OSwapPool[] = [];
 
-        const usd0 = await this.dexHelper.getTokenUSDPrice(
-          { address: pool.token0, decimals: 18 },
-          BigInt(state.balance0),
-        );
-        const usd1 = await this.dexHelper.getTokenUSDPrice(
-          { address: pool.token1, decimals: 18 },
-          BigInt(state.balance1),
-        );
+    for (const pool of pools) {
+      const eventPool = this.eventPools[pool.id];
+      const state = eventPool.getStaleState();
+      if (!state) continue;
 
-        // Get the other token in the pair.
-        const pairedToken =
+      validPools.push(pool);
+      tokenAmounts.push(
+        [pool.token0, BigInt(state.balance0)],
+        [pool.token1, BigInt(state.balance1)],
+      );
+    }
+
+    if (!validPools.length) return [];
+
+    const usdAmounts = await this.dexHelper.getUsdTokenAmounts(tokenAmounts);
+
+    return validPools
+      .map((pool, i) => ({
+        exchange: this.dexKey,
+        address: pool.address,
+        connectorTokens: [
           pool.token0 === tokenAddress.toLowerCase()
             ? { address: pool.token1, decimals: 18 }
-            : { address: pool.token0, decimals: 18 };
-
-        return {
-          exchange: this.dexKey,
-          address: pool.address,
-          connectorTokens: [pairedToken],
-          liquidityUSD: usd0 + usd1,
-        };
-      }),
-    );
-    return results
-      .filter(r => r)
-      .sort((a, b) => a.liquidityUSD - b.liquidityUSD)
+            : { address: pool.token0, decimals: 18 },
+        ],
+        liquidityUSD: usdAmounts[i * 2] + usdAmounts[i * 2 + 1],
+      }))
+      .sort((a, b) => b.liquidityUSD - a.liquidityUSD)
       .slice(0, limit);
   }
 

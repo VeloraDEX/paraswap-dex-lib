@@ -43,6 +43,10 @@ class DummyCache implements ICache {
     return null;
   }
 
+  async mget(keys: string[]): Promise<Array<string | null>> {
+    return Promise.all(keys.map(this.rawget));
+  }
+
   async keys(
     dexKey: string,
     network: number,
@@ -62,7 +66,6 @@ class DummyCache implements ICache {
 
   async rawget(key: string): Promise<string | null> {
     return this.storage[key] ? this.storage[key] : null;
-    return null;
   }
 
   async rawset(
@@ -72,6 +75,20 @@ class DummyCache implements ICache {
   ): Promise<string | null> {
     this.storage[key] = value;
     return 'OK';
+  }
+
+  async set(key: string, value: string) {
+    this.storage[key] = value;
+  }
+
+  async mset(...args: Array<string>) {
+    if (args.length % 2 !== 0) {
+      throw new Error('Wrong number of params');
+    }
+
+    for (let i = 0; i < args.length; i += 2) {
+      this.storage[args[i]] = args[i + 1];
+    }
   }
 
   async rawdel(key: string): Promise<void> {
@@ -96,6 +113,19 @@ class DummyCache implements ICache {
   ): Promise<void> {
     this.storage[`${network}_${dexKey}_${cacheKey}`.toLowerCase()] = value;
     return;
+  }
+
+  async msetex(...args: Array<string | number>): Promise<void> {
+    if (args.length % 3 !== 0) {
+      throw new Error('Wrong number of params');
+    }
+
+    for (let i = 0; i < args.length; i += 3) {
+      const key = args[i];
+      const value = args[i + 1];
+      // ignore ttl
+      this.storage[key] = value.toString();
+    }
   }
 
   async getAndCacheLocally(
@@ -318,6 +348,8 @@ export class DummyDexHelper implements IDexHelper {
   provider: Provider;
   multiContract: Contract;
   multiWrapper: MultiWrapper;
+  multiNonZeroSenderContract: Contract;
+  multiNonZeroSenderWrapper: MultiWrapper;
   augustusApprovals: AugustusApprovals;
   promiseScheduler: PromiseScheduler;
   blockManager: IBlockManager;
@@ -344,6 +376,11 @@ export class DummyDexHelper implements IDexHelper {
       multiABIV2 as any,
       this.config.data.multicallV2Address,
     );
+    this.multiNonZeroSenderContract = new this.web3Provider.eth.Contract(
+      multiABIV2 as any,
+      this.config.data.multicallV2Address,
+      { from: '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb' },
+    );
     this.blockManager = new DummyBlockManager();
     this.getLogger = name => {
       const logger = log4js.getLogger(name);
@@ -366,6 +403,11 @@ export class DummyDexHelper implements IDexHelper {
     this.multiWrapper = new MultiWrapper(
       this.multiContract,
       this.getLogger(`MultiWrapper-${network}`),
+    );
+
+    this.multiNonZeroSenderWrapper = new MultiWrapper(
+      this.multiNonZeroSenderContract,
+      this.getLogger(`MultiNonZeroSenderWrapper-${network}`),
     );
 
     this.promiseScheduler = new PromiseScheduler(

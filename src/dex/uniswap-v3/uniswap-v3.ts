@@ -113,9 +113,6 @@ export class UniswapV3
         'QuickSwapV3.1',
         'SpookySwapV3',
         'RamsesV2',
-        'ChronosV3',
-        'Retro',
-        'BaseswapV3',
         'PharaohV2',
         'AlienBaseV3',
         'OkuTradeV3',
@@ -419,6 +416,7 @@ export class UniswapV3
       this.cacheStateKey,
       this.config.initHash,
       tickSpacing,
+      this.config.deployer,
     );
   }
 
@@ -523,7 +521,9 @@ export class UniswapV3
     if (pools.length === 0) {
       return null;
     }
-    this.logger.warn(`fallback to rpc for ${pools.length} pool(s)`);
+    this.logger.warn(
+      `fallback to rpc for ${pools.length} pool(s) for tokens ${from.address}/${to.address}`,
+    );
 
     const unitVolume = getBigIntPow(
       (side === SwapSide.SELL ? from : to).decimals,
@@ -1364,7 +1364,7 @@ export class UniswapV3
       .slice(0, limit);
   }
 
-  private async _getPoolBalances(
+  protected async _getPoolBalances(
     pools: [pool: string, token0: string, token1: string][],
   ): Promise<[balanceToken0: bigint | null, balanceToken1: bigint | null][]> {
     const callData: MultiCallParams<bigint>[] = pools
@@ -1498,7 +1498,7 @@ export class UniswapV3
     }
   }
 
-  private async _querySubgraph(
+  protected async _querySubgraph(
     query: string,
     variables: Object,
     timeout = 30000,

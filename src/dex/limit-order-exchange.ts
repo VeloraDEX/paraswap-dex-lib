@@ -1,21 +1,22 @@
-import Web3 from 'web3';
 import { LIMIT_ORDER_PROVIDERS } from '../constants';
 import { IDexHelper } from '../dex-helper';
 import { ILimitOrderProvider } from '../dex-helper/ilimit-order-provider';
-import { Address } from '../types';
-import { SimpleExchange } from './simple-exchange';
+import { SimpleExchangeWithRestrictions } from './simple-exchange-with-restrictions';
 
 export abstract class LimitOrderExchange<
   LimitOrderResponse,
   LimitOrderPriceSummaryResponse,
-> extends SimpleExchange {
+> extends SimpleExchangeWithRestrictions {
   protected _limitOrderProvider?: ILimitOrderProvider<
     LimitOrderResponse,
     LimitOrderPriceSummaryResponse
   >;
 
   constructor(dexHelper: IDexHelper, name: string) {
-    super(dexHelper, name);
+    super(dexHelper, name, {
+      blacklistedTTL: 'none',
+      enablePairRestriction: true,
+    });
   }
 
   abstract get limitOrderProviderName(): LIMIT_ORDER_PROVIDERS;
