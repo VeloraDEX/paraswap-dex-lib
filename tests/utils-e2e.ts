@@ -99,10 +99,14 @@ class APIParaswapSDK implements IParaSwapSDK {
     transferFees?: TransferFeeParams,
     forceRoute?: AddressOrSymbol[],
   ): Promise<OptimalRate> {
-    if (_poolIdentifiers)
-      throw new Error('PoolIdentifiers is not supported by the API');
-
     let priceRoute;
+
+    const includePools = _poolIdentifiers
+      ? _poolIdentifiers[this.dexKeys[0]]
+        ? _poolIdentifiers[this.dexKeys[0]]!.join(',')
+        : undefined
+      : undefined;
+
     if (forceRoute && forceRoute.length > 0) {
       const options = {
         route: forceRoute,
@@ -112,6 +116,7 @@ class APIParaswapSDK implements IParaSwapSDK {
         destDecimals: to.decimals,
         options: {
           includeDEXS: this.dexKeys,
+          ...(includePools && { includePools }),
           includeContractMethods: [contractMethod],
           partner: 'any',
           maxImpact: 100,
@@ -127,6 +132,7 @@ class APIParaswapSDK implements IParaSwapSDK {
         amount: amount.toString(),
         options: {
           includeDEXS: this.dexKeys,
+          ...(includePools && { includePools }),
           includeContractMethods: [contractMethod],
           partner: 'any',
           maxImpact: 100,
@@ -190,7 +196,7 @@ export async function testE2E(
   forceRoute?: AddressOrSymbol[],
   options?: TestE2EOptions,
 ) {
-  const useAPI = testingEndpoint && !poolIdentifiers;
+  const useAPI = !!testingEndpoint;
   // The API currently doesn't allow for specifying poolIdentifiers
   const sdk: IParaSwapSDK = useAPI
     ? new APIParaswapSDK(network, dexKeys, '')
