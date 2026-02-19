@@ -30,7 +30,6 @@ import { Thena } from './solidly/forks-override/thena';
 import { Velodrome } from './solidly/forks-override/velodrome';
 import { VelodromeV2 } from './solidly/forks-override/velodromeV2';
 import { SpiritSwapV2 } from './solidly/forks-override/spiritSwapV2';
-import { Synthetix } from './synthetix/synthetix';
 import { Equalizer } from './solidly/forks-override/equalizer';
 import { BalancerV1 } from './balancer-v1/balancer-v1';
 import { balancerV1Merge } from './balancer-v1/optimizer';
@@ -87,6 +86,7 @@ import { WrappedMM } from './usual/wrapped-m-m';
 import { UsualPP } from './usual-pp/usual-pp';
 import { AlgebraIntegral } from './algebra-integral/algebra-integral';
 import { Ekubo } from './ekubo/ekubo';
+import { EkuboV3 } from './ekubo-v3/ekubo-v3';
 import { UniswapV4 } from './uniswap-v4/uniswap-v4';
 import { PancakeSwapV2 } from './uniswap-v2/pancake-swap-v2';
 import { uniswapV4Merge } from './uniswap-v4/optimizer';
@@ -141,7 +141,6 @@ const Dexes = [
   Velodrome,
   VelodromeV2,
   Equalizer,
-  Synthetix,
   CurveV1Factory,
   CurveV1StableNg,
   WstETH,
@@ -180,6 +179,7 @@ const Dexes = [
   UsualMUsd0,
   UsualPP,
   Ekubo,
+  EkuboV3,
   MiroMigrator,
   AaveV3PtRollOver,
   RingV2,

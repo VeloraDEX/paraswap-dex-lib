@@ -234,7 +234,7 @@ describe('OSwap', function () {
         );
 
       const eventPool = oswap.eventPools[pool.id];
-      const state = await eventPool.getStateOrGenerate(blockNumber, true);
+      const state = await eventPool.getStateOrGenerate(blockNumber);
 
       const minBalance =
         state.balance0 < state.balance1 ? state.balance0 : state.balance1;
@@ -382,7 +382,7 @@ describe('OSwap', function () {
         );
 
       const eventPool = oswap.eventPools[pool.id];
-      const state = await eventPool.getStateOrGenerate(blockNumber, true);
+      const state = await eventPool.getStateOrGenerate(blockNumber);
 
       const minBalance =
         state.balance0 < state.balance1 ? state.balance0 : state.balance1;
@@ -523,7 +523,7 @@ describe('OSwap', function () {
         );
 
       const eventPool = oswap.eventPools[pool.id];
-      const state = await eventPool.getStateOrGenerate(blockNumber, true);
+      const state = await eventPool.getStateOrGenerate(blockNumber);
 
       const minBalance =
         state.balance0 < state.balance1 ? state.balance0 : state.balance1;
@@ -666,10 +666,7 @@ describe('OSwap', function () {
         );
 
       const eventPool = oswap.eventPools[pool.id];
-      const state = await eventPool.getStateOrGenerate(
-        currentBlockNumber,
-        true,
-      );
+      const state = await eventPool.getStateOrGenerate(currentBlockNumber);
 
       const minBalance =
         state.balance0 < state.balance1 ? state.balance0 : state.balance1;

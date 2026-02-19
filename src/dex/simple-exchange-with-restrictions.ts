@@ -1,3 +1,4 @@
+import _ from 'lodash';
 import { SimpleExchange } from './simple-exchange';
 import { IDexHelper } from '../dex-helper';
 import { Utils } from '../utils';
@@ -20,6 +21,8 @@ const BLACKLISTED_CACHE_VALUE = 'blacklisted';
 const DEFAULT_BLACKLISTED_TTL_S = 180 * 60; // 3 hours
 const DEFAULT_ENABLE_DEX_RESTRICTION = false;
 const DEFAULT_ENABLE_PAIR_RESTRICTION = false;
+
+const ADDRESS_BATCH_SIZE = 1000;
 
 type RestrictData = {
   count: number;
@@ -94,29 +97,41 @@ export class SimpleExchangeWithRestrictions
     return cached !== null;
   }
 
-  protected setBlacklist(addresses: string[], ttl = this.blacklistedTTL) {
+  protected async setBlacklist(addresses: string[], ttl = this.blacklistedTTL) {
     this.logger.info(`Blacklisting addresses: ${addresses.length}`);
 
-    if (ttl === 'none') {
-      return this.dexHelper.cache.mset(
-        ...addresses
-          .map(address => [
-            this.getBlacklistedCacheKey(address),
-            BLACKLISTED_CACHE_VALUE,
-          ])
-          .flat(),
+    const batches = _.chunk(addresses, ADDRESS_BATCH_SIZE);
+    const results = await Promise.allSettled(
+      batches.map(batch => this.setCacheBatch(batch, ttl)),
+    );
+
+    const failed = results.filter(r => r.status === 'rejected');
+    if (failed.length > 0) {
+      this.logger.error(
+        `Failed to set ${failed.length}/${results.length} blacklist batches: ${
+          (failed[0] as PromiseRejectedResult).reason
+        }`,
       );
     }
+  }
 
-    return this.dexHelper.cache.msetex(
-      ...addresses
-        .map(address => [
-          this.getBlacklistedCacheKey(address),
-          BLACKLISTED_CACHE_VALUE,
-          ttl,
-        ])
-        .flat(),
-    );
+  private setCacheBatch(addresses: string[], ttl: CACHE_TTL): Promise<void> {
+    if (ttl === 'none') {
+      const args = addresses.flatMap(address => [
+        this.getBlacklistedCacheKey(address),
+        BLACKLISTED_CACHE_VALUE,
+      ]);
+
+      return this.dexHelper.cache.mset(...args);
+    }
+
+    const args: Array<string | number> = addresses.flatMap(address => [
+      this.getBlacklistedCacheKey(address),
+      BLACKLISTED_CACHE_VALUE,
+      ttl,
+    ]);
+
+    return this.dexHelper.cache.msetex(...args);
   }
 
   public async addBlacklistedAddress(

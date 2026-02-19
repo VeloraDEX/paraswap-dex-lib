@@ -3,7 +3,7 @@ import { DeepReadonly } from 'ts-essentials';
 import { Contract } from 'web3-eth-contract';
 import { Address, Log, Logger } from '../../types';
 import { StatefulEventSubscriber } from '../../stateful-event-subscriber';
-import { getBigIntPow } from '../../utils';
+import { getBigIntPow, catchParseLogError } from '../../utils';
 import { IDexHelper } from '../../dex-helper/idex-helper';
 import { PoolState, PoolConfig } from './types';
 import { LitePsmConfig } from './config';
@@ -192,10 +192,7 @@ export class LitePsmEventPool extends StatefulEventSubscriber<PoolState> {
       }
       return state;
     } catch (e) {
-      this.logger.error(
-        `Error_${this.parentName}_processLog could not parse the log with topic ${log.topics}:`,
-        e,
-      );
+      catchParseLogError(e, this.logger);
       return null;
     }
   }
