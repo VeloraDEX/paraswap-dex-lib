@@ -90,7 +90,10 @@ export class BalancerV3 extends SimpleExchange implements IDex<BalancerV3Data> {
   // for pricing requests. It is optional for a DEX to
   // implement this function
   async initializePricing(blockNumber: number) {
-    await this.eventHooks.initialize(blockNumber);
+    // prevent reinitialization on retry in case `eventPools` initialization fails
+    if (!this.eventHooks.isInitialized) {
+      await this.eventHooks.initialize(blockNumber);
+    }
     this.eventPools.setHooksConfigMap(this.eventHooks.hooksConfigMap);
     await this.eventPools.initialize(blockNumber);
 
