@@ -22,4 +22,13 @@ export const AlgebraIntegralConfig: DexConfigMap<DexParams> = {
       chunksCount: 10,
     },
   },
+  TrebleSwap: {
+    [Network.BASE]: {
+      factory: '0x6e606Cf94A4DDc01aEed2Fce16d1b4f5B33e0A31',
+      subgraphURL: '3sThy2UsWd9X3D2M6MUQWzNUYrs8snMMhQKHSg9kUEAd',
+      quoter: '0x4b25da09909A2CAF6ec8584B09BA0e24519A46fa',
+      router: '0x309959994fc3fC6F789796923408f27748879b01',
+      chunksCount: 10,
+    },
+  },
 };

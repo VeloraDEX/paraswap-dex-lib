@@ -1763,6 +1763,10 @@ export const Tokens: {
       address: '0x50c5725949a6f0c72e6c4a641f24049a917db0cb',
       decimals: 18,
     },
+    TREB: {
+      address: '0xB96450dCB16e4a30b999Cb5F4087bae9c0ffAc4e',
+      decimals: 18,
+    },
     ALB: {
       address: '0x1dd2d631c92b1acdfcdd51a0f7145a50130050c4',
       decimals: 18,
