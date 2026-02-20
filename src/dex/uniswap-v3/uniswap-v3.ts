@@ -26,8 +26,8 @@ import {
   isTruthy,
   uuidToBytes16,
 } from '../../utils';
-import { IDex } from '../../dex/idex';
-import { IDexHelper } from '../../dex-helper/idex-helper';
+import { IDex } from '../idex';
+import { IDexHelper } from '../../dex-helper';
 import {
   DexParams,
   OutputResult,
@@ -49,7 +49,6 @@ import { UniswapV3EventPool } from './uniswap-v3-pool';
 import UniswapV3RouterABI from '../../abi/uniswap-v3/UniswapV3Router.abi.json';
 import UniswapSwapRouter02ABI from '../../abi/uniswap-v3/UniswapSwapRouter02.abi.json';
 import UniswapV3QuoterV2ABI from '../../abi/uniswap-v3/UniswapV3QuoterV2.abi.json';
-import UniswapV3MultiABI from '../../abi/uniswap-v3/UniswapMulti.abi.json';
 import DirectSwapABI from '../../abi/DirectSwap.json';
 import UniswapV3StateMulticallABI from '../../abi/uniswap-v3/UniswapV3StateMulticall.abi.json';
 import {
@@ -93,7 +92,13 @@ export class UniswapV3
   protected readonly factory: UniswapV3Factory;
   readonly routerIface: Interface;
   readonly isFeeOnTransferSupported: boolean = false;
-  readonly eventPools: Record<string, UniswapV3EventPool | null> = {};
+  readonly eventPools: Partial<Record<string, UniswapV3EventPool | null>> = {};
+
+  // Guards against concurrent getPool() calls for the same identifier.
+  // Stores in-flight initialization promises so duplicate callers await
+  // the same work instead of creating duplicate pool instances.
+  private poolInitPromises: Record<string, Promise<UniswapV3EventPool | null>> =
+    {};
 
   protected totalPoolsCount = 0;
   protected nonNullPoolsCount = 0;
@@ -123,7 +128,6 @@ export class UniswapV3
 
   logger: Logger;
 
-  private uniswapMulti: Contract;
   protected stateMultiContract: Contract;
 
   protected notExistingPoolSetKey: string;
@@ -149,10 +153,6 @@ export class UniswapV3
         : UniswapV3RouterABI;
     this.routerIface = new Interface(routerABI);
     this.logger = dexHelper.getLogger(dexKey + '-' + network);
-    this.uniswapMulti = new this.dexHelper.web3Provider.eth.Contract(
-      UniswapV3MultiABI as AbiItem[],
-      this.config.uniswapMulticall,
-    );
     this.stateMultiContract = new this.dexHelper.web3Provider.eth.Contract(
       this.config.stateMultiCallAbi !== undefined
         ? this.config.stateMultiCallAbi
@@ -274,11 +274,22 @@ export class UniswapV3
     blockNumber: number,
     tickSpacing?: bigint,
   ): Promise<UniswapV3EventPool | null> {
-    let pool = this.eventPools[
-      this.getPoolIdentifier(srcAddress, destAddress, fee, tickSpacing)
-    ] as UniswapV3EventPool | null | undefined;
+    const poolIdentifier = this.getPoolIdentifier(
+      srcAddress,
+      destAddress,
+      fee,
+      tickSpacing,
+    );
+
+    let pool = this.eventPools[poolIdentifier];
 
     if (pool === null) return null;
+
+    // If another caller is already initializing this pool, await the same promise
+    const existingPromise = this.poolInitPromises[poolIdentifier];
+    if (existingPromise) {
+      return existingPromise;
+    }
 
     if (pool) {
       if (pool.isInactive()) {
@@ -295,7 +306,37 @@ export class UniswapV3
         }
         // else pursue with re-try initialization
       }
-    } else {
+    }
+
+    const initPromise = this._initPool(
+      srcAddress,
+      destAddress,
+      fee,
+      blockNumber,
+      tickSpacing,
+      poolIdentifier,
+      pool,
+    );
+
+    this.poolInitPromises[poolIdentifier] = initPromise;
+
+    try {
+      return await initPromise;
+    } finally {
+      delete this.poolInitPromises[poolIdentifier];
+    }
+  }
+
+  private async _initPool(
+    srcAddress: Address,
+    destAddress: Address,
+    fee: bigint,
+    blockNumber: number,
+    tickSpacing: bigint | undefined,
+    poolIdentifier: string,
+    existingPool: UniswapV3EventPool | undefined,
+  ): Promise<UniswapV3EventPool | null> {
+    if (!existingPool) {
       // new pool going to be added to the mapping
       this.totalPoolsCount++;
     }
@@ -308,7 +349,7 @@ export class UniswapV3
       key = `${key}_${tickSpacing}`;
     }
 
-    if (!pool) {
+    if (!existingPool) {
       const notExistingPoolScore = await this.dexHelper.cache.zscore(
         this.notExistingPoolSetKey,
         key,
@@ -317,24 +358,25 @@ export class UniswapV3
       const poolDoesNotExist = notExistingPoolScore !== null;
 
       if (poolDoesNotExist) {
-        this.eventPools[
-          this.getPoolIdentifier(srcAddress, destAddress, fee, tickSpacing)
-        ] = null;
+        this.eventPools[poolIdentifier] = null;
         return null;
       }
     }
 
     this.logger.trace(`starting to listen to new pool: ${key}`);
-    pool = pool || this.getPoolInstance(token0, token1, fee, tickSpacing);
+    const pool =
+      existingPool || this.getPoolInstance(token0, token1, fee, tickSpacing);
+
+    let result: UniswapV3EventPool | null = pool;
 
     try {
       await pool.initialize(blockNumber, {
         initCallback: (state: DeepReadonly<PoolState>) => {
           //really hacky, we need to push poolAddress so that we subscribeToLogs in StatefulEventSubscriber
-          pool!.addressesSubscribed[0] = state.pool;
-          pool!.poolAddress = state.pool;
-          pool!.initFailed = false;
-          pool!.initRetryAttemptCount = 0;
+          pool.addressesSubscribed[0] = state.pool;
+          pool.poolAddress = state.pool;
+          pool.initFailed = false;
+          pool.initRetryAttemptCount = 0;
         },
       });
     } catch (e) {
@@ -356,7 +398,7 @@ export class UniswapV3
         );
 
         // prevent more requests for this pool
-        pool = null;
+        result = null;
         this.logger.trace(
           `${this.dexHelper}: ${e.message}: srcAddress=${srcAddress}, destAddress=${destAddress}, fee=${fee}`,
           e,
@@ -372,12 +414,12 @@ export class UniswapV3
       }
     }
 
-    if (pool !== null) {
+    if (result !== null) {
       // if pool was created, delete pool record from non existing set
       this.dexHelper.cache
         .zrem(this.notExistingPoolSetKey, [key])
         .catch(() => {});
-      if (!pool.initFailed) {
+      if (!result.initFailed) {
         this.nonNullPoolsCount++;
         this.logger.info(
           `starting to listen to new non-null pool: ${key}. Already following ${this.nonNullPoolsCount} non-null pools or ${this.totalPoolsCount} total pools`,
@@ -385,10 +427,8 @@ export class UniswapV3
       }
     }
 
-    this.eventPools[
-      this.getPoolIdentifier(srcAddress, destAddress, fee, tickSpacing)
-    ] = pool;
-    return pool;
+    this.eventPools[poolIdentifier] = result;
+    return result;
   }
 
   protected getPoolInstance(
@@ -459,11 +499,7 @@ export class UniswapV3
         : undefined,
     );
 
-    if (!pool) {
-      return false;
-    }
-
-    return true;
+    return !!pool;
   }
 
   async getPoolIdentifiers(
@@ -1399,19 +1435,6 @@ export class UniswapV3
       ]);
     }
     return balances;
-  }
-
-  private async _getPoolsFromIdentifiers(
-    poolIdentifiers: string[],
-    blockNumber: number,
-  ): Promise<UniswapV3EventPool[]> {
-    const pools = await Promise.all(
-      poolIdentifiers.map(async identifier => {
-        const [, srcAddress, destAddress, fee] = identifier.split('_');
-        return this.getPool(srcAddress, destAddress, BigInt(fee), blockNumber);
-      }),
-    );
-    return pools.filter(pool => pool) as UniswapV3EventPool[];
   }
 
   protected _getLoweredAddresses(srcToken: Token, destToken: Token) {

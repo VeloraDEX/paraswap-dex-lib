@@ -66,6 +66,11 @@ export class Solidly extends UniswapV2 {
   volatileFee?: number;
   getPairMethodName: string;
 
+  // Guards against concurrent findSolidlyPairs() calls for the same token pair.
+  // Stores in-flight promises so duplicate callers await
+  // the same work instead of creating duplicate pair objects.
+  private findSolidlyPairPromises: Record<string, Promise<SolidlyPair[]>> = {};
+
   readonly isFeeOnTransferSupported: boolean = true;
   readonly SRC_TOKEN_DEX_TRANSFERS = 1;
   readonly DEST_TOKEN_DEX_TRANSFERS = 1;
@@ -161,6 +166,38 @@ export class Solidly extends UniswapV2 {
 
     if (pairs.every(Boolean)) return pairs;
 
+    // Use token pair as dedup key (covers both stable and volatile)
+    const dedupKey = `${token0.address.toLowerCase()}_${token1.address.toLowerCase()}`;
+
+    // If another caller is already discovering these pairs, await the same promise
+    const existingPromise = this.findSolidlyPairPromises[dedupKey];
+    if (existingPromise) {
+      return existingPromise;
+    }
+
+    const findPromise = this._findSolidlyPairs(
+      token0,
+      token1,
+      stableValues,
+      pairKeys,
+      pairs,
+    );
+    this.findSolidlyPairPromises[dedupKey] = findPromise;
+
+    try {
+      return await findPromise;
+    } finally {
+      delete this.findSolidlyPairPromises[dedupKey];
+    }
+  }
+
+  private async _findSolidlyPairs(
+    token0: Token,
+    token1: Token,
+    stableValues: boolean[],
+    pairKeys: string[],
+    pairs: SolidlyPair[],
+  ): Promise<SolidlyPair[]> {
     const cachedPairsRaw = await this.dexHelper.cache.hmget(
       this.pairsHashCacheKey,
       pairKeys,

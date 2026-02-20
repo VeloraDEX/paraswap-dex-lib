@@ -114,6 +114,10 @@ export class CurveV1
   minConversionRate = '1';
 
   eventPools = new Array<CurvePool | CurveMetapool>();
+  private poolInitPromises: Record<
+    string,
+    Promise<(CurvePool | CurveMetapool)[]>
+  > = {};
   public poolInterface: Interface;
 
   private logger: Logger;
@@ -217,10 +221,6 @@ export class CurveV1
     );
   }
 
-  protected getPoolConfigByAddress(address: Address) {
-    return Object.values(this.pools).find(p => p.address == address);
-  }
-
   getPoolConfig(from: Token, to: Token): PoolConfig | undefined {
     return this.getPoolConfigs(from, to)[0];
   }
@@ -250,9 +250,7 @@ export class CurveV1
         return true;
 
       // Case 2: If it a swap between any direct tokens
-      if (coins.includes(toAddress) && coins.includes(fromAddress)) return true;
-
-      return false;
+      return coins.includes(toAddress) && coins.includes(fromAddress);
     });
   }
 
@@ -264,11 +262,6 @@ export class CurveV1
   ): Promise<string[]> {
     const pools = this.getPoolConfigs(_from, _to);
     return pools.map(pool => this.getPoolIdentifier(pool.name));
-  }
-
-  getContractAddress(srcToken: Token, to: Token) {
-    const pool = this.getPoolConfig(srcToken, to);
-    return pool && pool.address;
   }
 
   poolConfigsByAddress() {
@@ -349,50 +342,88 @@ export class CurveV1
   ): Promise<string[]> {
     const unavailablePools = new Array<string>();
     if (!blockNumber) return unavailablePools;
-    let poolsToFetch: (CurvePool | CurveMetapool)[] = [];
+
+    // Phase 1 (synchronous): collect pools to init and pending promises
+    const poolsToInit: (CurvePool | CurveMetapool)[] = [];
+    const pendingPromises: Promise<(CurvePool | CurveMetapool)[]>[] = [];
+
     for (const poolAddress of poolAddresses) {
-      // Check if the pool is already tracked
-      let pool = this.getPoolByAddress(poolAddress);
-      // If the pool is not stracked add it to the list of pools to fetch
-      if (!pool) {
-        let newPool = this.getEventPoolInstance(poolAddress);
-        if (!newPool)
-          throw new Error(
-            `Error_${this.dexKey} requested unsupported event pool with address ${poolAddress}`,
-          );
+      if (this.getPoolByAddress(poolAddress)) continue;
 
-        const addressesSubscribed = newPool.addressesSubscribed.map(address =>
-          address.toLowerCase(),
+      const key = poolAddress.toLowerCase();
+      const existingPromise = this.poolInitPromises[key];
+      if (existingPromise) {
+        pendingPromises.push(existingPromise);
+        continue;
+      }
+
+      const newPool = this.getEventPoolInstance(poolAddress);
+      if (!newPool) {
+        throw new Error(
+          `Error_${this.dexKey} requested unsupported event pool with address ${poolAddress}`,
         );
-        if (!addressesSubscribed.includes(poolAddress)) {
-          newPool.addressesSubscribed.push(poolAddress);
-        }
+      }
 
-        await newPool.initialize(blockNumber);
-        poolsToFetch.push(newPool);
-      } else if (!pool.getState(blockNumber)) {
+      const addressesSubscribed = newPool.addressesSubscribed.map(a =>
+        a.toLowerCase(),
+      );
+      if (!addressesSubscribed.includes(poolAddress)) {
+        newPool.addressesSubscribed.push(poolAddress);
+      }
+
+      poolsToInit.push(newPool);
+    }
+
+    // Register a single batch promise for all new pools (still synchronous)
+    if (poolsToInit.length > 0) {
+      const batchPromise = this._batchInitializePools(poolsToInit, blockNumber);
+      for (const pool of poolsToInit) {
+        this.poolInitPromises[pool.address.toLowerCase()] = batchPromise;
+      }
+      pendingPromises.push(batchPromise);
+    }
+
+    // Phase 2 (async): await all pending initialization
+    try {
+      await Promise.all(pendingPromises);
+    } catch (e) {
+      this.logger.error(`Error_batchCatchUpPools`, e);
+      throw e;
+    } finally {
+      for (const pool of poolsToInit) {
+        delete this.poolInitPromises[pool.address.toLowerCase()];
+      }
+    }
+
+    // Phase 3: check state availability
+    for (const poolAddress of poolAddresses) {
+      const pool = this.getPoolByAddress(poolAddress);
+      if (!pool || !pool.getState(blockNumber)) {
         unavailablePools.push(poolAddress);
       }
     }
 
-    if (!poolsToFetch.length) return unavailablePools;
+    return unavailablePools;
+  }
 
-    try {
-      const poolStates = await getManyPoolStates(
-        poolsToFetch,
-        this.dexHelper.multiContract,
-        blockNumber,
-      );
+  private async _batchInitializePools(
+    pools: (CurvePool | CurveMetapool)[],
+    blockNumber: number,
+  ): Promise<(CurvePool | CurveMetapool)[]> {
+    const poolStates = await getManyPoolStates(
+      pools,
+      this.dexHelper.multiContract,
+      blockNumber,
+    );
 
-      for (let i = 0; i < poolsToFetch.length; i++) {
-        await poolsToFetch[i].setup(blockNumber, poolStates[i] as any);
-        this.eventPools.push(poolsToFetch[i]);
-      }
-      return unavailablePools;
-    } catch (e) {
-      this.logger.error(`Error_batchCatchUpPools`, e);
-      throw e;
+    for (let i = 0; i < pools.length; i++) {
+      await pools[i].initialize(blockNumber, {
+        state: poolStates[i] as any,
+      });
+      this.eventPools.push(pools[i]);
     }
+
+    return pools;
   }
 
   async getRatesEventPools(
@@ -589,26 +620,6 @@ export class CurveV1
 
   isEventPoolSupported(poolAddress: Address): Boolean {
     return this.eventSupportedPools.some(p => p === poolAddress.toLowerCase());
-  }
-
-  allocPools(
-    from: Token,
-    to: Token,
-    side: SwapSide,
-    routeID: number,
-    usedPools: { [poolIdentifier: string]: number },
-    isFirstSwap: boolean,
-  ) {
-    if (side === SwapSide.BUY) {
-      return;
-    }
-
-    this.getPoolConfigs(from, to).forEach(p => {
-      const poolIdentifier = this.getPoolIdentifier(p.name);
-      if (!(poolIdentifier in usedPools)) {
-        usedPools[poolIdentifier] = routeID;
-      }
-    });
   }
 
   public getPoolIdentifier(name: string) {
