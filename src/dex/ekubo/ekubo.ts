@@ -104,6 +104,7 @@ export class Ekubo extends SimpleExchange implements IDex<EkuboData> {
     getDexKeysWithNetwork(EKUBO_CONFIG);
 
   private readonly pools: Map<string, IEkuboPool> = new Map();
+  private poolInitPromises: Record<string, Promise<IEkuboPool>> = {};
   private poolKeysSynced = false;
 
   public logger;
@@ -216,6 +217,8 @@ export class Ekubo extends SimpleExchange implements IDex<EkuboData> {
       initialState: DeepReadonly<S> | undefined,
       poolKey: PoolKey,
     ): Promise<void> => {
+      if (this.pools.has(poolKey.stringId)) return;
+
       const pool = new constructor(...commonArgs, poolKey);
 
       if (subscribe) {
@@ -724,6 +727,25 @@ export class Ekubo extends SimpleExchange implements IDex<EkuboData> {
   }
 
   private async initializeUntrackedPool(
+    stringId: string,
+    blockNumber: number,
+  ): Promise<IEkuboPool> {
+    const existing = this.pools.get(stringId);
+    if (existing) return existing;
+
+    const existingPromise = this.poolInitPromises[stringId];
+    if (existingPromise) return existingPromise;
+
+    const initPromise = this._initializeUntrackedPool(stringId, blockNumber);
+    this.poolInitPromises[stringId] = initPromise;
+    try {
+      return await initPromise;
+    } finally {
+      delete this.poolInitPromises[stringId];
+    }
+  }
+
+  private async _initializeUntrackedPool(
     stringId: string,
     blockNumber: number,
   ): Promise<IEkuboPool> {

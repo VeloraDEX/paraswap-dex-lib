@@ -50,6 +50,11 @@ export class UniswapV4PoolManager extends StatefulEventSubscriber<PoolManagerSta
 
   private eventPools: Record<string, UniswapV4Pool | null> = {};
 
+  // Guards against concurrent getEventPool() calls for the same pool id.
+  // Stores in-flight initialization promises so duplicate callers await
+  // the same work instead of creating duplicate pool instances.
+  private poolInitPromises: Record<string, Promise<UniswapV4Pool | null>> = {};
+
   logDecoder: (log: Log) => any;
 
   stateViewIface: Interface;
@@ -134,7 +139,7 @@ export class UniswapV4PoolManager extends StatefulEventSubscriber<PoolManagerSta
     blockNumber: number,
   ): Promise<UniswapV4Pool | null> {
     const _poolId = poolId.toLowerCase();
-    let eventPool = this.eventPools[_poolId];
+    const eventPool = this.eventPools[_poolId];
 
     if (eventPool === null) return null; // non existing pool
 
@@ -142,12 +147,32 @@ export class UniswapV4PoolManager extends StatefulEventSubscriber<PoolManagerSta
       return eventPool;
     }
 
+    // If another caller is already initializing this pool, await the same promise
+    const existingPromise = this.poolInitPromises[_poolId];
+    if (existingPromise) {
+      return existingPromise;
+    }
+
+    const initPromise = this._initEventPool(_poolId, blockNumber);
+    this.poolInitPromises[_poolId] = initPromise;
+
+    try {
+      return await initPromise;
+    } finally {
+      delete this.poolInitPromises[_poolId];
+    }
+  }
+
+  private async _initEventPool(
+    poolId: string,
+    blockNumber: number,
+  ): Promise<UniswapV4Pool | null> {
     const subgraphPool = this.pools.find(
-      pool => pool.id.toLowerCase() === _poolId,
+      pool => pool.id.toLowerCase() === poolId,
     );
 
     if (!subgraphPool) {
-      this.eventPools[_poolId] = null;
+      this.eventPools[poolId] = null;
       return null;
     }
 
@@ -159,26 +184,26 @@ export class UniswapV4PoolManager extends StatefulEventSubscriber<PoolManagerSta
       hooks: subgraphPool.hooks,
     };
 
-    eventPool = new UniswapV4Pool(
+    const eventPool = new UniswapV4Pool(
       this.dexHelper,
       this.parentName,
       this.network,
       this.config,
       this.logger,
       this.mapKey,
-      _poolId,
+      poolId,
       poolKey.currency0,
       poolKey.currency1,
       poolKey.fee,
       poolKey.hooks,
       poolKey.tickSpacing.toString(),
-      this.getHook(_poolId, poolKey),
+      this.getHook(poolId, poolKey),
     );
 
     await eventPool.initialize(blockNumber);
-    this.eventPools[_poolId] = eventPool;
+    this.eventPools[poolId] = eventPool;
 
-    return this.eventPools[_poolId];
+    return eventPool;
   }
 
   public async getAvailablePoolsForPair(

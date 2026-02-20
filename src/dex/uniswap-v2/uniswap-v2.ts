@@ -225,6 +225,11 @@ export class UniswapV2
   factory: Contract;
   pairsHashCacheKey: string;
 
+  // Guards against concurrent findPair() calls for the same key.
+  // Stores in-flight promises so duplicate callers await
+  // the same work instead of creating duplicate pair objects.
+  private findPairPromises: Record<string, Promise<UniswapV2Pair | null>> = {};
+
   routerInterface: Interface;
   exchangeRouterInterface: Interface;
 
@@ -393,9 +398,30 @@ export class UniswapV2
         : [to, from];
 
     const key = this.getPoolIdentifier(token0.address, token1.address);
-    let pair = this.pairs[key];
+    const pair = this.pairs[key];
     if (pair) return pair;
 
+    // If another caller is already discovering this pair, await the same promise
+    const existingPromise = this.findPairPromises[key];
+    if (existingPromise) {
+      return existingPromise;
+    }
+
+    const findPromise = this._findPair(key, token0, token1);
+    this.findPairPromises[key] = findPromise;
+
+    try {
+      return await findPromise;
+    } finally {
+      delete this.findPairPromises[key];
+    }
+  }
+
+  private async _findPair(
+    key: string,
+    token0: Token,
+    token1: Token,
+  ): Promise<UniswapV2Pair | null> {
     const cachedPairRaw = await this.dexHelper.cache.hget(
       this.pairsHashCacheKey,
       key,
@@ -419,6 +445,8 @@ export class UniswapV2
       .getPair(token0.address, token1.address)
       .call();
 
+    let pair: UniswapV2Pair | undefined;
+
     if (exchange === NULL_ADDRESS) {
       // if the pool has been newly created to not allow this op as we can run into race condition between pool discovery and concurrent pricing request touching this pool
       if (!this.newlyCreatedPoolKeys.has(key)) {
@@ -428,17 +456,19 @@ export class UniswapV2
       pair = { token0, token1, exchange };
     }
 
-    if (pair) {
-      await this.dexHelper.cache.hset(
-        this.pairsHashCacheKey,
-        key,
-        JSON.stringify({
-          ...pair,
-          checkExistenceAfter:
-            Date.now() + UNISWAP_V2_RECHECK_PAIR_EXISTENCE_AFTER_MS,
-        }),
-      );
+    if (!pair) {
+      return null;
     }
+
+    await this.dexHelper.cache.hset(
+      this.pairsHashCacheKey,
+      key,
+      JSON.stringify({
+        ...pair,
+        checkExistenceAfter:
+          Date.now() + UNISWAP_V2_RECHECK_PAIR_EXISTENCE_AFTER_MS,
+      }),
+    );
 
     this.pairs[key] = pair;
     return pair;

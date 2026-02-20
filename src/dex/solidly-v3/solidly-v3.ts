@@ -69,6 +69,12 @@ export class SolidlyV3
   readonly isFeeOnTransferSupported: boolean = false;
   readonly eventPools: Record<string, SolidlyV3EventPool | null> = {};
 
+  // Guards against concurrent getPool() calls for the same identifier.
+  // Stores in-flight initialization promises so duplicate callers await
+  // the same work instead of creating duplicate pool instances.
+  private poolInitPromises: Record<string, Promise<SolidlyV3EventPool | null>> =
+    {};
+
   readonly hasConstantPriceLargeAmounts = false;
   readonly needWrapNative = true;
 
@@ -222,11 +228,24 @@ export class SolidlyV3
     tickSpacing: bigint,
     blockNumber: number,
   ): Promise<SolidlyV3EventPool | null> {
-    let pool = this.eventPools[
-      this.getPoolIdentifier(srcAddress, destAddress, tickSpacing)
-    ] as SolidlyV3EventPool | null | undefined;
+    const poolIdentifier = this.getPoolIdentifier(
+      srcAddress,
+      destAddress,
+      tickSpacing,
+    );
+
+    let pool = this.eventPools[poolIdentifier] as
+      | SolidlyV3EventPool
+      | null
+      | undefined;
 
     if (pool === null) return null;
+
+    // If another caller is already initializing this pool, await the same promise
+    const existingPromise = this.poolInitPromises[poolIdentifier];
+    if (existingPromise) {
+      return existingPromise;
+    }
 
     if (pool) {
       if (!pool.initFailed) {
@@ -243,6 +262,30 @@ export class SolidlyV3
       }
     }
 
+    const initPromise = this._initPool(
+      srcAddress,
+      destAddress,
+      tickSpacing,
+      blockNumber,
+      pool,
+    );
+
+    this.poolInitPromises[poolIdentifier] = initPromise;
+
+    try {
+      return await initPromise;
+    } finally {
+      delete this.poolInitPromises[poolIdentifier];
+    }
+  }
+
+  private async _initPool(
+    srcAddress: Address,
+    destAddress: Address,
+    tickSpacing: bigint,
+    blockNumber: number,
+    pool: SolidlyV3EventPool | undefined,
+  ): Promise<SolidlyV3EventPool | null> {
     const [token0, token1] = this._sortTokens(srcAddress, destAddress);
 
     const key = `${token0}_${token1}_${tickSpacing}`.toLowerCase();
@@ -281,6 +324,8 @@ export class SolidlyV3
         this.config.initHash,
       );
 
+    let resultPool: SolidlyV3EventPool | null = pool;
+
     try {
       await pool.initialize(blockNumber, {
         initCallback: (state: DeepReadonly<PoolState>) => {
@@ -302,7 +347,7 @@ export class SolidlyV3
 
         // Pool does not exist for this feeCode, so we can set it to null
         // to prevent more requests for this pool
-        pool = null;
+        resultPool = null;
         this.logger.trace(
           `${this.dexHelper}: Pool: srcAddress=${srcAddress}, destAddress=${destAddress}, fee=${tickSpacing} not found`,
           e,
@@ -318,7 +363,7 @@ export class SolidlyV3
       }
     }
 
-    if (pool !== null) {
+    if (resultPool !== null) {
       const allEventPools = Object.values(this.eventPools);
       this.logger.info(
         `starting to listen to new non-null pool: ${key}. Already following ${allEventPools
@@ -332,8 +377,8 @@ export class SolidlyV3
 
     this.eventPools[
       this.getPoolIdentifier(srcAddress, destAddress, tickSpacing)
-    ] = pool;
-    return pool;
+    ] = resultPool;
+    return resultPool;
   }
 
   async addMasterPool(poolKey: string, blockNumber: number): Promise<boolean> {
