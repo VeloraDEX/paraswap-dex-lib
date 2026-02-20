@@ -11,9 +11,12 @@ export enum SUPPORTED_POOLS {
   RECLAMM = 'RECLAMM',
 }
 
+// pools should be lowercased
 export const disabledPoolIds: Record<string, Record<number, string[]>> = {
   BalancerV3: {
+    [Network.MAINNET]: ['0xe388f1c31662a25b2c771fa7620682338f9eb667'],
     [Network.GNOSIS]: [],
+    [Network.BASE]: ['0x15ebbf604b5fa847bdac208af1719d4dc78d2994'],
   },
 };
 
@@ -41,6 +44,13 @@ export const BalancerV3Config: DexConfigMap<DexParams> = {
           factoryDeploymentBlock: 7549387,
           hookAddress: '0xc0cbcdd6b823a4f22aa6bbdde44c17e754266aef', // Address of the hook that will be used by pools
         },
+        {
+          type: 'StableSurge', // StableSurgeV3 - Is same as V1/V2 with changes: introduce additional safety guardrails and additional protocol fee config options
+          apiName: 'STABLE_SURGE',
+          factoryAddress: '0x8573CAF1EC065c5956006d2b34117D2DBa326955', // Pools with StableSurge hook will always be deployed from this factory
+          factoryDeploymentBlock: 10058895,
+          hookAddress: '0xc0cbcdd6b823a4f22aa6bbdde44c17e754266aef', // Address of the hook that will be used by pools
+        },
       ],
     },
     [Network.GNOSIS]: {
@@ -61,6 +71,13 @@ export const BalancerV3Config: DexConfigMap<DexParams> = {
           apiName: 'STABLE_SURGE',
           factoryAddress: '0x45fB5aF0a1aD80Ea16C803146eb81844D9972373', // Pools with StableSurge hook will always be deployed from this factory
           factoryDeploymentBlock: 39390487,
+          hookAddress: '0x90BD26fbb9dB17D75b56E4cA3A4c438FA7C93694', // Address of the hook that will be used by pools
+        },
+        {
+          type: 'StableSurge', // StableSurgeV3 - Is same as V1/V2 with changes: introduce additional safety guardrails and additional protocol fee config options
+          apiName: 'STABLE_SURGE',
+          factoryAddress: '0x59D55FA503Faea8D95935a561f34153C273255DD', // Pools with StableSurge hook will always be deployed from this factory
+          factoryDeploymentBlock: 44200063,
           hookAddress: '0x90BD26fbb9dB17D75b56E4cA3A4c438FA7C93694', // Address of the hook that will be used by pools
         },
       ],
@@ -86,6 +103,14 @@ export const BalancerV3Config: DexConfigMap<DexParams> = {
           hookAddress:
             '0xBDbADc891BB95DEE80eBC491699228EF0f7D6fF1'.toLowerCase(), // Address of the hook that will be used by pools
         },
+        {
+          type: 'StableSurge', // StableSurgeV3 - Is same as V1/V2 with changes: introduce additional safety guardrails and additional protocol fee config options
+          apiName: 'STABLE_SURGE',
+          factoryAddress: '0x187a05fb9e4234Dd310ae74215743560D1BAA6Ac', // Pools with StableSurge hook will always be deployed from this factory
+          factoryDeploymentBlock: 24249983,
+          hookAddress:
+            '0xBDbADc891BB95DEE80eBC491699228EF0f7D6fF1'.toLowerCase(), // Address of the hook that will be used by pools
+        },
       ],
       quantAmmUpdateWeightRunnerAddress:
         '0x21Ae9576a393413D6d91dFE2543dCb548Dbb8748',
@@ -108,6 +133,13 @@ export const BalancerV3Config: DexConfigMap<DexParams> = {
           apiName: 'STABLE_SURGE',
           factoryAddress: '0x201efd508c8DfE9DE1a13c2452863A78CB2a86Cc', // Pools with StableSurge hook will always be deployed from this factory
           factoryDeploymentBlock: 322937794,
+          hookAddress: '0x7c1b7A97BfAcD39975dE53e989A16c7BC4C78275', // Address of the hook that will be used by pools
+        },
+        {
+          type: 'StableSurge', // StableSurgeV3 - Is same as V1/V2 with changes: introduce additional safety guardrails and additional protocol fee config options
+          apiName: 'STABLE_SURGE',
+          factoryAddress: '0x8A8B9f35765899B3a0291700141470D79EA2eA88', // Pools with StableSurge hook will always be deployed from this factory
+          factoryDeploymentBlock: 422088458,
           hookAddress: '0x7c1b7A97BfAcD39975dE53e989A16c7BC4C78275', // Address of the hook that will be used by pools
         },
         {
@@ -140,6 +172,13 @@ export const BalancerV3Config: DexConfigMap<DexParams> = {
           hookAddress: '0xDB8d758BCb971e482B2C45f7F8a7740283A1bd3A', // Address of the hook that will be used by pools
         },
         {
+          type: 'StableSurge', // StableSurgeV3 - Is same as V1/V2 with changes: introduce additional safety guardrails and additional protocol fee config options
+          apiName: 'STABLE_SURGE',
+          factoryAddress: '0x6623d1CEEaB236ae93aCAfB285dDFB77336B6981', // Pools with StableSurge hook will always be deployed from this factory
+          factoryDeploymentBlock: 40904686,
+          hookAddress: '0xDB8d758BCb971e482B2C45f7F8a7740283A1bd3A', // Address of the hook that will be used by pools
+        },
+        {
           type: 'Akron',
           apiName: 'AKRON',
           hookAddress: '0xA45570815dbE7BF7010c41f1f74479bE322D02bd',
@@ -161,6 +200,13 @@ export const BalancerV3Config: DexConfigMap<DexParams> = {
           factoryDeploymentBlock: 783985,
           hookAddress: '0x6817149cb753BF529565B4D023d7507eD2ff4Bc0', // Address of the hook that will be used by pools
         },
+        {
+          type: 'StableSurge', // StableSurgeV3 - Is same as V1/V2 with changes: introduce additional safety guardrails and additional protocol fee config options
+          apiName: 'STABLE_SURGE',
+          factoryAddress: '0x7c1b7A97BfAcD39975dE53e989A16c7BC4C78275', // Pools with StableSurge hook will always be deployed from this factory
+          factoryDeploymentBlock: 11668367,
+          hookAddress: '0x6817149cb753BF529565B4D023d7507eD2ff4Bc0', // Address of the hook that will be used by pools
+        },
       ],
     },
     [Network.AVALANCHE]: {
@@ -176,6 +222,13 @@ export const BalancerV3Config: DexConfigMap<DexParams> = {
           factoryDeploymentBlock: 59966276,
           hookAddress: '0x86705Ee19c0509Ff68F1118C55ee2ebdE383D122', // Address of the hook that will be used by pools
         },
+        {
+          type: 'StableSurge', // StableSurgeV3 - Is same as V1/V2 with changes: introduce additional safety guardrails and additional protocol fee config options
+          apiName: 'STABLE_SURGE',
+          factoryAddress: '0x8D217CB74f675B46cC2767C8cF0aAB53BE1c4818', // Pools with StableSurge hook will always be deployed from this factory
+          factoryDeploymentBlock: 75904552,
+          hookAddress: '0x86705Ee19c0509Ff68F1118C55ee2ebdE383D122', // Address of the hook that will be used by pools
+        },
       ],
     },
     [Network.OPTIMISM]: {
@@ -189,6 +242,13 @@ export const BalancerV3Config: DexConfigMap<DexParams> = {
           apiName: 'STABLE_SURGE',
           factoryAddress: '0x3BEb058DE1A25dd24223fd9e1796df8589429AcE', // Pools with StableSurge hook will always be deployed from this factory
           factoryDeploymentBlock: 134097700,
+          hookAddress: '0xF39CA6ede9BF7820a952b52f3c94af526bAB9015', // Address of the hook that will be used by pools
+        },
+        {
+          type: 'StableSurge', //StableSurgeV3 - Is same as V1/V2 with changes: introduce additional safety guardrails and additional protocol fee config options
+          apiName: 'STABLE_SURGE',
+          factoryAddress: '0xFD214210587Fb84798cbE7F37235e12898f3128f', // Pools with StableSurge hook will always be deployed from this factory
+          factoryDeploymentBlock: 146500110,
           hookAddress: '0xF39CA6ede9BF7820a952b52f3c94af526bAB9015', // Address of the hook that will be used by pools
         },
       ],
@@ -211,6 +271,13 @@ export const BalancerV3Config: DexConfigMap<DexParams> = {
           apiName: 'STABLE_SURGE',
           factoryAddress: '0x3D9319BB29DAF6081D01DC56b6203EfcC90f0bAD', // Pools with StableSurge hook will always be deployed from this factory
           factoryDeploymentBlock: 20250404,
+          hookAddress: '0x049919Ae32E50aEe5ea1A0998a841d175ec6f1b3', // Address of the hook that will be used by pools
+        },
+        {
+          type: 'StableSurge', // StableSurgeV3 - Is same as V1/V2 with changes: introduce additional safety guardrails and additional protocol fee config options
+          apiName: 'STABLE_SURGE',
+          factoryAddress: '0x8e2E3058702FEB83D45dD27311dEd693f7CD162b', // Pools with StableSurge hook will always be deployed from this factory
+          factoryDeploymentBlock: 61251981,
           hookAddress: '0x049919Ae32E50aEe5ea1A0998a841d175ec6f1b3', // Address of the hook that will be used by pools
         },
       ],

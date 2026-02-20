@@ -38,10 +38,6 @@ function createQuery(
   hooks: string,
   count: number,
 ): string {
-  const disabledPoolIdsString = disabledPoolIds.BalancerV3[networkId]
-    ?.map(p => `"${p}"`)
-    .join(', ');
-
   const networkString = BalancerV3Config.BalancerV3[networkId].apiNetworkName;
   const poolIdString = poolsFilter.map(a => `"${a}"`).join(', ');
   // Build the where clause conditionally
@@ -49,7 +45,6 @@ function createQuery(
     chainIn: networkString,
     protocolVersionIn: 3,
     idIn: `[${poolIdString}]`,
-    ...(disabledPoolIdsString && { idNotIn: `[${disabledPoolIdsString}]` }),
     includeHooks: `[${hooks}]`,
   };
 
@@ -113,7 +108,9 @@ export async function getTopPoolsApi(
       },
     );
 
+    const disabled = disabledPoolIds.BalancerV3[networkId] ?? [];
     const pools = response.data.data.aggregatorPools
+      .filter(pool => !disabled.includes(pool.address.toLowerCase()))
       .filter(
         pool =>
           !pool.hook ||
