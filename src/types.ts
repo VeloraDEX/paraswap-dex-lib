@@ -323,6 +323,8 @@ export type Config = {
   bebopAuthName?: string;
   bebopAuthToken?: string;
   nativeApiKey?: string;
+  renegadeAuthApiKey?: string;
+  renegadeAuthApiSecret?: string;
   forceRpcFallbackDexs: string[];
   apiKeyTheGraph: string;
   lidoReferralAddress?: Address;
