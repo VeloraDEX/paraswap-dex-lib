@@ -285,6 +285,12 @@ export class UniswapV3
 
     if (pool === null) return null;
 
+    // If another caller is already initializing this pool, await the same promise
+    const existingPromise = this.poolInitPromises[poolIdentifier];
+    if (existingPromise) {
+      return existingPromise;
+    }
+
     if (pool) {
       if (pool.isInactive()) {
         return null;
@@ -300,12 +306,6 @@ export class UniswapV3
         }
         // else pursue with re-try initialization
       }
-    }
-
-    // If another caller is already initializing this pool, await the same promise
-    const existingPromise = this.poolInitPromises[poolIdentifier];
-    if (existingPromise) {
-      return existingPromise;
     }
 
     const initPromise = this._initPool(
