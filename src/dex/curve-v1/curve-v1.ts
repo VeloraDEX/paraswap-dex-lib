@@ -221,10 +221,6 @@ export class CurveV1
     );
   }
 
-  protected getPoolConfigByAddress(address: Address) {
-    return Object.values(this.pools).find(p => p.address == address);
-  }
-
   getPoolConfig(from: Token, to: Token): PoolConfig | undefined {
     return this.getPoolConfigs(from, to)[0];
   }
@@ -254,9 +250,7 @@ export class CurveV1
         return true;
 
       // Case 2: If it a swap between any direct tokens
-      if (coins.includes(toAddress) && coins.includes(fromAddress)) return true;
-
-      return false;
+      return coins.includes(toAddress) && coins.includes(fromAddress);
     });
   }
 
@@ -268,11 +262,6 @@ export class CurveV1
   ): Promise<string[]> {
     const pools = this.getPoolConfigs(_from, _to);
     return pools.map(pool => this.getPoolIdentifier(pool.name));
-  }
-
-  getContractAddress(srcToken: Token, to: Token) {
-    const pool = this.getPoolConfig(srcToken, to);
-    return pool && pool.address;
   }
 
   poolConfigsByAddress() {
@@ -631,26 +620,6 @@ export class CurveV1
 
   isEventPoolSupported(poolAddress: Address): Boolean {
     return this.eventSupportedPools.some(p => p === poolAddress.toLowerCase());
-  }
-
-  allocPools(
-    from: Token,
-    to: Token,
-    side: SwapSide,
-    routeID: number,
-    usedPools: { [poolIdentifier: string]: number },
-    isFirstSwap: boolean,
-  ) {
-    if (side === SwapSide.BUY) {
-      return;
-    }
-
-    this.getPoolConfigs(from, to).forEach(p => {
-      const poolIdentifier = this.getPoolIdentifier(p.name);
-      if (!(poolIdentifier in usedPools)) {
-        usedPools[poolIdentifier] = routeID;
-      }
-    });
   }
 
   public getPoolIdentifier(name: string) {
