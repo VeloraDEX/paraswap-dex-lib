@@ -3,6 +3,7 @@ import { DexConfigMap, AdapterMappings } from '../../types';
 import { Network, SwapSide } from '../../constants';
 import { Address } from '../../types';
 import RamsesV2StateMulticallABI from '../../abi/RamsesV2StateMulticall.abi.json';
+import RamsesV3StateMulticallABI from '../../abi/ramses-v3/RamsesV3StateMulticall.abi.json';
 import VelodromeSlipstreamMulticallABi from '../../abi/velodrome-slipstream/VelodromeSlipstreamStateMulticall.abi.json';
 import { AbiItem } from 'web3-utils';
 import { decodeStateMultiCallResultWithRelativeBitmaps as decodeStateMultiCallResultWithRelativeBitmapsForRamses } from './forks/ramses-v2/utils';
@@ -14,6 +15,8 @@ import { PangolinV3EventPool } from './forks/pangolin-v3/pangolin-v3-pool';
 
 const SUPPORTED_FEES = [10000n, 3000n, 500n, 100n];
 const RAMSES_FORKS_FEES = [...SUPPORTED_FEES, 50n, 250n];
+// RamsesV3: tickSpacing = fee, common tickSpacings from deployed pools
+const RAMSES_V3_SUPPORTED_FEES = [50n, 10n, 5n, 1n];
 const PANGOLIN_SUPPORTED_FEES = [8000n, 2500n, 500n, 100n];
 
 // Pools that will be initialized on app startup
@@ -314,6 +317,56 @@ export const UniswapV3Config: DexConfigMap<DexParams> = {
         '0x1565b129f2d1790f12d45301b9b084335626f0c92410bc43130763b69971135d',
       subgraphURL:
         'https://api.studio.thegraph.com/query/66247/pharaoh-cl/version/latest',
+    },
+  },
+  RamsesV3: {
+    [Network.ARBITRUM]: {
+      factory: '0xd0019e86edB35E1fedaaB03aED5c3c60f115d28b',
+      deployer: '0xb722efaAbe807FAeA16068f595EaA9aa1a62CECD',
+      quoter: '0x00d4FeA3Dd90C4480992f9c7Ea13b8a6A8F7E124',
+      router: '0x4730e03EB4a58A5e20244062D5f9A99bCf5770a6',
+      supportedFees: RAMSES_V3_SUPPORTED_FEES,
+      stateMulticall: '0x0588514800f67b400e83989a0170998bd9ab3c04',
+      stateMultiCallAbi: RamsesV3StateMulticallABI as AbiItem[],
+      uniswapMulticall: '0xbFbb2BCBc9dfFA029C27A249ae9BE031E1d83b1C',
+      chunksCount: 10,
+      initRetryFrequency: 10,
+      initHash:
+        '0x892f127ed4b26ca352056c8fb54585a3268f76f97fdd84d5836ef4bda8d8c685',
+      subgraphURL:
+        'https://arbitrumv2.kingdomsubgraph.com/subgraphs/name/ramses-pruned',
+    },
+    [Network.HYPEREVM]: {
+      factory: '0x07E60782535752be279929e2DFfDd136Db2e6b45',
+      deployer: '0x301d2E3c7Db5904b3971cf9C36195e37c5a14873',
+      quoter: '0x403Bf94fe505cA0F0b1563C350B57dCeC8303ECd',
+      router: '0x76D91074B46fF76E04FE59a90526a40009943fd2',
+      supportedFees: RAMSES_V3_SUPPORTED_FEES,
+      stateMulticall: '0x118b6ff1d03149f958e525ac587ff577ddfafc0d',
+      stateMultiCallAbi: RamsesV3StateMulticallABI as AbiItem[],
+      uniswapMulticall: '0xD933929feBCe5494677EC22b7e7FaCA956311d37',
+      chunksCount: 10,
+      initRetryFrequency: 10,
+      initHash:
+        '0x892f127ed4b26ca352056c8fb54585a3268f76f97fdd84d5836ef4bda8d8c685',
+      subgraphURL:
+        'https://hyperevm.kingdomsubgraph.com/subgraphs/name/ramses-v3-pruned',
+    },
+    [Network.POLYGON]: {
+      factory: '0x2Bef16A0081565E72100D73CBe19B1Bd2d802380',
+      deployer: '0x43B2Bf9f33036a02fC7A00935571c2A6b0108e66',
+      quoter: '0x3c4532424Eb018013595e4960Fd3de5397B6f571',
+      router: '0xdcD5F77697914E27f56FD263EF82923C8524AbAc',
+      supportedFees: RAMSES_V3_SUPPORTED_FEES,
+      stateMulticall: '0xd21eeb527414ff97208c7dfbc9c9eca520341a78',
+      stateMultiCallAbi: RamsesV3StateMulticallABI as AbiItem[],
+      uniswapMulticall: '0x25E0B133AD88B8cd60AFBD9DD7651FCC5FEc97bd',
+      chunksCount: 10,
+      initRetryFrequency: 10,
+      initHash:
+        '0x892f127ed4b26ca352056c8fb54585a3268f76f97fdd84d5836ef4bda8d8c685',
+      subgraphURL:
+        'https://polygon.kingdomsubgraph.com/subgraphs/name/ramses-pruned',
     },
   },
   SpookySwapV3: {
