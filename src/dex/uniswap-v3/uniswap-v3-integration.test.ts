@@ -1300,6 +1300,96 @@ describe('RamsesV3', () => {
       }
     });
   });
+
+  describe('HyperEVM', () => {
+    const network = Network.HYPEREVM;
+    const dexHelper = new DummyDexHelper(network);
+    const TokenASymbol = 'WHYPE';
+    const TokenA = Tokens[network][TokenASymbol];
+
+    const TokenBSymbol = 'USDT0';
+    const TokenB = Tokens[network][TokenBSymbol];
+
+    beforeEach(async () => {
+      blockNumber = await dexHelper.web3Provider.eth.getBlockNumber();
+      ramsesV3 = new RamsesV3(network, dexKey, dexHelper);
+    });
+
+    it('getPoolIdentifiers and getPricesVolume SELL', async function () {
+      const amounts = [
+        0n,
+        1000000000000000000n,
+        2000000000000000000n,
+        3000000000000000000n,
+        4000000000000000000n,
+        5000000000000000000n,
+      ];
+
+      const pools = await ramsesV3.getPoolIdentifiers(
+        TokenA,
+        TokenB,
+        SwapSide.SELL,
+        blockNumber,
+      );
+      console.log(
+        `${TokenASymbol} <> ${TokenBSymbol} Pool Identifiers: `,
+        pools,
+      );
+
+      expect(pools.length).toBeGreaterThan(0);
+
+      const poolPrices = await ramsesV3.getPricesVolume(
+        TokenA,
+        TokenB,
+        amounts,
+        SwapSide.SELL,
+        blockNumber,
+        pools,
+      );
+      console.log(
+        `${TokenASymbol} <> ${TokenBSymbol} Pool Prices: `,
+        poolPrices,
+      );
+
+      expect(poolPrices).not.toBeNull();
+      checkPoolPrices(poolPrices!, amounts, SwapSide.SELL, dexKey);
+
+      let falseChecksCounter = 0;
+      await Promise.all(
+        poolPrices!.map(async price => {
+          const fee = ramsesV3.eventPools[price.poolIdentifiers![0]]!.feeCode;
+          const res = await checkOnChainPricing(
+            dexHelper,
+            ramsesV3,
+            'quoteExactInputSingle',
+            blockNumber,
+            '0x403Bf94fe505cA0F0b1563C350B57dCeC8303ECd',
+            price.prices,
+            TokenA.address,
+            TokenB.address,
+            fee,
+            amounts,
+            velodromeQuoterIface,
+          );
+          if (res === false) falseChecksCounter++;
+        }),
+      );
+
+      expect(falseChecksCounter).toBeLessThan(poolPrices!.length);
+    });
+
+    it('getTopPoolsForToken', async function () {
+      const poolLiquidity = await ramsesV3.getTopPoolsForToken(
+        TokenB.address,
+        10,
+      );
+      console.log(`${TokenBSymbol} Top Pools:`, poolLiquidity);
+
+      if (!ramsesV3.hasConstantPriceLargeAmounts) {
+        checkPoolsLiquidity(poolLiquidity, TokenB.address, dexKey);
+      }
+    });
+  });
 });
 
 describe('PharaohV2', () => {
