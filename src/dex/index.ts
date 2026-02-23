@@ -81,6 +81,7 @@ import { EtherFi } from './etherfi';
 import { Spark } from './spark/spark';
 import { SparkPsm } from './spark/spark-psm';
 import { VelodromeSlipstream } from './uniswap-v3/forks/velodrome-slipstream/velodrome-slipstream';
+import { RamsesV3 } from './uniswap-v3/forks/ramses-v3/ramses-v3';
 import { AaveV3Stata } from './aave-v3-stata/aave-v3-stata';
 import { AaveV3StataV2 } from './aave-v3-stata-v2/aave-v3-stata-v2';
 import { OSwap } from './oswap/oswap';
@@ -153,6 +154,7 @@ const Dexes = [
   PancakeSwapV2,
   PancakeswapV3,
   VelodromeSlipstream,
+  RamsesV3,
   BiSwap,
   MDEX,
   Dfyn,

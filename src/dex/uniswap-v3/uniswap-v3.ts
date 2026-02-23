@@ -121,7 +121,6 @@ export class UniswapV3
         'OkuTradeV3',
         'PangolinV3',
         'Wagmi',
-        'RamsesV3',
       ]),
     );
 
@@ -420,6 +419,7 @@ export class UniswapV3
       this.cacheStateKey,
       this.config.initHash,
       tickSpacing,
+      this.config.deployer,
     );
   }
 
@@ -1499,7 +1499,7 @@ export class UniswapV3
     }
   }
 
-  private async _querySubgraph(
+  protected async _querySubgraph(
     query: string,
     variables: Object,
     timeout = 30000,

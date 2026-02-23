@@ -14,6 +14,7 @@ import VelodromeSlipstreamQuoterV2ABI from '../../abi/velodrome-slipstream/Velod
 import { Address } from '@paraswap/core';
 import { UniswapV3Config } from './config';
 import { VelodromeSlipstream } from './forks/velodrome-slipstream/velodrome-slipstream';
+import { RamsesV3 } from './forks/ramses-v3/ramses-v3';
 
 const network = Network.POLYGON;
 const TokenASymbol = 'USDC';
@@ -1049,7 +1050,7 @@ describe('RamsesV2', () => {
 describe('RamsesV3', () => {
   const dexKey = 'RamsesV3';
   let blockNumber: number;
-  let ramsesV3: UniswapV3;
+  let ramsesV3: RamsesV3;
 
   describe('Arbitrum', () => {
     const network = Network.ARBITRUM;
@@ -1062,7 +1063,7 @@ describe('RamsesV3', () => {
 
     beforeEach(async () => {
       blockNumber = await dexHelper.web3Provider.eth.getBlockNumber();
-      ramsesV3 = new UniswapV3(network, dexKey, dexHelper);
+      ramsesV3 = new RamsesV3(network, dexKey, dexHelper);
     });
 
     it('getPoolIdentifiers and getPricesVolume SELL', async function () {
@@ -1109,8 +1110,7 @@ describe('RamsesV3', () => {
       let falseChecksCounter = 0;
       await Promise.all(
         poolPrices!.map(async price => {
-          const fee =
-            ramsesV3.eventPools[price.poolIdentifiers![0]]!.feeCode;
+          const fee = ramsesV3.eventPools[price.poolIdentifiers![0]]!.feeCode;
           const res = await checkOnChainPricing(
             dexHelper,
             ramsesV3,
@@ -1122,6 +1122,7 @@ describe('RamsesV3', () => {
             TokenB.address,
             fee,
             amounts,
+            velodromeQuoterIface,
           );
           if (res === false) falseChecksCounter++;
         }),
@@ -1174,8 +1175,7 @@ describe('RamsesV3', () => {
       let falseChecksCounter = 0;
       await Promise.all(
         poolPrices!.map(async price => {
-          const fee =
-            ramsesV3.eventPools[price.poolIdentifiers![0]]!.feeCode;
+          const fee = ramsesV3.eventPools[price.poolIdentifiers![0]]!.feeCode;
           const res = await checkOnChainPricing(
             dexHelper,
             ramsesV3,
@@ -1187,6 +1187,7 @@ describe('RamsesV3', () => {
             TokenB.address,
             fee,
             amounts,
+            velodromeQuoterIface,
           );
           if (res === false) falseChecksCounter++;
         }),
@@ -1211,7 +1212,7 @@ describe('RamsesV3', () => {
   describe('Polygon', () => {
     const network = Network.POLYGON;
     const dexHelper = new DummyDexHelper(network);
-    const TokenASymbol = 'USDC';
+    const TokenASymbol = 'USDCn';
     const TokenA = Tokens[network][TokenASymbol];
 
     const TokenBSymbol = 'USDT';
@@ -1219,7 +1220,7 @@ describe('RamsesV3', () => {
 
     beforeEach(async () => {
       blockNumber = await dexHelper.web3Provider.eth.getBlockNumber();
-      ramsesV3 = new UniswapV3(network, dexKey, dexHelper);
+      ramsesV3 = new RamsesV3(network, dexKey, dexHelper);
     });
 
     it('getPoolIdentifiers and getPricesVolume SELL', async function () {
@@ -1266,8 +1267,7 @@ describe('RamsesV3', () => {
       let falseChecksCounter = 0;
       await Promise.all(
         poolPrices!.map(async price => {
-          const fee =
-            ramsesV3.eventPools[price.poolIdentifiers![0]]!.feeCode;
+          const fee = ramsesV3.eventPools[price.poolIdentifiers![0]]!.feeCode;
           const res = await checkOnChainPricing(
             dexHelper,
             ramsesV3,
@@ -1279,6 +1279,7 @@ describe('RamsesV3', () => {
             TokenB.address,
             fee,
             amounts,
+            velodromeQuoterIface,
           );
           if (res === false) falseChecksCounter++;
         }),

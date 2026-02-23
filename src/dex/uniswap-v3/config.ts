@@ -12,6 +12,7 @@ import { RamsesV2EventPool } from './forks/ramses-v2/ramses-v2-pool';
 import { VelodromeSlipstreamEventPool } from './forks/velodrome-slipstream/velodrome-slipstream-pool';
 import { VelodromeSlipstreamFactory } from './forks/velodrome-slipstream/velodrome-slipstream-factory';
 import { PangolinV3EventPool } from './forks/pangolin-v3/pangolin-v3-pool';
+import { RamsesV3EventPool } from './forks/ramses-v3/ramses-v3-pool';
 
 const SUPPORTED_FEES = [10000n, 3000n, 500n, 100n];
 const RAMSES_FORKS_FEES = [...SUPPORTED_FEES, 50n, 250n];
@@ -331,6 +332,7 @@ export const UniswapV3Config: DexConfigMap<DexParams> = {
       uniswapMulticall: '0xbFbb2BCBc9dfFA029C27A249ae9BE031E1d83b1C',
       chunksCount: 10,
       initRetryFrequency: 10,
+      eventPoolImplementation: RamsesV3EventPool,
       initHash:
         '0x892f127ed4b26ca352056c8fb54585a3268f76f97fdd84d5836ef4bda8d8c685',
       subgraphURL:
@@ -347,6 +349,7 @@ export const UniswapV3Config: DexConfigMap<DexParams> = {
       uniswapMulticall: '0xD933929feBCe5494677EC22b7e7FaCA956311d37',
       chunksCount: 10,
       initRetryFrequency: 10,
+      eventPoolImplementation: RamsesV3EventPool,
       initHash:
         '0x892f127ed4b26ca352056c8fb54585a3268f76f97fdd84d5836ef4bda8d8c685',
       subgraphURL:
@@ -363,6 +366,7 @@ export const UniswapV3Config: DexConfigMap<DexParams> = {
       uniswapMulticall: '0x25E0B133AD88B8cd60AFBD9DD7651FCC5FEc97bd',
       chunksCount: 10,
       initRetryFrequency: 10,
+      eventPoolImplementation: RamsesV3EventPool,
       initHash:
         '0x892f127ed4b26ca352056c8fb54585a3268f76f97fdd84d5836ef4bda8d8c685',
       subgraphURL:

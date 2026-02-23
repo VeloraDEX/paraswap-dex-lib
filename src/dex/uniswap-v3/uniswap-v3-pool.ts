@@ -76,6 +76,7 @@ export class UniswapV3EventPool extends StatefulEventSubscriber<PoolState> {
     mapKey: string = '',
     readonly poolInitCodeHash: string,
     public readonly tickSpacing?: bigint,
+    protected readonly deployerAddress?: Address,
   ) {
     let poolKey = `${token0}_${token1}_${feeCode}`;
     if (tickSpacing !== undefined) {
@@ -559,7 +560,7 @@ export class UniswapV3EventPool extends StatefulEventSubscriber<PoolState> {
     );
 
     return ethers.utils.getCreate2Address(
-      this.factoryAddress,
+      this.deployerAddress || this.factoryAddress,
       encodedKey,
       this.poolInitCodeHash,
     );
