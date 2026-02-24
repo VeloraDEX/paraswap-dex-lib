@@ -796,11 +796,6 @@ describe('UniswapV3 E2E', () => {
   describe('RamsesV3 E2E', () => {
     const dexKey = 'RamsesV3';
 
-    const sideToContractMethods = new Map([
-      [SwapSide.SELL, [ContractMethod.swapExactAmountIn]],
-      [SwapSide.BUY, [ContractMethod.swapExactAmountOut]],
-    ]);
-
     describe('Arbitrum', () => {
       const network = Network.ARBITRUM;
       const provider = new StaticJsonRpcProvider(
@@ -810,30 +805,33 @@ describe('UniswapV3 E2E', () => {
       const tokens = Tokens[network];
       const holders = Holders[network];
 
-      const tokenASymbol: string = 'WETH';
-      const tokenBSymbol: string = 'USDC';
-      const tokenAAmount: string = '100000000000000000';
-      const tokenBAmount: string = '1000000';
+      it(`SELL swapExactAmountIn USDC -> USDCe`, async () => {
+        await testE2E(
+          tokens['USDC'],
+          tokens['USDCe'],
+          holders['USDC'],
+          '1100000',
+          SwapSide.SELL,
+          dexKey,
+          ContractMethod.swapExactAmountIn,
+          network,
+          provider,
+        );
+      });
 
-      sideToContractMethods.forEach((contractMethods, side) =>
-        contractMethods.forEach((contractMethod: ContractMethod) => {
-          describe(`${contractMethod}`, () => {
-            it(`${network} ${side} ${contractMethod} ${tokenASymbol} -> ${tokenBSymbol}`, async () => {
-              await testE2E(
-                tokens[tokenASymbol],
-                tokens[tokenBSymbol],
-                holders[tokenASymbol],
-                side === SwapSide.SELL ? tokenAAmount : tokenBAmount,
-                side,
-                dexKey,
-                contractMethod,
-                network,
-                provider,
-              );
-            });
-          });
-        }),
-      );
+      it(`BUY swapExactAmountOut USDC -> USDCe`, async () => {
+        await testE2E(
+          tokens['USDC'],
+          tokens['USDCe'],
+          holders['USDC'],
+          '1000000',
+          SwapSide.BUY,
+          dexKey,
+          ContractMethod.swapExactAmountOut,
+          network,
+          provider,
+        );
+      });
     });
 
     describe('Polygon', () => {
@@ -845,30 +843,33 @@ describe('UniswapV3 E2E', () => {
       const tokens = Tokens[network];
       const holders = Holders[network];
 
-      const tokenASymbol: string = 'USDCn';
-      const tokenBSymbol: string = 'USDT';
-      const tokenAAmount: string = '1100000';
-      const tokenBAmount: string = '1000000';
+      it(`SELL swapExactAmountIn USDCn -> USDT`, async () => {
+        await testE2E(
+          tokens['USDCn'],
+          tokens['USDT'],
+          holders['USDCn'],
+          '1100000',
+          SwapSide.SELL,
+          dexKey,
+          ContractMethod.swapExactAmountIn,
+          network,
+          provider,
+        );
+      });
 
-      sideToContractMethods.forEach((contractMethods, side) =>
-        contractMethods.forEach((contractMethod: ContractMethod) => {
-          describe(`${contractMethod}`, () => {
-            it(`${network} ${side} ${contractMethod} ${tokenASymbol} -> ${tokenBSymbol}`, async () => {
-              await testE2E(
-                tokens[tokenASymbol],
-                tokens[tokenBSymbol],
-                holders[tokenASymbol],
-                side === SwapSide.SELL ? tokenAAmount : tokenBAmount,
-                side,
-                dexKey,
-                contractMethod,
-                network,
-                provider,
-              );
-            });
-          });
-        }),
-      );
+      it(`BUY swapExactAmountOut USDCn -> USDT`, async () => {
+        await testE2E(
+          tokens['USDCn'],
+          tokens['USDT'],
+          holders['USDCn'],
+          '1000000',
+          SwapSide.BUY,
+          dexKey,
+          ContractMethod.swapExactAmountOut,
+          network,
+          provider,
+        );
+      });
     });
   });
 
