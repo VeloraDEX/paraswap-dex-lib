@@ -37,6 +37,7 @@ import {
   ERC1271Contract,
 } from '../../lib/erc1271-utils';
 import { isContractAddress } from '../../utils';
+import { AxiosError } from 'axios';
 
 const GET_FIRM_RATE_TIMEOUT_MS = 2000;
 export const reversePrice = (price: PriceAndAmountBigNumber) =>
@@ -46,20 +47,18 @@ export const reversePrice = (price: PriceAndAmountBigNumber) =>
   ] as PriceAndAmountBigNumber;
 
 export class RateFetcher {
-  private tokensFetcher: Fetcher<TokensResponse>;
-  private pairsFetcher: Fetcher<PairsResponse>;
-  private rateFetcher: Fetcher<RatesResponse>;
-  private blackListFetcher?: Fetcher<BlackListResponse>;
+  private readonly tokensFetcher: Fetcher<TokensResponse>;
+  private readonly pairsFetcher: Fetcher<PairsResponse>;
+  private readonly rateFetcher: Fetcher<RatesResponse>;
+  private readonly blackListFetcher?: Fetcher<BlackListResponse>;
 
   private tokens: Record<string, TokenWithInfo> = {};
   private addressToTokenMap: Record<string, TokenWithInfo> = {};
   private pairs: PairMap = {};
 
-  private firmRateAuth?: (options: RequestConfig) => void;
+  private readonly firmRateAuth?: (options: RequestConfig) => void;
 
-  public blackListCacheKey: string;
-
-  private authHttp: (
+  private readonly authHttp: (
     secret: RFQSecret,
   ) => (options: RequestConfig) => RequestConfig;
 
@@ -70,6 +69,7 @@ export class RateFetcher {
     private config: RFQConfig,
     private dexKey: string,
     private logger: Logger,
+    setBlacklist: (blacklist: string[]) => Promise<void>,
   ) {
     this.authHttp = genericRFQAuthHttp(config.pathToRemove);
     this.tokensFetcher = new Fetcher<TokensResponse>(
@@ -137,14 +137,13 @@ export class RateFetcher {
             },
             authenticate: this.authHttp(config.rateConfig.secret),
           },
-          handler: this.handleBlackListResponse.bind(this),
+          handler: this.buildBlackListResponseHandler(setBlacklist),
         },
         config.blacklistConfig.intervalMs,
         logger,
       );
     }
 
-    this.blackListCacheKey = `${this.dexHelper.config.data.network}_${this.dexKey}_blacklist`;
     if (this.config.firmRateConfig.secret) {
       this.firmRateAuth = this.authHttp(this.config.firmRateConfig.secret);
     }
@@ -210,17 +209,12 @@ export class RateFetcher {
     this.pairs = pairs;
   }
 
-  private handleBlackListResponse(resp: BlackListResponse) {
-    for (const address of resp.blacklist) {
-      this.dexHelper.cache.sadd(this.blackListCacheKey, address.toLowerCase());
-    }
-  }
-
-  public isBlackListed(userAddress: string) {
-    return this.dexHelper.cache.sismember(
-      this.blackListCacheKey,
-      userAddress.toLowerCase(),
-    );
+  private buildBlackListResponseHandler(
+    setBlacklist: (blacklist: string[]) => Promise<void>,
+  ): (resp: BlackListResponse) => void {
+    return (resp: BlackListResponse) => {
+      void setBlacklist(resp.blacklist);
+    };
   }
 
   private handleRatesResponse(resp: RatesResponse) {
@@ -484,7 +478,17 @@ export class RateFetcher {
         permitTakerAsset: '0x',
       };
     } catch (e) {
-      this.logger.error(e);
+      let message = `Failed to build quote for pair ${srcToken.address}-${destToken.address} on side: ${side}, `;
+
+      if (e instanceof AxiosError) {
+        message += `error: ${e?.message}, status: ${
+          e?.response?.status
+        }, response data: ${JSON.stringify(e?.response?.data)}`;
+      } else if (e instanceof Error) {
+        message += `error: ${e?.message}`;
+      }
+
+      this.logger.error(message, e);
       throw e;
     }
   }

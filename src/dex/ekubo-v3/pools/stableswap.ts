@@ -1,0 +1,216 @@
+import { DeepReadonly } from 'ts-essentials';
+import { Result } from '@ethersproject/abi';
+import { IDexHelper } from '../../../dex-helper/idex-helper';
+import { Logger } from '../../../types';
+import { EkuboContracts } from '../types';
+import { EkuboPool, Quote } from './pool';
+import { computeStep, isPriceIncreasing } from './math/swap';
+import {
+  MAX_SQRT_RATIO,
+  MAX_TICK,
+  MIN_SQRT_RATIO,
+  MIN_TICK,
+  toSqrtRatio,
+} from './math/tick';
+import { PoolKey, StableswapPoolTypeConfig, SwappedEvent } from './utils';
+import { amount0Delta, amount1Delta } from './math/delta';
+import { FullRangePoolState } from './full-range';
+
+const GAS_COST_OF_ONE_STABLESWAP_SWAP = 16_818;
+
+export abstract class StableswapPoolBase<
+  S extends FullRangePoolState.Object,
+> extends EkuboPool<StableswapPoolTypeConfig, S> {
+  private readonly bounds;
+
+  protected readonly quoteDataFetcher;
+
+  public constructor(
+    parentName: string,
+    dexHelper: IDexHelper,
+    logger: Logger,
+    contracts: EkuboContracts,
+    initBlockNumber: number,
+    key: PoolKey<StableswapPoolTypeConfig>,
+  ) {
+    const {
+      contract: { address },
+      interface: iface,
+      quoteDataFetcher,
+    } = contracts.core;
+
+    super(parentName, dexHelper, logger, initBlockNumber, key, address, iface);
+
+    this.quoteDataFetcher = quoteDataFetcher;
+
+    this.bounds = computeStableswapBounds(key.config.poolTypeConfig);
+  }
+
+  protected override _quote(
+    amount: bigint,
+    isToken1: boolean,
+    state: DeepReadonly<S>,
+    sqrtRatioLimit?: bigint,
+  ): Quote {
+    return quoteStableswap(
+      this.key.config.fee,
+      this.bounds,
+      amount,
+      isToken1,
+      state,
+      sqrtRatioLimit,
+    );
+  }
+
+  protected _computeTvl(state: DeepReadonly<S>): [bigint, bigint] {
+    const { sqrtRatio, liquidity } = state;
+    const { lowerPrice, upperPrice } = this.bounds;
+
+    let [amount0, amount1] = [0n, 0n];
+
+    if (sqrtRatio < upperPrice) {
+      amount0 = amount0Delta(sqrtRatio, upperPrice, liquidity, false);
+    }
+    if (sqrtRatio > lowerPrice) {
+      amount1 = amount1Delta(lowerPrice, sqrtRatio, liquidity, false);
+    }
+
+    return [amount0, amount1];
+  }
+}
+
+export function quoteStableswap(
+  fee: bigint,
+  { lowerPrice, upperPrice }: StableswapBounds,
+  amount: bigint,
+  isToken1: boolean,
+  state: DeepReadonly<
+    Pick<FullRangePoolState.Object, 'sqrtRatio' | 'liquidity'>
+  >,
+  sqrtRatioLimit?: bigint,
+): Quote<Pick<FullRangePoolState.Object, 'sqrtRatio' | 'liquidity'>> {
+  const isIncreasing = isPriceIncreasing(amount, isToken1);
+
+  let { sqrtRatio, liquidity } = state;
+
+  sqrtRatioLimit ??= isIncreasing ? MAX_SQRT_RATIO : MIN_SQRT_RATIO;
+
+  let calculatedAmount = 0n;
+  let amountRemaining = amount;
+  let movedOutOfBoundary = false;
+
+  while (amountRemaining !== 0n && sqrtRatio !== sqrtRatioLimit) {
+    let stepLiquidity = liquidity;
+    const inRange =
+      sqrtRatio <= upperPrice && sqrtRatio >= lowerPrice && !movedOutOfBoundary;
+
+    let nextTickSqrtRatio = null;
+    if (inRange) {
+      nextTickSqrtRatio = isIncreasing ? upperPrice : lowerPrice;
+    } else {
+      stepLiquidity = 0n;
+
+      if (!movedOutOfBoundary) {
+        if (sqrtRatio < lowerPrice) {
+          if (isIncreasing) {
+            nextTickSqrtRatio = lowerPrice;
+          }
+        } else if (!isIncreasing) {
+          nextTickSqrtRatio = upperPrice;
+        }
+      }
+    }
+
+    const stepSqrtRatioLimit =
+      nextTickSqrtRatio === null ||
+      nextTickSqrtRatio < sqrtRatioLimit !== isIncreasing
+        ? sqrtRatioLimit
+        : nextTickSqrtRatio;
+
+    const step = computeStep({
+      fee,
+      sqrtRatio,
+      liquidity: stepLiquidity,
+      isToken1,
+      sqrtRatioLimit: stepSqrtRatioLimit,
+      amount: amountRemaining,
+    });
+
+    amountRemaining -= step.consumedAmount;
+    calculatedAmount += step.calculatedAmount;
+    sqrtRatio = step.sqrtRatioNext;
+
+    if (
+      sqrtRatio === nextTickSqrtRatio &&
+      ((sqrtRatio === upperPrice && isIncreasing) ||
+        (sqrtRatio === lowerPrice && !isIncreasing))
+    ) {
+      movedOutOfBoundary = true;
+    }
+  }
+
+  return {
+    consumedAmount: amount - amountRemaining,
+    calculatedAmount,
+    gasConsumed: GAS_COST_OF_ONE_STABLESWAP_SWAP,
+    skipAhead: 0,
+    stateAfter: {
+      sqrtRatio,
+      liquidity,
+    },
+  };
+}
+
+export class StableswapPool extends StableswapPoolBase<FullRangePoolState.Object> {
+  public override async generateState(
+    blockNumber?: number | 'latest',
+  ): Promise<DeepReadonly<FullRangePoolState.Object>> {
+    const data = await this.quoteDataFetcher.getQuoteData(
+      [this.key.toAbi()],
+      0,
+      {
+        blockTag: blockNumber,
+      },
+    );
+    return FullRangePoolState.fromQuoter(data[0]);
+  }
+
+  protected override handlePositionUpdated(
+    args: Result,
+    oldState: DeepReadonly<FullRangePoolState.Object>,
+  ): DeepReadonly<FullRangePoolState.Object> | null {
+    return FullRangePoolState.fromPositionUpdatedEvent(
+      oldState,
+      args.liquidityDelta.toBigInt(),
+    );
+  }
+
+  protected override handleSwappedEvent(
+    ev: SwappedEvent,
+    _oldState: DeepReadonly<FullRangePoolState.Object>,
+  ): DeepReadonly<FullRangePoolState.Object> | null {
+    return FullRangePoolState.fromSwappedEvent(ev);
+  }
+}
+
+export interface StableswapBounds {
+  lowerPrice: bigint;
+  upperPrice: bigint;
+}
+
+export function computeStableswapBounds(
+  config: StableswapPoolTypeConfig,
+): StableswapBounds {
+  const { centerTick, amplificationFactor } = config;
+
+  const liquidityWidth = MAX_TICK >> amplificationFactor;
+  const [lowerTick, upperTick] = [
+    centerTick - liquidityWidth,
+    centerTick + liquidityWidth,
+  ];
+
+  return {
+    lowerPrice: lowerTick > MIN_TICK ? toSqrtRatio(lowerTick) : MIN_SQRT_RATIO,
+    upperPrice: upperTick < MAX_TICK ? toSqrtRatio(upperTick) : MAX_SQRT_RATIO,
+  };
+}

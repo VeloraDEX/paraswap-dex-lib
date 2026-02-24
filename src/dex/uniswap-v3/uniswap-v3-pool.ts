@@ -77,6 +77,7 @@ export class UniswapV3EventPool extends StatefulEventSubscriber<PoolState> {
     readonly poolInitCodeHash: string,
     public readonly tickSpacing?: bigint,
     protected readonly deployerAddress?: Address,
+    readonly deployer?: Address,
   ) {
     let poolKey = `${token0}_${token1}_${feeCode}`;
     if (tickSpacing !== undefined) {

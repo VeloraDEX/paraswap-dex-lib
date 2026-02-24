@@ -33,7 +33,12 @@ import ERC20ABI from './abi/erc20.json';
 import { ExecutorDetector } from './executor/ExecutorDetector';
 import { ExecutorBytecodeBuilder } from './executor/ExecutorBytecodeBuilder';
 import { IDexTxBuilder } from './dex/idex';
-import { ContractMethod, ParaSwapVersion, SwapSide } from '@paraswap/core';
+import {
+  ContractMethod,
+  ContractMethodV6,
+  ParaSwapVersion,
+  SwapSide,
+} from '@paraswap/core';
 
 const {
   utils: { hexlify, hexConcat, hexZeroPad },
@@ -238,8 +243,8 @@ export class GenericSwapTransactionBuilder {
     isDirectFeeTransfer: boolean,
     beneficiary: Address,
     permit: string,
-    deadline: string,
     uuid: string,
+    genericWithPartnerFee: boolean,
   ) {
     const executorName =
       this.executorDetector.getExecutorByPriceRoute(priceRoute);
@@ -288,11 +293,18 @@ export class GenericSwapTransactionBuilder {
       bytecode,
     ];
 
+    let method: ContractMethodV6 = isSell
+      ? ContractMethod.swapExactAmountIn
+      : ContractMethod.swapExactAmountOut;
+
+    if (genericWithPartnerFee) {
+      method = isSell
+        ? ContractMethod.swapExactAmountInPro
+        : ContractMethod.swapExactAmountOutPro;
+    }
+
     const encoder = (...params: any[]) =>
-      this.augustusV6Interface.encodeFunctionData(
-        isSell ? 'swapExactAmountIn' : 'swapExactAmountOut',
-        params,
-      );
+      this.augustusV6Interface.encodeFunctionData(method, params);
 
     return {
       encoder,
@@ -441,10 +453,10 @@ export class GenericSwapTransactionBuilder {
     maxFeePerGas,
     maxPriorityFeePerGas,
     permit,
-    deadline,
     uuid,
     beneficiary = NULL_ADDRESS,
     onlyParams = false,
+    genericWithPartnerFee = false,
   }: {
     priceRoute: OptimalRate;
     minMaxAmount: string;
@@ -465,6 +477,7 @@ export class GenericSwapTransactionBuilder {
     uuid: string;
     beneficiary?: Address;
     onlyParams?: boolean;
+    genericWithPartnerFee?: boolean;
   }): Promise<TxObject | (string | string[])[]> {
     // if quotedAmount wasn't passed, use the amount from the route
     const _quotedAmount = quotedAmount
@@ -516,8 +529,8 @@ export class GenericSwapTransactionBuilder {
         isDirectFeeTransfer ?? false,
         _beneficiary,
         permit || '0x',
-        deadline,
         uuid,
+        genericWithPartnerFee,
       ));
     }
 

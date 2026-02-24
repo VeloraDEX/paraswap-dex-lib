@@ -189,6 +189,7 @@ export class LocalParaswapSDK implements IParaSwapSDK {
                   percent: 100,
                   data: finalPrice.data,
                   poolAddresses: finalPrice.poolAddresses,
+                  poolIdentifiers: finalPrice.poolIdentifiers,
                 },
               ],
             },

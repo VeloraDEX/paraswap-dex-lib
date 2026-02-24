@@ -249,6 +249,28 @@ export abstract class ExecutorBytecodeBuilder<S = {}, D = {}> {
     return hexConcat([approvalCalldata, permit2Calldata]);
   }
 
+  protected findAmountPosInCalldata(
+    exchangeData: string,
+    encodedAmount: string,
+  ): number {
+    const rawCalldata = exchangeData.replace('0x', '');
+    const rawAmount = encodedAmount.replace('0x', '');
+
+    let amountIndex = -1;
+    for (
+      let idx = rawCalldata.indexOf(rawAmount);
+      idx !== -1;
+      idx = rawCalldata.indexOf(rawAmount, idx + 1)
+    ) {
+      if (idx % 2 === 0) {
+        amountIndex = idx;
+        break;
+      }
+    }
+
+    return (amountIndex !== -1 ? amountIndex : exchangeData.length) / 2;
+  }
+
   protected buildWrapEthCallData(
     wethAddress: string,
     depositCallData: string,

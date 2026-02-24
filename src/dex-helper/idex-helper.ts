@@ -18,6 +18,11 @@ export interface IDexHelper {
   httpRequest: IRequestWrapper;
   multiContract: Contract;
   multiWrapper: MultiWrapper;
+  // duplicates for cases when making a static call with a non-zero `from`
+  // address make a difference (like for some CurveV1StableNg pools)
+  // todo: refactor so multi wrapper can take `from` as a param
+  multiNonZeroSenderContract: Contract;
+  multiNonZeroSenderWrapper: MultiWrapper;
   augustusApprovals: AugustusApprovals;
   promiseScheduler: PromiseScheduler;
   provider: Provider;

@@ -16,6 +16,9 @@ import { PoolState } from '../../types';
 import { VelodromeSlipstreamEventPool } from './velodrome-slipstream-pool';
 import { UniswapV3EventPool } from '../../uniswap-v3-pool';
 import { OnPoolCreatedCallback } from '../../uniswap-v3-factory';
+import { MultiCallParams } from '../../../../lib/multi-wrapper';
+import { uint24ToBigInt } from '../../../../lib/decoders';
+import VelodromeSlipstreamFactoryABI from '../../../../abi/velodrome-slipstream/VelodromeSlipstreamFactory.abi.json';
 
 type VelodromeSlipstreamData = {
   path: {
@@ -30,6 +33,12 @@ type VelodromeSlipstreamData = {
 
 export class VelodromeSlipstream extends UniswapV3 {
   readonly eventPools: Record<string, VelodromeSlipstreamEventPool | null> = {};
+
+  protected feeUpdateIntervalTask?: NodeJS.Timeout;
+  private static readonly FEE_REFRESH_INTERVAL_MS = 60 * 1000;
+  protected readonly factoryIface = new Interface(
+    VelodromeSlipstreamFactoryABI,
+  );
 
   constructor(
     protected network: Network,
@@ -57,6 +66,7 @@ export class VelodromeSlipstream extends UniswapV3 {
         'VelodromeSlipstream',
         'VelodromeSlipstreamNewFactory',
         'AerodromeSlipstream',
+        'AerodromeSlipstreamNewFactory',
       ]),
     );
 
@@ -80,6 +90,13 @@ export class VelodromeSlipstream extends UniswapV3 {
       this.intervalTask = setInterval(
         cleanExpiredNotExistingPoolsKeys.bind(this),
         UNISWAPV3_CLEAN_NOT_EXISTING_POOL_INTERVAL_MS,
+      );
+    } else {
+      void this.updateAllPoolFees();
+
+      this.feeUpdateIntervalTask = setInterval(
+        this.updateAllPoolFees.bind(this),
+        VelodromeSlipstream.FEE_REFRESH_INTERVAL_MS,
       );
     }
   }
@@ -188,6 +205,83 @@ export class VelodromeSlipstream extends UniswapV3 {
         },
       ],
     };
+  }
+
+  protected buildFeeCallData(
+    pools: VelodromeSlipstreamEventPool[],
+  ): MultiCallParams<bigint>[] {
+    return pools.map(pool => ({
+      target: this.config.factory,
+      callData: this.factoryIface.encodeFunctionData('getSwapFee', [
+        pool.poolAddress,
+      ]),
+      decodeFunction: uint24ToBigInt,
+    }));
+  }
+
+  protected async updateAllPoolFees(): Promise<void> {
+    try {
+      const activePools = Object.values(this.eventPools).filter(
+        pool => pool !== null,
+      ) as VelodromeSlipstreamEventPool[];
+
+      if (activePools.length === 0) {
+        this.logger.warn(`${this.dexKey}: No active pools to update fees for`);
+        return;
+      }
+
+      this.logger.info(
+        `${this.dexKey}: Updating fees for ${activePools.length} pools`,
+      );
+
+      const callData = this.buildFeeCallData(activePools);
+
+      const results = await this.dexHelper.multiWrapper.tryAggregate<bigint>(
+        false,
+        callData,
+      );
+
+      const updateBlockNumber = await this.dexHelper.provider.getBlockNumber();
+
+      activePools.forEach((pool, index) => {
+        if (!results[index].success) {
+          this.logger.warn(
+            `${this.dexKey}: Failed to fetch fee for pool ${pool.poolAddress}`,
+          );
+          return;
+        }
+
+        const newFee = results[index].returnData;
+        const currentState = pool.getStaleState();
+
+        if (!currentState) {
+          this.logger.debug(
+            `${this.dexKey}: No state available for pool ${pool.poolAddress}, skipping fee update`,
+          );
+          return;
+        }
+
+        if (currentState.fee !== newFee) {
+          const newState = { ...currentState, fee: newFee };
+          pool.setState(newState, updateBlockNumber);
+
+          this.logger.debug(
+            `${this.dexKey}: Updated fee for pool ${pool.poolAddress}: ${currentState.fee} -> ${newFee}`,
+          );
+        }
+      });
+    } catch (error) {
+      this.logger.error(`${this.dexKey}: Error updating pool fees:`, error);
+    }
+  }
+
+  releaseResources() {
+    super.releaseResources();
+
+    if (this.feeUpdateIntervalTask !== undefined) {
+      clearInterval(this.feeUpdateIntervalTask);
+      this.feeUpdateIntervalTask = undefined;
+    }
   }
 
   /*

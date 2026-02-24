@@ -77,6 +77,7 @@ export type RFQConfig = {
   blacklistConfig?: FetcherParams;
   maker: Address;
   pathToRemove?: string;
+  minTradeUsd: number | null;
 };
 
 export type TokenWithAmount = Token & {
@@ -102,6 +103,22 @@ export type RFQFirmRateResponse = {
   status: 'accepted' | 'rejected';
   order: AugustusOrderWithStringAndSignature;
 };
+
+export class BlacklistError extends Error {
+  isBlacklistError = true;
+  cause = 'BlacklistError';
+  code = 'BLACKLIST';
+
+  constructor(
+    public dexKey: string,
+    public network: Network,
+    public user: Address,
+  ) {
+    const message = `User address ${user} is blacklisted on ${dexKey}-${network}`;
+    super(message);
+    this.name = 'BlacklistError';
+  }
+}
 
 export class SlippageCheckError extends Error {
   isSlippageError = true;

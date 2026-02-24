@@ -52,7 +52,7 @@ export class StatePollingManager {
       _blockNumber = 0;
     }
 
-    const results = await dexHelper.multiWrapper.tryAggregate(
+    const results = await dexHelper.multiNonZeroSenderWrapper.tryAggregate(
       false,
       callDatas,
       blockNumber,

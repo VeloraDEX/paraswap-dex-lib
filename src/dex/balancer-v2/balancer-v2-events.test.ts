@@ -111,7 +111,7 @@ describe('BalancerV2 Event', function () {
             dexKey,
             network,
             config.vaultAddress,
-            config.subgraphURL,
+            config.apiNetworkName,
             dexHelper,
             logger,
           );

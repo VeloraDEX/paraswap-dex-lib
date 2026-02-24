@@ -104,6 +104,7 @@ export class Ekubo extends SimpleExchange implements IDex<EkuboData> {
     getDexKeysWithNetwork(EKUBO_CONFIG);
 
   private readonly pools: Map<string, IEkuboPool> = new Map();
+  private poolInitPromises: Record<string, Promise<IEkuboPool>> = {};
   private poolKeysSynced = false;
 
   public logger;
@@ -216,11 +217,19 @@ export class Ekubo extends SimpleExchange implements IDex<EkuboData> {
       initialState: DeepReadonly<S> | undefined,
       poolKey: PoolKey,
     ): Promise<void> => {
+      if (this.pools.has(poolKey.stringId)) return;
+
       const pool = new constructor(...commonArgs, poolKey);
 
       if (subscribe) {
+        this.logger.info(`Adding and subscribing to pool ${poolKey.stringId}`);
         await pool.initialize(blockNumber, { state: initialState });
       } else {
+        if (!initialState) {
+          this.logger.info(
+            `Fetching initial state for pool ${poolKey.stringId}`,
+          );
+        }
         pool.setState(
           initialState ?? (await pool.generateState(blockNumber)),
           blockNumber,
@@ -618,6 +627,7 @@ export class Ekubo extends SimpleExchange implements IDex<EkuboData> {
   private async fetchAllPoolKeys(): Promise<PoolKey[]> {
     const res = await this.dexHelper.httpRequest.get(
       `${this.config.apiUrl}/v1/poolKeys`,
+      5000,
     );
 
     const { error, value } = allPoolsSchema.validate(res, {
@@ -720,6 +730,25 @@ export class Ekubo extends SimpleExchange implements IDex<EkuboData> {
     stringId: string,
     blockNumber: number,
   ): Promise<IEkuboPool> {
+    const existing = this.pools.get(stringId);
+    if (existing) return existing;
+
+    const existingPromise = this.poolInitPromises[stringId];
+    if (existingPromise) return existingPromise;
+
+    const initPromise = this._initializeUntrackedPool(stringId, blockNumber);
+    this.poolInitPromises[stringId] = initPromise;
+    try {
+      return await initPromise;
+    } finally {
+      delete this.poolInitPromises[stringId];
+    }
+  }
+
+  private async _initializeUntrackedPool(
+    stringId: string,
+    blockNumber: number,
+  ): Promise<IEkuboPool> {
     const poolKey = PoolKey.fromStringId(stringId);
 
     let constructor;
@@ -760,6 +789,8 @@ export class Ekubo extends SimpleExchange implements IDex<EkuboData> {
       this.contracts,
       poolKey,
     );
+
+    this.logger.info(`Initializing untracked pool ${stringId}`);
     await pool.initialize(blockNumber);
     this.pools.set(stringId, pool);
 

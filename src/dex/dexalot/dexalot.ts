@@ -38,10 +38,11 @@ import {
   TokenDataMap,
 } from './types';
 import {
+  BlacklistError,
   SlippageCheckError,
   TooStrictSlippageCheckError,
 } from '../generic-rfq/types';
-import { SimpleExchange } from '../simple-exchange';
+import { SimpleExchangeWithRestrictions } from '../simple-exchange-with-restrictions';
 import { Adapters, DexalotConfig } from './config';
 import { RateFetcher } from './rate-fetcher';
 import mainnetRFQAbi from '../../abi/dexalot/DexalotMainnetRFQ.json';
@@ -58,10 +59,7 @@ import {
   DEXALOT_API_BLACKLIST_POLLING_INTERVAL_MS,
   DEXALOT_RATE_LIMITED_TTL_S,
   DEXALOT_MIN_SLIPPAGE_FACTOR_THRESHOLD_FOR_RESTRICTION,
-  DEXALOT_RESTRICTED_CACHE_KEY,
   DEXALOT_RESTRICT_TTL_S,
-  DEXALOT_RATELIMIT_CACHE_VALUE,
-  DEXALOT_BLACKLIST_CACHES_TTL_S,
   DEXALOT_FIRM_QUOTE_TIMEOUT_MS,
 } from './constants';
 import { BI_MAX_UINT256 } from '../../bigint-constants';
@@ -70,7 +68,10 @@ import BigNumber from 'bignumber.js';
 import { Method } from '../../dex-helper/irequest-wrapper';
 import { SpecialDex } from '../../executor/types';
 
-export class Dexalot extends SimpleExchange implements IDex<DexalotData> {
+export class Dexalot
+  extends SimpleExchangeWithRestrictions
+  implements IDex<DexalotData>
+{
   readonly isStatePollingDex = true;
   readonly hasConstantPriceLargeAmounts = false;
   readonly needWrapNative = false;
@@ -83,7 +84,6 @@ export class Dexalot extends SimpleExchange implements IDex<DexalotData> {
   private pairsCacheKey: string;
   private tokensAddrCacheKey: string;
   private tokensCacheKey: string;
-  private blacklistCacheKey: string;
   private tokensMap: TokenDataMap = {};
 
   public static dexKeysWithNetwork: { key: string; networks: Network[] }[] =
@@ -100,7 +100,10 @@ export class Dexalot extends SimpleExchange implements IDex<DexalotData> {
       .dexalotRouterAddress,
     protected rfqInterface = new Interface(mainnetRFQAbi),
   ) {
-    super(dexHelper, dexKey);
+    super(dexHelper, dexKey, {
+      enablePairRestriction: true,
+      restrictPairTtlS: DEXALOT_RESTRICT_TTL_S,
+    });
     this.logger = dexHelper.getLogger(`${dexKey}-${network}`);
 
     const authToken = dexHelper.config.data.dexalotAuthToken;
@@ -114,7 +117,6 @@ export class Dexalot extends SimpleExchange implements IDex<DexalotData> {
     this.pairsCacheKey = 'pairs';
     this.tokensAddrCacheKey = 'tokens_addr';
     this.tokensCacheKey = 'tokens';
-    this.blacklistCacheKey = 'blacklist';
 
     this.rateFetcher = new RateFetcher(
       this.dexHelper,
@@ -136,8 +138,7 @@ export class Dexalot extends SimpleExchange implements IDex<DexalotData> {
           tokensAddrCacheKey: this.tokensAddrCacheKey,
           tokensCacheKey: this.tokensCacheKey,
           tokensCacheTTLSecs: DEXALOT_TOKENS_CACHES_TTL_S,
-          blacklistCacheKey: this.blacklistCacheKey,
-          blacklistCacheTTLSecs: DEXALOT_BLACKLIST_CACHES_TTL_S,
+          setBlacklist: this.setBlacklist.bind(this),
         },
       },
     );
@@ -462,9 +463,6 @@ export class Dexalot extends SimpleExchange implements IDex<DexalotData> {
           )
         : await this.getPoolIdentifiers(srcToken, destToken, side, blockNumber);
 
-      pools = await Promise.all(
-        pools.map(async p => !(await this.isRestrictedPool(p))),
-      ).then(res => pools.filter((_v, i) => res[i]));
       if (pools.length === 0) {
         return null;
       }
@@ -569,11 +567,7 @@ export class Dexalot extends SimpleExchange implements IDex<DexalotData> {
       this.logger.warn(
         `${this.dexKey}-${this.network}: blacklisted TX Origin address '${options.txOrigin}' trying to build a transaction. Bailing...`,
       );
-      throw new Error(
-        `${this.dexKey}-${
-          this.network
-        }: user=${options.txOrigin.toLowerCase()} is blacklisted`,
-      );
+      throw new BlacklistError(this.dexKey, this.network, options.txOrigin);
     }
 
     if (BigInt(optimalSwapExchange.srcAmount) === 0n) {
@@ -726,11 +720,24 @@ export class Dexalot extends SimpleExchange implements IDex<DexalotData> {
           this.logger.warn(
             `${this.dexKey}-${this.network}: Encountered rate limited user=${options.userAddress}. Adding to local rate limit cache`,
           );
-          await this.setRateLimited(options.userAddress, errorData.RetryAfter);
+          await this.addBlacklistedAddress(
+            options.userAddress,
+            errorData.RetryAfter ?? DEXALOT_RATE_LIMITED_TTL_S,
+          );
+          throw new BlacklistError(
+            this.dexKey,
+            this.network,
+            options.userAddress,
+          );
         } else {
-          await this.setBlacklist(options.userAddress);
+          await this.addBlacklistedAddress(options.userAddress);
           this.logger.error(
             `${this.dexKey}-${this.network}: Failed to fetch RFQ for ${swapIdentifier}: ${errorData.Reason}`,
+          );
+          throw new BlacklistError(
+            this.dexKey,
+            this.network,
+            options.userAddress,
           );
         }
       } else {
@@ -739,18 +746,10 @@ export class Dexalot extends SimpleExchange implements IDex<DexalotData> {
             `${this.dexKey}-${this.network}: failed to build transaction on side ${side} with too strict slippage. Skipping restriction`,
           );
         } else {
-          const poolIdentifiers = await this.getPoolIdentifiers(
-            srcToken,
-            destToken,
-            side,
-            0,
-          );
           this.logger.warn(
-            `${this.dexKey}-${this.network}: protocol is restricted for pools ${poolIdentifiers} due to swap: ${swapIdentifier}`,
+            `${this.dexKey}-${this.network}: protocol is restricted for pair ${srcToken.address} -> ${destToken.address} due to swap: ${swapIdentifier}`,
           );
-          await Promise.all(
-            poolIdentifiers.map(async p => await this.restrictPool(p)),
-          );
+          await this.restrictPair(srcToken.address, destToken.address);
         }
       }
 
@@ -833,108 +832,6 @@ export class Dexalot extends SimpleExchange implements IDex<DexalotData> {
       payload,
       networkFee: '0',
     };
-  }
-
-  getRestrictedPoolKey(poolIdentifier: string): string {
-    return `${DEXALOT_RESTRICTED_CACHE_KEY}-${poolIdentifier}`;
-  }
-
-  async restrictPool(
-    poolIdentifier: string,
-    ttl: number = DEXALOT_RESTRICT_TTL_S,
-  ): Promise<boolean> {
-    await this.dexHelper.cache.setex(
-      this.dexKey,
-      this.network,
-      this.getRestrictedPoolKey(poolIdentifier),
-      ttl,
-      'true',
-    );
-    return true;
-  }
-
-  async isRestrictedPool(poolIdentifier: string): Promise<boolean> {
-    const result = await this.dexHelper.cache.get(
-      this.dexKey,
-      this.network,
-      this.getRestrictedPoolKey(poolIdentifier),
-    );
-
-    return result === 'true';
-  }
-
-  async setBlacklist(
-    txOrigin: Address,
-    ttl: number = DEXALOT_BLACKLIST_CACHES_TTL_S,
-  ): Promise<boolean> {
-    const cachedBlacklist = await this.dexHelper.cache.get(
-      this.dexKey,
-      this.network,
-      this.blacklistCacheKey,
-    );
-
-    let blacklist: string[] = [];
-    if (cachedBlacklist) {
-      blacklist = JSON.parse(cachedBlacklist);
-    }
-
-    blacklist.push(txOrigin.toLowerCase());
-
-    this.dexHelper.cache.setex(
-      this.dexKey,
-      this.network,
-      this.blacklistCacheKey,
-      ttl,
-      JSON.stringify(blacklist),
-    );
-
-    return true;
-  }
-
-  async isBlacklisted(txOrigin: Address): Promise<boolean> {
-    const [cachedBlacklist, isRateLimited] = await Promise.all([
-      this.dexHelper.cache.get(
-        this.dexKey,
-        this.network,
-        this.blacklistCacheKey,
-      ),
-      this.isRateLimited(txOrigin),
-    ]);
-
-    if (isRateLimited) {
-      return true;
-    }
-
-    if (cachedBlacklist) {
-      const blacklist = JSON.parse(cachedBlacklist) as string[];
-      return blacklist.includes(txOrigin.toLowerCase());
-    }
-
-    return false;
-  }
-
-  getRateLimitedKey(address: Address) {
-    return `rate_limited_${address}`.toLowerCase();
-  }
-
-  async isRateLimited(txOrigin: Address): Promise<boolean> {
-    const result = await this.dexHelper.cache.get(
-      this.dexKey,
-      this.network,
-      this.getRateLimitedKey(txOrigin),
-    );
-    return result === DEXALOT_RATELIMIT_CACHE_VALUE;
-  }
-
-  async setRateLimited(txOrigin: Address, ttl = DEXALOT_RATE_LIMITED_TTL_S) {
-    await this.dexHelper.cache.setex(
-      this.dexKey,
-      this.network,
-      this.getRateLimitedKey(txOrigin),
-      ttl,
-      DEXALOT_RATELIMIT_CACHE_VALUE,
-    );
-    return true;
   }
 
   async getSimpleParam(

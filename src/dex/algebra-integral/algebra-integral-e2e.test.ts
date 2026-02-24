@@ -243,3 +243,49 @@ describe('BlackholeCL E2E', () => {
     });
   });
 });
+
+describe('Supernova E2E', () => {
+  const dexKey = 'Supernova';
+
+  describe('Mainnet', () => {
+    const network = Network.MAINNET;
+
+    describe('USDC -> WETH', () => {
+      const tokenASymbol: string = 'USDC';
+      const tokenBSymbol: string = 'WETH';
+
+      const tokenAAmount: string = '1000000';
+      const tokenBAmount: string = '1000000000000000000';
+      const nativeTokenAmount = '1000000000000000000';
+
+      testForNetwork(
+        network,
+        dexKey,
+        tokenASymbol,
+        tokenBSymbol,
+        tokenAAmount,
+        tokenBAmount,
+        nativeTokenAmount,
+      );
+    });
+
+    describe('USDT -> WETH', () => {
+      const tokenASymbol: string = 'USDT';
+      const tokenBSymbol: string = 'WETH';
+
+      const tokenAAmount: string = '100000000';
+      const tokenBAmount: string = '1000000000000000000';
+      const nativeTokenAmount = '1000000000000000000';
+
+      testForNetwork(
+        network,
+        dexKey,
+        tokenASymbol,
+        tokenBSymbol,
+        tokenAAmount,
+        tokenBAmount,
+        nativeTokenAmount,
+      );
+    });
+  });
+});

@@ -32,10 +32,11 @@ import {
 } from '../../types';
 import { getDexKeysWithNetwork, Utils } from '../../utils';
 import {
+  BlacklistError,
   SlippageCheckError,
   TooStrictSlippageCheckError,
 } from '../generic-rfq/types';
-import { SimpleExchange } from '../simple-exchange';
+import { SimpleExchangeWithRestrictions } from '../simple-exchange-with-restrictions';
 import { Adapters, HashflowConfig } from './config';
 import {
   CONSECUTIVE_ERROR_THRESHOLD,
@@ -63,7 +64,10 @@ import {
 } from './types';
 import { SpecialDex } from '../../executor/types';
 
-export class Hashflow extends SimpleExchange implements IDex<HashflowData> {
+export class Hashflow
+  extends SimpleExchangeWithRestrictions
+  implements IDex<HashflowData>
+{
   readonly isStatePollingDex = true;
   readonly hasConstantPriceLargeAmounts = false;
   readonly needWrapNative = true;
@@ -94,7 +98,7 @@ export class Hashflow extends SimpleExchange implements IDex<HashflowData> {
       .routerAddress,
     protected routerInterface = new Interface(routerAbi),
   ) {
-    super(dexHelper, dexKey);
+    super(dexHelper, dexKey, { blacklistedTTL: HASHFLOW_BLACKLIST_TTL_S });
     this.logger = dexHelper.getLogger(`${dexKey}-${network}`);
     const token = dexHelper.config.data.hashFlowAuthToken;
     assert(
@@ -539,11 +543,7 @@ export class Hashflow extends SimpleExchange implements IDex<HashflowData> {
       this.logger.warn(
         `${this.dexKey}-${this.network}: blacklisted TX Origin address '${options.txOrigin}' trying to build a transaction. Bailing...`,
       );
-      throw new Error(
-        `${this.dexKey}-${
-          this.network
-        }: user=${options.txOrigin.toLowerCase()} is blacklisted`,
-      );
+      throw new BlacklistError(this.dexKey, this.network, options.txOrigin);
     }
     const mm = optimalSwapExchange.data?.mm;
     assert(
@@ -717,7 +717,12 @@ export class Hashflow extends SimpleExchange implements IDex<HashflowData> {
         this.logger.warn(
           `${prefix}: Encountered restricted user=${options.userAddress}. Adding to local blacklist cache`,
         );
-        await this.setBlacklist(options.userAddress);
+        await this.addBlacklistedAddress(options.userAddress);
+        throw new BlacklistError(
+          this.dexKey,
+          this.network,
+          options.userAddress,
+        );
       } else if (e instanceof TooStrictSlippageCheckError) {
         this.logger.warn(
           `${prefix}: Market Maker ${mm} failed to build transaction on side ${side} with too strict slippage. Skipping restriction ${e}`,
@@ -909,33 +914,6 @@ export class Hashflow extends SimpleExchange implements IDex<HashflowData> {
       payload,
       networkFee: '0',
     };
-  }
-
-  getBlackListKey(address: Address) {
-    return `blacklist_${address}`.toLowerCase();
-  }
-
-  async isBlacklisted(txOrigin: Address): Promise<boolean> {
-    const result = await this.dexHelper.cache.get(
-      this.dexKey,
-      this.network,
-      this.getBlackListKey(txOrigin),
-    );
-    return result === 'blacklisted';
-  }
-
-  async setBlacklist(
-    txOrigin: Address,
-    ttl: number = HASHFLOW_BLACKLIST_TTL_S,
-  ) {
-    await this.dexHelper.cache.setex(
-      this.dexKey,
-      this.network,
-      this.getBlackListKey(txOrigin),
-      ttl,
-      'blacklisted',
-    );
-    return true;
   }
 
   async getSimpleParam(

@@ -32,6 +32,7 @@ import {
 } from './types';
 import { IDex } from '../idex';
 import {
+  CACHE_PREFIX,
   DEST_TOKEN_PARASWAP_TRANSFERS,
   ETHER_ADDRESS,
   Network,
@@ -59,10 +60,12 @@ import { UniswapV2Config, Adapters } from './config';
 import { Uniswapv2ConstantProductPool } from './uniswap-v2-constant-product-pool';
 import { applyTransferFee } from '../../lib/token-transfer-fee';
 import _rebaseTokens from '../../rebase-tokens.json';
-import { Flag, SpecialDex } from '../../executor/types';
+import { SpecialDex } from '../../executor/types';
 import { hexZeroPad, hexlify, solidityPack, hexConcat } from 'ethers/lib/utils';
 import { BigNumber } from 'ethers';
 import { OnPoolCreatedCallback, UniswapV2Factory } from './uniswap-v2-factory';
+
+const UNISWAP_V2_RECHECK_PAIR_EXISTENCE_AFTER_MS = 3 * 24 * 60 * 60 * 1000; // 3 days
 
 const rebaseTokens = _rebaseTokens as { chainId: number; address: string }[];
 
@@ -116,6 +119,7 @@ export interface UniswapV2Pair {
   token1: Token;
   exchange?: Address;
   pool?: UniswapV2EventPool;
+  checkExistenceAfter?: number;
 }
 
 export class UniswapV2EventPool extends StatefulEventSubscriber<UniswapV2PoolState> {
@@ -138,10 +142,7 @@ export class UniswapV2EventPool extends StatefulEventSubscriber<UniswapV2PoolSta
   ) {
     super(
       parentName,
-      (token0.symbol || token0.address) +
-        '-' +
-        (token1.symbol || token1.address) +
-        ' pool',
+      `${token0.address}_${token1.address}_${poolAddress}`,
       dexHelper,
       logger,
     );
@@ -219,6 +220,12 @@ export class UniswapV2
   pairs: { [key: string]: UniswapV2Pair } = {};
   feeFactor = 10000;
   factory: Contract;
+  pairsHashCacheKey: string;
+
+  // Guards against concurrent findPair() calls for the same key.
+  // Stores in-flight promises so duplicate callers await
+  // the same work instead of creating duplicate pair objects.
+  private findPairPromises: Record<string, Promise<UniswapV2Pair | null>> = {};
 
   routerInterface: Interface;
   exchangeRouterInterface: Interface;
@@ -280,6 +287,8 @@ export class UniswapV2
 
     this.routerInterface = new Interface(ParaSwapABI);
     this.exchangeRouterInterface = new Interface(UniswapV2ExchangeRouterABI);
+    this.pairsHashCacheKey =
+      `${CACHE_PREFIX}_${network}_${dexKey}_pairs`.toLowerCase();
 
     this.factoryInst = new UniswapV2Factory(
       dexHelper,
@@ -334,10 +343,10 @@ export class UniswapV2
     });
   }
 
-  async getBuyPrice(
+  getBuyPrice(
     priceParams: UniswapV2PoolOrderedParams,
     destAmount: bigint,
-  ): Promise<bigint> {
+  ): bigint {
     return Uniswapv2ConstantProductPool.getBuyPrice(
       priceParams,
       destAmount,
@@ -345,10 +354,10 @@ export class UniswapV2
     );
   }
 
-  async getSellPrice(
+  getSellPrice(
     priceParams: UniswapV2PoolOrderedParams,
     srcAmount: bigint,
-  ): Promise<bigint> {
+  ): bigint {
     return Uniswapv2ConstantProductPool.getSellPrice(
       priceParams,
       srcAmount,
@@ -356,24 +365,24 @@ export class UniswapV2
     );
   }
 
-  async getBuyPricePath(
+  getBuyPricePath(
     amount: bigint,
     params: UniswapV2PoolOrderedParams[],
-  ): Promise<bigint> {
+  ): bigint {
     let price = amount;
     for (const param of params.reverse()) {
-      price = await this.getBuyPrice(param, price);
+      price = this.getBuyPrice(param, price);
     }
     return price;
   }
 
-  async getSellPricePath(
+  getSellPricePath(
     amount: bigint,
     params: UniswapV2PoolOrderedParams[],
-  ): Promise<bigint> {
+  ): bigint {
     let price = amount;
     for (const param of params) {
-      price = await this.getSellPrice(param, price);
+      price = this.getSellPrice(param, price);
     }
     return price;
   }
@@ -386,11 +395,55 @@ export class UniswapV2
         : [to, from];
 
     const key = this.getPoolIdentifier(token0.address, token1.address);
-    let pair = this.pairs[key];
+    const pair = this.pairs[key];
     if (pair) return pair;
+
+    // If another caller is already discovering this pair, await the same promise
+    const existingPromise = this.findPairPromises[key];
+    if (existingPromise) {
+      return existingPromise;
+    }
+
+    const findPromise = this._findPair(key, token0, token1);
+    this.findPairPromises[key] = findPromise;
+
+    try {
+      return await findPromise;
+    } finally {
+      delete this.findPairPromises[key];
+    }
+  }
+
+  private async _findPair(
+    key: string,
+    token0: Token,
+    token1: Token,
+  ): Promise<UniswapV2Pair | null> {
+    const cachedPairRaw = await this.dexHelper.cache.hget(
+      this.pairsHashCacheKey,
+      key,
+    );
+
+    const cachedPair = cachedPairRaw
+      ? (JSON.parse(cachedPairRaw) as UniswapV2Pair)
+      : null;
+
+    if (
+      cachedPair &&
+      (cachedPair.exchange ||
+        (cachedPair.checkExistenceAfter &&
+          cachedPair.checkExistenceAfter > Date.now()))
+    ) {
+      this.pairs[key] = cachedPair;
+      return cachedPair;
+    }
+
     const exchange = await this.factory.methods
       .getPair(token0.address, token1.address)
       .call();
+
+    let pair: UniswapV2Pair | undefined;
+
     if (exchange === NULL_ADDRESS) {
       // if the pool has been newly created to not allow this op as we can run into race condition between pool discovery and concurrent pricing request touching this pool
       if (!this.newlyCreatedPoolKeys.has(key)) {
@@ -399,6 +452,21 @@ export class UniswapV2
     } else {
       pair = { token0, token1, exchange };
     }
+
+    if (!pair) {
+      return null;
+    }
+
+    await this.dexHelper.cache.hset(
+      this.pairsHashCacheKey,
+      key,
+      JSON.stringify({
+        ...pair,
+        checkExistenceAfter:
+          Date.now() + UNISWAP_V2_RECHECK_PAIR_EXISTENCE_AFTER_MS,
+      }),
+    );
+
     this.pairs[key] = pair;
     return pair;
   }
@@ -604,19 +672,15 @@ export class UniswapV2
       );
 
       const unit = isSell
-        ? await this.getSellPricePath(unitVolumeWithFee, [pairParam])
-        : await this.getBuyPricePath(unitVolumeWithFee, [pairParam]);
+        ? this.getSellPricePath(unitVolumeWithFee, [pairParam])
+        : this.getBuyPricePath(unitVolumeWithFee, [pairParam]);
 
       const prices = isSell
-        ? await Promise.all(
-            amountsWithFee.map(amount =>
-              this.getSellPricePath(amount, [pairParam]),
-            ),
+        ? amountsWithFee.map(amount =>
+            this.getSellPricePath(amount, [pairParam]),
           )
-        : await Promise.all(
-            amountsWithFee.map(amount =>
-              this.getBuyPricePath(amount, [pairParam]),
-            ),
+        : amountsWithFee.map(amount =>
+            this.getBuyPricePath(amount, [pairParam]),
           );
 
       const [unitOutWithFee, ...outputsWithFee] = applyTransferFee(
@@ -873,18 +937,6 @@ export class UniswapV2
     let targetExchange: Address;
     let dexFuncHasRecipient: boolean;
 
-    // if (this.dexKey === 'BakerySwap') {
-    //   const weth = this.getWETHAddress(srcToken, destToken, data.weth);
-
-    //   exchangeData = this.exchangeRouterInterface.encodeFunctionData(
-    //     UniswapV2Functions.swap,
-    //     [srcToken, srcAmount, destAmount, weth, pools],
-    //   );
-    //   specialDexFlag = SpecialDex.DEFAULT;
-    //   targetExchange = data.router;
-    //   dexFuncHasRecipient = false;
-    // } else if (side === SwapSide.SELL) {
-
     if (side === SwapSide.SELL) {
       // 28 bytes are prepended in the Bytecode builder
       const exchangeDataTypes = ['bytes4', 'bytes32', 'bytes32'];
@@ -1101,6 +1153,8 @@ export class UniswapV2
 
         // delete entry locally to let local instance discover the pool
         delete this.pairs[poolKey];
+
+        await this.dexHelper.cache.hdel(this.pairsHashCacheKey, [poolKey]);
 
         this.logger.info(`${logPrefix} discovered new pool ${poolKey}`);
       } catch (e) {

@@ -177,11 +177,9 @@ export class BalancerV3EventPool extends StatefulEventSubscriber<PoolStateMap> {
   async generateState(
     blockNumber: number,
   ): Promise<DeepReadonly<PoolStateMap>> {
-    const block = await this.dexHelper.provider.getBlock(blockNumber);
     const apiPoolStateMap = await getPoolsApi(
       this.network,
       this.hooksConfigMap,
-      block.timestamp,
     );
     const allOnChainPools = await getOnChainState(
       this.network,
@@ -189,6 +187,7 @@ export class BalancerV3EventPool extends StatefulEventSubscriber<PoolStateMap> {
       this.dexHelper,
       this.interfaces,
       blockNumber,
+      this.logger,
     );
 
     // Filter out all paused pools
@@ -220,6 +219,7 @@ export class BalancerV3EventPool extends StatefulEventSubscriber<PoolStateMap> {
       this.dexHelper,
       this.interfaces,
       blockNumber,
+      this.logger,
     );
 
     return latestOnChainPools;
@@ -524,7 +524,7 @@ export class BalancerV3EventPool extends StatefulEventSubscriber<PoolStateMap> {
         hookState = hookStateMap[step.poolState.hookAddress];
         if (!hookState) {
           this.logger.error(
-            `getSwapResult hookState not found ${step.poolState.hookAddress}`,
+            `getSwapResult hookState not found ${step.poolState.poolAddress.toLowerCase()} hook ${step.poolState.hookAddress.toLowerCase()}`,
           );
           return 0n;
         }
@@ -551,7 +551,7 @@ export class BalancerV3EventPool extends StatefulEventSubscriber<PoolStateMap> {
           ];
           if (!poolHookState) {
             this.logger.error(
-              `getSwapResult StableSurge hookState not found ${step.poolState.hookAddress}`,
+              `getSwapResult StableSurge hookState not found ${step.poolState.poolAddress.toLowerCase()}`,
             );
             return 0n;
           }
@@ -641,7 +641,7 @@ export class BalancerV3EventPool extends StatefulEventSubscriber<PoolStateMap> {
     );
 
     // Update state
-    const blockNumber = await this.dexHelper.provider.getBlockNumber();
+    const blockNumber = this.dexHelper.blockManager.getLatestBlockNumber();
     this.setState(poolState, blockNumber);
   }
 

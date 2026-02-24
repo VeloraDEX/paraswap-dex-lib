@@ -86,3 +86,10 @@ export type CurveV1DirectSwap = [
   partnerAndFee: string,
   permit: string,
 ];
+
+export interface ApiPool {
+  id: string;
+  address: string;
+  usdTotal: number;
+  isBroken: boolean;
+}

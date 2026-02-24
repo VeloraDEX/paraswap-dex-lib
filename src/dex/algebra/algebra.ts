@@ -79,6 +79,15 @@ export class Algebra extends SimpleExchange implements IDex<AlgebraData> {
   readonly isFeeOnTransferSupported: boolean = true;
   protected eventPools: Record<string, IAlgebraEventPool | null> = {};
 
+  // Guards against concurrent getPool() calls for the same identifier.
+  // Stores in-flight initialization promises so duplicate callers await
+  // the same work instead of creating duplicate pool instances.
+  private poolInitPromises: Record<string, Promise<IAlgebraEventPool | null>> =
+    {};
+
+  protected totalPoolsCount = 0;
+  protected nonNullPoolsCount = 0;
+
   private newlyCreatedPoolKeys: Set<string> = new Set();
 
   readonly hasConstantPriceLargeAmounts = false;
@@ -228,11 +237,20 @@ export class Algebra extends SimpleExchange implements IDex<AlgebraData> {
     destAddress: Address,
     blockNumber: number,
   ): Promise<IAlgebraEventPool | null> {
-    let pool = this.eventPools[
-      this.getPoolIdentifier(srcAddress, destAddress)
-    ] as IAlgebraEventPool | null | undefined;
+    const poolIdentifier = this.getPoolIdentifier(srcAddress, destAddress);
+
+    let pool = this.eventPools[poolIdentifier] as
+      | IAlgebraEventPool
+      | null
+      | undefined;
 
     if (pool === null) return null;
+
+    // If another caller is already initializing this pool, await the same promise
+    const existingPromise = this.poolInitPromises[poolIdentifier];
+    if (existingPromise) {
+      return existingPromise;
+    }
 
     if (pool) {
       if (!pool.initFailed) {
@@ -249,12 +267,40 @@ export class Algebra extends SimpleExchange implements IDex<AlgebraData> {
       }
     }
 
+    const initPromise = this._initPool(
+      srcAddress,
+      destAddress,
+      blockNumber,
+      poolIdentifier,
+      pool,
+    );
+
+    this.poolInitPromises[poolIdentifier] = initPromise;
+
+    try {
+      return await initPromise;
+    } finally {
+      delete this.poolInitPromises[poolIdentifier];
+    }
+  }
+
+  private async _initPool(
+    srcAddress: Address,
+    destAddress: Address,
+    blockNumber: number,
+    poolIdentifier: string,
+    existingPool: IAlgebraEventPool | undefined,
+  ): Promise<IAlgebraEventPool | null> {
+    if (!existingPool) {
+      this.totalPoolsCount++;
+    }
+
     const [token0, token1] = this._sortTokens(srcAddress, destAddress);
 
     const key = `${token0}_${token1}`.toLowerCase();
 
     // no need to run this logic on retry initialisation scenario
-    if (!pool) {
+    if (!existingPool) {
       const notExistingPoolScore = await this.dexHelper.cache.zscore(
         this.notExistingPoolSetKey,
         key,
@@ -263,14 +309,14 @@ export class Algebra extends SimpleExchange implements IDex<AlgebraData> {
       const poolDoesNotExist = notExistingPoolScore !== null;
 
       if (poolDoesNotExist) {
-        this.eventPools[this.getPoolIdentifier(srcAddress, destAddress)] = null;
+        this.eventPools[poolIdentifier] = null;
         return null;
       }
     }
 
     this.logger.trace(`starting to listen to new pool: ${key}`);
-    pool =
-      pool ||
+    const pool =
+      existingPool ||
       new this.AlgebraPoolImplem(
         this.dexHelper,
         this.dexKey,
@@ -286,14 +332,16 @@ export class Algebra extends SimpleExchange implements IDex<AlgebraData> {
         this.config.forceManualStateGenerate,
       );
 
+    let result: IAlgebraEventPool | null = pool;
+
     try {
       await pool.initialize(blockNumber, {
         initCallback: state => {
           //really hacky, we need to push poolAddress so that we subscribeToLogs in StatefulEventSubscriber
-          pool!.addressesSubscribed[0] = state.pool;
-          pool!.poolAddress = state.pool;
-          pool!.initFailed = false;
-          pool!.initRetryAttemptCount = 0;
+          pool.addressesSubscribed[0] = state.pool;
+          pool.poolAddress = state.pool;
+          pool.initFailed = false;
+          pool.initRetryAttemptCount = 0;
         },
       });
 
@@ -326,7 +374,7 @@ export class Algebra extends SimpleExchange implements IDex<AlgebraData> {
 
           // Pool does not exist for this pair, so we can set it to null
           // to prevent more requests for this pool
-          pool = null;
+          result = null;
         }
       } else {
         // on unknown error mark as failed and increase retryCount for retry init strategy
@@ -339,24 +387,21 @@ export class Algebra extends SimpleExchange implements IDex<AlgebraData> {
       }
     }
 
-    if (pool !== null) {
-      const allEventPools = Object.values(this.eventPools);
+    if (result !== null) {
       // if pool was created, delete pool record from non existing set
       this.dexHelper.cache
         .zrem(this.notExistingPoolSetKey, [key])
         .catch(() => {});
-      this.logger.info(
-        `starting to listen to new non-null pool: ${key}. Already following ${allEventPools
-          // Not that I like this reduce, but since it is done only on initialization, expect this to be ok
-          .reduce(
-            (acc, curr) => (curr !== null ? ++acc : acc),
-            0,
-          )} non-null pools or ${allEventPools.length} total pools`,
-      );
+      if (!result.initFailed) {
+        this.nonNullPoolsCount++;
+        this.logger.info(
+          `starting to listen to new non-null pool: ${key}. Already following ${this.nonNullPoolsCount} non-null pools or ${this.totalPoolsCount} total pools`,
+        );
+      }
     }
 
-    this.eventPools[this.getPoolIdentifier(srcAddress, destAddress)] = pool;
-    return pool;
+    this.eventPools[poolIdentifier] = result;
+    return result;
   }
 
   async addMasterPool(poolKey: string, blockNumber: number): Promise<boolean> {

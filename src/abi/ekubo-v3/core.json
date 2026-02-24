@@ -1,0 +1,93 @@
+[
+  {
+    "type": "event",
+    "name": "PoolInitialized",
+    "inputs": [
+      {
+        "name": "poolId",
+        "type": "bytes32",
+        "indexed": false,
+        "internalType": "PoolId"
+      },
+      {
+        "name": "poolKey",
+        "type": "tuple",
+        "indexed": false,
+        "internalType": "struct PoolKey",
+        "components": [
+          {
+            "name": "token0",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "token1",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "config",
+            "type": "bytes32",
+            "internalType": "PoolConfig"
+          }
+        ]
+      },
+      {
+        "name": "tick",
+        "type": "int32",
+        "indexed": false,
+        "internalType": "int32"
+      },
+      {
+        "name": "sqrtRatio",
+        "type": "uint96",
+        "indexed": false,
+        "internalType": "SqrtRatio"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "PositionUpdated",
+    "inputs": [
+      {
+        "name": "locker",
+        "type": "address",
+        "indexed": false,
+        "internalType": "address"
+      },
+      {
+        "name": "poolId",
+        "type": "bytes32",
+        "indexed": false,
+        "internalType": "PoolId"
+      },
+      {
+        "name": "positionId",
+        "type": "bytes32",
+        "indexed": false,
+        "internalType": "PositionId"
+      },
+      {
+        "name": "liquidityDelta",
+        "type": "int128",
+        "indexed": false,
+        "internalType": "int128"
+      },
+      {
+        "name": "balanceUpdate",
+        "type": "bytes32",
+        "indexed": false,
+        "internalType": "PoolBalanceUpdate"
+      },
+      {
+        "name": "stateAfter",
+        "type": "bytes32",
+        "indexed": false,
+        "internalType": "PoolState"
+      }
+    ],
+    "anonymous": false
+  }
+]

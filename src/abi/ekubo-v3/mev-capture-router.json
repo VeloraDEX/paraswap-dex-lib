@@ -1,0 +1,109 @@
+[
+  {
+    "type": "function",
+    "name": "quote",
+    "inputs": [
+      {
+        "name": "poolKey",
+        "type": "tuple",
+        "internalType": "struct PoolKey",
+        "components": [
+          {
+            "name": "token0",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "token1",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "config",
+            "type": "bytes32",
+            "internalType": "PoolConfig"
+          }
+        ]
+      },
+      {
+        "name": "isToken1",
+        "type": "bool",
+        "internalType": "bool"
+      },
+      {
+        "name": "amount",
+        "type": "int128",
+        "internalType": "int128"
+      },
+      {
+        "name": "sqrtRatioLimit",
+        "type": "uint96",
+        "internalType": "SqrtRatio"
+      },
+      {
+        "name": "skipAhead",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "balanceUpdate",
+        "type": "bytes32",
+        "internalType": "PoolBalanceUpdate"
+      },
+      {
+        "name": "stateAfter",
+        "type": "bytes32",
+        "internalType": "PoolState"
+      }
+    ],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "swapAllowPartialFill",
+    "inputs": [
+      {
+        "name": "poolKey",
+        "type": "tuple",
+        "internalType": "struct PoolKey",
+        "components": [
+          {
+            "name": "token0",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "token1",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "config",
+            "type": "bytes32",
+            "internalType": "PoolConfig"
+          }
+        ]
+      },
+      {
+        "name": "params",
+        "type": "bytes32",
+        "internalType": "SwapParameters"
+      },
+      {
+        "name": "recipient",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "balanceUpdate",
+        "type": "bytes32",
+        "internalType": "PoolBalanceUpdate"
+      }
+    ],
+    "stateMutability": "payable"
+  }
+]

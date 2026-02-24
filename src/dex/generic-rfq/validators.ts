@@ -87,7 +87,7 @@ const ext: joi.Extension = {
               currentValue.lte(previousValue) ? currentValue : previousValue,
             new BigNumber('123456789012345678901234567890'),
           );
-        return maxBid < minAsk
+        return maxBid.lt(minAsk)
           ? values
           : helpers.message({
               custom: 'the maximum bid is higher than minimum ask',

@@ -86,6 +86,7 @@ import {
   DirectCurveV1Param,
   DirectCurveV1ParamV6,
   CurveV1DirectSwap,
+  ApiPool,
 } from './types';
 import { erc20Iface } from '../../lib/utils-interfaces';
 import { applyTransferFee } from '../../lib/token-transfer-fee';
@@ -93,6 +94,10 @@ import { DIRECT_METHOD_NAME, DIRECT_METHOD_NAME_V6 } from './constants';
 import { packCurveData } from '../../lib/curve/encoder';
 import { encodeCurveAssets } from './packer';
 import { hexConcat, hexZeroPad, hexlify } from 'ethers/lib/utils';
+import {
+  CURVE_API_URL,
+  NETWORK_ID_TO_NAME,
+} from '../curve-v1-factory/constants';
 
 const CURVE_DEFAULT_CHUNKS = 10;
 
@@ -109,6 +114,10 @@ export class CurveV1
   minConversionRate = '1';
 
   eventPools = new Array<CurvePool | CurveMetapool>();
+  private poolInitPromises: Record<
+    string,
+    Promise<(CurvePool | CurveMetapool)[]>
+  > = {};
   public poolInterface: Interface;
 
   private logger: Logger;
@@ -119,6 +128,7 @@ export class CurveV1
   private decimalsCoinsAndUnderlying: Record<string, number> = {};
 
   protected pools: Record<string, PoolConfig>;
+  protected allApiPools: ApiPool[] = [];
   protected eventSupportedPools: string[];
   protected baseTokens: Record<string, TokenWithReasonableVolume>;
 
@@ -211,10 +221,6 @@ export class CurveV1
     );
   }
 
-  protected getPoolConfigByAddress(address: Address) {
-    return Object.values(this.pools).find(p => p.address == address);
-  }
-
   getPoolConfig(from: Token, to: Token): PoolConfig | undefined {
     return this.getPoolConfigs(from, to)[0];
   }
@@ -244,9 +250,7 @@ export class CurveV1
         return true;
 
       // Case 2: If it a swap between any direct tokens
-      if (coins.includes(toAddress) && coins.includes(fromAddress)) return true;
-
-      return false;
+      return coins.includes(toAddress) && coins.includes(fromAddress);
     });
   }
 
@@ -258,11 +262,6 @@ export class CurveV1
   ): Promise<string[]> {
     const pools = this.getPoolConfigs(_from, _to);
     return pools.map(pool => this.getPoolIdentifier(pool.name));
-  }
-
-  getContractAddress(srcToken: Token, to: Token) {
-    const pool = this.getPoolConfig(srcToken, to);
-    return pool && pool.address;
   }
 
   poolConfigsByAddress() {
@@ -343,50 +342,88 @@ export class CurveV1
   ): Promise<string[]> {
     const unavailablePools = new Array<string>();
     if (!blockNumber) return unavailablePools;
-    let poolsToFetch: (CurvePool | CurveMetapool)[] = [];
+
+    // Phase 1 (synchronous): collect pools to init and pending promises
+    const poolsToInit: (CurvePool | CurveMetapool)[] = [];
+    const pendingPromises: Promise<(CurvePool | CurveMetapool)[]>[] = [];
+
     for (const poolAddress of poolAddresses) {
-      // Check if the pool is already tracked
-      let pool = this.getPoolByAddress(poolAddress);
-      // If the pool is not stracked add it to the list of pools to fetch
-      if (!pool) {
-        let newPool = this.getEventPoolInstance(poolAddress);
-        if (!newPool)
-          throw new Error(
-            `Error_${this.dexKey} requested unsupported event pool with address ${poolAddress}`,
-          );
+      if (this.getPoolByAddress(poolAddress)) continue;
 
-        const addressesSubscribed = newPool.addressesSubscribed.map(address =>
-          address.toLowerCase(),
+      const key = poolAddress.toLowerCase();
+      const existingPromise = this.poolInitPromises[key];
+      if (existingPromise) {
+        pendingPromises.push(existingPromise);
+        continue;
+      }
+
+      const newPool = this.getEventPoolInstance(poolAddress);
+      if (!newPool) {
+        throw new Error(
+          `Error_${this.dexKey} requested unsupported event pool with address ${poolAddress}`,
         );
-        if (!addressesSubscribed.includes(poolAddress)) {
-          newPool.addressesSubscribed.push(poolAddress);
-        }
+      }
 
-        await newPool.initialize(blockNumber);
-        poolsToFetch.push(newPool);
-      } else if (!pool.getState(blockNumber)) {
+      const addressesSubscribed = newPool.addressesSubscribed.map(a =>
+        a.toLowerCase(),
+      );
+      if (!addressesSubscribed.includes(poolAddress)) {
+        newPool.addressesSubscribed.push(poolAddress);
+      }
+
+      poolsToInit.push(newPool);
+    }
+
+    // Register a single batch promise for all new pools (still synchronous)
+    if (poolsToInit.length > 0) {
+      const batchPromise = this._batchInitializePools(poolsToInit, blockNumber);
+      for (const pool of poolsToInit) {
+        this.poolInitPromises[pool.address.toLowerCase()] = batchPromise;
+      }
+      pendingPromises.push(batchPromise);
+    }
+
+    // Phase 2 (async): await all pending initialization
+    try {
+      await Promise.all(pendingPromises);
+    } catch (e) {
+      this.logger.error(`Error_batchCatchUpPools`, e);
+      throw e;
+    } finally {
+      for (const pool of poolsToInit) {
+        delete this.poolInitPromises[pool.address.toLowerCase()];
+      }
+    }
+
+    // Phase 3: check state availability
+    for (const poolAddress of poolAddresses) {
+      const pool = this.getPoolByAddress(poolAddress);
+      if (!pool || !pool.getState(blockNumber)) {
         unavailablePools.push(poolAddress);
       }
     }
 
-    if (!poolsToFetch.length) return unavailablePools;
+    return unavailablePools;
+  }
 
-    try {
-      const poolStates = await getManyPoolStates(
-        poolsToFetch,
-        this.dexHelper.multiContract,
-        blockNumber,
-      );
+  private async _batchInitializePools(
+    pools: (CurvePool | CurveMetapool)[],
+    blockNumber: number,
+  ): Promise<(CurvePool | CurveMetapool)[]> {
+    const poolStates = await getManyPoolStates(
+      pools,
+      this.dexHelper.multiContract,
+      blockNumber,
+    );
 
-      for (let i = 0; i < poolsToFetch.length; i++) {
-        await poolsToFetch[i].setup(blockNumber, poolStates[i] as any);
-        this.eventPools.push(poolsToFetch[i]);
-      }
-      return unavailablePools;
-    } catch (e) {
-      this.logger.error(`Error_batchCatchUpPools`, e);
-      throw e;
+    for (let i = 0; i < pools.length; i++) {
+      await pools[i].initialize(blockNumber, {
+        state: poolStates[i] as any,
+      });
+      this.eventPools.push(pools[i]);
     }
+
+    return pools;
   }
 
   async getRatesEventPools(
@@ -583,26 +620,6 @@ export class CurveV1
 
   isEventPoolSupported(poolAddress: Address): Boolean {
     return this.eventSupportedPools.some(p => p === poolAddress.toLowerCase());
-  }
-
-  allocPools(
-    from: Token,
-    to: Token,
-    side: SwapSide,
-    routeID: number,
-    usedPools: { [poolIdentifier: string]: number },
-    isFirstSwap: boolean,
-  ) {
-    if (side === SwapSide.BUY) {
-      return;
-    }
-
-    this.getPoolConfigs(from, to).forEach(p => {
-      const poolIdentifier = this.getPoolIdentifier(p.name);
-      if (!(poolIdentifier in usedPools)) {
-        usedPools[poolIdentifier] = routeID;
-      }
-    });
   }
 
   public getPoolIdentifier(name: string) {
@@ -1251,6 +1268,30 @@ export class CurveV1
     }
   }
 
+  async fetchAllApiPools() {
+    const baseUrl = CURVE_API_URL;
+    const networkSlug = NETWORK_ID_TO_NAME[this.network];
+    const url = `${baseUrl}/${networkSlug}`;
+
+    try {
+      const response = await this.dexHelper.httpRequest.get<{
+        success: boolean;
+        data: { poolData: ApiPool[] };
+      }>(url);
+
+      if (response.success) {
+        this.allApiPools = response.data.poolData.map(t => ({
+          ...t,
+          address: t.address.toLowerCase(),
+        }));
+      }
+    } catch (error) {
+      this.logger.error(
+        `fetchAllApiPools ${this.dexKey} on ${url} failed to fetch pools from API`,
+      );
+    }
+  }
+
   async updatePoolState(): Promise<void> {
     if (!Object.keys(this.decimalsCoinsAndUnderlying).length) {
       await this.fetchDecimals();
@@ -1258,6 +1299,7 @@ export class CurveV1
 
     await this.updateBaseTokenPrice();
     await this.fetchAllPools();
+    await this.fetchAllApiPools();
   }
 
   async getTopPoolsForToken(
@@ -1285,11 +1327,22 @@ export class CurveV1
           ? _.concat(connectorTokens, pool.underlying)
           : connectorTokens;
 
+        const apiPool = this.allApiPools.find(
+          p => p.address === pool.address.toLowerCase(),
+        );
+
+        if (apiPool && apiPool.isBroken) {
+          this.logger.warn(
+            `CurveV1 pool ${pool.address} is marked as broken in the API, skipping it for top pools`,
+          );
+          return acc;
+        }
+
         if (connectorTokens.length) {
           acc.push({
             exchange: this.dexKey,
             address: pool.address,
-            liquidityUSD: pool.liquidityUSD!,
+            liquidityUSD: apiPool?.usdTotal ?? pool.liquidityUSD!,
             connectorTokens: _.uniq(connectorTokens)
               .filter(
                 (_token: string) =>
