@@ -1288,6 +1288,71 @@ describe('RamsesV3', () => {
       expect(falseChecksCounter).toBeLessThan(poolPrices!.length);
     });
 
+    it('getPoolIdentifiers and getPricesVolume BUY', async function () {
+      const amounts = [
+        0n,
+        6000000n,
+        12000000n,
+        18000000n,
+        24000000n,
+        30000000n,
+        36000000n,
+        42000000n,
+      ];
+
+      const pools = await ramsesV3.getPoolIdentifiers(
+        TokenA,
+        TokenB,
+        SwapSide.BUY,
+        blockNumber,
+      );
+      console.log(
+        `${TokenASymbol} <> ${TokenBSymbol} Pool Identifiers: `,
+        pools,
+      );
+
+      expect(pools.length).toBeGreaterThan(0);
+
+      const poolPrices = await ramsesV3.getPricesVolume(
+        TokenA,
+        TokenB,
+        amounts,
+        SwapSide.BUY,
+        blockNumber,
+        pools,
+      );
+      console.log(
+        `${TokenASymbol} <> ${TokenBSymbol} Pool Prices: `,
+        poolPrices,
+      );
+
+      expect(poolPrices).not.toBeNull();
+      checkPoolPrices(poolPrices!, amounts, SwapSide.BUY, dexKey);
+
+      let falseChecksCounter = 0;
+      await Promise.all(
+        poolPrices!.map(async price => {
+          const fee = ramsesV3.eventPools[price.poolIdentifiers![0]]!.feeCode;
+          const res = await checkOnChainPricing(
+            dexHelper,
+            ramsesV3,
+            'quoteExactOutputSingle',
+            blockNumber,
+            '0x3c4532424Eb018013595e4960Fd3de5397B6f571',
+            price.prices,
+            TokenA.address,
+            TokenB.address,
+            fee,
+            amounts,
+            velodromeQuoterIface,
+          );
+          if (res === false) falseChecksCounter++;
+        }),
+      );
+
+      expect(falseChecksCounter).toBeLessThan(poolPrices!.length);
+    });
+
     it('getTopPoolsForToken', async function () {
       const poolLiquidity = await ramsesV3.getTopPoolsForToken(
         TokenB.address,
@@ -1362,6 +1427,62 @@ describe('RamsesV3', () => {
             dexHelper,
             ramsesV3,
             'quoteExactInputSingle',
+            blockNumber,
+            '0x403Bf94fe505cA0F0b1563C350B57dCeC8303ECd',
+            price.prices,
+            TokenA.address,
+            TokenB.address,
+            fee,
+            amounts,
+            velodromeQuoterIface,
+          );
+          if (res === false) falseChecksCounter++;
+        }),
+      );
+
+      expect(falseChecksCounter).toBeLessThan(poolPrices!.length);
+    });
+
+    it('getPoolIdentifiers and getPricesVolume BUY', async function () {
+      const amounts = [0n, 1000000n, 2000000n, 3000000n, 4000000n, 5000000n];
+
+      const pools = await ramsesV3.getPoolIdentifiers(
+        TokenA,
+        TokenB,
+        SwapSide.BUY,
+        blockNumber,
+      );
+      console.log(
+        `${TokenASymbol} <> ${TokenBSymbol} Pool Identifiers: `,
+        pools,
+      );
+
+      expect(pools.length).toBeGreaterThan(0);
+
+      const poolPrices = await ramsesV3.getPricesVolume(
+        TokenA,
+        TokenB,
+        amounts,
+        SwapSide.BUY,
+        blockNumber,
+        pools,
+      );
+      console.log(
+        `${TokenASymbol} <> ${TokenBSymbol} Pool Prices: `,
+        poolPrices,
+      );
+
+      expect(poolPrices).not.toBeNull();
+      checkPoolPrices(poolPrices!, amounts, SwapSide.BUY, dexKey);
+
+      let falseChecksCounter = 0;
+      await Promise.all(
+        poolPrices!.map(async price => {
+          const fee = ramsesV3.eventPools[price.poolIdentifiers![0]]!.feeCode;
+          const res = await checkOnChainPricing(
+            dexHelper,
+            ramsesV3,
+            'quoteExactOutputSingle',
             blockNumber,
             '0x403Bf94fe505cA0F0b1563C350B57dCeC8303ECd',
             price.prices,
