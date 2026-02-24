@@ -197,3 +197,11 @@ export const uint24ToBigInt = (
     BigInt(value[0].toString()),
   );
 };
+
+export const uint16ToBigInt = (
+  result: MultiResult<BytesLike> | BytesLike,
+): bigint => {
+  return generalDecoder(result, ['uint16'], 0n, value =>
+    BigInt(value[0].toString()),
+  );
+};

@@ -54,8 +54,10 @@ import {
   ALGEBRA_EFFICIENCY_FACTOR,
   POOL_TVL_UPDATE_INTERVAL,
   MIN_USD_TVL_FOR_PRICING,
+  FEE_UPDATE_INTERVAL_MS,
 } from './constants';
-import { uint256ToBigInt } from '../../lib/decoders';
+import { uint256ToBigInt, uint16ToBigInt } from '../../lib/decoders';
+import { MultiCallParams } from '../../lib/multi-wrapper';
 import { AlgebraMath } from '../algebra/lib/AlgebraMath';
 import { PoolStateV1_1 } from '../algebra/types';
 import { OutputResult } from '../uniswap-v3/types';
@@ -71,6 +73,7 @@ export class AlgebraIntegral
 
   private readonly factory: AlgebraIntegralFactory;
   private updatePoolsTvlTimer?: NodeJS.Timeout;
+  private feeUpdateIntervalTask?: NodeJS.Timeout;
   protected eventPools: Record<string, AlgebraIntegralEventPool | null> = {};
   protected stateMulticallIface: Interface = new Interface(
     AlgebraIntegralStateMulticallABI,
@@ -126,6 +129,14 @@ export class AlgebraIntegral
           );
         }
       }, POOL_TVL_UPDATE_INTERVAL * 1000);
+
+      if (!this.feeUpdateIntervalTask) {
+        void this.updateAllPoolFees();
+        this.feeUpdateIntervalTask = setInterval(
+          this.updateAllPoolFees.bind(this),
+          FEE_UPDATE_INTERVAL_MS,
+        );
+      }
     }
   }
 
@@ -957,11 +968,79 @@ export class AlgebraIntegral
     return [srcToken.address.toLowerCase(), destToken.address.toLowerCase()];
   }
 
+  protected buildFeeCallData(
+    pools: AlgebraIntegralEventPool[],
+  ): MultiCallParams<bigint>[] {
+    return pools.map(pool => ({
+      target: pool.poolAddress,
+      callData: pool.poolIface.encodeFunctionData('fee', []),
+      decodeFunction: uint16ToBigInt,
+    }));
+  }
+
+  protected async updateAllPoolFees(): Promise<void> {
+    try {
+      const activePools = Object.values(this.eventPools).filter(
+        (pool): pool is AlgebraIntegralEventPool => pool !== null,
+      );
+
+      if (activePools.length === 0) {
+        return;
+      }
+
+      const callData = this.buildFeeCallData(activePools);
+
+      const results = await this.dexHelper.multiWrapper.tryAggregate<bigint>(
+        false,
+        callData,
+      );
+
+      const updateBlockNumber = await this.dexHelper.provider.getBlockNumber();
+
+      activePools.forEach((pool, index) => {
+        if (!results[index].success) {
+          this.logger.warn(
+            `${this.dexKey}: Failed to fetch fee for pool ${pool.poolAddress}`,
+          );
+          return;
+        }
+
+        const newFee = results[index].returnData;
+        const currentState = pool.getStaleState();
+
+        if (!currentState) {
+          return;
+        }
+
+        if (currentState.globalState.fee !== newFee) {
+          pool.setState(
+            {
+              ...currentState,
+              globalState: {
+                ...currentState.globalState,
+                fee: newFee,
+              },
+            },
+            updateBlockNumber,
+          );
+        }
+      });
+    } catch (error) {
+      this.logger.error(`${this.dexKey}: Error updating pool fees:`, error);
+    }
+  }
+
   releaseResources(): void {
     if (this.updatePoolsTvlTimer) {
       clearInterval(this.updatePoolsTvlTimer);
       this.updatePoolsTvlTimer = undefined;
       this.logger.info(`${this.dexKey}: cleared updatePoolsTvlTimer`);
+    }
+
+    if (this.feeUpdateIntervalTask) {
+      clearInterval(this.feeUpdateIntervalTask);
+      this.feeUpdateIntervalTask = undefined;
+      this.logger.info(`${this.dexKey}: cleared feeUpdateIntervalTask`);
     }
   }
 }
