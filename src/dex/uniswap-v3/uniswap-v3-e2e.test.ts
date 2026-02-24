@@ -810,9 +810,9 @@ describe('UniswapV3 E2E', () => {
       const tokens = Tokens[network];
       const holders = Holders[network];
 
-      const tokenASymbol: string = 'USDCe';
+      const tokenASymbol: string = 'WETH';
       const tokenBSymbol: string = 'USDC';
-      const tokenAAmount: string = '1100000';
+      const tokenAAmount: string = '100000000000000000';
       const tokenBAmount: string = '1000000';
 
       sideToContractMethods.forEach((contractMethods, side) =>

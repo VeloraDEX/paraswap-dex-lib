@@ -1055,7 +1055,7 @@ describe('RamsesV3', () => {
   describe('Arbitrum', () => {
     const network = Network.ARBITRUM;
     const dexHelper = new DummyDexHelper(network);
-    const TokenASymbol = 'USDCe';
+    const TokenASymbol = 'WETH';
     const TokenA = Tokens[network][TokenASymbol];
 
     const TokenBSymbol = 'USDC';
@@ -1069,13 +1069,13 @@ describe('RamsesV3', () => {
     it('getPoolIdentifiers and getPricesVolume SELL', async function () {
       const amounts = [
         0n,
-        6000000n,
-        12000000n,
-        18000000n,
-        24000000n,
-        30000000n,
-        36000000n,
-        42000000n,
+        100000000000000000n,
+        200000000000000000n,
+        300000000000000000n,
+        400000000000000000n,
+        500000000000000000n,
+        600000000000000000n,
+        700000000000000000n,
       ];
 
       const pools = await ramsesV3.getPoolIdentifiers(
