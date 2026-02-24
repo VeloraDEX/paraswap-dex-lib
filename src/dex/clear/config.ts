@@ -5,8 +5,8 @@ import { Network } from '../../constants';
 export const ClearConfig: DexConfigMap<DexParams> = {
   Clear: {
     [Network.MAINNET]: {
-      factoryAddress: '0x8bF266ED803e474AE7Bf09ADB5ba2566c489223d',
-      swapAddress: '0xeb5AD3D93E59eFcbC6934caD2B48EB33BAf29745',
+      factoryAddress: '0x78aba0729345219B8Ec4D5c9c19D23186E0803fB',
+      swapAddress: '0x07656EA4898760d55feA211015df247b44B9D81b',
       poolGasCost: 150_000,
     },
   },
