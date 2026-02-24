@@ -64,6 +64,10 @@ export class AlgebraIntegralFactory extends StatefulEventSubscriber<FactoryState
     return {};
   }
 
+  public getAllPools(): Pool[] {
+    return this.pools;
+  }
+
   public getAvailablePoolsForPair(
     srcToken: Address,
     destToken: Address,

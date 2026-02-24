@@ -1,7 +1,8 @@
 import { BytesLike, ethers } from 'ethers';
-import { extractSuccessAndValue } from '../../lib/decoders';
-import { MultiResult } from '../../lib/multi-wrapper';
+import { extractSuccessAndValue, uint16ToBigInt } from '../../lib/decoders';
+import { MultiCallParams, MultiResult } from '../../lib/multi-wrapper';
 import { DecodedStateMultiCallResultIntegral } from './types';
+import { AlgebraIntegralEventPool } from './algebra-integral-pool';
 
 export function decodeStateMultiCallResultIntegral(
   result: MultiResult<BytesLike> | BytesLike,
@@ -51,4 +52,14 @@ export function decodeStateMultiCallResultIntegral(
   )[0];
 
   return decoded as DecodedStateMultiCallResultIntegral;
+}
+
+export function buildFeeCallData(
+  pools: AlgebraIntegralEventPool[],
+): MultiCallParams<bigint>[] {
+  return pools.map(pool => ({
+    target: pool.poolAddress,
+    callData: pool.poolIface.encodeFunctionData('fee', []),
+    decodeFunction: uint16ToBigInt,
+  }));
 }

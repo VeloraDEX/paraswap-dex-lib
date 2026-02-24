@@ -29,7 +29,7 @@ export class BlackholeCL extends AlgebraIntegral {
       _.pick(AlgebraIntegralConfig, ['BlackholeCL', 'Supernova']),
     );
 
-  getMultiCallData(
+  buildQuoteCallData(
     from: string,
     to: string,
     deployer: string,
