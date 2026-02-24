@@ -1,4 +1,10 @@
-import { Address } from '../../types';
+import { BigNumber } from 'ethers';
+import { Address, NumberAsString } from '../../types';
+import { TickInfo } from '../uniswap-v3/types';
+import {
+  TickBitMapMappingsWithBigNumber,
+  TickInfoMappingsWithBigNumber,
+} from '../algebra/types';
 
 export type AlgebraIntegralData = {
   path: {
@@ -21,6 +27,30 @@ export type DexParams = {
   router: Address;
   subgraphURL: string;
   chunksCount: number;
+  algebraStateMulticall: Address;
+};
+
+// Pool state compatible with PoolStateV1_1 shape for AlgebraMath reuse
+export type AlgebraIntegralPoolState = {
+  pool: string;
+  blockTimestamp: bigint;
+  tickSpacing: bigint;
+  globalState: {
+    price: bigint;
+    tick: bigint;
+    fee: bigint; // mapped from lastFee
+    communityFeeToken0: bigint; // mapped from communityFee
+    communityFeeToken1: bigint; // mapped from communityFee
+  };
+  liquidity: bigint;
+  maxLiquidityPerTick: bigint;
+  tickBitmap: Record<NumberAsString, bigint>;
+  ticks: Record<NumberAsString, TickInfo>;
+  isValid: boolean;
+  startTickBitmap: bigint;
+  balance0: bigint;
+  balance1: bigint;
+  areTicksCompressed: boolean;
 };
 
 export type Pool = {
@@ -38,3 +68,22 @@ export enum AlgebraIntegralFunctions {
   exactOutput = 'exactOutput',
   exactInputWithFeeToken = 'exactInputSingleSupportingFeeOnTransferTokens',
 }
+
+export type DecodedGlobalStateIntegral = {
+  price: BigNumber;
+  tick: number;
+  lastFee: number;
+  pluginConfig: number;
+  communityFee: number;
+};
+
+export type DecodedStateMultiCallResultIntegral = {
+  pool: Address;
+  blockTimestamp: BigNumber;
+  globalState: DecodedGlobalStateIntegral;
+  liquidity: BigNumber;
+  tickSpacing: number;
+  maxLiquidityPerTick: BigNumber;
+  tickBitmap: TickBitMapMappingsWithBigNumber[];
+  ticks: TickInfoMappingsWithBigNumber[];
+};
