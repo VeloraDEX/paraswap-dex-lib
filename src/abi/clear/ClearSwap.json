@@ -218,6 +218,11 @@
         "internalType": "uint256",
         "name": "_amountIn",
         "type": "uint256"
+      },
+      {
+        "internalType": "bool",
+        "name": "_receiveIOU",
+        "type": "bool"
       }
     ],
     "name": "previewSwap",
