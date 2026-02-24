@@ -875,7 +875,7 @@ describe('UniswapV3 E2E', () => {
     describe('Polygon', () => {
       const network = Network.POLYGON;
 
-      const tokenASymbol: string = 'USDC';
+      const tokenASymbol: string = 'USDCn';
       const tokenBSymbol: string = 'USDT';
 
       const tokenAAmount: string = '1100000';
