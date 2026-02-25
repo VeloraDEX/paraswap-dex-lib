@@ -1,3 +1,4 @@
+import _ from 'lodash';
 import { pack } from '@ethersproject/solidity';
 import {
   Token,
@@ -77,7 +78,7 @@ export class AlgebraIntegral
   );
 
   public static dexKeysWithNetwork: { key: string; networks: Network[] }[] =
-    getDexKeysWithNetwork(AlgebraIntegralConfig);
+    getDexKeysWithNetwork(_.pick(AlgebraIntegralConfig, ['QuickSwapV4']));
 
   logger: Logger;
 
