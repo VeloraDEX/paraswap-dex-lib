@@ -70,8 +70,6 @@ export type SubgraphPoolData = {
   deployer: string;
 };
 
-export type FactoryState = Record<string, never>;
-
 export enum AlgebraIntegralFunctions {
   exactInput = 'exactInput',
   exactOutput = 'exactOutput',
