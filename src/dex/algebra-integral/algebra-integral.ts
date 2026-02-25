@@ -15,6 +15,7 @@ import {
 import {
   SwapSide,
   Network,
+  CACHE_PREFIX,
   DEST_TOKEN_DEX_TRANSFERS,
   SRC_TOKEN_DEX_TRANSFERS,
   SUBGRAPH_TIMEOUT,
@@ -59,6 +60,8 @@ import {
 import { uint256ToBigInt } from '../../lib/decoders';
 import AlgebraIntegralStateMulticallABI from '../../abi/algebra-integral/AlgebraIntegralStateMulticall.abi.json';
 import { buildFeeCallData } from './utils';
+
+const PoolsRegistryHashKey = `${CACHE_PREFIX}_poolsRegistry`;
 
 export class AlgebraIntegral
   extends SimpleExchange
@@ -185,6 +188,40 @@ export class AlgebraIntegral
         }
       }),
     );
+  }
+
+  async addMasterPool(poolKey: string, blockNumber: number): Promise<boolean> {
+    const _pairs = await this.dexHelper.cache.hget(
+      PoolsRegistryHashKey,
+      `${this.cacheStateKey}_${poolKey}`,
+    );
+    if (!_pairs) {
+      this.logger.warn(
+        `did not find poolConfig in for key ${PoolsRegistryHashKey} ${this.cacheStateKey}_${poolKey}`,
+      );
+      return false;
+    }
+
+    const poolInfo: { token0: Address; token1: Address } = JSON.parse(_pairs);
+
+    const pools = this.factory.getAvailablePoolsForPair(
+      poolInfo.token0,
+      poolInfo.token1,
+    );
+
+    if (pools.length === 0) return false;
+
+    try {
+      await this.initializeEventPools(blockNumber, true, pools);
+    } catch (e) {
+      this.logger.error(
+        `${this.dexKey}: failed to initialize master pools for ${poolInfo.token0}/${poolInfo.token1}`,
+        e,
+      );
+      return false;
+    }
+
+    return true;
   }
 
   protected async updateAllPoolFees(): Promise<void> {
