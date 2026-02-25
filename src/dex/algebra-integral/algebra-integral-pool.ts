@@ -8,7 +8,7 @@ import { IDexHelper } from '../../dex-helper/idex-helper';
 import { AlgebraIntegralPoolState } from './types';
 import AlgebraIntegralPoolABI from '../../abi/algebra-integral/AlgebraIntegralPool.abi.json';
 import { OUT_OF_RANGE_ERROR_POSTFIX } from '../uniswap-v3/constants';
-import { uint256ToBigInt } from '../../lib/decoders';
+import { addressDecode, uint256ToBigInt } from '../../lib/decoders';
 import { MultiCallParams } from '../../lib/multi-wrapper';
 import { AlgebraMath } from '../algebra/lib/AlgebraMath';
 import { TickTable } from '../algebra/lib/TickTable';
@@ -25,6 +25,9 @@ import {
 } from './constants';
 import { DecodedStateMultiCallResultIntegral } from './types';
 import { decodeStateMultiCallResultIntegral } from './utils';
+
+const TRANSFER_TOPIC =
+  '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef';
 
 export class AlgebraIntegralEventPool extends StatefulEventSubscriber<AlgebraIntegralPoolState> {
   handlers: {
@@ -64,7 +67,7 @@ export class AlgebraIntegralEventPool extends StatefulEventSubscriber<AlgebraInt
     this.poolAddress = poolAddress.toLowerCase();
 
     this.logDecoder = (log: Log) => this.poolIface.parseLog(log);
-    this.addressesSubscribed = [this.poolAddress];
+    this.addressesSubscribed = [this.poolAddress, this.token0, this.token1];
 
     this.handlers['Fee'] = this.handleNewFee.bind(this);
     this.handlers['Swap'] = this.handleSwapEvent.bind(this);
@@ -74,6 +77,9 @@ export class AlgebraIntegralEventPool extends StatefulEventSubscriber<AlgebraInt
     this.handlers['Collect'] = this.handleCollectEvent.bind(this);
     this.handlers['CommunityFee'] = this.handleCommunityFee.bind(this);
     this.handlers['TickSpacing'] = this.handleTickSpacing.bind(this);
+    this.handlers['Skim'] = this.handleSkimEvent.bind(this);
+    this.handlers['CommunityVault'] =
+      this.handleCommunityVaultChange.bind(this);
   }
 
   protected getPoolIdentifierData() {
@@ -100,6 +106,13 @@ export class AlgebraIntegralEventPool extends StatefulEventSubscriber<AlgebraInt
     log: Readonly<Log>,
     blockHeader: Readonly<BlockHeader>,
   ): DeepReadonly<AlgebraIntegralPoolState> | null {
+    const logAddress = log.address.toLowerCase();
+
+    // Handle ERC20 Transfer events on token0/token1 (community fee payments)
+    if (logAddress === this.token0 || logAddress === this.token1) {
+      return this.processTransferLog(state, log, logAddress, blockHeader);
+    }
+
     try {
       const event = this.logDecoder(log);
       if (event.name in this.handlers) {
@@ -140,6 +153,40 @@ export class AlgebraIntegralEventPool extends StatefulEventSubscriber<AlgebraInt
     return null;
   }
 
+  private processTransferLog(
+    state: DeepReadonly<AlgebraIntegralPoolState>,
+    log: Readonly<Log>,
+    logAddress: string,
+    blockHeader: Readonly<BlockHeader>,
+  ): DeepReadonly<AlgebraIntegralPoolState> | null {
+    if (
+      log.topics[0] !== TRANSFER_TOPIC ||
+      !state.communityVault ||
+      log.topics.length < 3
+    ) {
+      return null;
+    }
+
+    const from = '0x' + log.topics[1].slice(26).toLowerCase();
+    const to = '0x' + log.topics[2].slice(26).toLowerCase();
+
+    if (from !== this.poolAddress || to !== state.communityVault) {
+      return null;
+    }
+
+    const amount = BigInt(log.data);
+    const _state = _.cloneDeep(state) as AlgebraIntegralPoolState;
+
+    if (logAddress === this.token0) {
+      _state.balance0 -= amount;
+    } else {
+      _state.balance1 -= amount;
+    }
+    _state.blockTimestamp = bigIntify(blockHeader.timestamp);
+
+    return _state;
+  }
+
   getBitmapRangeToRequest() {
     const networkId = this.dexHelper.config.data.network;
     const tickBitmapToUse =
@@ -151,9 +198,9 @@ export class AlgebraIntegralEventPool extends StatefulEventSubscriber<AlgebraInt
 
   private async _fetchPoolState(
     blockNumber: number,
-  ): Promise<[bigint, bigint, DecodedStateMultiCallResultIntegral]> {
+  ): Promise<[bigint, bigint, DecodedStateMultiCallResultIntegral, string]> {
     const callData: MultiCallParams<
-      bigint | DecodedStateMultiCallResultIntegral | null
+      bigint | DecodedStateMultiCallResultIntegral | string | null
     >[] = [
       {
         target: this.token0,
@@ -181,11 +228,16 @@ export class AlgebraIntegralEventPool extends StatefulEventSubscriber<AlgebraInt
         ),
         decodeFunction: decodeStateMultiCallResultIntegral,
       },
+      {
+        target: this.poolAddress,
+        callData: this.poolIface.encodeFunctionData('communityVault'),
+        decodeFunction: addressDecode,
+      },
     ];
 
-    const [resBalance0, resBalance1, resState] =
+    const [resBalance0, resBalance1, resState, resCommunityVault] =
       await this.dexHelper.multiWrapper.tryAggregate<
-        bigint | DecodedStateMultiCallResultIntegral | null
+        bigint | DecodedStateMultiCallResultIntegral | string | null
       >(false, callData, blockNumber);
 
     assert(
@@ -199,15 +251,18 @@ export class AlgebraIntegralEventPool extends StatefulEventSubscriber<AlgebraInt
       resState.returnData,
     ] as [bigint, bigint, DecodedStateMultiCallResultIntegral];
 
-    return [balance0, balance1, _state];
+    const communityVault = resCommunityVault.success
+      ? (resCommunityVault.returnData as string).toLowerCase()
+      : '';
+
+    return [balance0, balance1, _state, communityVault];
   }
 
   async generateState(
     blockNumber: number,
   ): Promise<Readonly<AlgebraIntegralPoolState>> {
-    const [balance0, balance1, _state] = await this._fetchPoolState(
-      blockNumber,
-    );
+    const [balance0, balance1, _state, communityVault] =
+      await this._fetchPoolState(blockNumber);
 
     const tickBitmap = {};
     const ticks = {};
@@ -237,6 +292,7 @@ export class AlgebraIntegralEventPool extends StatefulEventSubscriber<AlgebraInt
       balance0,
       balance1,
       areTicksCompressed: false,
+      communityVault,
     };
   }
 
@@ -265,7 +321,7 @@ export class AlgebraIntegralEventPool extends StatefulEventSubscriber<AlgebraInt
     const zeroForOne = amount0 > 0n;
 
     // Cast to PoolStateV1_1 for AlgebraMath compatibility
-    const [, , , , , communityFee] = AlgebraMath._calculateSwapAndLock(
+    AlgebraMath._calculateSwapAndLock(
       this.dexHelper.config.data.network,
       pool as unknown as PoolStateV1_1,
       zeroForOne,
@@ -294,14 +350,6 @@ export class AlgebraIntegralEventPool extends StatefulEventSubscriber<AlgebraInt
         pool.isValid = false;
       }
       pool.balance1 += BigInt.asUintN(256, amount1);
-    }
-
-    if (communityFee > 0n) {
-      if (zeroForOne) {
-        pool.balance0 -= communityFee;
-      } else {
-        pool.balance1 -= communityFee;
-      }
     }
 
     return pool;
@@ -415,6 +463,31 @@ export class AlgebraIntegralEventPool extends StatefulEventSubscriber<AlgebraInt
     blockHeader: BlockHeader,
   ) {
     pool.tickSpacing = bigIntify(event.args.newTickSpacing);
+    pool.blockTimestamp = bigIntify(blockHeader.timestamp);
+    return pool;
+  }
+
+  handleCommunityVaultChange(
+    event: any,
+    pool: AlgebraIntegralPoolState,
+    _log: Log,
+    blockHeader: BlockHeader,
+  ) {
+    pool.communityVault = event.args.newCommunityVault.toLowerCase();
+    pool.blockTimestamp = bigIntify(blockHeader.timestamp);
+    return pool;
+  }
+
+  handleSkimEvent(
+    event: any,
+    pool: AlgebraIntegralPoolState,
+    _log: Log,
+    blockHeader: BlockHeader,
+  ) {
+    const amount0 = bigIntify(event.args.amount0);
+    const amount1 = bigIntify(event.args.amount1);
+    pool.balance0 -= amount0;
+    pool.balance1 -= amount1;
     pool.blockTimestamp = bigIntify(blockHeader.timestamp);
     return pool;
   }
