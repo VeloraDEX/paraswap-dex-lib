@@ -1,5 +1,4 @@
 import { pack } from '@ethersproject/solidity';
-import _ from 'lodash';
 import { DeepReadonly } from 'ts-essentials';
 import {
   Token,
@@ -18,6 +17,7 @@ import {
   Network,
   DEST_TOKEN_DEX_TRANSFERS,
   SRC_TOKEN_DEX_TRANSFERS,
+  SUBGRAPH_TIMEOUT,
 } from '../../constants';
 import * as CALLDATA_GAS_COST from '../../calldata-gas-cost';
 import { Interface } from 'ethers/lib/utils';
@@ -37,6 +37,7 @@ import {
   AlgebraIntegralData,
   AlgebraIntegralPoolState,
   Pool,
+  SubgraphPoolData,
   AlgebraIntegralFunctions,
 } from './types';
 import {
@@ -75,6 +76,7 @@ export class AlgebraIntegral
   private updatePoolsTvlTimer?: NodeJS.Timeout;
   private feeUpdateIntervalTask?: NodeJS.Timeout;
   protected eventPools: Record<string, AlgebraIntegralEventPool | null> = {};
+  private topPoolsCache: SubgraphPoolData[] = [];
   protected stateMulticallIface: Interface = new Interface(
     AlgebraIntegralStateMulticallABI,
   );
@@ -107,7 +109,6 @@ export class AlgebraIntegral
 
   async initializePricing(blockNumber: number) {
     await this.factory.initialize(blockNumber);
-
     await this.initializeEventPools(blockNumber);
 
     if (this.dexHelper.config.isSlave) {
@@ -143,8 +144,12 @@ export class AlgebraIntegral
     }
   }
 
-  async initializeEventPools(blockNumber: number): Promise<void> {
-    const allPools = this.factory.getAllPools();
+  async initializeEventPools(
+    blockNumber: number,
+    subscribe = true,
+    pools?: Pool[],
+  ): Promise<void> {
+    const allPools = pools ?? this.factory.getAllPools();
 
     await Promise.all(
       allPools.map(async pool => {
@@ -167,7 +172,12 @@ export class AlgebraIntegral
         );
 
         try {
-          await eventPool.initialize(blockNumber);
+          if (subscribe) {
+            await eventPool.initialize(blockNumber);
+          } else {
+            const state = await eventPool.generateState(blockNumber);
+            eventPool.setState(state, blockNumber);
+          }
           this.eventPools[key] = eventPool;
         } catch (e) {
           this.logger.warn(
@@ -178,6 +188,49 @@ export class AlgebraIntegral
         }
       }),
     );
+  }
+
+  protected async updateAllPoolFees(): Promise<void> {
+    try {
+      const activePools = Object.values(this.eventPools).filter(
+        (p): p is AlgebraIntegralEventPool => p !== null,
+      );
+      if (!activePools.length) return;
+
+      const [results, blockNumber] = await Promise.all([
+        this.dexHelper.multiWrapper.tryAggregate<bigint>(
+          false,
+          buildFeeCallData(activePools),
+        ),
+        this.dexHelper.blockManager.getLatestBlockNumber(),
+      ]);
+
+      activePools.forEach((pool, i) => {
+        const result = results[i];
+        if (!result.success) {
+          this.logger.warn(
+            `${this.dexKey}: Failed to fetch fee for pool ${pool.poolAddress}`,
+          );
+          return;
+        }
+
+        const state = pool.getStaleState();
+        if (!state) return;
+
+        const newFee = result.returnData;
+        if (state.globalState.fee === newFee) return;
+
+        pool.setState(
+          {
+            ...state,
+            globalState: { ...state.globalState, fee: newFee },
+          },
+          blockNumber,
+        );
+      });
+    } catch (error) {
+      this.logger.error(`${this.dexKey}: Error updating pool fees:`, error);
+    }
   }
 
   getAdapters(side: SwapSide): { name: string; index: number }[] | null {
@@ -206,10 +259,10 @@ export class AlgebraIntegral
     const _srcToken = this.dexHelper.config.wrapETH(srcToken);
     const _destToken = this.dexHelper.config.wrapETH(destToken);
 
-    const [_srcAddress, _destAddress] = this._getLoweredAddresses(
-      _srcToken,
-      _destToken,
-    );
+    const [_srcAddress, _destAddress] = [
+      _srcToken.address.toLowerCase(),
+      _destToken.address.toLowerCase(),
+    ];
 
     if (_srcAddress === _destAddress) return [];
 
@@ -250,10 +303,10 @@ export class AlgebraIntegral
       const _srcToken = this.dexHelper.config.wrapETH(srcToken);
       const _destToken = this.dexHelper.config.wrapETH(destToken);
 
-      const [_srcAddress, _destAddress] = this._getLoweredAddresses(
-        _srcToken,
-        _destToken,
-      );
+      const [_srcAddress, _destAddress] = [
+        _srcToken.address.toLowerCase(),
+        _destToken.address.toLowerCase(),
+      ];
 
       if (_srcAddress === _destAddress) return null;
 
@@ -659,208 +712,155 @@ export class AlgebraIntegral
     };
   }
 
-  // Returns list of top pools based on liquidity. Max
-  // limit number pools should be returned.
+  async updatePoolState(): Promise<void> {
+    const blockNumber = await this.dexHelper.provider.getBlockNumber();
+    this.topPoolsCache = await this.querySubgraphPools();
+
+    const pools: Pool[] = this.topPoolsCache.map(p => ({
+      poolAddress: p.poolAddress,
+      token0: p.token0.address,
+      token1: p.token1.address,
+      deployer: p.deployer,
+      tvlUSD: 0,
+    }));
+
+    await this.initializeEventPools(blockNumber, false, pools);
+  }
+
+  private async querySubgraphPools(): Promise<SubgraphPoolData[]> {
+    const query = `query ($first: Int!) {
+      pools(
+        orderBy: totalValueLockedUSD
+        orderDirection: desc
+        first: $first
+      ) {
+        id
+        deployer
+        token0 {
+          id
+          decimals
+        }
+        token1 {
+          id
+          decimals
+        }
+      }
+    }`;
+
+    const res = await this.dexHelper.httpRequest.querySubgraph<{
+      data: {
+        pools: Array<{
+          id: string;
+          deployer: string;
+          token0: { id: string; decimals: string };
+          token1: { id: string; decimals: string };
+        }>;
+      };
+    }>(
+      this.config.subgraphURL,
+      { query, variables: { first: 1000 } },
+      { timeout: SUBGRAPH_TIMEOUT },
+    );
+
+    return res.data.pools.map(pool => ({
+      poolAddress: pool.id.toLowerCase(),
+      token0: {
+        address: pool.token0.id.toLowerCase(),
+        decimals: parseInt(pool.token0.decimals, 10),
+      },
+      token1: {
+        address: pool.token1.id.toLowerCase(),
+        decimals: parseInt(pool.token1.decimals, 10),
+      },
+      deployer: pool.deployer.toLowerCase(),
+    }));
+  }
+
   async getTopPoolsForToken(
     tokenAddress: Address,
     limit: number,
   ): Promise<PoolLiquidity[]> {
     const _tokenAddress = tokenAddress.toLowerCase();
 
-    const res = await this._querySubgraph(
-      `query ($token: Bytes!, $count: Int) {
-                pools0: pools(first: $count, orderBy: totalValueLockedUSD, orderDirection: desc, where: {token0: $token}) {
-                id
-                deployer
-                token0 {
-                  id
-                  decimals
-                }
-                token1 {
-                  id
-                  decimals
-                }
-                totalValueLockedUSD
-              }
-              pools1: pools(first: $count, orderBy: totalValueLockedUSD, orderDirection: desc, where: {token1: $token}) {
-                id
-                deployer
-                token0 {
-                  id
-                  decimals
-                }
-                token1 {
-                  id
-                  decimals
-                }
-                totalValueLockedUSD
-              }
-            }`,
-      {
-        token: _tokenAddress,
-        count: limit,
-      },
+    const relevantPools = this.topPoolsCache.filter(
+      pool =>
+        pool.token0.address === _tokenAddress ||
+        pool.token1.address === _tokenAddress,
     );
 
-    if (!(res && res.pools0 && res.pools1)) {
-      this.logger.error(
-        `Error_${this.dexKey}_Subgraph: couldn't fetch the pools from the subgraph`,
+    if (relevantPools.length === 0) return [];
+
+    const tokenAmounts: [string, bigint][] = [];
+    const poolsWithBalances: {
+      pool: SubgraphPoolData;
+      balance0: bigint;
+      balance1: bigint;
+    }[] = [];
+
+    for (const pool of relevantPools) {
+      const [token0, token1] = this._sortTokens(
+        pool.token0.address,
+        pool.token1.address,
       );
-      return [];
+
+      const key = this.getPoolIdentifier(token0, token1, pool.deployer);
+      const eventPool = this.eventPools[key];
+      const state = eventPool?.getStaleState();
+
+      if (!state) continue;
+
+      poolsWithBalances.push({
+        pool,
+        balance0: state.balance0,
+        balance1: state.balance1,
+      });
+
+      tokenAmounts.push([pool.token0.address, state.balance0]);
+      tokenAmounts.push([pool.token1.address, state.balance1]);
     }
 
-    const pools0: PoolLiquidity[] = _.map(res.pools0, pool => ({
-      exchange: this.dexKey,
-      address: pool.id.toLowerCase(),
-      connectorTokens: [
-        {
-          address: pool.token1.id.toLowerCase(),
-          decimals: parseInt(pool.token1.decimals),
-        },
-      ],
-      liquidityUSD:
-        parseFloat(pool.totalValueLockedUSD) * ALGEBRA_EFFICIENCY_FACTOR,
-    }));
+    if (poolsWithBalances.length === 0) return [];
 
-    const pools1: PoolLiquidity[] = _.map(res.pools1, pool => ({
-      exchange: this.dexKey,
-      address: pool.id.toLowerCase(),
-      connectorTokens: [
-        {
-          address: pool.token0.id.toLowerCase(),
-          decimals: parseInt(pool.token0.decimals),
-        },
-      ],
-      liquidityUSD:
-        parseFloat(pool.totalValueLockedUSD) * ALGEBRA_EFFICIENCY_FACTOR,
-    }));
+    const usdValues = await this.dexHelper.getUsdTokenAmounts(tokenAmounts);
 
-    const allPools = pools0.concat(pools1);
+    const liquidityPools: PoolLiquidity[] = [];
 
-    if (allPools.length === 0) return [];
+    for (let i = 0; i < poolsWithBalances.length; i++) {
+      const {
+        pool: { poolAddress, token0, token1 },
+      } = poolsWithBalances[i];
 
-    // Get on-chain balances
-    const poolBalances = await this._getPoolBalances(
-      allPools.map(p => [
-        p.address,
-        _tokenAddress,
-        p.connectorTokens[0].address,
-      ]),
-    );
+      const isToken0 = token0.address === _tokenAddress;
 
-    // Build token amounts for USD conversion
-    const tokensAmounts = allPools
-      .map((p, i) => {
-        return [
-          [_tokenAddress, poolBalances[i][0]],
-          [p.connectorTokens[0].address, poolBalances[i][1]],
-        ] as [string, bigint | null][];
-      })
-      .flat();
+      const token0Usd = usdValues[i * 2] || 0;
+      const token1Usd = usdValues[i * 2 + 1] || 0;
 
-    // Get USD values
-    const poolUsdBalances = await this.dexHelper.getUsdTokenAmounts(
-      tokensAmounts,
-    );
+      const tokenUsd = isToken0 ? token0Usd : token1Usd;
+      const connectorUsd = isToken0 ? token1Usd : token0Usd;
+      const liquidityUSD =
+        (tokenUsd + connectorUsd) * ALGEBRA_EFFICIENCY_FACTOR;
 
-    // Calculate liquidity per pool
-    const pools = allPools.map((pool, i) => {
-      const tokenUsdBalance = poolUsdBalances[i * 2];
-      const connectorTokenUsdBalance = poolUsdBalances[i * 2 + 1];
-
-      let tokenUsdLiquidity = null;
-      if (tokenUsdBalance) {
-        tokenUsdLiquidity = tokenUsdBalance * ALGEBRA_EFFICIENCY_FACTOR;
+      if (liquidityUSD / ALGEBRA_EFFICIENCY_FACTOR < MIN_USD_TVL_FOR_PRICING) {
+        continue;
       }
 
-      let connectorTokenUsdLiquidity = null;
-      if (connectorTokenUsdBalance) {
-        connectorTokenUsdLiquidity =
-          connectorTokenUsdBalance * ALGEBRA_EFFICIENCY_FACTOR;
-      }
-
-      // Update connector token liquidity for directional swaps
-      if (tokenUsdLiquidity) {
-        pool.connectorTokens[0] = {
-          ...pool.connectorTokens[0],
-          liquidityUSD: tokenUsdLiquidity,
-        };
-      }
-
-      // Use connector token liquidity as primary, fallback to token liquidity
-      const liquidityUSD = connectorTokenUsdLiquidity || tokenUsdLiquidity || 0;
-
-      return {
-        ...pool,
+      liquidityPools.push({
+        exchange: this.dexKey,
+        address: poolAddress,
+        connectorTokens: [
+          {
+            address: isToken0 ? token1.address : token0.address,
+            decimals: isToken0 ? token1.decimals : token0.decimals,
+            liquidityUSD: connectorUsd * ALGEBRA_EFFICIENCY_FACTOR,
+          },
+        ],
         liquidityUSD,
-      };
-    });
+      });
+    }
 
-    // Filter by minimum TVL and sort
-    return pools
-      .filter(
-        pool =>
-          (pool.liquidityUSD + (pool.connectorTokens[0]?.liquidityUSD ?? 0)) /
-            ALGEBRA_EFFICIENCY_FACTOR >=
-          MIN_USD_TVL_FOR_PRICING,
-      )
+    return liquidityPools
       .sort((a, b) => b.liquidityUSD - a.liquidityUSD)
       .slice(0, limit);
-  }
-
-  private async _getPoolBalances(
-    pools: [pool: string, token0: string, token1: string][],
-  ): Promise<[balanceToken0: bigint | null, balanceToken1: bigint | null][]> {
-    const callData = pools
-      .map(pool => [
-        {
-          target: pool[1],
-          callData: this.erc20Interface.encodeFunctionData('balanceOf', [
-            pool[0],
-          ]),
-          decodeFunction: uint256ToBigInt,
-        },
-        {
-          target: pool[2],
-          callData: this.erc20Interface.encodeFunctionData('balanceOf', [
-            pool[0],
-          ]),
-          decodeFunction: uint256ToBigInt,
-        },
-      ])
-      .flat();
-
-    const balanceOfCalls =
-      await this.dexHelper.multiWrapper.tryAggregate<bigint>(false, callData);
-
-    const balances: [bigint | null, bigint | null][] = [];
-    for (let i = 0; i < balanceOfCalls.length; i += 2) {
-      const balanceToken0 = balanceOfCalls[i];
-      const balanceToken1 = balanceOfCalls[i + 1];
-      balances.push([
-        balanceToken0.success ? balanceToken0.returnData : null,
-        balanceToken1.success ? balanceToken1.returnData : null,
-      ]);
-    }
-    return balances;
-  }
-
-  private async _querySubgraph(
-    query: string,
-    variables: Object,
-    timeout = 30000,
-  ) {
-    try {
-      const res = await this.dexHelper.httpRequest.querySubgraph(
-        this.config.subgraphURL,
-        { query, variables },
-        { timeout },
-      );
-      return res.data;
-    } catch (e) {
-      this.logger.error(`${this.dexKey}: can not query subgraph: `, e);
-      return {};
-    }
   }
 
   private _encodePath(
@@ -903,62 +903,6 @@ export class AlgebraIntegral
 
   private _sortTokens(srcAddress: Address, destAddress: Address) {
     return [srcAddress, destAddress].sort((a, b) => (a < b ? -1 : 1));
-  }
-
-  private _getLoweredAddresses(srcToken: Token, destToken: Token) {
-    return [srcToken.address.toLowerCase(), destToken.address.toLowerCase()];
-  }
-
-  protected async updateAllPoolFees(): Promise<void> {
-    try {
-      const activePools = Object.values(this.eventPools).filter(
-        (pool): pool is AlgebraIntegralEventPool => pool !== null,
-      );
-
-      if (activePools.length === 0) {
-        return;
-      }
-
-      const callData = buildFeeCallData(activePools);
-
-      const results = await this.dexHelper.multiWrapper.tryAggregate<bigint>(
-        false,
-        callData,
-      );
-
-      const updateBlockNumber = await this.dexHelper.provider.getBlockNumber();
-
-      activePools.forEach((pool, index) => {
-        if (!results[index].success) {
-          this.logger.warn(
-            `${this.dexKey}: Failed to fetch fee for pool ${pool.poolAddress}`,
-          );
-          return;
-        }
-
-        const newFee = results[index].returnData;
-        const currentState = pool.getStaleState();
-
-        if (!currentState) {
-          return;
-        }
-
-        if (currentState.globalState.fee !== newFee) {
-          pool.setState(
-            {
-              ...currentState,
-              globalState: {
-                ...currentState.globalState,
-                fee: newFee,
-              },
-            },
-            updateBlockNumber,
-          );
-        }
-      });
-    } catch (error) {
-      this.logger.error(`${this.dexKey}: Error updating pool fees:`, error);
-    }
   }
 
   releaseResources(): void {
