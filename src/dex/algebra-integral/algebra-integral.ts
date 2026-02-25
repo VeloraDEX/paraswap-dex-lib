@@ -93,6 +93,7 @@ export class AlgebraIntegral
     readonly routerIface = new Interface(SwapRouter),
     readonly quoterIface = new Interface(AlgebraQuoterABI),
     readonly config = AlgebraIntegralConfig[dexKey][network],
+    readonly EventPoolImplementation = AlgebraIntegralEventPool,
   ) {
     super(dexHelper, dexKey);
     this.logger = dexHelper.getLogger(dexKey);
@@ -158,7 +159,7 @@ export class AlgebraIntegral
 
         if (this.eventPools[key] !== undefined) return;
 
-        const eventPool = new AlgebraIntegralEventPool(
+        const eventPool = new this.EventPoolImplementation(
           this.dexHelper,
           this.dexKey,
           this.stateMulticallIface,

@@ -8,7 +8,11 @@ import { IDexHelper } from '../../dex-helper/idex-helper';
 import { AlgebraIntegralPoolState } from './types';
 import AlgebraIntegralPoolABI from '../../abi/algebra-integral/AlgebraIntegralPool.abi.json';
 import { OUT_OF_RANGE_ERROR_POSTFIX } from '../uniswap-v3/constants';
-import { addressDecode, uint256ToBigInt } from '../../lib/decoders';
+import {
+  addressDecode,
+  uint16ToBigInt,
+  uint256ToBigInt,
+} from '../../lib/decoders';
 import { MultiCallParams } from '../../lib/multi-wrapper';
 import { AlgebraMath } from '../algebra/lib/AlgebraMath';
 import { TickTable } from '../algebra/lib/TickTable';
@@ -47,8 +51,6 @@ export class AlgebraIntegralEventPool extends StatefulEventSubscriber<AlgebraInt
 
   public readonly poolIface = new Interface(AlgebraIntegralPoolABI);
 
-  public initFailed = false;
-
   constructor(
     readonly dexHelper: IDexHelper,
     parentName: string,
@@ -58,7 +60,7 @@ export class AlgebraIntegralEventPool extends StatefulEventSubscriber<AlgebraInt
     token0: Address,
     token1: Address,
     logger: Logger,
-    mapKey: string = '',
+    mapKey: string,
     poolAddress: Address,
   ) {
     super(parentName, `${token0}_${token1}`, dexHelper, logger, true, mapKey);
@@ -198,7 +200,9 @@ export class AlgebraIntegralEventPool extends StatefulEventSubscriber<AlgebraInt
 
   private async _fetchPoolState(
     blockNumber: number,
-  ): Promise<[bigint, bigint, DecodedStateMultiCallResultIntegral, string]> {
+  ): Promise<
+    [bigint, bigint, string, bigint, DecodedStateMultiCallResultIntegral]
+  > {
     const callData: MultiCallParams<
       bigint | DecodedStateMultiCallResultIntegral | string | null
     >[] = [
@@ -217,6 +221,16 @@ export class AlgebraIntegralEventPool extends StatefulEventSubscriber<AlgebraInt
         decodeFunction: uint256ToBigInt,
       },
       {
+        target: this.poolAddress,
+        callData: this.poolIface.encodeFunctionData('communityVault'),
+        decodeFunction: addressDecode,
+      },
+      {
+        target: this.poolAddress,
+        callData: this.poolIface.encodeFunctionData('fee'),
+        decodeFunction: uint16ToBigInt,
+      },
+      {
         target: this.stateMulticallAddress,
         callData: this.stateMulticallIface.encodeFunctionData(
           'getFullStateWithRelativeBitmaps',
@@ -228,14 +242,9 @@ export class AlgebraIntegralEventPool extends StatefulEventSubscriber<AlgebraInt
         ),
         decodeFunction: decodeStateMultiCallResultIntegral,
       },
-      {
-        target: this.poolAddress,
-        callData: this.poolIface.encodeFunctionData('communityVault'),
-        decodeFunction: addressDecode,
-      },
     ];
 
-    const [resBalance0, resBalance1, resState, resCommunityVault] =
+    const [resBalance0, resBalance1, resCommunityVault, resFee, resState] =
       await this.dexHelper.multiWrapper.tryAggregate<
         bigint | DecodedStateMultiCallResultIntegral | string | null
       >(false, callData, blockNumber);
@@ -255,13 +264,17 @@ export class AlgebraIntegralEventPool extends StatefulEventSubscriber<AlgebraInt
       ? (resCommunityVault.returnData as string).toLowerCase()
       : '';
 
-    return [balance0, balance1, _state, communityVault];
+    const fee = resFee.success
+      ? (resFee.returnData as bigint)
+      : BigInt(_state.globalState.lastFee);
+
+    return [balance0, balance1, communityVault, fee, _state];
   }
 
   async generateState(
     blockNumber: number,
   ): Promise<Readonly<AlgebraIntegralPoolState>> {
-    const [balance0, balance1, _state, communityVault] =
+    const [balance0, balance1, communityVault, fee, _state] =
       await this._fetchPoolState(blockNumber);
 
     const tickBitmap = {};
@@ -279,7 +292,7 @@ export class AlgebraIntegralEventPool extends StatefulEventSubscriber<AlgebraInt
       globalState: {
         price: bigIntify(_state.globalState.price),
         tick: currentTick,
-        fee: BigInt(_state.globalState.lastFee),
+        fee,
         communityFeeToken0: BigInt(_state.globalState.communityFee),
         communityFeeToken1: BigInt(_state.globalState.communityFee),
       },

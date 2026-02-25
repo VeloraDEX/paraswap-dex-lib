@@ -406,18 +406,6 @@
         "internalType": "int24",
         "name": "tick",
         "type": "int24"
-      },
-      {
-        "indexed": false,
-        "internalType": "uint24",
-        "name": "overrideFee",
-        "type": "uint24"
-      },
-      {
-        "indexed": false,
-        "internalType": "uint24",
-        "name": "pluginFee",
-        "type": "uint24"
       }
     ],
     "name": "Swap",
