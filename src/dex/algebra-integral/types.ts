@@ -5,6 +5,7 @@ import {
   TickBitMapMappingsWithBigNumber,
   TickInfoMappingsWithBigNumber,
 } from '../algebra/types';
+import { Token } from '../../types';
 
 export type AlgebraIntegralData = {
   path: {
@@ -51,6 +52,7 @@ export type AlgebraIntegralPoolState = {
   balance0: bigint;
   balance1: bigint;
   areTicksCompressed: boolean;
+  communityVault: string;
 };
 
 export type Pool = {
@@ -59,6 +61,13 @@ export type Pool = {
   token1: Address;
   deployer: string;
   tvlUSD: number;
+};
+
+export type SubgraphPoolData = {
+  poolAddress: Address;
+  token0: Token;
+  token1: Token;
+  deployer: string;
 };
 
 export type FactoryState = Record<string, never>;
