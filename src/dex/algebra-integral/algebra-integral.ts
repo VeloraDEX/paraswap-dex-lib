@@ -1,5 +1,4 @@
 import { pack } from '@ethersproject/solidity';
-import { DeepReadonly } from 'ts-essentials';
 import {
   Token,
   Address,
@@ -35,7 +34,6 @@ import { IDex } from '../../dex/idex';
 import { IDexHelper } from '../../dex-helper/idex-helper';
 import {
   AlgebraIntegralData,
-  AlgebraIntegralPoolState,
   Pool,
   SubgraphPoolData,
   AlgebraIntegralFunctions,
@@ -58,9 +56,6 @@ import {
   ALGEBRA_QUOTE_GASLIMIT,
 } from './constants';
 import { uint256ToBigInt } from '../../lib/decoders';
-import { AlgebraMath } from '../algebra/lib/AlgebraMath';
-import { PoolStateV1_1 } from '../algebra/types';
-import { OutputResult } from '../uniswap-v3/types';
 import AlgebraIntegralStateMulticallABI from '../../abi/algebra-integral/AlgebraIntegralStateMulticall.abi.json';
 import { buildFeeCallData } from './utils';
 
@@ -330,55 +325,114 @@ export class AlgebraIntegral
       const [token0] = this._sortTokens(_srcAddress, _destAddress);
       const zeroForOne = token0 === _srcAddress;
 
-      const pricingResults = await Promise.all(
-        pools.map(pool =>
-          this.getPoolPricing(
-            pool,
-            _srcToken,
-            _destToken,
-            amounts,
-            side,
-            zeroForOne,
-            transferFees,
-            blockNumber,
-          ),
-        ),
-      );
+      const _isSrcFee = isSrcTokenTransferFeeToBeExchanged(transferFees);
+      const _isDestFee = isDestTokenTransferFeeToBeExchanged(transferFees);
+      const _isFeeOnTransfer = _isSrcFee;
 
-      const _isFeeOnTransfer = isSrcTokenTransferFeeToBeExchanged(transferFees);
+      const amountsExcludingZero = amounts.slice(1);
+      const amountsWithFee = _isSrcFee
+        ? applyTransferFee(
+            amountsExcludingZero,
+            side,
+            transferFees.srcDexFee,
+            SRC_TOKEN_DEX_TRANSFERS,
+          )
+        : amountsExcludingZero;
+
       const unit = getBigIntPow(
         side === SwapSide.SELL ? _destToken.decimals : _srcToken.decimals,
       );
 
       const results: ExchangePrices<AlgebraIntegralData> = [];
+      const rpcPools: Pool[] = [];
 
-      for (const result of pricingResults) {
-        if (!result) continue;
-
-        results.push({
-          unit,
-          prices: result.prices,
-          data: {
-            feeOnTransfer: _isFeeOnTransfer,
-            path: [
-              {
-                tokenIn: _srcAddress,
-                tokenOut: _destAddress,
-                deployer: result.pool.deployer,
-              },
-            ],
-          },
-          poolIdentifiers: [
-            this.getPoolIdentifier(
-              result.pool.token0,
-              result.pool.token1,
-              result.pool.deployer,
-            ),
+      const buildPoolPrices = (
+        pool: Pool,
+        prices: bigint[],
+        gasCost: number | number[],
+      ): PoolPrices<AlgebraIntegralData> => ({
+        unit,
+        prices,
+        data: {
+          feeOnTransfer: _isFeeOnTransfer,
+          path: [
+            {
+              tokenIn: _srcAddress,
+              tokenOut: _destAddress,
+              deployer: pool.deployer,
+            },
           ],
-          exchange: this.dexKey,
-          gasCost: result.gasCost,
-          poolAddresses: [result.pool.poolAddress],
-        });
+        },
+        poolIdentifiers: [
+          this.getPoolIdentifier(pool.token0, pool.token1, pool.deployer),
+        ],
+        exchange: this.dexKey,
+        gasCost,
+        poolAddresses: [pool.poolAddress],
+      });
+
+      for (const pool of pools) {
+        const key = this.getPoolIdentifier(
+          _srcAddress,
+          _destAddress,
+          pool.deployer,
+        );
+
+        const result = this.eventPools[key]?.getOutputs(
+          blockNumber,
+          amountsWithFee,
+          zeroForOne,
+          side,
+        );
+
+        if (!result) {
+          rpcPools.push(pool);
+          continue;
+        }
+
+        const outputsWithFee = _isDestFee
+          ? applyTransferFee(
+              result.outputs,
+              side,
+              transferFees.destDexFee,
+              DEST_TOKEN_DEX_TRANSFERS,
+            )
+          : result.outputs;
+
+        results.push(
+          buildPoolPrices(
+            pool,
+            [0n, ...outputsWithFee],
+            [0, ...outputsWithFee.map(p => (p === 0n ? 0 : ALGEBRA_GAS_COST))],
+          ),
+        );
+      }
+
+      if (rpcPools.length > 0) {
+        const rpcResults = await Promise.all(
+          rpcPools.map(pool =>
+            this.getPricingFromRpc(
+              _srcToken,
+              _destToken,
+              amounts,
+              side,
+              pool,
+              transferFees,
+              blockNumber,
+            ),
+          ),
+        );
+
+        for (const rpcResult of rpcResults) {
+          if (!rpcResult) continue;
+          results.push(
+            buildPoolPrices(
+              rpcResult.pool,
+              rpcResult.prices,
+              rpcResult.gasCost,
+            ),
+          );
+        }
       }
 
       return results.length > 0 ? results : null;
@@ -393,125 +447,6 @@ export class AlgebraIntegral
     }
   }
 
-  private _getOutputs(
-    state: DeepReadonly<AlgebraIntegralPoolState>,
-    amounts: bigint[],
-    zeroForOne: boolean,
-    side: SwapSide,
-    destTokenBalance: bigint,
-  ): OutputResult | null {
-    try {
-      const outputsResult = AlgebraMath.queryOutputs(
-        this.network,
-        state as unknown as DeepReadonly<PoolStateV1_1>,
-        amounts,
-        zeroForOne,
-        side,
-      );
-
-      if (side === SwapSide.SELL) {
-        if (outputsResult.outputs[0] > destTokenBalance) {
-          return null;
-        }
-
-        for (let i = 0; i < outputsResult.outputs.length; i++) {
-          if (outputsResult.outputs[i] > destTokenBalance) {
-            outputsResult.outputs[i] = 0n;
-            outputsResult.tickCounts[i] = 0;
-          }
-        }
-      } else {
-        if (amounts[0] > destTokenBalance) {
-          return null;
-        }
-
-        for (let i = 0; i < amounts.length; i++) {
-          if (amounts[i] > destTokenBalance) {
-            outputsResult.outputs[i] = 0n;
-            outputsResult.tickCounts[i] = 0;
-          }
-        }
-      }
-
-      return outputsResult;
-    } catch (e) {
-      this.logger.debug(
-        `${this.dexKey}: received error in _getOutputs while calculating outputs`,
-        e,
-      );
-      return null;
-    }
-  }
-
-  private async getPoolPricing(
-    pool: Pool,
-    from: Token,
-    to: Token,
-    amounts: bigint[],
-    side: SwapSide,
-    zeroForOne: boolean,
-    transferFees: TransferFeeParams,
-    blockNumber: number,
-  ): Promise<{
-    prices: bigint[];
-    gasCost: number | number[];
-    pool: Pool;
-  } | null> {
-    const srcAddress = from.address.toLowerCase();
-    const destAddress = to.address.toLowerCase();
-    const key = this.getPoolIdentifier(srcAddress, destAddress, pool.deployer);
-    const eventPool = this.eventPools[key];
-    const state = eventPool?.getState(blockNumber) ?? null;
-
-    if (state && state.isValid && state.liquidity > 0n) {
-      const destTokenBalance =
-        destAddress === eventPool!.token0 ? state.balance0 : state.balance1;
-
-      const _isSrcFee = isSrcTokenTransferFeeToBeExchanged(transferFees);
-      const _isDestFee = isDestTokenTransferFeeToBeExchanged(transferFees);
-
-      const amountsExcludingZero = amounts.slice(1);
-      const amountsWithFee = _isSrcFee
-        ? applyTransferFee(
-            amountsExcludingZero,
-            side,
-            transferFees.srcDexFee,
-            SRC_TOKEN_DEX_TRANSFERS,
-          )
-        : amountsExcludingZero;
-
-      const result = this._getOutputs(
-        state,
-        amountsWithFee,
-        zeroForOne,
-        side,
-        destTokenBalance,
-      );
-
-      if (!result) return null;
-
-      const outputsWithFee = _isDestFee
-        ? applyTransferFee(
-            result.outputs,
-            side,
-            transferFees.destDexFee,
-            DEST_TOKEN_DEX_TRANSFERS,
-          )
-        : result.outputs;
-
-      return {
-        prices: [0n, ...outputsWithFee],
-        gasCost: [
-          0,
-          ...outputsWithFee.map(p => (p === 0n ? 0 : ALGEBRA_GAS_COST)),
-        ],
-        pool,
-      };
-    }
-
-    return this.getPricingFromRpc(from, to, amounts, side, pool, transferFees);
-  }
-
   protected async getPricingFromRpc(
     from: Token,
     to: Token,
@@ -519,6 +454,7 @@ export class AlgebraIntegral
     side: SwapSide,
     pool: Pool,
     transferFees: TransferFeeParams,
+    blockNumber: number,
   ): Promise<{
     prices: bigint[];
     gasCost: number | number[];
@@ -532,10 +468,11 @@ export class AlgebraIntegral
     const _isDestFee = isDestTokenTransferFeeToBeExchanged(transferFees);
 
     const chunks = amounts.length - 1;
-    const _width = Math.floor(chunks / this.config.chunksCount);
-    const chunkedAmounts = Array.from(
-      Array(this.config.chunksCount).keys(),
-    ).map(i => amounts[(i + 1) * _width]);
+    const effectiveChunks = Math.min(this.config.chunksCount, chunks);
+    const _width = Math.floor(chunks / effectiveChunks);
+    const chunkedAmounts = Array.from(Array(effectiveChunks).keys()).map(
+      i => amounts[(i + 1) * _width],
+    );
 
     const amountsForQuote = _isSrcFee
       ? applyTransferFee(
@@ -559,6 +496,7 @@ export class AlgebraIntegral
     const results = await this.dexHelper.multiWrapper.tryAggregate(
       false,
       calldata,
+      blockNumber,
     );
 
     const _rates = chunkedAmounts.map((_, i) => {

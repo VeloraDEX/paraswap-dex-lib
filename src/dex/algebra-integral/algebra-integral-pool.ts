@@ -2,10 +2,12 @@ import _ from 'lodash';
 import { Interface } from '@ethersproject/abi';
 import { DeepReadonly, assert } from 'ts-essentials';
 import { Address, BlockHeader, Log, Logger } from '../../types';
+import { SwapSide } from '../../constants';
 import { bigIntify, catchParseLogError } from '../../utils';
 import { StatefulEventSubscriber } from '../../stateful-event-subscriber';
 import { IDexHelper } from '../../dex-helper/idex-helper';
 import { AlgebraIntegralPoolState } from './types';
+import { OutputResult } from '../uniswap-v3/types';
 import AlgebraIntegralPoolABI from '../../abi/algebra-integral/AlgebraIntegralPool.abi.json';
 import { OUT_OF_RANGE_ERROR_POSTFIX } from '../uniswap-v3/constants';
 import {
@@ -503,5 +505,53 @@ export class AlgebraIntegralEventPool extends StatefulEventSubscriber<AlgebraInt
     pool.balance1 -= amount1;
     pool.blockTimestamp = bigIntify(blockHeader.timestamp);
     return pool;
+  }
+
+  getOutputs(
+    blockNumber: number,
+    amounts: bigint[],
+    zeroForOne: boolean,
+    side: SwapSide,
+  ): OutputResult | null {
+    const state = this.getState(blockNumber);
+    if (!state || !state.isValid || state.liquidity <= 0n) return null;
+
+    const destTokenBalance = zeroForOne ? state.balance1 : state.balance0;
+
+    try {
+      const outputsResult = AlgebraMath.queryOutputs(
+        this.dexHelper.config.data.network,
+        state as unknown as DeepReadonly<PoolStateV1_1>,
+        amounts,
+        zeroForOne,
+        side,
+      );
+
+      if (side === SwapSide.SELL) {
+        if (outputsResult.outputs[0] > destTokenBalance) return null;
+        for (let i = 0; i < outputsResult.outputs.length; i++) {
+          if (outputsResult.outputs[i] > destTokenBalance) {
+            outputsResult.outputs[i] = 0n;
+            outputsResult.tickCounts[i] = 0;
+          }
+        }
+      } else {
+        if (amounts[0] > destTokenBalance) return null;
+        for (let i = 0; i < amounts.length; i++) {
+          if (amounts[i] > destTokenBalance) {
+            outputsResult.outputs[i] = 0n;
+            outputsResult.tickCounts[i] = 0;
+          }
+        }
+      }
+
+      return outputsResult;
+    } catch (e) {
+      this.logger.debug(
+        `${this.parentName}: error in getOutputs for pool ${this.poolAddress}`,
+        e,
+      );
+      return null;
+    }
   }
 }
