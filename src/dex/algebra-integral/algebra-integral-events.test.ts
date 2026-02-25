@@ -162,4 +162,49 @@ describe('AlgebraIntegral Events', function () {
       });
     });
   });
+
+  describe('Supernova - Mainnet', function () {
+    const dexKey = 'Supernova';
+    const network = Network.MAINNET;
+    const config = AlgebraIntegralConfig[dexKey][network];
+
+    // WETH/USDT pool
+    const poolAddress = '0xde758db54c1b4a87b06b34b30ef0a710dc35388f';
+    const token0 = '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2'; // WETH
+    const token1 = '0xdac17f958d2ee523a2206206994597c13d831ec7'; // USDT
+
+    const blockNumbers: { [eventName: string]: number[] } = {
+      Swap: [24534860, 24534858, 24534856, 24534854, 24534845],
+      Mint: [24534848, 24534919, 24534945, 24534897, 24534891],
+      Burn: [24534846, 24534917, 24534900, 24534895, 24534878],
+      Collect: [24534846, 24534917, 24534955, 24534900, 24534895],
+    };
+
+    Object.keys(blockNumbers).forEach((event: string) => {
+      blockNumbers[event].forEach((blockNumber: number) => {
+        it(`${event}:${blockNumber} - should return correct state`, async function () {
+          const { pool, dexHelper } = createPool(
+            dexKey,
+            network,
+            config.algebraStateMulticall,
+            token0,
+            token1,
+            poolAddress,
+            BlackholeCLPool,
+          );
+
+          await testEventSubscriber(
+            pool as any,
+            pool.addressesSubscribed,
+            (_blockNumber: number) =>
+              fetchPoolStateFromContract(pool, _blockNumber, poolAddress),
+            blockNumber,
+            `${dexKey}_${poolAddress}`,
+            dexHelper.provider,
+            stateCompare as any,
+          );
+        });
+      });
+    });
+  });
 });

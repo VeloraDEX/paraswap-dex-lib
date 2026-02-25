@@ -352,7 +352,7 @@ describe('Supernova', function () {
 
     const srcTokenSymbol = 'USDC';
     const destTokenSymbol = 'WETH';
-    const deployer = '0xdcfccf2e8c4efbba9127b80eac76c5a122125d29';
+    const deployer = '0x1c798614ef4c6a8f8a1aab25785714933e59e963';
 
     const amountsForSell = [
       0n,
@@ -370,16 +370,16 @@ describe('Supernova', function () {
 
     const amountsForBuy = [
       0n,
-      1n * BI_POWS[tokens[destTokenSymbol].decimals],
-      2n * BI_POWS[tokens[destTokenSymbol].decimals],
-      3n * BI_POWS[tokens[destTokenSymbol].decimals],
-      4n * BI_POWS[tokens[destTokenSymbol].decimals],
-      5n * BI_POWS[tokens[destTokenSymbol].decimals],
-      6n * BI_POWS[tokens[destTokenSymbol].decimals],
-      7n * BI_POWS[tokens[destTokenSymbol].decimals],
-      8n * BI_POWS[tokens[destTokenSymbol].decimals],
-      9n * BI_POWS[tokens[destTokenSymbol].decimals],
-      10n * BI_POWS[tokens[destTokenSymbol].decimals],
+      (1n * BI_POWS[tokens[destTokenSymbol].decimals]) / 100n,
+      (2n * BI_POWS[tokens[destTokenSymbol].decimals]) / 100n,
+      (3n * BI_POWS[tokens[destTokenSymbol].decimals]) / 100n,
+      (4n * BI_POWS[tokens[destTokenSymbol].decimals]) / 100n,
+      (5n * BI_POWS[tokens[destTokenSymbol].decimals]) / 100n,
+      (6n * BI_POWS[tokens[destTokenSymbol].decimals]) / 100n,
+      (7n * BI_POWS[tokens[destTokenSymbol].decimals]) / 100n,
+      (8n * BI_POWS[tokens[destTokenSymbol].decimals]) / 100n,
+      (9n * BI_POWS[tokens[destTokenSymbol].decimals]) / 100n,
+      (10n * BI_POWS[tokens[destTokenSymbol].decimals]) / 100n,
     ];
 
     beforeAll(async () => {

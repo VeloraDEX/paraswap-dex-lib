@@ -32,7 +32,7 @@ export const AlgebraIntegralConfig: DexConfigMap<DexParams> = {
       quoter: '0x8217550d36823b1194b58562dac55d7fe8efb727',
       router: '0x72d63a5b080e1b89cc93f9b9f50cbfa5e291c8ac',
       chunksCount: 10,
-      algebraStateMulticall: '', // TODO: add when deployed
+      algebraStateMulticall: '0xFC18433f203c58b8104eCb9b2e995032bc29f64f',
     },
   },
 };
