@@ -163,7 +163,7 @@ export class AlgebraIntegral
           this.dexHelper,
           this.dexKey,
           this.stateMulticallIface,
-          this.config.algebraStateMulticall,
+          this.config.stateMulticall,
           this.erc20Interface,
           token0,
           token1,

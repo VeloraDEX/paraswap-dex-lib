@@ -28,7 +28,7 @@ export type DexParams = {
   router: Address;
   subgraphURL: string;
   chunksCount: number;
-  algebraStateMulticall: Address;
+  stateMulticall: Address;
 };
 
 // Pool state compatible with PoolStateV1_1 shape for AlgebraMath reuse

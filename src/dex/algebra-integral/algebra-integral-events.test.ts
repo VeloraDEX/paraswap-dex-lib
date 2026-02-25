@@ -97,7 +97,7 @@ describe('AlgebraIntegral Events', function () {
           const { pool, dexHelper } = createPool(
             dexKey,
             network,
-            config.algebraStateMulticall,
+            config.stateMulticall,
             token0,
             token1,
             poolAddress,
@@ -141,7 +141,7 @@ describe('AlgebraIntegral Events', function () {
           const { pool, dexHelper } = createPool(
             dexKey,
             network,
-            config.algebraStateMulticall,
+            config.stateMulticall,
             token0,
             token1,
             poolAddress,
@@ -186,7 +186,7 @@ describe('AlgebraIntegral Events', function () {
           const { pool, dexHelper } = createPool(
             dexKey,
             network,
-            config.algebraStateMulticall,
+            config.stateMulticall,
             token0,
             token1,
             poolAddress,
