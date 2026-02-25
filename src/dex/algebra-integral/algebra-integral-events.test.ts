@@ -40,25 +40,8 @@ function stateCompare(
   expect(state.globalState.fee).toEqual(expectedState.globalState.fee);
   expect(state.liquidity).toEqual(expectedState.liquidity);
   expect(state.isValid).toEqual(true);
-
-  // Balances may differ slightly due to BurnFee plugin fees not tracked
-  // by event handlers. Use tolerance: <0.01% of total balance.
-  const bal0Diff =
-    state.balance0 > expectedState.balance0
-      ? state.balance0 - expectedState.balance0
-      : expectedState.balance0 - state.balance0;
-  const bal1Diff =
-    state.balance1 > expectedState.balance1
-      ? state.balance1 - expectedState.balance1
-      : expectedState.balance1 - state.balance1;
-
-  const tolerance0 =
-    expectedState.balance0 > 0n ? expectedState.balance0 / 10000n : 1n;
-  const tolerance1 =
-    expectedState.balance1 > 0n ? expectedState.balance1 / 10000n : 1n;
-
-  expect(bal0Diff).toBeLessThanOrEqual(tolerance0);
-  expect(bal1Diff).toBeLessThanOrEqual(tolerance1);
+  expect(state.balance0).toEqual(expectedState.balance0);
+  expect(state.balance1).toEqual(expectedState.balance1);
 }
 
 function createPool(
@@ -100,10 +83,10 @@ describe('AlgebraIntegral Events', function () {
     const token1 = '0xb97ef9ef8734c71904d8002f8b6bc66dd9c48a6e'; // USDC
 
     const blockNumbers: { [eventName: string]: number[] } = {
-      Swap: [78816476, 78842289, 78866470],
-      Mint: [78816486, 78841515, 78866465],
-      Burn: [78816476, 78841593, 78866465],
-      Collect: [78816476, 78841599, 78866465],
+      Swap: [78954389, 78954388, 78954387, 78954386, 78954385],
+      Mint: [78954423, 78954387, 78954647, 78954668, 78954649],
+      Burn: [78954423, 78954387, 78954385, 78954625, 78954628],
+      Collect: [78954423, 78954387, 78954385, 78954625, 78954628],
     };
 
     Object.keys(blockNumbers).forEach((event: string) => {
