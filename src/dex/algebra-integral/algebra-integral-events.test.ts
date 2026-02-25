@@ -11,6 +11,7 @@ import { Interface } from '@ethersproject/abi';
 import ERC20ABI from '../../abi/erc20.json';
 import AlgebraIntegralStateMulticallABI from '../../abi/algebra-integral/AlgebraIntegralStateMulticall.abi.json';
 import { AlgebraIntegralEventPool } from './algebra-integral-pool';
+import { BlackholeCLPool } from './forks/blackhole-cl-pool';
 
 jest.setTimeout(300 * 1000);
 
@@ -51,11 +52,12 @@ function createPool(
   token0: string,
   token1: string,
   poolAddress: string,
+  Poolimplementation: typeof AlgebraIntegralEventPool = AlgebraIntegralEventPool,
 ) {
   const dexHelper = new DummyDexHelper(network);
   const logger = dexHelper.getLogger(dexKey);
 
-  const pool = new AlgebraIntegralEventPool(
+  const pool = new Poolimplementation(
     dexHelper,
     dexKey,
     stateMulticallIface,
@@ -72,6 +74,50 @@ function createPool(
 }
 
 describe('AlgebraIntegral Events', function () {
+  describe('QuickSwapV4 - Base', function () {
+    const dexKey = 'QuickSwapV4';
+    const network = Network.BASE;
+    const config = AlgebraIntegralConfig[dexKey][network];
+
+    // WETH/USDC pool
+    const poolAddress = '0x5a9ad2bb92b0b3e5c571fdd5125114e04e02be1a';
+    const token0 = '0x4200000000000000000000000000000000000006'; // WETH
+    const token1 = '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913'; // USDC
+
+    const blockNumbers: { [eventName: string]: number[] } = {
+      Swap: [42614705, 42614648, 42614647, 42614636, 42614633],
+      Mint: [42614648, 42614647, 42614631, 42614630, 42620744],
+      Burn: [42614648, 42614647, 42614631, 42614630, 42620744],
+      Collect: [42614648, 42614647, 42614631, 42614630, 42620744],
+    };
+
+    Object.keys(blockNumbers).forEach((event: string) => {
+      blockNumbers[event].forEach((blockNumber: number) => {
+        it(`${event}:${blockNumber} - should return correct state`, async function () {
+          const { pool, dexHelper } = createPool(
+            dexKey,
+            network,
+            config.algebraStateMulticall,
+            token0,
+            token1,
+            poolAddress,
+          );
+
+          await testEventSubscriber(
+            pool as any,
+            pool.addressesSubscribed,
+            (_blockNumber: number) =>
+              fetchPoolStateFromContract(pool, _blockNumber, poolAddress),
+            blockNumber,
+            `${dexKey}_${poolAddress}`,
+            dexHelper.provider,
+            stateCompare as any,
+          );
+        });
+      });
+    });
+  });
+
   describe('BlackholeCL - Avalanche', function () {
     const dexKey = 'BlackholeCL';
     const network = Network.AVALANCHE;
@@ -99,6 +145,7 @@ describe('AlgebraIntegral Events', function () {
             token0,
             token1,
             poolAddress,
+            BlackholeCLPool,
           );
 
           await testEventSubscriber(

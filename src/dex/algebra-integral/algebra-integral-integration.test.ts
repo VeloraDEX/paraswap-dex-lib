@@ -212,6 +212,11 @@ describe('QuickSwapV4', function () {
       // We have to check without calling initializePricing, because
       // pool-tracker is not calling that function
       const newAlgebra = new AlgebraIntegral(network, dexKey, dexHelper);
+
+      if (newAlgebra.updatePoolState) {
+        await newAlgebra.updatePoolState();
+      }
+
       const poolLiquidity = await newAlgebra.getTopPoolsForToken(
         tokens[srcTokenSymbol].address,
         10,

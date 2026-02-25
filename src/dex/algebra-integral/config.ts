@@ -10,7 +10,7 @@ export const AlgebraIntegralConfig: DexConfigMap<DexParams> = {
       quoter: '0xA8a1dA1279ea63535c7B3BE8D20241483BC61009',
       router: '0xe6c9bb24ddB4aE5c6632dbE0DE14e3E474c6Cb04',
       chunksCount: 10,
-      algebraStateMulticall: '', // TODO: add when deployed
+      algebraStateMulticall: '0x0062C27357c71792c6767fA799f974B30BfB8630',
     },
   },
   BlackholeCL: {
