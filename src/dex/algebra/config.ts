@@ -1,6 +1,6 @@
-import { DexParams } from './types';
-import { DexConfigMap, AdapterMappings } from '../../types';
 import { Network, SwapSide } from '../../constants';
+import { AdapterMappings, DexConfigMap } from '../../types';
+import { DexParams } from './types';
 
 export const AlgebraConfig: DexConfigMap<DexParams> = {
   QuickSwapV3: {
@@ -17,6 +17,24 @@ export const AlgebraConfig: DexConfigMap<DexParams> = {
       uniswapMulticall: '0x1F98415757620B543A52E61c46B32eB19261F984',
       deployer: '0x2d98e2fa9da15aa6dc9581ab097ced7af697cb92',
       version: 'v1.1',
+    },
+  },
+  SynthSwapV3: {
+    [Network.BASE]: {
+      factory: '0xa37359E63D1aa44C0ACb2a4605D3B45785C97eE3',
+      router: '0x2dD788D8B399caa4eE92B5492A6A238Fdf2437de',
+      quoter: '0x9c8F11C113F1fE7959C838a5F6b43e5E6223320c',
+      initHash:
+        '0xbce37a54eab2fcd71913a0d40723e04238970e7fc1159bfd58ad5b79531697e7',
+      chunksCount: 10,
+      initRetryFrequency: 10,
+      algebraStateMulticall: '0xce512f490Bf09C4544A12a7264750B28FbE9AD76',
+      subgraphURL:
+        'https://api.studio.thegraph.com/query/45189/synthswap-v3-analytics-base/v0.1.5',
+      uniswapMulticall: '0xce512f490Bf09C4544A12a7264750B28FbE9AD76',
+      deployer: '0xBA97f8AEe67BaE3105fB4335760B103F24998a92',
+      version: 'v1.9',
+      forceRPC: true,
     },
   },
   CamelotV3: {
