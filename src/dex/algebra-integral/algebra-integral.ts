@@ -553,7 +553,11 @@ export class AlgebraIntegral
 
     const prices = interpolate(chunkedAmounts, _ratesWithFee, amounts, side);
 
-    return { prices, gasCost: ALGEBRA_GAS_COST, pool };
+    return {
+      prices,
+      gasCost: prices.map(p => (p === 0n ? 0 : ALGEBRA_GAS_COST)),
+      pool,
+    };
   }
 
   buildQuoteCallData(
@@ -578,7 +582,7 @@ export class AlgebraIntegral
   getCalldataGasCost(
     poolPrices: PoolPrices<AlgebraIntegralData>,
   ): number | number[] {
-    return (
+    const gasCost =
       CALLDATA_GAS_COST.FUNCTION_SELECTOR +
       // path offset
       CALLDATA_GAS_COST.OFFSET_SMALL +
@@ -593,8 +597,17 @@ export class AlgebraIntegral
       // path bytes (tokenIn, tokenOut, and deployer)
       60 * CALLDATA_GAS_COST.NONZERO_BYTE +
       // path padding
-      4 * CALLDATA_GAS_COST.ZERO_BYTE
-    );
+      4 * CALLDATA_GAS_COST.ZERO_BYTE;
+
+    const arr = new Array(poolPrices.prices.length);
+    poolPrices.prices.forEach((p, index) => {
+      if (p == 0n) {
+        arr[index] = 0;
+      } else {
+        arr[index] = gasCost;
+      }
+    });
+    return arr;
   }
 
   getDexParam(
