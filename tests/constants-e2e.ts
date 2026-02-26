@@ -1930,6 +1930,16 @@ export const Tokens: {
       decimals: 18,
     },
   },
+  [Network.HYPEREVM]: {
+    WHYPE: {
+      address: '0x5555555555555555555555555555555555555555',
+      decimals: 18,
+    },
+    USDT0: {
+      address: '0xB8CE59FC3717ada4C02eaDF9682A9e934F625ebb',
+      decimals: 6,
+    },
+  },
   [Network.SEPOLIA]: {
     ETH: { address: ETHER_ADDRESS, decimals: 18 },
     WETH: {
@@ -2414,6 +2424,7 @@ export const Holders: {
   [Network.UNICHAIN]: {},
   [Network.SONIC]: {},
   [Network.PLASMA]: {},
+  [Network.HYPEREVM]: {},
 };
 
 export const NativeTokenSymbols: { [network: number]: string } = {
@@ -2429,6 +2440,7 @@ export const NativeTokenSymbols: { [network: number]: string } = {
   [Network.SEPOLIA]: 'ETH',
   [Network.GNOSIS]: 'XDAI',
   [Network.UNICHAIN]: 'ETH',
+  [Network.HYPEREVM]: 'HYPE',
 };
 
 export const WrappedNativeTokenSymbols: { [network: number]: string } = {

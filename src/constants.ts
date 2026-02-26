@@ -46,6 +46,7 @@ export enum Network {
   PLASMA = 9745,
   ARBITRUM = 42161,
   AVALANCHE = 43114,
+  HYPEREVM = 999,
   SEPOLIA = 11155111,
 }
 
