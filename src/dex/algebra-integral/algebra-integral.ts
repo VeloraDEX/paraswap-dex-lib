@@ -244,13 +244,10 @@ export class AlgebraIntegral
       );
       if (!activePools.length) return;
 
-      const [results, blockNumber] = await Promise.all([
-        this.dexHelper.multiWrapper.tryAggregate<bigint>(
-          false,
-          buildFeeCallData(activePools),
-        ),
-        this.dexHelper.blockManager.getLatestBlockNumber(),
-      ]);
+      const results = await this.dexHelper.multiWrapper.tryAggregate<bigint>(
+        false,
+        buildFeeCallData(activePools),
+      );
 
       activePools.forEach((pool, i) => {
         const result = results[i];
@@ -272,7 +269,7 @@ export class AlgebraIntegral
             ...state,
             globalState: { ...state.globalState, fee: newFee },
           },
-          blockNumber,
+          pool.getStateBlockNumber(),
         );
       });
     } catch (error) {

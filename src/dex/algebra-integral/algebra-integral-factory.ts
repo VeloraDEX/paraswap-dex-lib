@@ -248,6 +248,14 @@ export class AlgebraIntegralFactory extends StatefulEventSubscriber<Pool[]> {
   }
 
   async updatePoolsTvl(): Promise<void> {
+    if (!this.getStaleState()) {
+      const bn =
+        this.stateBlockNumber ||
+        this.dexHelper.blockManager.getLatestBlockNumber();
+      const state = await this.generateState(bn);
+      this.setState(state, bn);
+    }
+
     const pools = this.getAllPools();
     if (pools.length === 0) return;
 
@@ -305,7 +313,6 @@ export class AlgebraIntegralFactory extends StatefulEventSubscriber<Pool[]> {
       tvlUSD: (usdValues[i * 2] || 0) + (usdValues[i * 2 + 1] || 0),
     }));
 
-    const blockNumber = await this.dexHelper.provider.getBlockNumber();
-    this.setState(updatedPools, blockNumber);
+    this.setState(updatedPools, this.stateBlockNumber);
   }
 }
