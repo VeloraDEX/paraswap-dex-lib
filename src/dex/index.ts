@@ -94,6 +94,7 @@ import { MiroMigrator } from './miro-migrator/miro-migrator';
 import { AaveV3PtRollOver } from './aave-v3-pt-roll-over/aave-v3-pt-roll-over';
 import { RingV2 } from './uniswap-v2/ring-v2';
 import { UsdcTransmuter } from './usdc-transmuter/usdc-transmuter';
+import { Aegis } from './aegis/uniswap-v4';
 import { Blackhole } from './solidly/forks-override/blackhole';
 import { BlackholeCL } from './algebra-integral/forks/blackhole-cl';
 import { Cap } from './cap/cap';
@@ -184,6 +185,7 @@ const Dexes = [
   AaveV3PtRollOver,
   RingV2,
   UsdcTransmuter,
+  Aegis,
   Blackhole,
   BlackholeCL,
   Cap,
