@@ -15,7 +15,6 @@ import {
 import {
   SwapSide,
   Network,
-  CACHE_PREFIX,
   DEST_TOKEN_DEX_TRANSFERS,
   SRC_TOKEN_DEX_TRANSFERS,
   SUBGRAPH_TIMEOUT,
@@ -61,8 +60,6 @@ import { uint256ToBigInt } from '../../lib/decoders';
 import AlgebraIntegralStateMulticallABI from '../../abi/algebra-integral/AlgebraIntegralStateMulticall.abi.json';
 import { buildFeeCallData } from './utils';
 
-const PoolsRegistryHashKey = `${CACHE_PREFIX}_poolsRegistry`;
-
 export class AlgebraIntegral
   extends SimpleExchange
   implements IDex<AlgebraIntegralData>
@@ -75,7 +72,14 @@ export class AlgebraIntegral
   private updatePoolsTvlTimer?: NodeJS.Timeout;
   private feeUpdateIntervalTask?: NodeJS.Timeout;
   protected eventPools: Record<string, AlgebraIntegralEventPool | null> = {};
-  private topPoolsCache: SubgraphPoolData[] = [];
+  private poolInitPromises: Record<
+    string,
+    Promise<AlgebraIntegralEventPool | null>
+  > = {};
+  private topPoolsCache: (SubgraphPoolData & {
+    balance0: bigint;
+    balance1: bigint;
+  })[] = [];
   protected stateMulticallIface: Interface = new Interface(
     AlgebraIntegralStateMulticallABI,
   );
@@ -109,7 +113,12 @@ export class AlgebraIntegral
 
   async initializePricing(blockNumber: number) {
     await this.factory.initialize(blockNumber);
-    await this.initializeEventPools(blockNumber);
+
+    this.logger.info(
+      `${this.dexKey}: factory initialized with ${
+        this.factory.getAllPools().length
+      } pools`,
+    );
 
     if (this.dexHelper.config.isSlave) {
       if (!this.updatePoolsTvlTimer) {
@@ -144,84 +153,88 @@ export class AlgebraIntegral
     }
   }
 
-  async initializeEventPools(
+  async getPool(
+    token0: Address,
+    token1: Address,
+    deployer: string,
+    poolAddress: Address,
     blockNumber: number,
-    subscribe = true,
-    pools?: Pool[],
-  ): Promise<void> {
-    const allPools = pools ?? this.factory.getAllPools();
+  ): Promise<AlgebraIntegralEventPool | null> {
+    const key = this.getPoolIdentifier(token0, token1, deployer);
 
-    await Promise.all(
-      allPools.map(async pool => {
-        const [token0, token1] = this._sortTokens(pool.token0, pool.token1);
-        const key = this.getPoolIdentifier(token0, token1, pool.deployer);
+    const pool = this.eventPools[key];
 
-        if (this.eventPools[key] !== undefined) return;
+    if (pool === null) return null;
 
-        const eventPool = new this.EventPoolImplementation(
-          this.dexHelper,
-          this.dexKey,
-          this.stateMulticallIface,
-          this.config.stateMulticall,
-          this.erc20Interface,
-          token0,
-          token1,
-          this.logger,
-          this.cacheStateKey,
-          pool.poolAddress,
-        );
-
+    if (pool) {
+      if (!pool.isInitialized) {
+        // Pool was created by updatePoolState without event subscription.
+        // Upgrade to full subscription for live pricing.
         try {
-          if (subscribe) {
-            await eventPool.initialize(blockNumber);
-          } else {
-            const state = await eventPool.generateState(blockNumber);
-            eventPool.setState(state, blockNumber);
-          }
-          this.eventPools[key] = eventPool;
+          await pool.initialize(blockNumber);
         } catch (e) {
           this.logger.warn(
-            `${this.dexKey}: Failed to initialize event pool ${pool.poolAddress}`,
+            `${this.dexKey}: Failed to subscribe pool ${poolAddress}`,
             e,
           );
-          this.eventPools[key] = null;
         }
-      }),
+      }
+      return pool;
+    }
+
+    const existingPromise = this.poolInitPromises[key];
+    if (existingPromise) return existingPromise;
+
+    const initPromise = this._initPool(
+      key,
+      token0,
+      token1,
+      deployer,
+      poolAddress,
+      blockNumber,
     );
+
+    this.poolInitPromises[key] = initPromise;
+    try {
+      return await initPromise;
+    } finally {
+      delete this.poolInitPromises[key];
+    }
   }
 
-  async addMasterPool(poolKey: string, blockNumber: number): Promise<boolean> {
-    const _pairs = await this.dexHelper.cache.hget(
-      PoolsRegistryHashKey,
-      `${this.cacheStateKey}_${poolKey}`,
+  private async _initPool(
+    key: string,
+    token0: Address,
+    token1: Address,
+    deployer: string,
+    poolAddress: Address,
+    blockNumber: number,
+  ): Promise<AlgebraIntegralEventPool | null> {
+    const eventPool = new this.EventPoolImplementation(
+      this.dexHelper,
+      this.dexKey,
+      this.stateMulticallIface,
+      this.config.stateMulticall,
+      this.erc20Interface,
+      token0,
+      token1,
+      this.logger,
+      this.cacheStateKey,
+      poolAddress,
     );
-    if (!_pairs) {
-      this.logger.warn(
-        `did not find poolConfig in for key ${PoolsRegistryHashKey} ${this.cacheStateKey}_${poolKey}`,
-      );
-      return false;
-    }
-
-    const poolInfo: { token0: Address; token1: Address } = JSON.parse(_pairs);
-
-    const pools = this.factory.getAvailablePoolsForPair(
-      poolInfo.token0,
-      poolInfo.token1,
-    );
-
-    if (pools.length === 0) return false;
 
     try {
-      await this.initializeEventPools(blockNumber, true, pools);
+      await eventPool.initialize(blockNumber);
+      this.eventPools[key] = eventPool;
+      return eventPool;
     } catch (e) {
-      this.logger.error(
-        `${this.dexKey}: failed to initialize master pools for ${poolInfo.token0}/${poolInfo.token1}`,
+      this.logger.warn(
+        `${this.dexKey}: Failed to initialize pool ${poolAddress}`,
         e,
       );
-      return false;
+      this.eventPools[key] = null;
+      return null;
     }
-
-    return true;
   }
 
   protected async updateAllPoolFees(): Promise<void> {
@@ -409,14 +422,29 @@ export class AlgebraIntegral
         poolAddresses: [pool.poolAddress],
       });
 
-      for (const pool of pools) {
-        const key = this.getPoolIdentifier(
-          _srcAddress,
-          _destAddress,
-          pool.deployer,
-        );
+      const eventPoolsResolved = await Promise.all(
+        pools.map(pool => {
+          const [t0, t1] = this._sortTokens(pool.token0, pool.token1);
+          return this.getPool(
+            t0,
+            t1,
+            pool.deployer,
+            pool.poolAddress,
+            blockNumber,
+          );
+        }),
+      );
 
-        const result = this.eventPools[key]?.getOutputs(
+      for (let i = 0; i < pools.length; i++) {
+        const pool = pools[i];
+        const eventPool = eventPoolsResolved[i];
+
+        if (!eventPool) {
+          rpcPools.push(pool);
+          continue;
+        }
+
+        const result = eventPool.getOutputs(
           blockNumber,
           amountsWithFee,
           zeroForOne,
@@ -703,18 +731,44 @@ export class AlgebraIntegral
   }
 
   async updatePoolState(): Promise<void> {
-    const blockNumber = await this.dexHelper.provider.getBlockNumber();
-    this.topPoolsCache = await this.querySubgraphPools();
+    const pools = await this.querySubgraphPools();
+    if (pools.length === 0) {
+      this.topPoolsCache = [];
+      return;
+    }
 
-    const pools: Pool[] = this.topPoolsCache.map(p => ({
-      poolAddress: p.poolAddress,
-      token0: p.token0.address,
-      token1: p.token1.address,
-      deployer: p.deployer,
-      tvlUSD: 0,
+    const balanceCalls = pools.flatMap(p => [
+      {
+        target: p.token0.address,
+        callData: this.erc20Interface.encodeFunctionData('balanceOf', [
+          p.poolAddress,
+        ]),
+        decodeFunction: uint256ToBigInt,
+      },
+      {
+        target: p.token1.address,
+        callData: this.erc20Interface.encodeFunctionData('balanceOf', [
+          p.poolAddress,
+        ]),
+        decodeFunction: uint256ToBigInt,
+      },
+    ]);
+
+    const balanceResults =
+      await this.dexHelper.multiWrapper.tryAggregate<bigint>(
+        false,
+        balanceCalls,
+      );
+
+    this.topPoolsCache = pools.map((p, i) => ({
+      ...p,
+      balance0: balanceResults[i * 2].success
+        ? balanceResults[i * 2].returnData
+        : 0n,
+      balance1: balanceResults[i * 2 + 1].success
+        ? balanceResults[i * 2 + 1].returnData
+        : 0n,
     }));
-
-    await this.initializeEventPools(blockNumber, false, pools);
   }
 
   private async querySubgraphPools(): Promise<SubgraphPoolData[]> {
@@ -780,45 +834,17 @@ export class AlgebraIntegral
 
     if (relevantPools.length === 0) return [];
 
-    const tokenAmounts: [string, bigint][] = [];
-    const poolsWithBalances: {
-      pool: SubgraphPoolData;
-      balance0: bigint;
-      balance1: bigint;
-    }[] = [];
-
-    for (const pool of relevantPools) {
-      const [token0, token1] = this._sortTokens(
-        pool.token0.address,
-        pool.token1.address,
-      );
-
-      const key = this.getPoolIdentifier(token0, token1, pool.deployer);
-      const eventPool = this.eventPools[key];
-      const state = eventPool?.getStaleState();
-
-      if (!state) continue;
-
-      poolsWithBalances.push({
-        pool,
-        balance0: state.balance0,
-        balance1: state.balance1,
-      });
-
-      tokenAmounts.push([pool.token0.address, state.balance0]);
-      tokenAmounts.push([pool.token1.address, state.balance1]);
-    }
-
-    if (poolsWithBalances.length === 0) return [];
+    const tokenAmounts: [string, bigint][] = relevantPools.flatMap(pool => [
+      [pool.token0.address, pool.balance0],
+      [pool.token1.address, pool.balance1],
+    ]);
 
     const usdValues = await this.dexHelper.getUsdTokenAmounts(tokenAmounts);
 
     const liquidityPools: PoolLiquidity[] = [];
 
-    for (let i = 0; i < poolsWithBalances.length; i++) {
-      const {
-        pool: { poolAddress, token0, token1 },
-      } = poolsWithBalances[i];
+    for (let i = 0; i < relevantPools.length; i++) {
+      const { poolAddress, token0, token1 } = relevantPools[i];
 
       const isToken0 = token0.address === _tokenAddress;
 

@@ -65,7 +65,7 @@ export class AlgebraIntegralEventPool extends StatefulEventSubscriber<AlgebraInt
     mapKey: string,
     poolAddress: Address,
   ) {
-    super(parentName, `${token0}_${token1}`, dexHelper, logger, true, mapKey);
+    super(parentName, `${token0}_${token1}`, dexHelper, logger, false, mapKey);
     this.token0 = token0.toLowerCase();
     this.token1 = token1.toLowerCase();
     this.poolAddress = poolAddress.toLowerCase();
@@ -514,7 +514,22 @@ export class AlgebraIntegralEventPool extends StatefulEventSubscriber<AlgebraInt
     side: SwapSide,
   ): OutputResult | null {
     const state = this.getState(blockNumber);
-    if (!state || !state.isValid || state.liquidity <= 0n) return null;
+    if (!state) {
+      this.logger.warn(
+        `${this.parentName}: pool ${this.poolAddress} has no state at block ${blockNumber} ` +
+          `(stateBlockNumber=${this.getStateBlockNumber()}, isInitialized=${
+            this.isInitialized
+          })`,
+      );
+      return null;
+    }
+    if (!state.isValid) {
+      this.logger.warn(
+        `${this.parentName}: pool ${this.poolAddress} state is invalid at block ${blockNumber}`,
+      );
+      return null;
+    }
+    if (state.liquidity <= 0n) return null;
 
     const destTokenBalance = zeroForOne ? state.balance1 : state.balance0;
 
