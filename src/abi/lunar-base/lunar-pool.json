@@ -1,0 +1,100 @@
+[
+  {
+    "type": "function",
+    "name": "getReserves",
+    "inputs": [],
+    "outputs": [
+      { "name": "", "type": "uint112", "internalType": "uint112" },
+      { "name": "", "type": "uint112", "internalType": "uint112" }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "token0",
+    "inputs": [],
+    "outputs": [{ "name": "", "type": "address", "internalType": "Currency" }],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "token1",
+    "inputs": [],
+    "outputs": [{ "name": "", "type": "address", "internalType": "Currency" }],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "swap",
+    "inputs": [
+      { "name": "amount0Out", "type": "uint256", "internalType": "uint256" },
+      { "name": "amount1Out", "type": "uint256", "internalType": "uint256" },
+      { "name": "to", "type": "address", "internalType": "address" },
+      { "name": "data", "type": "bytes", "internalType": "bytes" }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "event",
+    "name": "Sync",
+    "inputs": [
+      {
+        "name": "reserve0",
+        "type": "uint112",
+        "indexed": false,
+        "internalType": "uint112"
+      },
+      {
+        "name": "reserve1",
+        "type": "uint112",
+        "indexed": false,
+        "internalType": "uint112"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "Swap",
+    "inputs": [
+      {
+        "name": "sender",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "amount0In",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "amount1In",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "amount0Out",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "amount1Out",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "to",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  }
+]
