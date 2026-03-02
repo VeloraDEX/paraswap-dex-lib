@@ -73,6 +73,7 @@ const buildConfigForGenericRFQ = (): RFQConfig => {
       dataTTLS: 1000 * 60 * 60 * 11,
     },
     pathToRemove,
+    minTradeUsd: null,
   };
 };
 
