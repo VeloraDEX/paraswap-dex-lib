@@ -22,6 +22,8 @@ import {
   ZEROS_28_BYTES,
   ZEROS_4_BYTES,
   DISABLED_MAX_UNIT_APPROVAL_TOKENS,
+  BYTES_64_LENGTH,
+  FUNCTION_SELECTOR_LENGTH,
 } from './constants';
 import { Executors, Flag, SpecialDex } from './types';
 import { MAX_UINT, Network, PERMIT2_ADDRESS } from '../constants';
@@ -262,7 +264,7 @@ export abstract class ExecutorBytecodeBuilder<S = {}, D = {}> {
       idx !== -1;
       idx = rawCalldata.indexOf(rawAmount, idx + 1)
     ) {
-      if (idx % 2 === 0) {
+      if ((idx - FUNCTION_SELECTOR_LENGTH) % BYTES_64_LENGTH === 0) {
         amountIndex = idx;
         break;
       }
