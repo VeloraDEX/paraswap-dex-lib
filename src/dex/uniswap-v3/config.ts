@@ -250,8 +250,7 @@ export const UniswapV3Config: DexConfigMap<DexParams> = {
       chunksCount: 10,
       initRetryFrequency: 10,
       initHash: `0xe34f199b19b2b4f47f68442619d555527d244f78a3297ea89325f843f87b8b54`,
-      subgraphType: 'deployments',
-      subgraphURL: 'QmWWh7RgdXHcxaSwhJMpH1SB7D9rFZRGLZVwRfg2BPKsHt',
+      subgraphURL: 'Cz4Snpih41NNNPZcbj1gd3fYXPwFr5q92iWMoZjCarEb',
     },
   },
   RamsesV2: {
