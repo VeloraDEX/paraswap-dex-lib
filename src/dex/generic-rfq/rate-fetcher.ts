@@ -444,7 +444,10 @@ export class RateFetcher {
       const { data } = await this.dexHelper.httpRequest.request<unknown>(
         payload,
       );
-      this.logger.info(`FirmRate Response: ${JSON.stringify(data)}`);
+      this.logger.info(
+        'FirmRate Response: ',
+        JSON.stringify(data).replace(/(?:\r\n|\r|\n)/g, ' '),
+      );
       const firmRateResp = validateAndCast<RFQFirmRateResponse>(
         data,
         firmRateWithTakerValidator(takerAddress),
