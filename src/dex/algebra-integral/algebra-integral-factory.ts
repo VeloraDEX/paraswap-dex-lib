@@ -216,7 +216,7 @@ export class AlgebraIntegralFactory extends StatefulEventSubscriber<Pool[]> {
     if (!poolAddress) return null;
 
     return [
-      ...state,
+      ...state.filter(p => p.poolAddress !== poolAddress),
       {
         poolAddress,
         token0: event.args.token0.toLowerCase(),
@@ -236,7 +236,7 @@ export class AlgebraIntegralFactory extends StatefulEventSubscriber<Pool[]> {
     if (!poolAddress) return null;
 
     return [
-      ...state,
+      ...state.filter(p => p.poolAddress !== poolAddress),
       {
         poolAddress,
         token0: event.args.token0.toLowerCase(),
