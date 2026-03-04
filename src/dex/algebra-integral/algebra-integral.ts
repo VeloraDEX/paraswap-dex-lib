@@ -472,22 +472,17 @@ export class AlgebraIntegral
       }
 
       if (rpcPools.length > 0) {
-        const rpcResults = await Promise.all(
-          rpcPools.map(pool =>
-            this.getPricingFromRpc(
-              _srcToken,
-              _destToken,
-              amounts,
-              side,
-              pool,
-              transferFees,
-              blockNumber,
-            ),
-          ),
+        const rpcResults = await this.getPricingFromRpc(
+          _srcToken,
+          _destToken,
+          amounts,
+          side,
+          rpcPools,
+          transferFees,
+          blockNumber,
         );
 
         for (const rpcResult of rpcResults) {
-          if (!rpcResult) continue;
           results.push(
             buildPoolPrices(
               rpcResult.pool,
@@ -515,15 +510,21 @@ export class AlgebraIntegral
     to: Token,
     amounts: bigint[],
     side: SwapSide,
-    pool: Pool,
+    pools: Pool[],
     transferFees: TransferFeeParams,
     blockNumber: number,
-  ): Promise<{
-    prices: bigint[];
-    gasCost: number | number[];
-    pool: Pool;
-  } | null> {
-    this.logger.warn(`fallback to rpc for pool ${pool.poolAddress}`);
+  ): Promise<
+    Array<{
+      prices: bigint[];
+      gasCost: number | number[];
+      pool: Pool;
+    }>
+  > {
+    this.logger.warn(
+      `fallback to rpc for ${pools.length} pools: ${pools
+        .map(p => p.poolAddress)
+        .join(', ')}`,
+    );
 
     const isSELL = side === SwapSide.SELL;
 
@@ -546,43 +547,63 @@ export class AlgebraIntegral
         )
       : chunkedAmounts;
 
-    const calldata = amountsForQuote.map(amount =>
-      this.buildQuoteCallData(
-        from.address,
-        to.address,
-        pool.deployer,
-        amount,
-        isSELL,
+    const calldata = pools.flatMap(pool =>
+      amountsForQuote.map(amount =>
+        this.buildQuoteCallData(
+          from.address,
+          to.address,
+          pool.deployer,
+          amount,
+          isSELL,
+        ),
       ),
     );
 
-    const results = await this.dexHelper.multiWrapper.tryAggregate(
+    const allResults = await this.dexHelper.multiWrapper.tryAggregate(
       false,
       calldata,
       blockNumber,
     );
 
-    const _rates = chunkedAmounts.map((_, i) => {
-      const res = results[i];
-      return res.success ? res.returnData : 0n;
-    });
+    const callsPerPool = amountsForQuote.length;
+    const output: Array<{
+      prices: bigint[];
+      gasCost: number | number[];
+      pool: Pool;
+    }> = [];
 
-    const _ratesWithFee = _isDestFee
-      ? applyTransferFee(
-          _rates,
-          side,
-          transferFees.destDexFee,
-          DEST_TOKEN_DEX_TRANSFERS,
-        )
-      : _rates;
+    for (let i = 0; i < pools.length; i++) {
+      const poolResults = allResults.slice(
+        i * callsPerPool,
+        (i + 1) * callsPerPool,
+      );
 
-    const prices = interpolate(chunkedAmounts, _ratesWithFee, amounts, side);
+      const _rates = chunkedAmounts.map((_, j) => {
+        const res = poolResults[j];
+        return res.success ? res.returnData : 0n;
+      });
 
-    return {
-      prices,
-      gasCost: prices.map(p => (p === 0n ? 0 : ALGEBRA_GAS_COST)),
-      pool,
-    };
+      const _ratesWithFee = _isDestFee
+        ? applyTransferFee(
+            _rates,
+            side,
+            transferFees.destDexFee,
+            DEST_TOKEN_DEX_TRANSFERS,
+          )
+        : _rates;
+
+      const prices = interpolate(chunkedAmounts, _ratesWithFee, amounts, side);
+
+      if (prices.every(p => p === 0n)) continue;
+
+      output.push({
+        prices,
+        gasCost: prices.map(p => (p === 0n ? 0 : ALGEBRA_GAS_COST)),
+        pool: pools[i],
+      });
+    }
+
+    return output;
   }
 
   buildQuoteCallData(
