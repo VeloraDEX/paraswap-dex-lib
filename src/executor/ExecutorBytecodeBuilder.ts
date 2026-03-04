@@ -268,6 +268,13 @@ export abstract class ExecutorBytecodeBuilder<S = {}, D = {}> {
         amountIndex = idx;
         break;
       }
+      if (idx % 2 === 0) {
+        this.dexHelper
+          .getLogger(`ExecutorBytecodeBuilder`)
+          .warn(
+            `findAmountPosInCalldata: amount found at idx=${idx} (byte-aligned) but not on ABI word boundary. rawCalldata=${rawCalldata}, rawAmount=${rawAmount}`,
+          );
+      }
     }
 
     return (amountIndex !== -1 ? amountIndex : exchangeData.length) / 2;
