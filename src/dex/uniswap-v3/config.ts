@@ -17,6 +17,7 @@ import { PharaohV3EventPool } from './forks/pharaoh-v3/pharaoh-v3-pool';
 import PharaohV3MulticallABI from '../../abi/pharaoh-v3/PharaohV3StateMulticall.abi.json';
 import { PharaohV3Factory } from './forks/pharaoh-v3/pharaoh-v3-factory';
 import { RamsesV3EventPool } from './forks/ramses-v3/ramses-v3-pool';
+import { RamsesV3Factory } from './forks/ramses-v3/ramses-v3-factory';
 
 const SUPPORTED_FEES = [10000n, 3000n, 500n, 100n];
 const RAMSES_FORKS_FEES = [...SUPPORTED_FEES, 50n, 250n];
@@ -496,6 +497,7 @@ export const UniswapV3Config: DexConfigMap<DexParams> = {
       chunksCount: 10,
       initRetryFrequency: 10,
       eventPoolImplementation: RamsesV3EventPool,
+      factoryImplementation: RamsesV3Factory,
       initHash:
         '0x892f127ed4b26ca352056c8fb54585a3268f76f97fdd84d5836ef4bda8d8c685',
       subgraphURL:
@@ -513,6 +515,7 @@ export const UniswapV3Config: DexConfigMap<DexParams> = {
       chunksCount: 10,
       initRetryFrequency: 10,
       eventPoolImplementation: RamsesV3EventPool,
+      factoryImplementation: RamsesV3Factory,
       initHash:
         '0x892f127ed4b26ca352056c8fb54585a3268f76f97fdd84d5836ef4bda8d8c685',
       subgraphURL:
@@ -530,6 +533,7 @@ export const UniswapV3Config: DexConfigMap<DexParams> = {
       chunksCount: 10,
       initRetryFrequency: 10,
       eventPoolImplementation: RamsesV3EventPool,
+      factoryImplementation: RamsesV3Factory,
       initHash:
         '0x892f127ed4b26ca352056c8fb54585a3268f76f97fdd84d5836ef4bda8d8c685',
       subgraphURL:
