@@ -1,23 +1,30 @@
-import { UniswapV3 } from '../../uniswap-v3';
 import { Network } from '../../../../constants';
-import { IDexHelper } from '../../../../dex-helper';
-import { Adapters, UniswapV3Config } from '../../config';
+import { UniswapV3Config } from '../../config';
 import { getDexKeysWithNetwork } from '../../../../utils';
 import _ from 'lodash';
+import { VelodromeSlipstream } from '../velodrome-slipstream/velodrome-slipstream';
 import { Address } from '../../../../types';
 import { PoolLiquidity } from '../../../../types';
+import { MultiCallParams } from '../../../../lib/multi-wrapper';
+import { uint24ToBigInt } from '../../../../lib/decoders';
+import { Interface } from '@ethersproject/abi';
+import RamsesV3PoolABI from '../../../../abi/ramses-v3/RamsesV3Pool.abi.json';
+import { VelodromeSlipstreamEventPool } from '../velodrome-slipstream/velodrome-slipstream-pool';
 
-export class RamsesV3 extends UniswapV3 {
+export class RamsesV3 extends VelodromeSlipstream {
   public static dexKeysWithNetwork: { key: string; networks: Network[] }[] =
     getDexKeysWithNetwork(_.pick(UniswapV3Config, ['RamsesV3']));
 
-  constructor(
-    protected network: Network,
-    dexKey: string,
-    protected dexHelper: IDexHelper,
-    protected adapters = Adapters[network] || {},
-  ) {
-    super(network, dexKey, dexHelper, adapters);
+  protected readonly poolIface = new Interface(RamsesV3PoolABI);
+
+  protected buildFeeCallData(
+    pools: VelodromeSlipstreamEventPool[],
+  ): MultiCallParams<bigint>[] {
+    return pools.map(pool => ({
+      target: pool.poolAddress,
+      callData: this.poolIface.encodeFunctionData('fee', []),
+      decodeFunction: uint24ToBigInt,
+    }));
   }
 
   async getTopPoolsForToken(
