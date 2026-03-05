@@ -4,25 +4,24 @@ import FactoryABI from '../../abi/algebra-integral/AlgebraFactory.abi.json';
 import erc20Abi from '../../abi/erc20.json';
 import { IDexHelper } from '../../dex-helper/idex-helper';
 import { StatefulEventSubscriber } from '../../stateful-event-subscriber';
-import { Address, Log, Logger } from '../../types';
-import { LogDescription } from 'ethers/lib/utils';
-import { FactoryState, Pool } from './types';
+import { Address, BlockHeader, Log, Logger } from '../../types';
+import { catchParseLogError } from '../../utils';
+import { Pool } from './types';
 import { ETHER_ADDRESS, NULL_ADDRESS, SUBGRAPH_TIMEOUT } from '../../constants';
 import { MIN_USD_TVL_FOR_PRICING } from './constants';
 import { uint256ToBigInt } from '../../lib/decoders';
 
-/*
- * "Stateless" event subscriber in order to capture "PoolCreated" event on new pools created.
- * State is present, but it's a placeholder to actually make the events reach handlers (if there's no previous state - `processBlockLogs` is not called)
- */
-export class AlgebraIntegralFactory extends StatefulEventSubscriber<FactoryState> {
+export class AlgebraIntegralFactory extends StatefulEventSubscriber<Pool[]> {
   handlers: {
-    [event: string]: (event: any) => Promise<void>;
+    [event: string]: (
+      event: any,
+      state: DeepReadonly<Pool[]>,
+      log: Readonly<Log>,
+    ) => DeepReadonly<Pool[]> | null;
   } = {};
 
   logDecoder: (log: Log) => any;
 
-  private pools: Pool[] = [];
   private erc20Interface = new Interface(erc20Abi);
 
   constructor(
@@ -34,7 +33,7 @@ export class AlgebraIntegralFactory extends StatefulEventSubscriber<FactoryState
     protected subgraphURL: string,
     protected factoryIface = new Interface(FactoryABI),
   ) {
-    super(parentName, `${parentName} Factory`, dexHelper, logger, false);
+    super(parentName, 'factory', dexHelper, logger, false);
 
     this.addressesSubscribed = [factoryAddress];
 
@@ -44,24 +43,35 @@ export class AlgebraIntegralFactory extends StatefulEventSubscriber<FactoryState
     this.handlers['CustomPool'] = this.handleNewCustomPool.bind(this);
   }
 
-  async initialize(blockNumber: number) {
-    this.pools = await this.queryAllAvailablePools(blockNumber);
+  async generateState(
+    blockNumber?: number | 'latest',
+  ): Promise<DeepReadonly<Pool[]>> {
+    const _blockNumber =
+      typeof blockNumber === 'number'
+        ? blockNumber
+        : this.dexHelper.blockManager.getLatestBlockNumber();
+
+    return this.queryAllAvailablePools(_blockNumber);
   }
 
-  generateState(): FactoryState {
-    return {};
-  }
-
-  protected async processLog(
-    _: DeepReadonly<FactoryState>,
+  protected processLog(
+    state: DeepReadonly<Pool[]>,
     log: Readonly<Log>,
-  ): Promise<FactoryState> {
-    const event = this.logDecoder(log);
-    if (event.name in this.handlers) {
-      await this.handlers[event.name](event);
+  ): DeepReadonly<Pool[]> | null {
+    try {
+      const event = this.logDecoder(log);
+      if (event.name in this.handlers) {
+        return this.handlers[event.name](event, state, log);
+      }
+    } catch (e) {
+      catchParseLogError(e, this.logger);
     }
 
-    return {};
+    return null;
+  }
+
+  public getAllPools(): Pool[] {
+    return [...(this.getStaleState() ?? [])];
   }
 
   public getAvailablePoolsForPair(
@@ -76,7 +86,7 @@ export class AlgebraIntegralFactory extends StatefulEventSubscriber<FactoryState
       _destToken.toLowerCase(),
     ];
 
-    return this.pools
+    return this.getAllPools()
       .filter(
         pool =>
           (pool.token0 === _srcAddress && pool.token1 === _destAddress) ||
@@ -84,7 +94,6 @@ export class AlgebraIntegralFactory extends StatefulEventSubscriber<FactoryState
       )
       .filter(pool => pool.tvlUSD >= MIN_USD_TVL_FOR_PRICING)
       .sort((a, b) => {
-        // sort by tvl
         const tvlDiff = b.tvlUSD - a.tvlUSD;
         if (tvlDiff !== 0) {
           return tvlDiff;
@@ -94,7 +103,7 @@ export class AlgebraIntegralFactory extends StatefulEventSubscriber<FactoryState
       });
   }
 
-  public async queryAllAvailablePools(blockNumber: number): Promise<Pool[]> {
+  private async queryAllAvailablePools(blockNumber: number): Promise<Pool[]> {
     const defaultPerPageLimit = 1000;
     let pools: Pool[] = [];
     let skip = 0;
@@ -198,45 +207,59 @@ export class AlgebraIntegralFactory extends StatefulEventSubscriber<FactoryState
     }));
   }
 
-  async handleNewPool(event: LogDescription) {
-    const token0 = event.args.token0.toLowerCase();
-    const token1 = event.args.token1.toLowerCase();
-    const deployer = NULL_ADDRESS; // Regular pools have zero address as deployer
-
+  handleNewPool(
+    event: any,
+    state: DeepReadonly<Pool[]>,
+    _log: Readonly<Log>,
+  ): DeepReadonly<Pool[]> | null {
     const poolAddress = event.args.pool?.toLowerCase() || '';
-    if (poolAddress) {
-      this.pools.push({
+    if (!poolAddress) return null;
+
+    return [
+      ...state.filter(p => p.poolAddress !== poolAddress),
+      {
         poolAddress,
-        token0,
-        token1,
-        deployer,
+        token0: event.args.token0.toLowerCase(),
+        token1: event.args.token1.toLowerCase(),
+        deployer: NULL_ADDRESS,
         tvlUSD: 0,
-      });
-    }
+      },
+    ];
   }
 
-  async handleNewCustomPool(event: LogDescription) {
-    const token0 = event.args.token0.toLowerCase();
-    const token1 = event.args.token1.toLowerCase();
-    const deployer = event.args.deployer.toLowerCase();
-
+  handleNewCustomPool(
+    event: any,
+    state: DeepReadonly<Pool[]>,
+    _log: Readonly<Log>,
+  ): DeepReadonly<Pool[]> | null {
     const poolAddress = event.args.pool?.toLowerCase() || '';
-    if (poolAddress) {
-      this.pools.push({
+    if (!poolAddress) return null;
+
+    return [
+      ...state.filter(p => p.poolAddress !== poolAddress),
+      {
         poolAddress,
-        token0,
-        token1,
-        deployer,
+        token0: event.args.token0.toLowerCase(),
+        token1: event.args.token1.toLowerCase(),
+        deployer: event.args.deployer.toLowerCase(),
         tvlUSD: 0,
-      });
-    }
+      },
+    ];
   }
 
   async updatePoolsTvl(): Promise<void> {
-    if (this.pools.length === 0) return;
+    if (!this.getStaleState()) {
+      const bn =
+        this.stateBlockNumber ||
+        this.dexHelper.blockManager.getLatestBlockNumber();
+      const state = await this.generateState(bn);
+      this.setState(state, bn);
+    }
 
-    // Build multicall to fetch token balances for all pools
-    const balanceCalls = this.pools.flatMap(pool => [
+    const pools = this.getAllPools();
+    if (pools.length === 0) return;
+
+    const balanceCalls = pools.flatMap(pool => [
       {
         target: pool.token0,
         callData: this.erc20Interface.encodeFunctionData('balanceOf', [
@@ -259,8 +282,7 @@ export class AlgebraIntegralFactory extends StatefulEventSubscriber<FactoryState
         balanceCalls,
       );
 
-    // Build token amounts for USD conversion
-    const tokenAmounts: [string, bigint][] = this.pools.flatMap((pool, i) => {
+    const tokenAmounts: [string, bigint][] = pools.flatMap((pool, i) => {
       const balance0 = balanceResults[i * 2].success
         ? balanceResults[i * 2].returnData
         : 0n;
@@ -284,14 +306,13 @@ export class AlgebraIntegralFactory extends StatefulEventSubscriber<FactoryState
       ] as [string, bigint][];
     });
 
-    // Get USD values
     const usdValues = await this.dexHelper.getUsdTokenAmounts(tokenAmounts);
 
-    // Update pool TVL
-    this.pools.forEach((pool, i) => {
-      const tvl0 = usdValues[i * 2] || 0;
-      const tvl1 = usdValues[i * 2 + 1] || 0;
-      pool.tvlUSD = tvl0 + tvl1;
-    });
+    const updatedPools = pools.map((pool, i) => ({
+      ...pool,
+      tvlUSD: (usdValues[i * 2] || 0) + (usdValues[i * 2 + 1] || 0),
+    }));
+
+    this.setState(updatedPools, this.stateBlockNumber);
   }
 }

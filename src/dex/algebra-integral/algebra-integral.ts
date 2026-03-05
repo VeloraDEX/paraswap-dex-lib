@@ -1,5 +1,5 @@
-import { pack } from '@ethersproject/solidity';
 import _ from 'lodash';
+import { pack } from '@ethersproject/solidity';
 import {
   Token,
   Address,
@@ -17,6 +17,7 @@ import {
   Network,
   DEST_TOKEN_DEX_TRANSFERS,
   SRC_TOKEN_DEX_TRANSFERS,
+  SUBGRAPH_TIMEOUT,
 } from '../../constants';
 import * as CALLDATA_GAS_COST from '../../calldata-gas-cost';
 import { Interface } from 'ethers/lib/utils';
@@ -32,7 +33,12 @@ import {
 } from '../../utils';
 import { IDex } from '../../dex/idex';
 import { IDexHelper } from '../../dex-helper/idex-helper';
-import { AlgebraIntegralData, Pool, AlgebraIntegralFunctions } from './types';
+import {
+  AlgebraIntegralData,
+  Pool,
+  SubgraphPoolData,
+  AlgebraIntegralFunctions,
+} from './types';
 import {
   SimpleExchange,
   getLocalDeadlineAsFriendlyPlaceholder,
@@ -41,14 +47,18 @@ import { applyTransferFee } from '../../lib/token-transfer-fee';
 import { AlgebraIntegralConfig } from './config';
 import { extractReturnAmountPosition } from '../../executor/utils';
 import { AlgebraIntegralFactory } from './algebra-integral-factory';
+import { AlgebraIntegralEventPool } from './algebra-integral-pool';
 import {
   ALGEBRA_GAS_COST,
-  ALGEBRA_QUOTE_GASLIMIT,
   ALGEBRA_EFFICIENCY_FACTOR,
   POOL_TVL_UPDATE_INTERVAL,
   MIN_USD_TVL_FOR_PRICING,
+  FEE_UPDATE_INTERVAL_MS,
+  ALGEBRA_QUOTE_GASLIMIT,
 } from './constants';
 import { uint256ToBigInt } from '../../lib/decoders';
+import AlgebraIntegralStateMulticallABI from '../../abi/algebra-integral/AlgebraIntegralStateMulticall.abi.json';
+import { buildFeeCallData } from './utils';
 
 export class AlgebraIntegral
   extends SimpleExchange
@@ -60,9 +70,22 @@ export class AlgebraIntegral
 
   private readonly factory: AlgebraIntegralFactory;
   private updatePoolsTvlTimer?: NodeJS.Timeout;
+  private feeUpdateIntervalTask?: NodeJS.Timeout;
+  protected eventPools: Record<string, AlgebraIntegralEventPool | null> = {};
+  private poolInitPromises: Record<
+    string,
+    Promise<AlgebraIntegralEventPool | null>
+  > = {};
+  private topPoolsCache: (SubgraphPoolData & {
+    balance0: bigint;
+    balance1: bigint;
+  })[] = [];
+  protected stateMulticallIface: Interface = new Interface(
+    AlgebraIntegralStateMulticallABI,
+  );
 
   public static dexKeysWithNetwork: { key: string; networks: Network[] }[] =
-    getDexKeysWithNetwork(AlgebraIntegralConfig);
+    getDexKeysWithNetwork(_.pick(AlgebraIntegralConfig, ['QuickSwapV4']));
 
   logger: Logger;
 
@@ -73,6 +96,7 @@ export class AlgebraIntegral
     readonly routerIface = new Interface(SwapRouter),
     readonly quoterIface = new Interface(AlgebraQuoterABI),
     readonly config = AlgebraIntegralConfig[dexKey][network],
+    readonly EventPoolImplementation = AlgebraIntegralEventPool,
   ) {
     super(dexHelper, dexKey);
     this.logger = dexHelper.getLogger(dexKey);
@@ -90,27 +114,166 @@ export class AlgebraIntegral
   async initializePricing(blockNumber: number) {
     await this.factory.initialize(blockNumber);
 
-    // Set up TVL update timer (slave only)
-    if (!this.updatePoolsTvlTimer && this.dexHelper.config.isSlave) {
-      try {
-        await this.factory.updatePoolsTvl();
-      } catch (error) {
-        this.logger.error(
-          `${this.dexKey}: Failed to update pool TVL on initialize:`,
-          error,
-        );
-      }
+    this.logger.info(
+      `${this.dexKey}: factory initialized with ${
+        this.factory.getAllPools().length
+      } pools`,
+    );
 
-      this.updatePoolsTvlTimer = setInterval(async () => {
+    if (this.dexHelper.config.isSlave) {
+      if (!this.updatePoolsTvlTimer) {
         try {
           await this.factory.updatePoolsTvl();
         } catch (error) {
           this.logger.error(
-            `${this.dexKey}: Failed to update pool TVL:`,
+            `${this.dexKey}: Failed to update pool TVL on initialize:`,
             error,
           );
         }
-      }, POOL_TVL_UPDATE_INTERVAL * 1000);
+
+        this.updatePoolsTvlTimer = setInterval(async () => {
+          try {
+            await this.factory.updatePoolsTvl();
+          } catch (error) {
+            this.logger.error(
+              `${this.dexKey}: Failed to update pool TVL:`,
+              error,
+            );
+          }
+        }, POOL_TVL_UPDATE_INTERVAL * 1000);
+      }
+
+      if (!this.feeUpdateIntervalTask) {
+        void this.updateAllPoolFees();
+        this.feeUpdateIntervalTask = setInterval(
+          this.updateAllPoolFees.bind(this),
+          FEE_UPDATE_INTERVAL_MS,
+        );
+      }
+    }
+  }
+
+  async getPool(
+    token0: Address,
+    token1: Address,
+    deployer: string,
+    poolAddress: Address,
+    blockNumber: number,
+  ): Promise<AlgebraIntegralEventPool | null> {
+    const key = this.getPoolIdentifier(token0, token1, deployer);
+
+    const pool = this.eventPools[key];
+
+    if (pool === null) return null;
+
+    if (pool) {
+      if (!pool.isInitialized) {
+        // Pool was created by updatePoolState without event subscription.
+        // Upgrade to full subscription for live pricing.
+        try {
+          await pool.initialize(blockNumber);
+        } catch (e) {
+          this.logger.warn(
+            `${this.dexKey}: Failed to subscribe pool ${poolAddress}`,
+            e,
+          );
+        }
+      }
+      return pool;
+    }
+
+    const existingPromise = this.poolInitPromises[key];
+    if (existingPromise) return existingPromise;
+
+    const initPromise = this._initPool(
+      key,
+      token0,
+      token1,
+      deployer,
+      poolAddress,
+      blockNumber,
+    );
+
+    this.poolInitPromises[key] = initPromise;
+    try {
+      return await initPromise;
+    } finally {
+      delete this.poolInitPromises[key];
+    }
+  }
+
+  private async _initPool(
+    key: string,
+    token0: Address,
+    token1: Address,
+    deployer: string,
+    poolAddress: Address,
+    blockNumber: number,
+  ): Promise<AlgebraIntegralEventPool | null> {
+    const eventPool = new this.EventPoolImplementation(
+      this.dexHelper,
+      this.dexKey,
+      this.stateMulticallIface,
+      this.config.stateMulticall,
+      this.erc20Interface,
+      token0,
+      token1,
+      this.logger,
+      this.cacheStateKey,
+      poolAddress,
+    );
+
+    try {
+      await eventPool.initialize(blockNumber);
+      this.eventPools[key] = eventPool;
+      return eventPool;
+    } catch (e) {
+      this.logger.warn(
+        `${this.dexKey}: Failed to initialize pool ${poolAddress}`,
+        e,
+      );
+      this.eventPools[key] = null;
+      return null;
+    }
+  }
+
+  protected async updateAllPoolFees(): Promise<void> {
+    try {
+      const activePools = Object.values(this.eventPools).filter(
+        (p): p is AlgebraIntegralEventPool => p !== null,
+      );
+      if (!activePools.length) return;
+
+      const results = await this.dexHelper.multiWrapper.tryAggregate<bigint>(
+        false,
+        buildFeeCallData(activePools),
+      );
+
+      activePools.forEach((pool, i) => {
+        const result = results[i];
+        if (!result.success) {
+          this.logger.warn(
+            `${this.dexKey}: Failed to fetch fee for pool ${pool.poolAddress}`,
+          );
+          return;
+        }
+
+        const state = pool.getStaleState();
+        if (!state) return;
+
+        const newFee = result.returnData;
+        if (state.globalState.fee === newFee) return;
+
+        pool.setState(
+          {
+            ...state,
+            globalState: { ...state.globalState, fee: newFee },
+          },
+          pool.getStateBlockNumber(),
+        );
+      });
+    } catch (error) {
+      this.logger.error(`${this.dexKey}: Error updating pool fees:`, error);
     }
   }
 
@@ -140,10 +303,10 @@ export class AlgebraIntegral
     const _srcToken = this.dexHelper.config.wrapETH(srcToken);
     const _destToken = this.dexHelper.config.wrapETH(destToken);
 
-    const [_srcAddress, _destAddress] = this._getLoweredAddresses(
-      _srcToken,
-      _destToken,
-    );
+    const [_srcAddress, _destAddress] = [
+      _srcToken.address.toLowerCase(),
+      _destToken.address.toLowerCase(),
+    ];
 
     if (_srcAddress === _destAddress) return [];
 
@@ -159,141 +322,6 @@ export class AlgebraIntegral
     );
   }
 
-  getMultiCallData(
-    from: string,
-    to: string,
-    deployer: string,
-    amount: bigint,
-    isSELL = true,
-  ) {
-    return {
-      target: this.config.quoter,
-      gasLimit: ALGEBRA_QUOTE_GASLIMIT,
-      callData: this.quoterIface.encodeFunctionData(
-        isSELL ? 'quoteExactInputSingle' : 'quoteExactOutputSingle',
-        [from, to, deployer, amount.toString(), 0],
-      ),
-      decodeFunction: uint256ToBigInt,
-    };
-  }
-
-  async getPricingFromRpc(
-    from: Token,
-    to: Token,
-    amounts: bigint[],
-    side: SwapSide,
-    pools: Pool[],
-    transferFees: TransferFeeParams = {
-      srcFee: 0,
-      destFee: 0,
-      srcDexFee: 0,
-      destDexFee: 0,
-    },
-  ): Promise<ExchangePrices<AlgebraIntegralData> | null> {
-    if (pools.length === 0) {
-      return null;
-    }
-
-    this.logger.warn(`fallback to rpc for ${pools.length} pool(s)`);
-
-    const isSELL = side === SwapSide.SELL;
-
-    const _isSrcTokenTransferFeeToBeExchanged =
-      isSrcTokenTransferFeeToBeExchanged(transferFees);
-    const _isDestTokenTransferFeeToBeExchanged =
-      isDestTokenTransferFeeToBeExchanged(transferFees);
-
-    const unitVolume = getBigIntPow((isSELL ? from : to).decimals);
-
-    const chunks = amounts.length - 1;
-    const _width = Math.floor(chunks / this.config.chunksCount);
-    const chunkedAmounts = [unitVolume].concat(
-      Array.from(Array(this.config.chunksCount).keys()).map(
-        i => amounts[(i + 1) * _width],
-      ),
-    );
-
-    const amountsForQuote = _isSrcTokenTransferFeeToBeExchanged
-      ? applyTransferFee(
-          chunkedAmounts,
-          side,
-          transferFees.srcDexFee,
-          SRC_TOKEN_DEX_TRANSFERS,
-        )
-      : chunkedAmounts;
-
-    const calldata = pools.flatMap(pool =>
-      amountsForQuote.map(amount =>
-        this.getMultiCallData(
-          from.address,
-          to.address,
-          pool.deployer,
-          amount,
-          isSELL,
-        ),
-      ),
-    );
-
-    const results = await this.dexHelper.multiWrapper.tryAggregate(
-      false,
-      calldata,
-    );
-
-    const result = pools.map((pool, poolIndex) => {
-      const offset = poolIndex * amountsForQuote.length;
-
-      const _rates = chunkedAmounts.map((_, i) => {
-        const res = results[offset + i];
-        return res.success ? res.returnData : 0n;
-      });
-
-      const _ratesWithFee = _isDestTokenTransferFeeToBeExchanged
-        ? applyTransferFee(
-            _rates,
-            side,
-            transferFees.destDexFee,
-            DEST_TOKEN_DEX_TRANSFERS,
-          )
-        : _rates;
-
-      const unit: bigint = _ratesWithFee[0];
-
-      const prices = interpolate(
-        chunkedAmounts.slice(1),
-        _ratesWithFee.slice(1),
-        amounts,
-        side,
-      );
-
-      return {
-        prices,
-        unit,
-        data: {
-          feeOnTransfer: _isSrcTokenTransferFeeToBeExchanged,
-          path: [
-            {
-              tokenIn: from.address,
-              tokenOut: to.address,
-              deployer: pool.deployer,
-            },
-          ],
-        },
-        poolIdentifiers: [
-          this.getPoolIdentifier(pool.token0, pool.token1, pool.deployer),
-        ],
-        exchange: this.dexKey,
-        gasCost: ALGEBRA_GAS_COST,
-        poolAddresses: [pool.poolAddress],
-      };
-    });
-
-    return result;
-  }
-
-  // Returns pool prices for amounts.
-  // If limitPools is defined only pools in limitPools
-  // should be used. If limitPools is undefined then
-  // any pools can be used.
   async getPricesVolume(
     srcToken: Token,
     destToken: Token,
@@ -309,20 +337,20 @@ export class AlgebraIntegral
     },
   ): Promise<null | ExchangePrices<AlgebraIntegralData>> {
     try {
-      const _isSrcTokenTransferFeeToBeExchanged =
-        isSrcTokenTransferFeeToBeExchanged(transferFees);
-
-      if (_isSrcTokenTransferFeeToBeExchanged && side == SwapSide.BUY) {
+      if (
+        isSrcTokenTransferFeeToBeExchanged(transferFees) &&
+        side === SwapSide.BUY
+      ) {
         return null;
       }
 
       const _srcToken = this.dexHelper.config.wrapETH(srcToken);
       const _destToken = this.dexHelper.config.wrapETH(destToken);
 
-      const [_srcAddress, _destAddress] = this._getLoweredAddresses(
-        _srcToken,
-        _destToken,
-      );
+      const [_srcAddress, _destAddress] = [
+        _srcToken.address.toLowerCase(),
+        _destToken.address.toLowerCase(),
+      ];
 
       if (_srcAddress === _destAddress) return null;
 
@@ -333,26 +361,139 @@ export class AlgebraIntegral
 
       if (limitPools && limitPools.length > 0) {
         const limitPoolsSet = new Set(limitPools);
-        pools = pools.filter(pool => {
-          const poolIdentifier = this.getPoolIdentifier(
-            _srcAddress,
-            _destAddress,
-            pool.deployer,
-          );
-          return limitPoolsSet.has(poolIdentifier);
-        });
+        pools = pools.filter(pool =>
+          limitPoolsSet.has(
+            this.getPoolIdentifier(_srcAddress, _destAddress, pool.deployer),
+          ),
+        );
       }
 
-      const rpcPrice = await this.getPricingFromRpc(
-        _srcToken,
-        _destToken,
-        amounts,
-        side,
-        pools,
-        transferFees,
+      if (pools.length === 0) return null;
+
+      const [token0] = this._sortTokens(_srcAddress, _destAddress);
+      const zeroForOne = token0 === _srcAddress;
+
+      const _isSrcFee = isSrcTokenTransferFeeToBeExchanged(transferFees);
+      const _isDestFee = isDestTokenTransferFeeToBeExchanged(transferFees);
+      const _isFeeOnTransfer = _isSrcFee;
+
+      const amountsExcludingZero = amounts.slice(1);
+      const amountsWithFee = _isSrcFee
+        ? applyTransferFee(
+            amountsExcludingZero,
+            side,
+            transferFees.srcDexFee,
+            SRC_TOKEN_DEX_TRANSFERS,
+          )
+        : amountsExcludingZero;
+
+      const unit = getBigIntPow(
+        side === SwapSide.SELL ? _destToken.decimals : _srcToken.decimals,
       );
 
-      return rpcPrice;
+      const results: ExchangePrices<AlgebraIntegralData> = [];
+      const rpcPools: Pool[] = [];
+
+      const buildPoolPrices = (
+        pool: Pool,
+        prices: bigint[],
+        gasCost: number | number[],
+      ): PoolPrices<AlgebraIntegralData> => ({
+        unit,
+        prices,
+        data: {
+          feeOnTransfer: _isFeeOnTransfer,
+          path: [
+            {
+              tokenIn: _srcAddress,
+              tokenOut: _destAddress,
+              deployer: pool.deployer,
+            },
+          ],
+        },
+        poolIdentifiers: [
+          this.getPoolIdentifier(pool.token0, pool.token1, pool.deployer),
+        ],
+        exchange: this.dexKey,
+        gasCost,
+        poolAddresses: [pool.poolAddress],
+      });
+
+      const eventPoolsResolved = await Promise.all(
+        pools.map(pool => {
+          const [t0, t1] = this._sortTokens(pool.token0, pool.token1);
+          return this.getPool(
+            t0,
+            t1,
+            pool.deployer,
+            pool.poolAddress,
+            blockNumber,
+          );
+        }),
+      );
+
+      for (let i = 0; i < pools.length; i++) {
+        const pool = pools[i];
+        const eventPool = eventPoolsResolved[i];
+
+        if (!eventPool) {
+          rpcPools.push(pool);
+          continue;
+        }
+
+        const result = eventPool.getOutputs(
+          blockNumber,
+          amountsWithFee,
+          zeroForOne,
+          side,
+        );
+
+        if (!result) {
+          rpcPools.push(pool);
+          continue;
+        }
+
+        const outputsWithFee = _isDestFee
+          ? applyTransferFee(
+              result.outputs,
+              side,
+              transferFees.destDexFee,
+              DEST_TOKEN_DEX_TRANSFERS,
+            )
+          : result.outputs;
+
+        results.push(
+          buildPoolPrices(
+            pool,
+            [0n, ...outputsWithFee],
+            [0, ...outputsWithFee.map(p => (p === 0n ? 0 : ALGEBRA_GAS_COST))],
+          ),
+        );
+      }
+
+      if (rpcPools.length > 0) {
+        const rpcResults = await this.getPricingFromRpc(
+          _srcToken,
+          _destToken,
+          amounts,
+          side,
+          rpcPools,
+          transferFees,
+          blockNumber,
+        );
+
+        for (const rpcResult of rpcResults) {
+          results.push(
+            buildPoolPrices(
+              rpcResult.pool,
+              rpcResult.prices,
+              rpcResult.gasCost,
+            ),
+          );
+        }
+      }
+
+      return results.length > 0 ? results : null;
     } catch (e) {
       this.logger.error(
         `Error_getPricesVolume ${srcToken.symbol || srcToken.address}, ${
@@ -364,11 +505,130 @@ export class AlgebraIntegral
     }
   }
 
+  protected async getPricingFromRpc(
+    from: Token,
+    to: Token,
+    amounts: bigint[],
+    side: SwapSide,
+    pools: Pool[],
+    transferFees: TransferFeeParams,
+    blockNumber: number,
+  ): Promise<
+    Array<{
+      prices: bigint[];
+      gasCost: number | number[];
+      pool: Pool;
+    }>
+  > {
+    this.logger.warn(
+      `fallback to rpc for ${pools.length} pools: ${pools
+        .map(p => p.poolAddress)
+        .join(', ')}`,
+    );
+
+    const isSELL = side === SwapSide.SELL;
+
+    const _isSrcFee = isSrcTokenTransferFeeToBeExchanged(transferFees);
+    const _isDestFee = isDestTokenTransferFeeToBeExchanged(transferFees);
+
+    const chunks = amounts.length - 1;
+    const effectiveChunks = Math.min(this.config.chunksCount, chunks);
+    const _width = Math.floor(chunks / effectiveChunks);
+    const chunkedAmounts = Array.from(Array(effectiveChunks).keys()).map(
+      i => amounts[(i + 1) * _width],
+    );
+
+    const amountsForQuote = _isSrcFee
+      ? applyTransferFee(
+          chunkedAmounts,
+          side,
+          transferFees.srcDexFee,
+          SRC_TOKEN_DEX_TRANSFERS,
+        )
+      : chunkedAmounts;
+
+    const calldata = pools.flatMap(pool =>
+      amountsForQuote.map(amount =>
+        this.buildQuoteCallData(
+          from.address,
+          to.address,
+          pool.deployer,
+          amount,
+          isSELL,
+        ),
+      ),
+    );
+
+    const allResults = await this.dexHelper.multiWrapper.tryAggregate(
+      false,
+      calldata,
+      blockNumber,
+    );
+
+    const callsPerPool = amountsForQuote.length;
+    const output: Array<{
+      prices: bigint[];
+      gasCost: number | number[];
+      pool: Pool;
+    }> = [];
+
+    for (let i = 0; i < pools.length; i++) {
+      const poolResults = allResults.slice(
+        i * callsPerPool,
+        (i + 1) * callsPerPool,
+      );
+
+      const _rates = chunkedAmounts.map((_, j) => {
+        const res = poolResults[j];
+        return res.success ? res.returnData : 0n;
+      });
+
+      const _ratesWithFee = _isDestFee
+        ? applyTransferFee(
+            _rates,
+            side,
+            transferFees.destDexFee,
+            DEST_TOKEN_DEX_TRANSFERS,
+          )
+        : _rates;
+
+      const prices = interpolate(chunkedAmounts, _ratesWithFee, amounts, side);
+
+      if (prices.every(p => p === 0n)) continue;
+
+      output.push({
+        prices,
+        gasCost: prices.map(p => (p === 0n ? 0 : ALGEBRA_GAS_COST)),
+        pool: pools[i],
+      });
+    }
+
+    return output;
+  }
+
+  buildQuoteCallData(
+    from: string,
+    to: string,
+    deployer: string,
+    amount: bigint,
+    isSELL: boolean,
+  ) {
+    return {
+      target: this.config.quoter,
+      gasLimit: ALGEBRA_QUOTE_GASLIMIT,
+      callData: this.quoterIface.encodeFunctionData(
+        isSELL ? 'quoteExactInputSingle' : 'quoteExactOutputSingle',
+        [from, to, deployer, amount.toString(), 0],
+      ),
+      decodeFunction: uint256ToBigInt,
+    };
+  }
+
   // Returns estimated gas cost of calldata for this DEX in multiSwap
   getCalldataGasCost(
     poolPrices: PoolPrices<AlgebraIntegralData>,
   ): number | number[] {
-    return (
+    const gasCost =
       CALLDATA_GAS_COST.FUNCTION_SELECTOR +
       // path offset
       CALLDATA_GAS_COST.OFFSET_SMALL +
@@ -383,8 +643,17 @@ export class AlgebraIntegral
       // path bytes (tokenIn, tokenOut, and deployer)
       60 * CALLDATA_GAS_COST.NONZERO_BYTE +
       // path padding
-      4 * CALLDATA_GAS_COST.ZERO_BYTE
-    );
+      4 * CALLDATA_GAS_COST.ZERO_BYTE;
+
+    const arr = new Array(poolPrices.prices.length);
+    poolPrices.prices.forEach((p, index) => {
+      if (p == 0n) {
+        arr[index] = 0;
+      } else {
+        arr[index] = gasCost;
+      }
+    });
+    return arr;
   }
 
   getDexParam(
@@ -479,208 +748,153 @@ export class AlgebraIntegral
     };
   }
 
-  // Returns list of top pools based on liquidity. Max
-  // limit number pools should be returned.
+  async updatePoolState(): Promise<void> {
+    const pools = await this.querySubgraphPools();
+    if (pools.length === 0) {
+      this.topPoolsCache = [];
+      return;
+    }
+
+    const balanceCalls = pools.flatMap(p => [
+      {
+        target: p.token0.address,
+        callData: this.erc20Interface.encodeFunctionData('balanceOf', [
+          p.poolAddress,
+        ]),
+        decodeFunction: uint256ToBigInt,
+      },
+      {
+        target: p.token1.address,
+        callData: this.erc20Interface.encodeFunctionData('balanceOf', [
+          p.poolAddress,
+        ]),
+        decodeFunction: uint256ToBigInt,
+      },
+    ]);
+
+    const balanceResults =
+      await this.dexHelper.multiWrapper.tryAggregate<bigint>(
+        false,
+        balanceCalls,
+      );
+
+    this.topPoolsCache = pools.map((p, i) => ({
+      ...p,
+      balance0: balanceResults[i * 2].success
+        ? balanceResults[i * 2].returnData
+        : 0n,
+      balance1: balanceResults[i * 2 + 1].success
+        ? balanceResults[i * 2 + 1].returnData
+        : 0n,
+    }));
+  }
+
+  private async querySubgraphPools(): Promise<SubgraphPoolData[]> {
+    const query = `query ($first: Int!) {
+      pools(
+        orderBy: totalValueLockedUSD
+        orderDirection: desc
+        first: $first
+      ) {
+        id
+        deployer
+        token0 {
+          id
+          decimals
+        }
+        token1 {
+          id
+          decimals
+        }
+      }
+    }`;
+
+    const res = await this.dexHelper.httpRequest.querySubgraph<{
+      data: {
+        pools: Array<{
+          id: string;
+          deployer: string;
+          token0: { id: string; decimals: string };
+          token1: { id: string; decimals: string };
+        }>;
+      };
+    }>(
+      this.config.subgraphURL,
+      { query, variables: { first: 1000 } },
+      { timeout: SUBGRAPH_TIMEOUT },
+    );
+
+    return res.data.pools.map(pool => ({
+      poolAddress: pool.id.toLowerCase(),
+      token0: {
+        address: pool.token0.id.toLowerCase(),
+        decimals: parseInt(pool.token0.decimals, 10),
+      },
+      token1: {
+        address: pool.token1.id.toLowerCase(),
+        decimals: parseInt(pool.token1.decimals, 10),
+      },
+      deployer: pool.deployer.toLowerCase(),
+    }));
+  }
+
   async getTopPoolsForToken(
     tokenAddress: Address,
     limit: number,
   ): Promise<PoolLiquidity[]> {
     const _tokenAddress = tokenAddress.toLowerCase();
 
-    const res = await this._querySubgraph(
-      `query ($token: Bytes!, $count: Int) {
-                pools0: pools(first: $count, orderBy: totalValueLockedUSD, orderDirection: desc, where: {token0: $token}) {
-                id
-                deployer
-                token0 {
-                  id
-                  decimals
-                }
-                token1 {
-                  id
-                  decimals
-                }
-                totalValueLockedUSD
-              }
-              pools1: pools(first: $count, orderBy: totalValueLockedUSD, orderDirection: desc, where: {token1: $token}) {
-                id
-                deployer
-                token0 {
-                  id
-                  decimals
-                }
-                token1 {
-                  id
-                  decimals
-                }
-                totalValueLockedUSD
-              }
-            }`,
-      {
-        token: _tokenAddress,
-        count: limit,
-      },
+    const relevantPools = this.topPoolsCache.filter(
+      pool =>
+        pool.token0.address === _tokenAddress ||
+        pool.token1.address === _tokenAddress,
     );
 
-    if (!(res && res.pools0 && res.pools1)) {
-      this.logger.error(
-        `Error_${this.dexKey}_Subgraph: couldn't fetch the pools from the subgraph`,
-      );
-      return [];
+    if (relevantPools.length === 0) return [];
+
+    const tokenAmounts: [string, bigint][] = relevantPools.flatMap(pool => [
+      [pool.token0.address, pool.balance0],
+      [pool.token1.address, pool.balance1],
+    ]);
+
+    const usdValues = await this.dexHelper.getUsdTokenAmounts(tokenAmounts);
+
+    const liquidityPools: PoolLiquidity[] = [];
+
+    for (let i = 0; i < relevantPools.length; i++) {
+      const { poolAddress, token0, token1 } = relevantPools[i];
+
+      const isToken0 = token0.address === _tokenAddress;
+
+      const token0Usd = usdValues[i * 2] || 0;
+      const token1Usd = usdValues[i * 2 + 1] || 0;
+
+      const tokenUsd = isToken0 ? token0Usd : token1Usd;
+      const connectorUsd = isToken0 ? token1Usd : token0Usd;
+      const liquidityUSD =
+        (tokenUsd + connectorUsd) * ALGEBRA_EFFICIENCY_FACTOR;
+
+      if (liquidityUSD / ALGEBRA_EFFICIENCY_FACTOR < MIN_USD_TVL_FOR_PRICING) {
+        continue;
+      }
+
+      liquidityPools.push({
+        exchange: this.dexKey,
+        address: poolAddress,
+        connectorTokens: [
+          {
+            address: isToken0 ? token1.address : token0.address,
+            decimals: isToken0 ? token1.decimals : token0.decimals,
+            liquidityUSD: connectorUsd * ALGEBRA_EFFICIENCY_FACTOR,
+          },
+        ],
+        liquidityUSD,
+      });
     }
 
-    const pools0: PoolLiquidity[] = _.map(res.pools0, pool => ({
-      exchange: this.dexKey,
-      address: pool.id.toLowerCase(),
-      connectorTokens: [
-        {
-          address: pool.token1.id.toLowerCase(),
-          decimals: parseInt(pool.token1.decimals),
-        },
-      ],
-      liquidityUSD:
-        parseFloat(pool.totalValueLockedUSD) * ALGEBRA_EFFICIENCY_FACTOR,
-    }));
-
-    const pools1: PoolLiquidity[] = _.map(res.pools1, pool => ({
-      exchange: this.dexKey,
-      address: pool.id.toLowerCase(),
-      connectorTokens: [
-        {
-          address: pool.token0.id.toLowerCase(),
-          decimals: parseInt(pool.token0.decimals),
-        },
-      ],
-      liquidityUSD:
-        parseFloat(pool.totalValueLockedUSD) * ALGEBRA_EFFICIENCY_FACTOR,
-    }));
-
-    const allPools = pools0.concat(pools1);
-
-    if (allPools.length === 0) return [];
-
-    // Get on-chain balances
-    const poolBalances = await this._getPoolBalances(
-      allPools.map(p => [
-        p.address,
-        _tokenAddress,
-        p.connectorTokens[0].address,
-      ]),
-    );
-
-    // Build token amounts for USD conversion
-    const tokensAmounts = allPools
-      .map((p, i) => {
-        return [
-          [_tokenAddress, poolBalances[i][0]],
-          [p.connectorTokens[0].address, poolBalances[i][1]],
-        ] as [string, bigint | null][];
-      })
-      .flat();
-
-    // Get USD values
-    const poolUsdBalances = await this.dexHelper.getUsdTokenAmounts(
-      tokensAmounts,
-    );
-
-    // Calculate liquidity per pool
-    const pools = allPools.map((pool, i) => {
-      const tokenUsdBalance = poolUsdBalances[i * 2];
-      const connectorTokenUsdBalance = poolUsdBalances[i * 2 + 1];
-
-      let tokenUsdLiquidity = null;
-      if (tokenUsdBalance) {
-        tokenUsdLiquidity = tokenUsdBalance * ALGEBRA_EFFICIENCY_FACTOR;
-      }
-
-      let connectorTokenUsdLiquidity = null;
-      if (connectorTokenUsdBalance) {
-        connectorTokenUsdLiquidity =
-          connectorTokenUsdBalance * ALGEBRA_EFFICIENCY_FACTOR;
-      }
-
-      // Update connector token liquidity for directional swaps
-      if (tokenUsdLiquidity) {
-        pool.connectorTokens[0] = {
-          ...pool.connectorTokens[0],
-          liquidityUSD: tokenUsdLiquidity,
-        };
-      }
-
-      // Use connector token liquidity as primary, fallback to token liquidity
-      const liquidityUSD = connectorTokenUsdLiquidity || tokenUsdLiquidity || 0;
-
-      return {
-        ...pool,
-        liquidityUSD,
-      };
-    });
-
-    // Filter by minimum TVL and sort
-    return pools
-      .filter(
-        pool =>
-          (pool.liquidityUSD + (pool.connectorTokens[0]?.liquidityUSD ?? 0)) /
-            ALGEBRA_EFFICIENCY_FACTOR >=
-          MIN_USD_TVL_FOR_PRICING,
-      )
+    return liquidityPools
       .sort((a, b) => b.liquidityUSD - a.liquidityUSD)
       .slice(0, limit);
-  }
-
-  private async _getPoolBalances(
-    pools: [pool: string, token0: string, token1: string][],
-  ): Promise<[balanceToken0: bigint | null, balanceToken1: bigint | null][]> {
-    const callData = pools
-      .map(pool => [
-        {
-          target: pool[1],
-          callData: this.erc20Interface.encodeFunctionData('balanceOf', [
-            pool[0],
-          ]),
-          decodeFunction: uint256ToBigInt,
-        },
-        {
-          target: pool[2],
-          callData: this.erc20Interface.encodeFunctionData('balanceOf', [
-            pool[0],
-          ]),
-          decodeFunction: uint256ToBigInt,
-        },
-      ])
-      .flat();
-
-    const balanceOfCalls =
-      await this.dexHelper.multiWrapper.tryAggregate<bigint>(false, callData);
-
-    const balances: [bigint | null, bigint | null][] = [];
-    for (let i = 0; i < balanceOfCalls.length; i += 2) {
-      const balanceToken0 = balanceOfCalls[i];
-      const balanceToken1 = balanceOfCalls[i + 1];
-      balances.push([
-        balanceToken0.success ? balanceToken0.returnData : null,
-        balanceToken1.success ? balanceToken1.returnData : null,
-      ]);
-    }
-    return balances;
-  }
-
-  private async _querySubgraph(
-    query: string,
-    variables: Object,
-    timeout = 30000,
-  ) {
-    try {
-      const res = await this.dexHelper.httpRequest.querySubgraph(
-        this.config.subgraphURL,
-        { query, variables },
-        { timeout },
-      );
-      return res.data;
-    } catch (e) {
-      this.logger.error(`${this.dexKey}: can not query subgraph: `, e);
-      return {};
-    }
   }
 
   private _encodePath(
@@ -725,15 +939,17 @@ export class AlgebraIntegral
     return [srcAddress, destAddress].sort((a, b) => (a < b ? -1 : 1));
   }
 
-  private _getLoweredAddresses(srcToken: Token, destToken: Token) {
-    return [srcToken.address.toLowerCase(), destToken.address.toLowerCase()];
-  }
-
   releaseResources(): void {
     if (this.updatePoolsTvlTimer) {
       clearInterval(this.updatePoolsTvlTimer);
       this.updatePoolsTvlTimer = undefined;
       this.logger.info(`${this.dexKey}: cleared updatePoolsTvlTimer`);
+    }
+
+    if (this.feeUpdateIntervalTask) {
+      clearInterval(this.feeUpdateIntervalTask);
+      this.feeUpdateIntervalTask = undefined;
+      this.logger.info(`${this.dexKey}: cleared feeUpdateIntervalTask`);
     }
   }
 }

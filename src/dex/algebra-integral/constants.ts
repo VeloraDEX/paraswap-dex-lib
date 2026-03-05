@@ -7,3 +7,12 @@ export const MIN_USD_TVL_FOR_PRICING = 50_000; // $50,000
 
 // TVL update interval in seconds
 export const POOL_TVL_UPDATE_INTERVAL = 5 * 60; // 5 minutes
+
+// Fee polling interval in milliseconds (slave only)
+export const FEE_UPDATE_INTERVAL_MS = 60 * 1000; // 60 seconds
+
+// Tick bitmap constants for event-based pricing (same as Algebra v1.9)
+export const TICK_BITMAP_TO_USE = 400n;
+export const TICK_BITMAP_BUFFER = 800n;
+export const TICK_BITMAP_TO_USE_BY_CHAIN: Record<number, bigint> = {};
+export const TICK_BITMAP_BUFFER_BY_CHAIN: Record<number, bigint> = {};

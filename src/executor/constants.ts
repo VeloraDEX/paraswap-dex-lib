@@ -5,6 +5,8 @@ const {
   utils: { hexlify, hexZeroPad },
 } = ethers;
 
+export const FUNCTION_SELECTOR_LENGTH = 8;
+
 export const BYTES_28_LENGTH = 28;
 export const BYTES_64_LENGTH = 64;
 export const BYTES_96_LENGTH = 96;

@@ -1464,6 +1464,7 @@ export class UniswapV3
       factoryImplementation: this.config.factoryImplementation,
       decodeStateMultiCallResultWithRelativeBitmaps:
         this.config.decodeStateMultiCallResultWithRelativeBitmaps,
+      liquidityField: this.config.liquidityField,
     };
     return newConfig;
   }

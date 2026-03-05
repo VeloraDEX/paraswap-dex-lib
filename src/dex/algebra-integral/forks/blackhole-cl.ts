@@ -11,6 +11,7 @@ import { AlgebraIntegral } from '../algebra-integral';
 import { ALGEBRA_QUOTE_GASLIMIT } from '../constants';
 import { MultiResult } from '../../../lib/multi-wrapper';
 import { generalDecoder } from '../../../lib/decoders';
+import { BlackholeCLPool } from './blackhole-cl-pool';
 
 export class BlackholeCL extends AlgebraIntegral {
   constructor(
@@ -20,6 +21,7 @@ export class BlackholeCL extends AlgebraIntegral {
     readonly routerIface = new Interface(SwapRouter),
     readonly quoterIface = new Interface(BlackholeClQuoterABI),
     readonly config = AlgebraIntegralConfig[dexKey][network],
+    readonly EventPoolImplementation = BlackholeCLPool,
   ) {
     super(network, dexKey, dexHelper, routerIface, quoterIface, config);
   }
@@ -29,7 +31,7 @@ export class BlackholeCL extends AlgebraIntegral {
       _.pick(AlgebraIntegralConfig, ['BlackholeCL', 'Supernova']),
     );
 
-  getMultiCallData(
+  buildQuoteCallData(
     from: string,
     to: string,
     deployer: string,

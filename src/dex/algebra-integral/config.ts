@@ -10,6 +10,7 @@ export const AlgebraIntegralConfig: DexConfigMap<DexParams> = {
       quoter: '0xA8a1dA1279ea63535c7B3BE8D20241483BC61009',
       router: '0xe6c9bb24ddB4aE5c6632dbE0DE14e3E474c6Cb04',
       chunksCount: 10,
+      stateMulticall: '0x0062C27357c71792c6767fA799f974B30BfB8630',
     },
   },
   BlackholeCL: {
@@ -20,6 +21,7 @@ export const AlgebraIntegralConfig: DexConfigMap<DexParams> = {
       quoter: '0x3e182bcf14Be6142b9217847ec1112e3c39Eb689',
       router: '0xaBfc48e8BED7b26762745f3139555F320119709d',
       chunksCount: 10,
+      stateMulticall: '0x484e14Ec742943Ed303310822Fe2FB993B075741',
     },
   },
   Supernova: {
@@ -30,6 +32,7 @@ export const AlgebraIntegralConfig: DexConfigMap<DexParams> = {
       quoter: '0x8217550d36823b1194b58562dac55d7fe8efb727',
       router: '0x72d63a5b080e1b89cc93f9b9f50cbfa5e291c8ac',
       chunksCount: 10,
+      stateMulticall: '0xFC18433f203c58b8104eCb9b2e995032bc29f64f',
     },
   },
 };
