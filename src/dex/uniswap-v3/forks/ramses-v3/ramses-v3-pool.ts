@@ -9,6 +9,7 @@ import { _reduceTickBitmap, _reduceTicks } from '../../contract-math/utils';
 import { bigIntify } from '../../../../utils';
 import { TickBitMap } from '../../contract-math/TickBitMap';
 import { Interface } from 'ethers/lib/utils';
+import { ethers } from 'ethers';
 import { Address } from '../../../../types';
 
 const POOL_FEE_ABI = ['function fee() view returns (uint24)'];
@@ -23,6 +24,27 @@ export class RamsesV3EventPool extends UniswapV3EventPool {
 
   get poolAddress(): Address {
     return super.poolAddress;
+  }
+
+  protected _computePoolAddress(
+    token0: Address,
+    token1: Address,
+    fee: bigint,
+  ): Address {
+    if (token0 > token1) [token0, token1] = [token1, token0];
+
+    const encodedKey = ethers.utils.keccak256(
+      ethers.utils.defaultAbiCoder.encode(
+        ['address', 'address', 'int24'],
+        [token0, token1, BigInt.asUintN(24, this.tickSpacing!)],
+      ),
+    );
+
+    return ethers.utils.getCreate2Address(
+      this.deployer!,
+      encodedKey,
+      this.poolInitCodeHash,
+    ) as Address;
   }
 
   protected _getStateRequestCallData() {
