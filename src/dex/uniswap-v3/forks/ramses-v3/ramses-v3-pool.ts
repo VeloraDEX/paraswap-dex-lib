@@ -46,7 +46,7 @@ export class RamsesV3EventPool extends UniswapV3EventPool {
               this.factoryAddress,
               this.token0,
               this.token1,
-              this.feeCode,
+              this.tickSpacing,
               this.getBitmapRangeToRequest(),
               this.getBitmapRangeToRequest(),
             )
