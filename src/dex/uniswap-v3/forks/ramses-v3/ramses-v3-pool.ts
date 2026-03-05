@@ -9,11 +9,21 @@ import { _reduceTickBitmap, _reduceTicks } from '../../contract-math/utils';
 import { bigIntify } from '../../../../utils';
 import { TickBitMap } from '../../contract-math/TickBitMap';
 import { Interface } from 'ethers/lib/utils';
+import { Address } from '../../../../types';
 
 const POOL_FEE_ABI = ['function fee() view returns (uint24)'];
 
 export class RamsesV3EventPool extends UniswapV3EventPool {
   private readonly poolFeeIface = new Interface(POOL_FEE_ABI);
+
+  set poolAddress(address: Address) {
+    super.poolAddress = address;
+    this._stateRequestCallData = undefined;
+  }
+
+  get poolAddress(): Address {
+    return super.poolAddress;
+  }
 
   protected _getStateRequestCallData() {
     if (!this._stateRequestCallData) {
