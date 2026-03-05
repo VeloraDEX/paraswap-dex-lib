@@ -5,6 +5,10 @@ export const Tokens: {
   [network: number]: { [symbol: string]: Token };
 } = {
   [Network.MAINNET]: {
+    MPS: {
+      address: '0x96c645d3d3706f793ef52c19bbace441900ed47d',
+      decimals: 0,
+    },
     aEthLidowstETH: {
       address: '0xC035a7cf15375cE2706766804551791aD035E0C2',
       decimals: 18,
@@ -1697,6 +1701,10 @@ export const Tokens: {
     yoETH: {
       address: '0x3a43aec53490cb9fa922847385d82fe25d0e9de7',
       decimals: 18,
+    },
+    USDT: {
+      address: '0xfde4c96c8593536e31f229ea8f37b2ada2699bb2',
+      decimals: 6,
     },
     yoUSD: {
       address: '0x0000000f2eb9f69274678c76222b35eec7588a65',

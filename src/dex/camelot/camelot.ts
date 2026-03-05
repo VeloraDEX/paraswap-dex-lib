@@ -1,4 +1,5 @@
 import {
+  CACHE_PREFIX,
   DEST_TOKEN_PARASWAP_TRANSFERS,
   Network,
   NULL_ADDRESS,
@@ -49,17 +50,13 @@ import {
   OnPoolCreatedCallback,
   UniswapV2Factory,
 } from '../uniswap-v2/uniswap-v2-factory';
-import {
-  hexDataLength,
-  hexlify,
-  hexZeroPad,
-  id,
-  solidityPack,
-} from 'ethers/lib/utils';
+import { hexlify, hexZeroPad, solidityPack } from 'ethers/lib/utils';
 import { BigNumber } from 'ethers';
-import { Flag, SpecialDex } from '../../executor/types';
+import { SpecialDex } from '../../executor/types';
 
 const DefaultCamelotPoolGasCost = 90 * 1000;
+
+const CAMELOT_RECHECK_PAIR_EXISTENCE_AFTER_MS = 3 * 24 * 60 * 60 * 1000; // 3 days
 
 const camelotPairIface = new Interface(camelotPairABI);
 const coder = new AbiCoder();
@@ -88,6 +85,7 @@ export interface CamelotPair {
   token1: Token;
   exchange?: Address;
   pool?: CamelotEventPool;
+  checkExistenceAfter?: number;
 }
 
 export class CamelotEventPool extends StatefulEventSubscriber<CamelotPoolState> {
@@ -176,6 +174,12 @@ export class Camelot
   pairs: { [key: string]: CamelotPair } = {};
   feeFactor = 100000;
   factory: Contract;
+  pairsHashCacheKey: string;
+
+  // Guards against concurrent findPair() calls for the same key.
+  // Stores in-flight promises so duplicate callers await
+  // the same work instead of creating duplicate pair objects.
+  private findPairPromises: Record<string, Promise<CamelotPair | null>> = {};
 
   needWrapNative = true;
   routerInterface: Interface;
@@ -224,6 +228,8 @@ export class Camelot
 
     this.routerInterface = new Interface(ParaSwapABI);
     this.exchangeRouterInterface = new Interface(UniswapV2ExchangeRouterABI);
+    this.pairsHashCacheKey =
+      `${CACHE_PREFIX}_${network}_${dexKey}_pairs`.toLowerCase();
 
     this.factoryInst = new UniswapV2Factory(
       dexHelper,
@@ -245,9 +251,7 @@ export class Camelot
         ? [token0, token1]
         : [token1, token0];
 
-    const poolKey = `${this.dexKey}_${_token0}_${_token1}`.toLowerCase();
-
-    return poolKey;
+    return `${this.dexKey}_${_token0}_${_token1}`.toLowerCase();
   }
 
   /*
@@ -267,6 +271,8 @@ export class Camelot
 
       // delete entry locally to let local instance discover the pool
       delete this.pairs[poolKey];
+
+      await this.dexHelper.cache.hdel(this.pairsHashCacheKey, [poolKey]);
 
       this.logger.info(`${logPrefix} discovered new pool ${poolKey}`);
     } catch (e) {
@@ -399,11 +405,55 @@ export class Camelot
         : [to, from];
 
     const key = this.getPoolIdentifier(token0.address, token1.address);
-    let pair = this.pairs[key];
+    const pair = this.pairs[key];
     if (pair) return pair;
+
+    // If another caller is already discovering this pair, await the same promise
+    const existingPromise = this.findPairPromises[key];
+    if (existingPromise) {
+      return existingPromise;
+    }
+
+    const findPromise = this._findPair(key, token0, token1);
+    this.findPairPromises[key] = findPromise;
+
+    try {
+      return await findPromise;
+    } finally {
+      delete this.findPairPromises[key];
+    }
+  }
+
+  private async _findPair(
+    key: string,
+    token0: Token,
+    token1: Token,
+  ): Promise<CamelotPair | null> {
+    const cachedPairRaw = await this.dexHelper.cache.hget(
+      this.pairsHashCacheKey,
+      key,
+    );
+
+    const cachedPair = cachedPairRaw
+      ? (JSON.parse(cachedPairRaw) as CamelotPair)
+      : null;
+
+    if (
+      cachedPair &&
+      (cachedPair.exchange ||
+        (cachedPair.checkExistenceAfter &&
+          cachedPair.checkExistenceAfter > Date.now()))
+    ) {
+      this.pairs[key] = cachedPair;
+      return cachedPair;
+    }
+
     const exchange = await this.factory.methods
       .getPair(token0.address, token1.address)
       .call();
+
+    let pair: CamelotPair | undefined;
+
     if (exchange === NULL_ADDRESS) {
       // if the pool has been newly created to not allow this op as we can run into race condition between pool discovery and concurrent pricing request touching this pool
       if (!this.newlyCreatedPoolKeys.has(key)) {
@@ -412,6 +462,21 @@ export class Camelot
     } else {
       pair = { token0, token1, exchange };
     }
+
+    if (!pair) {
+      return null;
+    }
+
+    await this.dexHelper.cache.hset(
+      this.pairsHashCacheKey,
+      key,
+      JSON.stringify({
+        ...pair,
+        checkExistenceAfter:
+          Date.now() + CAMELOT_RECHECK_PAIR_EXISTENCE_AFTER_MS,
+      }),
+    );
+
     this.pairs[key] = pair;
     return pair;
   }
