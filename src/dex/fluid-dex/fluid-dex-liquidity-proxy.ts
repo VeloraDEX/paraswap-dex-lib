@@ -66,7 +66,8 @@ export class FluidDexLiquidityProxy extends StatefulEventSubscriber<FluidDexLiqu
   ): Promise<DeepReadonly<FluidDexLiquidityProxyState> | null> {
     this.shouldUpdateState = true;
 
-    return null;
+    // state will be updated in updateReserves interval
+    return state;
   }
 
   async processLog(
