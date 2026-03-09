@@ -32,7 +32,7 @@ import { BigNumber } from 'ethers';
 import { sqrt } from './utils';
 import { FluidDexLiquidityProxy } from './fluid-dex-liquidity-proxy';
 import { FluidDexEventPool } from './fluid-dex-pool';
-import { MIN_SWAP_LIQUIDITY } from './constants';
+import { MIN_SWAP_LIQUIDITY, RESERVE_REFRESH_INTERVAL_MS } from './constants';
 
 export class FluidDex extends SimpleExchange implements IDex<FluidDexData> {
   readonly hasConstantPriceLargeAmounts = false;
@@ -52,6 +52,8 @@ export class FluidDex extends SimpleExchange implements IDex<FluidDexData> {
   readonly liquidityProxy: FluidDexLiquidityProxy;
 
   readonly fluidDexPoolIface: Interface;
+
+  private reserveUpdateIntervalTask?: NodeJS.Timeout;
 
   constructor(
     readonly network: Network,
@@ -124,8 +126,28 @@ export class FluidDex extends SimpleExchange implements IDex<FluidDexData> {
       }),
     );
 
-    this.liquidityProxy.setPoolAddresses(this.pools.map(p => p.address));
     await this.liquidityProxy.initialize(blockNumber);
+
+    if (this.dexHelper.config.isSlave === true) {
+      this.reserveUpdateIntervalTask = setInterval(
+        this.updateReserves.bind(this),
+        RESERVE_REFRESH_INTERVAL_MS,
+      );
+    }
+  }
+
+  private async updateReserves(): Promise<void> {
+    if (!this.liquidityProxy.shouldUpdateState) return;
+    this.liquidityProxy.shouldUpdateState = false;
+
+    try {
+      const blockNumber = await this.dexHelper.provider.getBlockNumber();
+
+      const state = await this.liquidityProxy.generateState(blockNumber);
+      this.liquidityProxy.setState(state, blockNumber);
+    } catch (error) {
+      this.logger.error(`${this.dexKey}: Error updating reserves:`, error);
+    }
   }
 
   getAdapters(side: SwapSide) {
@@ -136,7 +158,6 @@ export class FluidDex extends SimpleExchange implements IDex<FluidDexData> {
     poolsFromFactory: readonly PoolWithDecimals[],
   ) {
     this.pools = this.generateFluidDexPoolsFromPoolsFactory(poolsFromFactory);
-    this.liquidityProxy.setPoolAddresses(this.pools.map(p => p.address));
     this.logger.info(`${this.dexKey}: pools list was updated ...`);
   }
 
@@ -1272,5 +1293,12 @@ export class FluidDex extends SimpleExchange implements IDex<FluidDexData> {
 
   private abs(value: bigint): bigint {
     return value < 0 ? -value : value;
+  }
+
+  releaseResources(): void {
+    if (this.reserveUpdateIntervalTask) {
+      clearInterval(this.reserveUpdateIntervalTask);
+      this.reserveUpdateIntervalTask = undefined;
+    }
   }
 }

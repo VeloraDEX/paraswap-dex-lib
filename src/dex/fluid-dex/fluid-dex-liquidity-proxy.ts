@@ -15,8 +15,6 @@ import {
 import { Address } from '../../types';
 import { Contract } from 'ethers';
 
-const NON_POOL_THROTTLE_MS = 60 * 1000; // 1 minute
-
 export class FluidDexLiquidityProxy extends StatefulEventSubscriber<FluidDexLiquidityProxyState> {
   handlers: {
     [event: string]: (
@@ -36,9 +34,7 @@ export class FluidDexLiquidityProxy extends StatefulEventSubscriber<FluidDexLiqu
 
   resolverContract: Contract;
 
-  private poolAddresses: Set<string> = new Set();
-  private lastPoolEventBlockNumber: number = 0;
-  private lastNonPoolEventTimestamp: number = 0;
+  shouldUpdateState = false;
 
   constructor(
     readonly parentName: string,
@@ -63,35 +59,14 @@ export class FluidDexLiquidityProxy extends StatefulEventSubscriber<FluidDexLiqu
     this.handlers['LogOperate'] = this.handleOperate.bind(this);
   }
 
-  setPoolAddresses(addresses: string[]) {
-    this.poolAddresses = new Set(addresses.map(a => a.toLowerCase()));
-  }
-
   async handleOperate(
     event: any,
     state: DeepReadonly<FluidDexLiquidityProxyState>,
     log: Readonly<Log>,
   ): Promise<DeepReadonly<FluidDexLiquidityProxyState> | null> {
-    if (log.topics.length < 2) {
-      return null;
-    }
+    this.shouldUpdateState = true;
 
-    const userAddress = ('0x' + log.topics[1].slice(26)).toLowerCase();
-
-    if (this.poolAddresses.has(userAddress)) {
-      if (log.blockNumber === this.lastPoolEventBlockNumber) {
-        return null;
-      }
-      this.lastPoolEventBlockNumber = log.blockNumber;
-    } else {
-      const now = Date.now();
-      if (now - this.lastNonPoolEventTimestamp < NON_POOL_THROTTLE_MS) {
-        return null;
-      }
-      this.lastNonPoolEventTimestamp = now;
-    }
-
-    return this.generateState(log.blockNumber);
+    return null;
   }
 
   async processLog(
@@ -121,15 +96,6 @@ export class FluidDexLiquidityProxy extends StatefulEventSubscriber<FluidDexLiqu
     return state;
   }
 
-  /**
-   * The function generates state using on-chain calls. This
-   * function is called to regenerate state if the event based
-   * system fails to fetch events and the local state is no
-   * more correct.
-   * @param blockNumber - Blocknumber for which the state should
-   * should be generated
-   * @returns state of the event subscriber at blocknumber
-   */
   async generateState(
     blockNumber: number,
   ): Promise<DeepReadonly<FluidDexLiquidityProxyState>> {
