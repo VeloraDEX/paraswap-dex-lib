@@ -146,6 +146,7 @@ export class FluidDex extends SimpleExchange implements IDex<FluidDexData> {
       const state = await this.liquidityProxy.generateState(blockNumber);
       this.liquidityProxy.setState(state, blockNumber);
     } catch (error) {
+      this.liquidityProxy.shouldUpdateState = true;
       this.logger.error(`${this.dexKey}: Error updating reserves:`, error);
     }
   }
