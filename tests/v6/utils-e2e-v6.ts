@@ -4,7 +4,10 @@ import {
   IParaSwapSDK,
   LocalParaswapSDK,
 } from '../../src/implementations/local-paraswap-sdk';
-import { TenderlySimulator, StateOverride } from '../tenderly-simulation';
+import {
+  TenderlySimulator,
+  StateOverride,
+} from '../../src/tenderly-simulation';
 import { assert } from 'ts-essentials';
 import { AUGUSTUS_V6_INTERFACE } from '../utils-e2e';
 import { BigNumber } from 'ethers';
