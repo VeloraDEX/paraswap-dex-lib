@@ -72,45 +72,33 @@ export class FluidDexLiquidityProxy extends StatefulEventSubscriber<FluidDexLiqu
     state: DeepReadonly<FluidDexLiquidityProxyState>,
     log: Readonly<Log>,
   ): Promise<DeepReadonly<FluidDexLiquidityProxyState> | null> {
+    if (log.topics.length < 2) {
+      return null;
+    }
+
+    const userAddress = ('0x' + log.topics[1].slice(26)).toLowerCase();
+
+    if (this.poolAddresses.has(userAddress)) {
+      if (log.blockNumber === this.lastPoolEventBlockNumber) {
+        return null;
+      }
+      this.lastPoolEventBlockNumber = log.blockNumber;
+    } else {
+      const now = Date.now();
+      if (now - this.lastNonPoolEventTimestamp < NON_POOL_THROTTLE_MS) {
+        return null;
+      }
+      this.lastNonPoolEventTimestamp = now;
+    }
+
     return this.generateState(log.blockNumber);
   }
 
-  /**
-   * The function is called every time any of the subscribed
-   * addresses release log. The function accepts the current
-   * state, updates the state according to the log, and returns
-   * the updated state.
-   * @param state - Current state of event subscriber
-   * @param log - Log released by one of the subscribed addresses
-   * @returns Updates state of the event subscriber after the log
-   */
   async processLog(
     state: DeepReadonly<FluidDexLiquidityProxyState>,
     log: Readonly<Log>,
   ): Promise<DeepReadonly<FluidDexLiquidityProxyState> | null> {
     try {
-      if (log.topics.length >= 2) {
-        const userAddress = ('0x' + log.topics[1].slice(26)).toLowerCase();
-
-        if (this.poolAddresses.has(userAddress)) {
-          // Check if state was already updated for this block
-          if (log.blockNumber === this.lastPoolEventBlockNumber) {
-            return null;
-          }
-
-          this.lastPoolEventBlockNumber = log.blockNumber;
-        } else {
-          const now = Date.now();
-
-          // Throttle non-pool events to avoid generating state too often
-          if (now - this.lastNonPoolEventTimestamp < NON_POOL_THROTTLE_MS) {
-            return null;
-          }
-
-          this.lastNonPoolEventTimestamp = now;
-        }
-      }
-
       const event = this.logDecoder(log);
       if (event.name in this.handlers) {
         return await this.handlers[event.name](event, state, log);
