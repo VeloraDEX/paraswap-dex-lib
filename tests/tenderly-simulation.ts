@@ -5,6 +5,7 @@ import { ethers } from 'ethers';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { ETHER_ADDRESS } from '../src/constants';
+import { ICache } from '../src/dex-helper/icache';
 import { merge } from 'lodash';
 
 const TENDERLY_TOKEN = process.env.TENDERLY_TOKEN!;
@@ -141,7 +142,9 @@ export type SimulationResult = {
 };
 
 class TokenStorageSlotsCache {
-  private static TOKEN_STORAGE_SLOTS: Record<
+  private static cache: ICache | null = null;
+
+  private static TOKEN_FILE_STORAGE_SLOTS: Record<
     number,
     Record<string, TokenStorageSlots>
   > | null = null;
@@ -150,7 +153,15 @@ class TokenStorageSlotsCache {
     'token-storage-slots.json',
   );
 
-  private static async loadTokenStorageSlots(): Promise<
+  static setRedisCache(cache: ICache): void {
+    TokenStorageSlotsCache.cache = cache ?? null;
+  }
+
+  private static redisKey(chainId: number): string {
+    return `token_storage_slots_${chainId}`;
+  }
+
+  private static async loadTokenFileStorageSlots(): Promise<
     Record<number, Record<string, TokenStorageSlots>>
   > {
     return JSON.parse(
@@ -160,10 +171,10 @@ class TokenStorageSlotsCache {
     );
   }
 
-  private static async saveTokenStorageSlots(): Promise<void> {
+  private static async saveTokenFileStorageSlots(): Promise<void> {
     await fs.writeFile(
       TokenStorageSlotsCache.TOKEN_STORAGE_SLOTS_FILEPATH,
-      JSON.stringify(TokenStorageSlotsCache.TOKEN_STORAGE_SLOTS, null, 2) +
+      JSON.stringify(TokenStorageSlotsCache.TOKEN_FILE_STORAGE_SLOTS, null, 2) +
         '\n',
       { encoding: 'utf-8' },
     );
@@ -173,14 +184,31 @@ class TokenStorageSlotsCache {
     chainId: number,
     token: string,
   ): Promise<TokenStorageSlots | null> {
-    if (!TokenStorageSlotsCache.TOKEN_STORAGE_SLOTS) {
-      TokenStorageSlotsCache.TOKEN_STORAGE_SLOTS =
-        await TokenStorageSlotsCache.loadTokenStorageSlots();
+    const normalizedToken = token.toLowerCase();
+
+    if (TokenStorageSlotsCache.cache) {
+      try {
+        const cached = await TokenStorageSlotsCache.cache.hget(
+          TokenStorageSlotsCache.redisKey(chainId),
+          normalizedToken,
+        );
+        if (cached) {
+          return JSON.parse(cached) as TokenStorageSlots;
+        }
+      } catch (e) {
+        // Redis error — fall through to return null
+      }
+      return null;
+    }
+
+    if (!TokenStorageSlotsCache.TOKEN_FILE_STORAGE_SLOTS) {
+      TokenStorageSlotsCache.TOKEN_FILE_STORAGE_SLOTS =
+        await TokenStorageSlotsCache.loadTokenFileStorageSlots();
     }
 
     return (
-      TokenStorageSlotsCache.TOKEN_STORAGE_SLOTS[chainId]?.[
-        token.toLowerCase()
+      TokenStorageSlotsCache.TOKEN_FILE_STORAGE_SLOTS[chainId]?.[
+        normalizedToken
       ] ?? null
     );
   }
@@ -190,17 +218,28 @@ class TokenStorageSlotsCache {
     token: string,
     slots: TokenStorageSlots,
   ): Promise<void> {
-    if (!TokenStorageSlotsCache.TOKEN_STORAGE_SLOTS) {
-      TokenStorageSlotsCache.TOKEN_STORAGE_SLOTS =
-        await TokenStorageSlotsCache.loadTokenStorageSlots();
+    const normalizedToken = token.toLowerCase();
+
+    if (TokenStorageSlotsCache.cache) {
+      void TokenStorageSlotsCache.cache.hset(
+        TokenStorageSlotsCache.redisKey(chainId),
+        normalizedToken,
+        JSON.stringify(slots),
+      );
+      return;
     }
 
-    TokenStorageSlotsCache.TOKEN_STORAGE_SLOTS ||= {};
-    TokenStorageSlotsCache.TOKEN_STORAGE_SLOTS[chainId] ||= {};
-    TokenStorageSlotsCache.TOKEN_STORAGE_SLOTS[chainId][token.toLowerCase()] =
+    if (!TokenStorageSlotsCache.TOKEN_FILE_STORAGE_SLOTS) {
+      TokenStorageSlotsCache.TOKEN_FILE_STORAGE_SLOTS =
+        await TokenStorageSlotsCache.loadTokenFileStorageSlots();
+    }
+
+    TokenStorageSlotsCache.TOKEN_FILE_STORAGE_SLOTS ||= {};
+    TokenStorageSlotsCache.TOKEN_FILE_STORAGE_SLOTS[chainId] ||= {};
+    TokenStorageSlotsCache.TOKEN_FILE_STORAGE_SLOTS[chainId][normalizedToken] =
       slots;
 
-    void TokenStorageSlotsCache.saveTokenStorageSlots();
+    void TokenStorageSlotsCache.saveTokenFileStorageSlots();
   }
 }
 
@@ -215,9 +254,13 @@ export class TenderlySimulator {
 
   private constructor() {}
 
-  public static getInstance(): TenderlySimulator {
+  public static getInstance(cache?: ICache): TenderlySimulator {
     if (!TenderlySimulator.instance) {
       TenderlySimulator.instance = new TenderlySimulator();
+    }
+
+    if (cache) {
+      TokenStorageSlotsCache.setRedisCache(cache);
     }
 
     return TenderlySimulator.instance;
