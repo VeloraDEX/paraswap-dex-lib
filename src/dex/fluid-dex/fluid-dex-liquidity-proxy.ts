@@ -15,6 +15,8 @@ import {
 import { Address } from '../../types';
 import { Contract } from 'ethers';
 
+const NON_POOL_THROTTLE_MS = 60 * 1000; // 1 minute
+
 export class FluidDexLiquidityProxy extends StatefulEventSubscriber<FluidDexLiquidityProxyState> {
   handlers: {
     [event: string]: (
@@ -33,6 +35,10 @@ export class FluidDexLiquidityProxy extends StatefulEventSubscriber<FluidDexLiqu
   readonly resolverIface = new Interface(ResolverABI);
 
   resolverContract: Contract;
+
+  private poolAddresses: Set<string> = new Set();
+  private lastPoolEventBlockNumber: number = 0;
+  private lastNonPoolEventTimestamp: number = 0;
 
   constructor(
     readonly parentName: string,
@@ -57,9 +63,10 @@ export class FluidDexLiquidityProxy extends StatefulEventSubscriber<FluidDexLiqu
     this.handlers['LogOperate'] = this.handleOperate.bind(this);
   }
 
-  /**
-   * Handle a trade rate change on the pool.
-   */
+  setPoolAddresses(addresses: string[]) {
+    this.poolAddresses = new Set(addresses.map(a => a.toLowerCase()));
+  }
+
   async handleOperate(
     event: any,
     state: DeepReadonly<FluidDexLiquidityProxyState>,
@@ -82,6 +89,28 @@ export class FluidDexLiquidityProxy extends StatefulEventSubscriber<FluidDexLiqu
     log: Readonly<Log>,
   ): Promise<DeepReadonly<FluidDexLiquidityProxyState> | null> {
     try {
+      if (log.topics.length >= 2) {
+        const userAddress = ('0x' + log.topics[1].slice(26)).toLowerCase();
+
+        if (this.poolAddresses.has(userAddress)) {
+          // Check if state was already updated for this block
+          if (log.blockNumber === this.lastPoolEventBlockNumber) {
+            return null;
+          }
+
+          this.lastPoolEventBlockNumber = log.blockNumber;
+        } else {
+          const now = Date.now();
+
+          // Throttle non-pool events to avoid generating state too often
+          if (now - this.lastNonPoolEventTimestamp < NON_POOL_THROTTLE_MS) {
+            return null;
+          }
+
+          this.lastNonPoolEventTimestamp = now;
+        }
+      }
+
       const event = this.logDecoder(log);
       if (event.name in this.handlers) {
         return await this.handlers[event.name](event, state, log);

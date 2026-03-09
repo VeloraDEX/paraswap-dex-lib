@@ -124,6 +124,7 @@ export class FluidDex extends SimpleExchange implements IDex<FluidDexData> {
       }),
     );
 
+    this.liquidityProxy.setPoolAddresses(this.pools.map(p => p.address));
     await this.liquidityProxy.initialize(blockNumber);
   }
 
@@ -135,6 +136,7 @@ export class FluidDex extends SimpleExchange implements IDex<FluidDexData> {
     poolsFromFactory: readonly PoolWithDecimals[],
   ) {
     this.pools = this.generateFluidDexPoolsFromPoolsFactory(poolsFromFactory);
+    this.liquidityProxy.setPoolAddresses(this.pools.map(p => p.address));
     this.logger.info(`${this.dexKey}: pools list was updated ...`);
   }
 
