@@ -128,11 +128,14 @@ export class FluidDex extends SimpleExchange implements IDex<FluidDexData> {
     );
 
     if (!this.dexHelper.config.isSlave) {
-      await this.liquidityProxy.fetchAndSetState(blockNumber);
-      this.reserveUpdateIntervalTask = setInterval(
-        this.updateReserves.bind(this),
-        RESERVE_REFRESH_INTERVAL_MS,
-      );
+      void this.updateReserves();
+
+      if (!this.reserveUpdateIntervalTask) {
+        this.reserveUpdateIntervalTask = setInterval(
+          this.updateReserves.bind(this),
+          RESERVE_REFRESH_INTERVAL_MS,
+        );
+      }
     }
   }
 
