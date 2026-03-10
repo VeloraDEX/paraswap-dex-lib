@@ -38,6 +38,7 @@ export class FluidDex extends SimpleExchange implements IDex<FluidDexData> {
   readonly hasConstantPriceLargeAmounts = false;
   readonly needWrapNative = false;
   readonly isFeeOnTransferSupported = false;
+  readonly isStatePollingDex = true;
   public static dexKeysWithNetwork: { key: string; networks: Network[] }[] =
     getDexKeysWithNetwork(FluidDexConfig);
 
