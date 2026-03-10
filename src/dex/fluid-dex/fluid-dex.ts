@@ -126,9 +126,8 @@ export class FluidDex extends SimpleExchange implements IDex<FluidDexData> {
       }),
     );
 
-    await this.liquidityProxy.initialize(blockNumber);
-
-    if (this.dexHelper.config.isSlave === true) {
+    if (!this.dexHelper.config.isSlave) {
+      await this.liquidityProxy.fetchAndSetState(blockNumber);
       this.reserveUpdateIntervalTask = setInterval(
         this.updateReserves.bind(this),
         RESERVE_REFRESH_INTERVAL_MS,
@@ -137,16 +136,10 @@ export class FluidDex extends SimpleExchange implements IDex<FluidDexData> {
   }
 
   private async updateReserves(): Promise<void> {
-    if (!this.liquidityProxy.shouldUpdateState) return;
-    this.liquidityProxy.shouldUpdateState = false;
-
     try {
       const blockNumber = await this.dexHelper.provider.getBlockNumber();
-
-      const state = await this.liquidityProxy.generateState(blockNumber);
-      this.liquidityProxy.setState(state, blockNumber);
+      await this.liquidityProxy.fetchAndSetState(blockNumber);
     } catch (error) {
-      this.liquidityProxy.shouldUpdateState = true;
       this.logger.error(`${this.dexKey}: Error updating reserves:`, error);
     }
   }
@@ -215,9 +208,14 @@ export class FluidDex extends SimpleExchange implements IDex<FluidDexData> {
 
       if (!pools.length) return null;
 
-      const liquidityProxyState = await this.liquidityProxy.getStateOrGenerate(
-        blockNumber,
-      );
+      const liquidityProxyState = await this.liquidityProxy.getState();
+
+      if (!liquidityProxyState) {
+        this.logger.warn(
+          `${this.dexKey}-${this.network}: Liquidity proxy state is not available`,
+        );
+        return null;
+      }
 
       const poolsPrices = await Promise.all(
         pools.map(async pool => {
@@ -348,8 +346,6 @@ export class FluidDex extends SimpleExchange implements IDex<FluidDexData> {
         return eventPool;
       }),
     );
-
-    await this.liquidityProxy.updatePoolState(blockNumber);
   }
 
   // Returns list of top pools based on liquidity. Max
@@ -371,7 +367,7 @@ export class FluidDex extends SimpleExchange implements IDex<FluidDexData> {
         return [];
       }
 
-      const liquidityProxyState = this.liquidityProxy.getStaleState();
+      const liquidityProxyState = await this.liquidityProxy.getState();
 
       if (!liquidityProxyState) {
         return [];

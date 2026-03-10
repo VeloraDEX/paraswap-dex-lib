@@ -1,114 +1,66 @@
-import { Interface } from '@ethersproject/abi';
-import { DeepReadonly } from 'ts-essentials';
-import { Log, Logger } from '../../types';
-import { bigIntify, catchParseLogError } from '../../utils';
-import { StatefulEventSubscriber } from '../../stateful-event-subscriber';
+import { Logger } from '../../types';
+import { bigIntify, Utils } from '../../utils';
 import { IDexHelper } from '../../dex-helper/idex-helper';
-import ResolverABI from '../../abi/fluid-dex/resolver.abi.json';
-import LiquidityABI from '../../abi/fluid-dex/liquidityUserModule.abi.json';
 import {
   CommonAddresses,
   FluidDexLiquidityProxyState,
   PoolReserve,
   PoolReserveResponse,
 } from './types';
-import { Address } from '../../types';
 import { Contract } from 'ethers';
+import ResolverABI from '../../abi/fluid-dex/resolver.abi.json';
 
-export class FluidDexLiquidityProxy extends StatefulEventSubscriber<FluidDexLiquidityProxyState> {
-  handlers: {
-    [event: string]: (
-      event: any,
-      state: DeepReadonly<FluidDexLiquidityProxyState>,
-      log: Readonly<Log>,
-    ) => Promise<DeepReadonly<FluidDexLiquidityProxyState> | null>;
-  } = {};
+const STATE_CACHE_KEY = 'liquidity_proxy_state';
+const STATE_TTL_SECONDS = 600; // 10 minutes
+const LOCAL_CACHE_TTL_SECONDS = 5; // 5 seconds
 
-  logDecoder: (log: Log) => any;
-
-  addressesSubscribed: Address[];
-
-  readonly liquidityIface = new Interface(LiquidityABI);
-
-  readonly resolverIface = new Interface(ResolverABI);
-
-  resolverContract: Contract;
-
-  shouldUpdateState = false;
+export class FluidDexLiquidityProxy {
+  readonly resolverContract: Contract;
 
   constructor(
-    readonly parentName: string,
+    readonly dexKey: string,
     readonly commonAddresses: CommonAddresses,
     protected network: number,
     readonly dexHelper: IDexHelper,
-    logger: Logger,
+    readonly logger: Logger,
   ) {
-    super(parentName, 'liquidity proxy', dexHelper, logger);
-
-    this.logDecoder = (log: Log) => this.liquidityIface.parseLog(log);
-
     this.resolverContract = new Contract(
       this.commonAddresses.resolver,
       ResolverABI,
       this.dexHelper.provider,
     );
-
-    this.addressesSubscribed = [commonAddresses.liquidityProxy];
-
-    // Add handlers
-    this.handlers['LogOperate'] = this.handleOperate.bind(this);
   }
 
-  async handleOperate(
-    event: any,
-    state: DeepReadonly<FluidDexLiquidityProxyState>,
-    log: Readonly<Log>,
-  ): Promise<DeepReadonly<FluidDexLiquidityProxyState> | null> {
-    this.shouldUpdateState = true;
-
-    // state will be updated in updateReserves interval
-    return state;
-  }
-
-  async processLog(
-    state: DeepReadonly<FluidDexLiquidityProxyState>,
-    log: Readonly<Log>,
-  ): Promise<DeepReadonly<FluidDexLiquidityProxyState> | null> {
-    try {
-      const event = this.logDecoder(log);
-      if (event.name in this.handlers) {
-        return await this.handlers[event.name](event, state, log);
-      }
-    } catch (e) {
-      catchParseLogError(e, this.logger);
-    }
-
-    return null;
-  }
-
-  async getStateOrGenerate(
-    blockNumber: number,
-  ): Promise<FluidDexLiquidityProxyState> {
-    let state = this.getState(blockNumber);
-    if (!state) {
-      state = await this.generateState(blockNumber);
-      this.setState(state, blockNumber);
-    }
-    return state;
-  }
-
-  async generateState(
-    blockNumber: number,
-  ): Promise<DeepReadonly<FluidDexLiquidityProxyState>> {
+  async fetchAndSetState(blockNumber: number): Promise<void> {
     const rawResult =
       await this.resolverContract.callStatic.getAllPoolsReservesAdjusted({
         blockTag: blockNumber,
       });
 
-    const convertedResult = this.convertToFluidDexPoolState(rawResult);
-    this.logger.info(`${this.parentName}: ${this.name}: generating state...`);
+    const state = this.convertToFluidDexPoolState(rawResult);
 
-    return convertedResult;
+    await this.dexHelper.cache.setex(
+      this.dexKey,
+      this.network,
+      STATE_CACHE_KEY,
+      STATE_TTL_SECONDS,
+      Utils.Serialize(state),
+    );
+  }
+
+  async getState(): Promise<FluidDexLiquidityProxyState | null> {
+    const cached = await this.dexHelper.cache.getAndCacheLocally(
+      this.dexKey,
+      this.network,
+      STATE_CACHE_KEY,
+      LOCAL_CACHE_TTL_SECONDS,
+    );
+
+    if (cached) {
+      return Utils.Parse(cached) as FluidDexLiquidityProxyState;
+    }
+
+    return null;
   }
 
   private convertToFluidDexPoolState(
