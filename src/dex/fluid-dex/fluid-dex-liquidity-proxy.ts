@@ -1,130 +1,66 @@
-import { Interface } from '@ethersproject/abi';
-import { DeepReadonly } from 'ts-essentials';
-import { Log, Logger } from '../../types';
-import { bigIntify, catchParseLogError } from '../../utils';
-import { StatefulEventSubscriber } from '../../stateful-event-subscriber';
+import { Logger } from '../../types';
+import { bigIntify, Utils } from '../../utils';
 import { IDexHelper } from '../../dex-helper/idex-helper';
-import ResolverABI from '../../abi/fluid-dex/resolver.abi.json';
-import LiquidityABI from '../../abi/fluid-dex/liquidityUserModule.abi.json';
 import {
   CommonAddresses,
   FluidDexLiquidityProxyState,
   PoolReserve,
   PoolReserveResponse,
 } from './types';
-import { Address } from '../../types';
 import { Contract } from 'ethers';
+import ResolverABI from '../../abi/fluid-dex/resolver.abi.json';
 
-export class FluidDexLiquidityProxy extends StatefulEventSubscriber<FluidDexLiquidityProxyState> {
-  handlers: {
-    [event: string]: (
-      event: any,
-      state: DeepReadonly<FluidDexLiquidityProxyState>,
-      log: Readonly<Log>,
-    ) => Promise<DeepReadonly<FluidDexLiquidityProxyState> | null>;
-  } = {};
+const STATE_CACHE_KEY = 'liquidity_proxy_state';
+const STATE_TTL_SECONDS = 600; // 10 minutes
+const LOCAL_CACHE_TTL_SECONDS = 5; // 5 seconds
 
-  logDecoder: (log: Log) => any;
-
-  addressesSubscribed: Address[];
-
-  readonly liquidityIface = new Interface(LiquidityABI);
-
-  readonly resolverIface = new Interface(ResolverABI);
-
-  resolverContract: Contract;
+export class FluidDexLiquidityProxy {
+  readonly resolverContract: Contract;
 
   constructor(
-    readonly parentName: string,
+    readonly dexKey: string,
     readonly commonAddresses: CommonAddresses,
     protected network: number,
     readonly dexHelper: IDexHelper,
-    logger: Logger,
+    readonly logger: Logger,
   ) {
-    super(parentName, 'liquidity proxy', dexHelper, logger);
-
-    this.logDecoder = (log: Log) => this.liquidityIface.parseLog(log);
-
     this.resolverContract = new Contract(
       this.commonAddresses.resolver,
       ResolverABI,
       this.dexHelper.provider,
     );
-
-    this.addressesSubscribed = [commonAddresses.liquidityProxy];
-
-    // Add handlers
-    this.handlers['LogOperate'] = this.handleOperate.bind(this);
   }
 
-  /**
-   * Handle a trade rate change on the pool.
-   */
-  async handleOperate(
-    event: any,
-    state: DeepReadonly<FluidDexLiquidityProxyState>,
-    log: Readonly<Log>,
-  ): Promise<DeepReadonly<FluidDexLiquidityProxyState> | null> {
-    return this.generateState(log.blockNumber);
-  }
-
-  /**
-   * The function is called every time any of the subscribed
-   * addresses release log. The function accepts the current
-   * state, updates the state according to the log, and returns
-   * the updated state.
-   * @param state - Current state of event subscriber
-   * @param log - Log released by one of the subscribed addresses
-   * @returns Updates state of the event subscriber after the log
-   */
-  async processLog(
-    state: DeepReadonly<FluidDexLiquidityProxyState>,
-    log: Readonly<Log>,
-  ): Promise<DeepReadonly<FluidDexLiquidityProxyState> | null> {
-    try {
-      const event = this.logDecoder(log);
-      if (event.name in this.handlers) {
-        return await this.handlers[event.name](event, state, log);
-      }
-    } catch (e) {
-      catchParseLogError(e, this.logger);
-    }
-
-    return null;
-  }
-
-  async getStateOrGenerate(
-    blockNumber: number,
-  ): Promise<FluidDexLiquidityProxyState> {
-    let state = this.getState(blockNumber);
-    if (!state) {
-      state = await this.generateState(blockNumber);
-      this.setState(state, blockNumber);
-    }
-    return state;
-  }
-
-  /**
-   * The function generates state using on-chain calls. This
-   * function is called to regenerate state if the event based
-   * system fails to fetch events and the local state is no
-   * more correct.
-   * @param blockNumber - Blocknumber for which the state should
-   * should be generated
-   * @returns state of the event subscriber at blocknumber
-   */
-  async generateState(
-    blockNumber: number,
-  ): Promise<DeepReadonly<FluidDexLiquidityProxyState>> {
+  async fetchAndSetState(blockNumber: number): Promise<void> {
     const rawResult =
       await this.resolverContract.callStatic.getAllPoolsReservesAdjusted({
         blockTag: blockNumber,
       });
 
-    const convertedResult = this.convertToFluidDexPoolState(rawResult);
-    this.logger.info(`${this.parentName}: ${this.name}: generating state...`);
+    const state = this.convertToFluidDexPoolState(rawResult);
 
-    return convertedResult;
+    await this.dexHelper.cache.setex(
+      this.dexKey,
+      this.network,
+      STATE_CACHE_KEY,
+      STATE_TTL_SECONDS,
+      Utils.Serialize(state),
+    );
+  }
+
+  async getState(): Promise<FluidDexLiquidityProxyState | null> {
+    const cached = await this.dexHelper.cache.getAndCacheLocally(
+      this.dexKey,
+      this.network,
+      STATE_CACHE_KEY,
+      LOCAL_CACHE_TTL_SECONDS,
+    );
+
+    if (cached) {
+      return Utils.Parse(cached) as FluidDexLiquidityProxyState;
+    }
+
+    return null;
   }
 
   private convertToFluidDexPoolState(

@@ -32,12 +32,13 @@ import { BigNumber } from 'ethers';
 import { sqrt } from './utils';
 import { FluidDexLiquidityProxy } from './fluid-dex-liquidity-proxy';
 import { FluidDexEventPool } from './fluid-dex-pool';
-import { MIN_SWAP_LIQUIDITY } from './constants';
+import { MIN_SWAP_LIQUIDITY, RESERVE_REFRESH_INTERVAL_MS } from './constants';
 
 export class FluidDex extends SimpleExchange implements IDex<FluidDexData> {
   readonly hasConstantPriceLargeAmounts = false;
   readonly needWrapNative = false;
   readonly isFeeOnTransferSupported = false;
+  readonly isStatePollingDex = true;
   public static dexKeysWithNetwork: { key: string; networks: Network[] }[] =
     getDexKeysWithNetwork(FluidDexConfig);
 
@@ -52,6 +53,8 @@ export class FluidDex extends SimpleExchange implements IDex<FluidDexData> {
   readonly liquidityProxy: FluidDexLiquidityProxy;
 
   readonly fluidDexPoolIface: Interface;
+
+  private reserveUpdateIntervalTask?: NodeJS.Timeout;
 
   constructor(
     readonly network: Network,
@@ -124,7 +127,25 @@ export class FluidDex extends SimpleExchange implements IDex<FluidDexData> {
       }),
     );
 
-    await this.liquidityProxy.initialize(blockNumber);
+    if (!this.dexHelper.config.isSlave) {
+      void this.updateReserves();
+
+      if (!this.reserveUpdateIntervalTask) {
+        this.reserveUpdateIntervalTask = setInterval(
+          this.updateReserves.bind(this),
+          RESERVE_REFRESH_INTERVAL_MS,
+        );
+      }
+    }
+  }
+
+  private async updateReserves(): Promise<void> {
+    try {
+      const blockNumber = await this.dexHelper.provider.getBlockNumber();
+      await this.liquidityProxy.fetchAndSetState(blockNumber);
+    } catch (error) {
+      this.logger.error(`${this.dexKey}: Error updating reserves:`, error);
+    }
   }
 
   getAdapters(side: SwapSide) {
@@ -191,9 +212,14 @@ export class FluidDex extends SimpleExchange implements IDex<FluidDexData> {
 
       if (!pools.length) return null;
 
-      const liquidityProxyState = await this.liquidityProxy.getStateOrGenerate(
-        blockNumber,
-      );
+      const liquidityProxyState = await this.liquidityProxy.getState();
+
+      if (!liquidityProxyState) {
+        this.logger.warn(
+          `${this.dexKey}-${this.network}: Liquidity proxy state is not available`,
+        );
+        return null;
+      }
 
       const poolsPrices = await Promise.all(
         pools.map(async pool => {
@@ -324,8 +350,6 @@ export class FluidDex extends SimpleExchange implements IDex<FluidDexData> {
         return eventPool;
       }),
     );
-
-    await this.liquidityProxy.updatePoolState(blockNumber);
   }
 
   // Returns list of top pools based on liquidity. Max
@@ -347,7 +371,7 @@ export class FluidDex extends SimpleExchange implements IDex<FluidDexData> {
         return [];
       }
 
-      const liquidityProxyState = this.liquidityProxy.getStaleState();
+      const liquidityProxyState = await this.liquidityProxy.getState();
 
       if (!liquidityProxyState) {
         return [];
@@ -1270,5 +1294,12 @@ export class FluidDex extends SimpleExchange implements IDex<FluidDexData> {
 
   private abs(value: bigint): bigint {
     return value < 0 ? -value : value;
+  }
+
+  releaseResources(): void {
+    if (this.reserveUpdateIntervalTask) {
+      clearInterval(this.reserveUpdateIntervalTask);
+      this.reserveUpdateIntervalTask = undefined;
+    }
   }
 }
