@@ -178,6 +178,7 @@ type TestE2EOptions = {
 export async function testE2E(
   srcToken: Token,
   destToken: Token,
+  // unused, left for backwards compatibility
   senderAddress: Address,
   _amount: string,
   swapSide = SwapSide.SELL,

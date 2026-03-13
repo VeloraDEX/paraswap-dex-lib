@@ -2,7 +2,7 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 import { testE2E } from '../../../tests/utils-e2e';
-import { Tokens, Holders } from '../../../tests/constants-e2e';
+import { Tokens } from '../../../tests/constants-e2e';
 import { Network, ContractMethod, SwapSide } from '../../constants';
 import { StaticJsonRpcProvider } from '@ethersproject/providers';
 import { generateConfig } from '../../config';
@@ -19,7 +19,6 @@ describe('dETH E2E', () => {
     const wrappedAmount = '100000000000000000';
 
     const tokens = Tokens[network];
-    const holders = Holders[network];
     const provider = new StaticJsonRpcProvider(
       generateConfig(network).privateHttpProvider,
       network,
@@ -27,9 +26,6 @@ describe('dETH E2E', () => {
 
     const nativeToken = tokens[nativeTokenSymbol];
     const wrappedToken = tokens[wrappedTokenSymbol];
-
-    const nativeHolder = holders[nativeTokenSymbol];
-    const wrappedHolder = holders[wrappedTokenSymbol];
 
     describe('swapExactAmountIn SELL', () => {
       const contractMethod = ContractMethod.swapExactAmountIn;
@@ -39,7 +35,7 @@ describe('dETH E2E', () => {
         await testE2E(
           nativeToken,
           wrappedToken,
-          nativeHolder,
+          '',
           nativeAmount,
           side,
           dexKey,
@@ -48,11 +44,11 @@ describe('dETH E2E', () => {
           provider,
         );
       });
-      it.only('wrapped -> native', async () => {
+      it('wrapped -> native', async () => {
         await testE2E(
           wrappedToken,
           nativeToken,
-          wrappedHolder,
+          '',
           wrappedAmount,
           side,
           dexKey,
