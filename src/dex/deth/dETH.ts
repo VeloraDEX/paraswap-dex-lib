@@ -88,7 +88,7 @@ export class dETH extends SimpleExchange implements IDex<null, DexParams> {
 
     if (!canSwap) return null;
 
-    const gasCost = isETHAddress(srcToken.address) ? 6_500 : 9000;
+    const gasCost = isETHAddress(srcToken.address) ? 6_500 : 9_000;
 
     return [
       {
