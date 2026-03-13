@@ -58,6 +58,7 @@ import { Bebop } from './bebop/bebop';
 import { Swell } from './swell/swell';
 import { PharaohV1 } from './solidly/forks-override/pharaohV1';
 import { PharaohV3 } from './uniswap-v3/forks/pharaoh-v3/pharaoh-v3';
+import { RamsesV3 } from './uniswap-v3/forks/ramses-v3/ramses-v3';
 import { EtherFi } from './etherfi';
 import { Native } from './native/native';
 import { Spark } from './spark/spark';
@@ -159,6 +160,7 @@ const Dexes = [
   Swell,
   PharaohV1,
   PharaohV3,
+  RamsesV3,
   Spark,
   SparkPsm,
   AaveV3Stata,
