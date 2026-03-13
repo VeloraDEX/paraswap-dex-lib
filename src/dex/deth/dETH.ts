@@ -8,7 +8,12 @@ import {
   Logger,
   DexExchangeParam,
 } from '../../types';
-import { SwapSide, Network } from '../../constants';
+import {
+  SwapSide,
+  Network,
+  UNLIMITED_USD_LIQUIDITY,
+  ETHER_ADDRESS,
+} from '../../constants';
 import * as CALLDATA_GAS_COST from '../../calldata-gas-cost';
 import { getDexKeysWithNetwork, isETHAddress } from '../../utils';
 import { IDex } from '../../dex/idex';
@@ -140,10 +145,31 @@ export class dETH extends SimpleExchange implements IDex<null, DexParams> {
     };
   }
 
-  async getTopPoolsForToken(
-    tokenAddress: Address,
-    limit: number,
-  ): Promise<PoolLiquidity[]> {
-    return [];
+  async getTopPoolsForToken(tokenAddress: Address): Promise<PoolLiquidity[]> {
+    const isETH = isETHAddress(tokenAddress);
+    const isDETH = this.isDETH(tokenAddress);
+
+    if (!isETH && !isDETH) {
+      return [];
+    }
+
+    return [
+      {
+        exchange: this.dexKey,
+        address: this.config.wrappedToken,
+        connectorTokens: [
+          isETH
+            ? {
+                address: this.config.wrappedToken,
+                decimals: 18,
+              }
+            : {
+                address: ETHER_ADDRESS,
+                decimals: 18,
+              },
+        ],
+        liquidityUSD: UNLIMITED_USD_LIQUIDITY,
+      },
+    ];
   }
 }
