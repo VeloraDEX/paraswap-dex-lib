@@ -5,16 +5,16 @@ import { Network, SwapSide } from '../../constants';
 export const DexalotConfig: DexConfigMap<DexParams> = {
   Dexalot: {
     [Network.AVALANCHE]: {
-      dexalotRouterAddress: '0x3D3E4F0523500f95039D0Fe600ACf2ADE4b06eB9',
+      dexalotRouterAddress: '0xf00240e5256e72771b46d095666594E0f40D085c',
     },
     [Network.ARBITRUM]: {
-      dexalotRouterAddress: '0x3D3E4F0523500f95039D0Fe600ACf2ADE4b06eB9',
+      dexalotRouterAddress: '0xf00240e5256e72771b46d095666594E0f40D085c',
     },
     [Network.BASE]: {
-      dexalotRouterAddress: '0x3D3E4F0523500f95039D0Fe600ACf2ADE4b06eB9',
+      dexalotRouterAddress: '0xf00240e5256e72771b46d095666594E0f40D085c',
     },
     [Network.BSC]: {
-      dexalotRouterAddress: '0x3D3E4F0523500f95039D0Fe600ACf2ADE4b06eB9',
+      dexalotRouterAddress: '0xf00240e5256e72771b46d095666594E0f40D085c',
     },
   },
 };
