@@ -29,6 +29,7 @@ export type NativeBlacklistEntry = {
 
 export type NativeBlacklistResponse = {
   black_list: NativeBlacklistEntry[];
+  total_count: number;
 };
 
 export type NativeRateFetcherConfig = {

@@ -1,5 +1,6 @@
 import { IDexHelper } from '../../dex-helper';
-import { Fetcher } from '../../lib/fetcher/fetcher';
+import { RequestConfig, Response } from '../../dex-helper/irequest-wrapper';
+import { Fetcher, SkippingRequest } from '../../lib/fetcher/fetcher';
 import { validateAndCast } from '../../lib/validators';
 import { Logger } from '../../types';
 import {
@@ -8,6 +9,7 @@ import {
   NativeRateFetcherConfig,
 } from './types';
 import { blacklistResponseValidator } from './validators';
+import { NATIVE_BLACKLIST_PAGE_SIZE } from './constants';
 
 export class RateFetcher {
   private orderbookFetcher: Fetcher<NativeOrderbookResponse>;
@@ -44,6 +46,7 @@ export class RateFetcher {
       {
         info: {
           requestOptions: config.rateConfig.blacklistReqParams,
+          requestFunc: this.fetchAllBlacklistPages.bind(this),
           caster: (data: unknown) => {
             return validateAndCast<NativeBlacklistResponse>(
               data,
@@ -70,6 +73,56 @@ export class RateFetcher {
 
   async fetchOnce() {
     await this.orderbookFetcher.fetch(true);
+  }
+
+  private async fetchAllBlacklistPages(
+    options: RequestConfig,
+  ): Promise<Response<NativeBlacklistResponse>> {
+    const firstPage =
+      await this.dexHelper.httpRequest.request<NativeBlacklistResponse>({
+        ...options,
+        params: {
+          ...options.params,
+          page_size: NATIVE_BLACKLIST_PAGE_SIZE,
+          page_index: 1,
+        },
+      });
+
+    const totalCount = firstPage.data.total_count;
+    const totalPages = Math.ceil(totalCount / NATIVE_BLACKLIST_PAGE_SIZE);
+
+    if (totalPages <= 1) {
+      return firstPage;
+    }
+
+    const pagePromises: Promise<Response<NativeBlacklistResponse>>[] = [];
+    for (let page = 2; page <= totalPages; page++) {
+      pagePromises.push(
+        this.dexHelper.httpRequest.request<NativeBlacklistResponse>({
+          ...options,
+          params: {
+            ...options.params,
+            page_size: NATIVE_BLACKLIST_PAGE_SIZE,
+            page_index: page,
+          },
+        }),
+      );
+    }
+
+    const pages = await Promise.all(pagePromises);
+
+    const allEntries = [...firstPage.data.black_list];
+    for (const page of pages) {
+      allEntries.push(...page.data.black_list);
+    }
+
+    return {
+      ...firstPage,
+      data: {
+        black_list: allEntries,
+        total_count: totalCount,
+      },
+    };
   }
 
   private handleOrderbookResponse(resp: NativeOrderbookResponse) {
