@@ -1,6 +1,6 @@
 {
   "name": "@paraswap/dex-lib",
-  "version": "4.8.23",
+  "version": "4.8.24-native-blacklist-dexalot-router.0",
   "main": "build/index.js",
   "types": "build/index.d.ts",
   "repository": "https://github.com/paraswap/paraswap-dex-lib",
