@@ -10,4 +10,5 @@ const blacklistEntryValidator = joi.object({
 
 export const blacklistResponseValidator = joi.object({
   black_list: joi.array().items(blacklistEntryValidator).required(),
+  total_count: joi.number().integer().min(0).required(),
 });
