@@ -231,6 +231,7 @@ export class Wasabi extends SimpleExchange implements IDex<WasabiData> {
       returnAmountPos: extractReturnAmountPosition(
         this.routerIface,
         'swapExactInput',
+        'amountOut',
       ),
     };
   }
