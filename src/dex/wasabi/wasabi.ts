@@ -320,7 +320,22 @@ export class Wasabi extends SimpleExchange implements IDex<WasabiData> {
   private interpolate(samples: Sample[], amountIn: bigint): bigint {
     if (samples.length === 0 || amountIn === 0n) return 0n;
 
-    // Binary search for the largest sample where sampleAmountIn <= amountIn
+    if (samples.length === 1) {
+      const [sampleIn, sampleOut] = samples[0];
+      return sampleIn === 0n ? 0n : (amountIn * sampleOut) / sampleIn;
+    }
+
+    const [firstIn, firstOut] = samples[0];
+    if (amountIn <= firstIn) {
+      return firstIn === 0n ? 0n : (amountIn * firstOut) / firstIn;
+    }
+
+    const [lastIn, lastOut] = samples[samples.length - 1];
+    if (amountIn >= lastIn) {
+      return lastOut;
+    }
+
+    // Binary search for the first sample where sampleAmountIn > amountIn
     let lo = 0;
     let hi = samples.length;
     while (lo < hi) {
@@ -331,13 +346,22 @@ export class Wasabi extends SimpleExchange implements IDex<WasabiData> {
         lo = mid + 1;
       }
     }
-    const idx = Math.max(lo - 1, 0);
 
-    const [sampleIn, sampleOut] = samples[idx];
-    if (sampleIn === 0n) return 0n;
+    const lowerIdx = lo - 1;
+    const upperIdx = lo;
 
-    // Linear interpolation: amountOut = amountIn * sampleOut / sampleIn
-    return (amountIn * sampleOut) / sampleIn;
+    const [lowerIn, lowerOut] = samples[lowerIdx];
+    const [upperIn, upperOut] = samples[upperIdx];
+
+    if (upperIn === lowerIn) {
+      return lowerOut;
+    }
+
+    const inputDelta = amountIn - lowerIn;
+    const sampleInputDelta = upperIn - lowerIn;
+    const outputDelta = upperOut - lowerOut;
+
+    return lowerOut + (inputDelta * outputDelta) / sampleInputDelta;
   }
 
   private async discoverPools(): Promise<void> {
@@ -500,9 +524,8 @@ export class Wasabi extends SimpleExchange implements IDex<WasabiData> {
     }
 
     // Also fetch reserves for all pools
-    const reserveCalls: MultiCallParams<bigint>[] = [];
+    const reserveCalls: MultiCallParams<[bigint, bigint]>[] = [];
     for (const pool of this.pools) {
-      // baseTokenReserves
       reserveCalls.push({
         target: pool.address,
         callData: this.poolIface.encodeFunctionData('getReserves'),
@@ -511,29 +534,15 @@ export class Wasabi extends SimpleExchange implements IDex<WasabiData> {
             typeof result === 'object' && 'success' in result
               ? [result.success, result.returnData]
               : [true, result];
-          if (!isSuccess || toDecode === '0x') return 0n;
+          if (!isSuccess || toDecode === '0x') return [0n, 0n];
           const decoded = this.poolIface.decodeFunctionResult(
             'getReserves',
             toDecode as string,
           );
-          return decoded.baseTokenReserves.toBigInt();
-        },
-      });
-      // quoteTokenReserves
-      reserveCalls.push({
-        target: pool.address,
-        callData: this.poolIface.encodeFunctionData('getReserves'),
-        decodeFunction: result => {
-          const [isSuccess, toDecode] =
-            typeof result === 'object' && 'success' in result
-              ? [result.success, result.returnData]
-              : [true, result];
-          if (!isSuccess || toDecode === '0x') return 0n;
-          const decoded = this.poolIface.decodeFunctionResult(
-            'getReserves',
-            toDecode as string,
-          );
-          return decoded.quoteTokenReserves.toBigInt();
+          return [
+            decoded.baseTokenReserves.toBigInt(),
+            decoded.quoteTokenReserves.toBigInt(),
+          ];
         },
       });
     }
@@ -544,7 +553,7 @@ export class Wasabi extends SimpleExchange implements IDex<WasabiData> {
         calls,
         blockNumber,
       ),
-      this.dexHelper.multiWrapper.tryAggregate<bigint>(
+      this.dexHelper.multiWrapper.tryAggregate<[bigint, bigint]>(
         false,
         reserveCalls,
         blockNumber,
@@ -588,17 +597,8 @@ export class Wasabi extends SimpleExchange implements IDex<WasabiData> {
         });
       }
       const entry = poolSamplesMap.get(pi)!;
-      const baseIdx = pi * 2;
-      const quoteIdx = pi * 2 + 1;
-
-      if (
-        reserveResults[baseIdx]?.success &&
-        reserveResults[quoteIdx]?.success
-      ) {
-        entry.reserves = [
-          reserveResults[baseIdx].returnData,
-          reserveResults[quoteIdx].returnData,
-        ];
+      if (reserveResults[pi]?.success) {
+        entry.reserves = reserveResults[pi].returnData;
       }
     }
 
