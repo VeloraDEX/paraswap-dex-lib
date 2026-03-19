@@ -513,44 +513,29 @@ export class Wasabi extends SimpleExchange implements IDex<WasabiData> {
       }
     }
 
-    // Also fetch reserves for all pools
-    const reserveCalls: MultiCallParams<bigint>[] = [];
-    for (const pool of this.pools) {
-      // baseTokenReserves
-      reserveCalls.push({
+    // Fetch reserves for all pools with one call per pool.
+    const reserveCalls: MultiCallParams<[bigint, bigint]>[] = this.pools.map(
+      pool => ({
         target: pool.address,
         callData: this.poolIface.encodeFunctionData('getReserves'),
         decodeFunction: result => {
-          const [isSuccess, toDecode] =
-            typeof result === 'object' && 'success' in result
-              ? [result.success, result.returnData]
-              : [true, result];
-          if (!isSuccess || toDecode === '0x') return 0n;
+          const toDecode =
+            typeof result === 'object' && 'returnData' in result
+              ? result.returnData
+              : result;
+          if (toDecode === '0x') return [0n, 0n];
+
           const decoded = this.poolIface.decodeFunctionResult(
             'getReserves',
             toDecode as string,
           );
-          return decoded.baseTokenReserves.toBigInt();
+          return [
+            decoded.baseTokenReserves.toBigInt(),
+            decoded.quoteTokenReserves.toBigInt(),
+          ];
         },
-      });
-      // quoteTokenReserves
-      reserveCalls.push({
-        target: pool.address,
-        callData: this.poolIface.encodeFunctionData('getReserves'),
-        decodeFunction: result => {
-          const [isSuccess, toDecode] =
-            typeof result === 'object' && 'success' in result
-              ? [result.success, result.returnData]
-              : [true, result];
-          if (!isSuccess || toDecode === '0x') return 0n;
-          const decoded = this.poolIface.decodeFunctionResult(
-            'getReserves',
-            toDecode as string,
-          );
-          return decoded.quoteTokenReserves.toBigInt();
-        },
-      });
-    }
+      }),
+    );
 
     const [sampleResults, reserveResults] = await Promise.all([
       this.dexHelper.multiWrapper.tryAggregate<bigint>(
@@ -558,7 +543,7 @@ export class Wasabi extends SimpleExchange implements IDex<WasabiData> {
         calls,
         blockNumber,
       ),
-      this.dexHelper.multiWrapper.tryAggregate<bigint>(
+      this.dexHelper.multiWrapper.tryAggregate<[bigint, bigint]>(
         false,
         reserveCalls,
         blockNumber,
@@ -602,17 +587,8 @@ export class Wasabi extends SimpleExchange implements IDex<WasabiData> {
         });
       }
       const entry = poolSamplesMap.get(pi)!;
-      const baseIdx = pi * 2;
-      const quoteIdx = pi * 2 + 1;
-
-      if (
-        reserveResults[baseIdx]?.success &&
-        reserveResults[quoteIdx]?.success
-      ) {
-        entry.reserves = [
-          reserveResults[baseIdx].returnData,
-          reserveResults[quoteIdx].returnData,
-        ];
+      if (reserveResults[pi]?.success) {
+        entry.reserves = reserveResults[pi].returnData;
       }
     }
 
