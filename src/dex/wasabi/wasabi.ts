@@ -320,24 +320,38 @@ export class Wasabi extends SimpleExchange implements IDex<WasabiData> {
   private interpolate(samples: Sample[], amountIn: bigint): bigint {
     if (samples.length === 0 || amountIn === 0n) return 0n;
 
-    // Binary search for the largest sample where sampleAmountIn <= amountIn
+    // Binary search for the smallest sample where sampleAmountIn >= amountIn
     let lo = 0;
     let hi = samples.length;
     while (lo < hi) {
       const mid = (lo + hi) >> 1;
-      if (samples[mid][0] > amountIn) {
-        hi = mid;
-      } else {
+      if (samples[mid][0] < amountIn) {
         lo = mid + 1;
+      } else {
+        hi = mid;
       }
     }
-    const idx = Math.max(lo - 1, 0);
 
-    const [sampleIn, sampleOut] = samples[idx];
-    if (sampleIn === 0n) return 0n;
+    // Below first sample: scale from origin to first sample.
+    if (lo === 0) {
+      const [firstIn, firstOut] = samples[0];
+      return firstIn === 0n ? 0n : (amountIn * firstOut) / firstIn;
+    }
 
-    // Linear interpolation: amountOut = amountIn * sampleOut / sampleIn
-    return (amountIn * sampleOut) / sampleIn;
+    // Above last sample: clamp to last known output to avoid overestimation.
+    if (lo >= samples.length) {
+      return samples[samples.length - 1][1];
+    }
+
+    const [upperIn, upperOut] = samples[lo];
+    if (upperIn === amountIn) return upperOut;
+
+    const [lowerIn, lowerOut] = samples[lo - 1];
+    const deltaIn = upperIn - lowerIn;
+    if (deltaIn === 0n) return lowerOut;
+
+    // Linear interpolation between surrounding samples.
+    return lowerOut + ((upperOut - lowerOut) * (amountIn - lowerIn)) / deltaIn;
   }
 
   private async discoverPools(): Promise<void> {
