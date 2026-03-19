@@ -11,6 +11,8 @@ When making fixes based on code review comments or feedback, add a concise descr
 <!-- Add new fixes at the top of this list -->
 <!-- Format: - **[Date] Issue**: Brief description of fix -->
 
+- **[2026-03] Wasabi amountOut interpolation fix**: Updated `interpolate()` in `src/dex/wasabi/wasabi.ts` to linearly interpolate between bracketing samples (instead of scaling from the lower sample) and clamp above-range inputs to the last sampled output to prevent optimistic quotes.
+
 - **[2025-01] Block manager unavailable in certain methods**: `dexHelper.blockManager` is not available in `getTopPoolsForToken()` and `updatePoolState()` methods since these are called on a service that does not have it implemented. Use direct RPC calls (e.g., `dexHelper.provider.getBlock('latest')`) instead when block data is needed in these methods.
 
 - **[2025-01] Remove unused ABIs when removing DEXes**: When removing DEX integrations, also remove their associated ABI files from `src/abi/` if no longer referenced. Use `grep` to verify ABIs are not imported elsewhere before deletion.
