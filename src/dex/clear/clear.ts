@@ -140,7 +140,12 @@ export class Clear extends SimpleExchange implements IDex<ClearData> {
               amount,
               false,
             ]),
-            decodeFunction: (result: any) => result.amountOut.toBigInt(),
+            decodeFunction: (result: any) =>
+              BigInt(
+                this.clearSwapIface
+                  .decodeFunctionResult('previewSwap', result)
+                  .amountOut.toString(),
+              ),
           });
         }
 
