@@ -238,7 +238,7 @@ export class Clear extends SimpleExchange implements IDex<ClearData> {
    */
   getCalldataGasCost(_poolPrices: PoolPrices<ClearData>): number | number[] {
     return (
-      CALLDATA_GAS_COST.DEX_OVERHEAD +
+      CALLDATA_GAS_COST.FUNCTION_SELECTOR +
       CALLDATA_GAS_COST.ADDRESS + // recipient
       CALLDATA_GAS_COST.ADDRESS + // vault
       CALLDATA_GAS_COST.ADDRESS + // srcToken
