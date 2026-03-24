@@ -57,7 +57,7 @@ const baseConfigs: { [network: number]: BaseConfig } = {
     executorsAddresses: {
       Executor01: '0x000010036C0190E009a000d0fc3541100A07380A',
       Executor02: '0x00C600b30fb0400701010F4b080409018B9006E0',
-      Executor03: '0x0e5891850bb3f03090f03010000806f080040100',
+      Executor03: '0x432129d7679468c8DEB0707AbB549aa260e89D12',
     },
     adapterAddresses: {
       Adapter01: '0x9bE264469eF954c139Da4A45Cf76CbCC5e3A6A73',
