@@ -20,15 +20,9 @@ const {
   utils: { hexlify, hexDataLength, hexConcat, hexZeroPad, solidityPack },
 } = ethers;
 
-/**
- * Set bit 2 (uint128 write mode) on an existing Executor03 flag
- * while preserving swapMode (bits 0-1) and balCheck (flag % 3).
- * Adds a multiple of 8 so only bits >= 3 change to fix up % 3.
- */
+/** Set bit 2 (uint128 write mode) on an Executor03 flag. */
 function applyIs128(flag: number): number {
-  const base = (flag & 3) | 4;
-  const delta = ((flag % 3) - (base % 3) + 3) % 3;
-  return base + ((delta * 2) % 3) * 8;
+  return flag | 4;
 }
 
 export type Executor03SingleSwapCallDataParams = {
