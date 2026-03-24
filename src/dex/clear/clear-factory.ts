@@ -52,36 +52,18 @@ export class ClearFactory extends StatefulEventSubscriber<PoolState> {
   async handleNewClearVault(
     event: any,
     state: DeepReadonly<PoolState>,
-    log: Readonly<Log>,
+    _log: Readonly<Log>,
   ): Promise<DeepReadonly<PoolState> | null> {
     const vaultAddress = event.args.vault.toLowerCase();
-
-    const [tokenResult] = await this.dexHelper.multiWrapper.tryAggregate<
-      string[]
-    >(
-      false,
-      [
-        {
-          target: vaultAddress,
-          callData: this.vaultIface.encodeFunctionData('tokens'),
-          decodeFunction: addressArrayDecode as any,
-        },
-      ],
-      log.blockNumber,
+    const tokens = (event.args.tokens as string[]).map(addr =>
+      addr.toLowerCase(),
     );
-
-    if (!tokenResult.success || !tokenResult.returnData) {
-      this.logger.error(
-        `${this.parentName}: Failed to fetch tokens for new vault ${vaultAddress}`,
-      );
-      return null;
-    }
 
     return [
       ...state,
       {
         address: vaultAddress,
-        tokens: tokenResult.returnData.map(addr => addr.toLowerCase()),
+        tokens,
       },
     ];
   }
