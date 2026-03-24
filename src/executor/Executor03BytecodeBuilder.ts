@@ -1,4 +1,4 @@
-import { ethers } from 'ethers';
+import { ethers, BigNumber } from 'ethers';
 import { DexExchangeBuildParam } from '../types';
 import {
   Address,
@@ -19,6 +19,17 @@ import {
 const {
   utils: { hexlify, hexDataLength, hexConcat, hexZeroPad, solidityPack },
 } = ethers;
+
+/**
+ * Set bit 2 (uint128 write mode) on an existing Executor03 flag
+ * while preserving swapMode (bits 0-1) and balCheck (flag % 3).
+ * Adds a multiple of 8 so only bits >= 3 change to fix up % 3.
+ */
+function applyIs128(flag: number): number {
+  const base = (flag & 3) | 4;
+  const delta = ((flag % 3) - (base % 3) + 3) % 3;
+  return base + ((delta * 2) % 3) * 8;
+}
 
 export type Executor03SingleSwapCallDataParams = {
   swap: OptimalSwap;
@@ -312,7 +323,11 @@ export class Executor03BytecodeBuilder extends ExecutorBytecodeBuilder<
 
     const exchangeParam = exchangeParams[exchangeParamIndex];
     const swap = priceRoute.bestRoute[routeIndex].swaps[swapIndex];
-    let { exchangeData, specialDexFlag } = exchangeParam;
+    let {
+      exchangeData,
+      specialDexFlag,
+      amountsPacked128 = false,
+    } = exchangeParam;
 
     exchangeData = this.addTokenAddressToCallData(
       exchangeData,
@@ -351,24 +366,27 @@ export class Executor03BytecodeBuilder extends ExecutorBytecodeBuilder<
     let toAmountPos = 0;
 
     if (insertAmount) {
+      const srcAmount = swap.swapExchanges[swapExchangeIndex].srcAmount;
+      const destAmount = swap.swapExchanges[swapExchangeIndex].destAmount;
+
       if (exchangeParam.insertFromAmountPos) {
         fromAmountPos = exchangeParam.insertFromAmountPos;
       } else {
-        const fromAmount = ethers.utils.defaultAbiCoder.encode(
-          ['uint256'],
-          [swap.swapExchanges[swapExchangeIndex].srcAmount],
+        fromAmountPos = this.findAmountPosWithFallback(
+          exchangeData,
+          srcAmount,
+          amountsPacked128,
         );
-
-        fromAmountPos = this.findAmountPosInCalldata(exchangeData, fromAmount);
       }
 
-      const toAmount = ethers.utils.defaultAbiCoder.encode(
-        ['uint256'],
-        [swap.swapExchanges[swapExchangeIndex].destAmount],
+      toAmountPos = this.findAmountPosWithFallback(
+        exchangeData,
+        destAmount,
+        amountsPacked128,
       );
-
-      toAmountPos = this.findAmountPosInCalldata(exchangeData, toAmount);
     }
+
+    const finalFlag = amountsPacked128 ? applyIs128(flag) : flag;
 
     return this.buildCallData(
       exchangeParam.targetExchange,
@@ -376,7 +394,7 @@ export class Executor03BytecodeBuilder extends ExecutorBytecodeBuilder<
       fromAmountPos,
       tokenBalanceCheckPos,
       specialDexFlag || SpecialDex.DEFAULT,
-      flag,
+      finalFlag as Flag,
       toAmountPos,
     );
   }
@@ -448,6 +466,79 @@ export class Executor03BytecodeBuilder extends ExecutorBytecodeBuilder<
         swapsCalldata, // // calldata
       ],
     );
+  }
+
+  /**
+   * Find the position of an amount in calldata, trying both positive and
+   * negative encodings. For uint128 mode (is128), searches for 16-byte
+   * int128 patterns and returns the 32-byte slot position for mstore.
+   */
+  private findAmountPosWithFallback(
+    exchangeData: string,
+    amount: string,
+    is128: boolean,
+  ): number {
+    if (is128) {
+      return this.findAmount128PosInCalldata(exchangeData, amount);
+    }
+
+    // uint256 mode: try positive encoding first
+    const positiveEncoded = ethers.utils.defaultAbiCoder.encode(
+      ['uint256'],
+      [amount],
+    );
+    let pos = this.findAmountPosInCalldata(exchangeData, positiveEncoded);
+
+    // If not found, try negative int256 encoding
+    if (pos >= (exchangeData.length - 2) / 2) {
+      const negativeEncoded = ethers.utils.defaultAbiCoder.encode(
+        ['int256'],
+        [BigNumber.from(amount).mul(-1)],
+      );
+      pos = this.findAmountPosInCalldata(exchangeData, negativeEncoded);
+    }
+
+    return pos;
+  }
+
+  /**
+   * Find the byte position of a 128-bit amount in calldata.
+   * Searches for both positive and negative int128 encodings.
+   * Returns the 32-byte slot position (16 bytes before the int128 value)
+   * so that mstore with uint128 mode writes to the correct lower 16 bytes.
+   */
+  private findAmount128PosInCalldata(
+    exchangeData: string,
+    amount: string,
+  ): number {
+    const rawCalldata = exchangeData.replace('0x', '');
+    const amountBN = BigNumber.from(amount);
+
+    // Try positive int128 encoding (32 hex chars = 16 bytes)
+    const positiveHex = hexZeroPad(
+      amountBN.toTwos(128).toHexString(),
+      16,
+    ).replace('0x', '');
+    let idx = rawCalldata.indexOf(positiveHex);
+
+    // Try negative int128 encoding if positive not found
+    if (idx === -1) {
+      const negativeHex = hexZeroPad(
+        amountBN.mul(-1).toTwos(128).toHexString(),
+        16,
+      ).replace('0x', '');
+      idx = rawCalldata.indexOf(negativeHex);
+    }
+
+    if (idx !== -1) {
+      // The int128 value starts at byte position idx/2.
+      // mstore with uint128 mode writes lower 16 bytes of a 32-byte slot,
+      // so the slot position is 16 bytes before the int128 value.
+      return idx / 2 - 16;
+    }
+
+    // Not found — return past end of calldata (harmless write)
+    return exchangeData.length / 2;
   }
 
   private addMetadata(
