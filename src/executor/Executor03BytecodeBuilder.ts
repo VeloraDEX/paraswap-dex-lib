@@ -513,7 +513,7 @@ export class Executor03BytecodeBuilder extends ExecutorBytecodeBuilder<
       amountBN.toTwos(128).toHexString(),
       16,
     ).replace('0x', '');
-    let idx = rawCalldata.indexOf(positiveHex);
+    let idx = this.findByteAligned(rawCalldata, positiveHex);
 
     // Try negative int128 encoding if positive not found
     if (idx === -1) {
@@ -521,18 +521,33 @@ export class Executor03BytecodeBuilder extends ExecutorBytecodeBuilder<
         amountBN.mul(-1).toTwos(128).toHexString(),
         16,
       ).replace('0x', '');
-      idx = rawCalldata.indexOf(negativeHex);
+      idx = this.findByteAligned(rawCalldata, negativeHex);
     }
 
     if (idx !== -1) {
       // The int128 value starts at byte position idx/2.
       // mstore with uint128 mode writes lower 16 bytes of a 32-byte slot,
       // so the slot position is 16 bytes before the int128 value.
-      return idx / 2 - 16;
+      const slotPos = idx / 2 - 16;
+      if (slotPos >= 0) {
+        return slotPos;
+      }
     }
 
     // Not found — return past end of calldata (harmless write)
     return exchangeData.length / 2;
+  }
+
+  /** Find a hex pattern in calldata, only accepting byte-aligned matches. */
+  private findByteAligned(rawCalldata: string, pattern: string): number {
+    for (
+      let idx = rawCalldata.indexOf(pattern);
+      idx !== -1;
+      idx = rawCalldata.indexOf(pattern, idx + 1)
+    ) {
+      if (idx % 2 === 0) return idx;
+    }
+    return -1;
   }
 
   private addMetadata(
