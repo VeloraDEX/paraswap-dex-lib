@@ -484,7 +484,7 @@ export class Executor03BytecodeBuilder extends ExecutorBytecodeBuilder<
     let pos = this.findAmountPosInCalldata(exchangeData, positiveEncoded);
 
     // If not found, try negative int256 encoding
-    if (pos >= (exchangeData.length - 2) / 2) {
+    if (pos >= exchangeData.length / 2) {
       const negativeEncoded = ethers.utils.defaultAbiCoder.encode(
         ['int256'],
         [BigNumber.from(amount).mul(-1)],
