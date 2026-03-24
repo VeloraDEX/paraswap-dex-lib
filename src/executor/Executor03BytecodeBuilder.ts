@@ -20,9 +20,9 @@ const {
   utils: { hexlify, hexDataLength, hexConcat, hexZeroPad, solidityPack },
 } = ethers;
 
-/** Set bit 2 (uint128 write mode) on an Executor03 flag. */
+/** Set bit 15 (uint128 write mode) on an Executor03 flag. */
 function applyIs128(flag: number): number {
-  return flag | 4;
+  return flag | 0x8000;
 }
 
 export type Executor03SingleSwapCallDataParams = {
