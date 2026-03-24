@@ -40,7 +40,7 @@ Object.entries(testConfigs).forEach(([networkStr, config]) => {
 
   describe(`EkuboV3 Insert Amounts [${network}]`, () => {
     const sideToContractMethods = new Map([
-      // [SwapSide.SELL, [ContractMethod.swapExactAmountIn]],
+      [SwapSide.SELL, [ContractMethod.swapExactAmountIn]],
       [SwapSide.BUY, [ContractMethod.swapExactAmountOut]],
     ]);
 
@@ -56,21 +56,6 @@ Object.entries(testConfigs).forEach(([networkStr, config]) => {
                     tokens[tokenB.symbol],
                     String(
                       side === SwapSide.SELL ? tokenA.amount : tokenB.amount,
-                    ),
-                    side,
-                    DEX_KEY,
-                    contractMethod,
-                    network,
-                    limitPools && { [DEX_KEY]: limitPools },
-                  );
-                });
-
-                it.skip(`${tokenB.symbol} -> ${tokenA.symbol}`, async () => {
-                  await testInsertAmounts(
-                    tokens[tokenB.symbol],
-                    tokens[tokenA.symbol],
-                    String(
-                      side === SwapSide.SELL ? tokenB.amount : tokenA.amount,
                     ),
                     side,
                     DEX_KEY,
