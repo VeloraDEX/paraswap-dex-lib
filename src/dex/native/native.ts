@@ -224,13 +224,6 @@ export class Native
     return poolPrices.length ? poolPrices : null;
   }
 
-  getTokenFromAddress(address: Address): Token {
-    return this.dexHelper.config.wrapETH({
-      address,
-      decimals: 18,
-    });
-  }
-
   getCalldataGasCost(_: PoolPrices<NativeData>): number | number[] {
     return (
       CALLDATA_GAS_COST.DEX_OVERHEAD +

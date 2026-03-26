@@ -338,10 +338,6 @@ export class Cables
     return address.toLowerCase();
   }
 
-  getTokenFromAddress(address: Address): Token {
-    return this.tokensMap[this.normalizeAddress(address)];
-  }
-
   getPoolIdentifier(srcAddress: Address, destAddress: Address) {
     return `${this.dexKey}_${srcAddress}_${destAddress}`.toLowerCase();
   }

@@ -136,9 +136,6 @@ export interface IDexTxBuilder<ExchangeData, DirectParam = null>
     side: SwapSide,
     options: PreprocessTransactionOptions,
   ): AsyncOrSync<[OptimalSwapExchange<ExchangeData>, ExchangeTxInfo]>;
-
-  // This is helper a function to support testing if preProcessTransaction is implemented
-  getTokenFromAddress?(address: Address): Token;
 }
 
 export interface IDexWithBlacklist {
