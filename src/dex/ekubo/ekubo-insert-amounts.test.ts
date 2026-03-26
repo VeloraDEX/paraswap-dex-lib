@@ -17,7 +17,7 @@ const tokenBAmount = '10000000';
 
 describe(`Ekubo Insert Amounts [${network}]`, () => {
   const sideToContractMethods = new Map([
-    // [SwapSide.SELL, [ContractMethod.swapExactAmountIn]],
+    [SwapSide.SELL, [ContractMethod.swapExactAmountIn]],
     [SwapSide.BUY, [ContractMethod.swapExactAmountOut]],
   ]);
 
