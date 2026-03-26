@@ -11,6 +11,7 @@ import { LocalParaswapSDK } from '../src/implementations/local-paraswap-sdk';
 import { assert } from 'ts-essentials';
 import { AUGUSTUS_V6_INTERFACE } from './utils-e2e';
 import { BigNumber } from 'ethers';
+import { sleep } from './utils';
 
 const DEFAULT_AMOUNT_OFFSET = 5n;
 
@@ -62,9 +63,14 @@ export async function testInsertAmounts(
   network: Network,
   poolIdentifiers?: { [key: string]: string[] | null } | null,
   amountOffset: bigint = DEFAULT_AMOUNT_OFFSET,
+  sleepMs?: number,
 ) {
   const sdk = new LocalParaswapSDK(network, dexKey, '');
   await sdk.initializePricing?.();
+  // if sleepMs is provided, pause simulation for specified time
+  if (sleepMs) {
+    await sleep(sleepMs);
+  }
 
   const priceRoute = await sdk.getPrices(
     srcToken,
