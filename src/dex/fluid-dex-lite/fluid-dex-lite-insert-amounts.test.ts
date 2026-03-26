@@ -26,15 +26,15 @@ describe(`FluidDexLite Insert Amounts [${network}]`, () => {
       contractMethods.forEach((contractMethod: ContractMethod) => {
         describe(`${contractMethod}`, () => {
           it(`${tokenASymbol} -> ${tokenBSymbol}`, async () => {
-            await testInsertAmounts(
-              tokens[tokenASymbol],
-              tokens[tokenBSymbol],
-              side === SwapSide.SELL ? tokenAAmount : tokenBAmount,
+            await testInsertAmounts({
+              srcToken: tokens[tokenASymbol],
+              destToken: tokens[tokenBSymbol],
+              amount: side === SwapSide.SELL ? tokenAAmount : tokenBAmount,
               side,
               dexKey,
               contractMethod,
               network,
-            );
+            });
           });
         });
       });

@@ -53,18 +53,30 @@ function tweakAmounts(
   ]);
 }
 
-export async function testInsertAmounts(
-  srcToken: Token,
-  destToken: Token,
-  amount: string,
-  side: SwapSide,
-  dexKey: string,
-  contractMethod: ContractMethod,
-  network: Network,
-  poolIdentifiers?: { [key: string]: string[] | null } | null,
-  amountOffset: bigint = DEFAULT_AMOUNT_OFFSET,
-  sleepMs?: number,
-) {
+export async function testInsertAmounts(params: {
+  srcToken: Token;
+  destToken: Token;
+  amount: string;
+  side: SwapSide;
+  dexKey: string;
+  contractMethod: ContractMethod;
+  network: Network;
+  poolIdentifiers?: { [key: string]: string[] | null } | null;
+  amountOffset?: bigint;
+  sleepMs?: number;
+}) {
+  const {
+    srcToken,
+    destToken,
+    amount,
+    side,
+    dexKey,
+    contractMethod,
+    network,
+    poolIdentifiers,
+    amountOffset = DEFAULT_AMOUNT_OFFSET,
+    sleepMs,
+  } = params;
   const sdk = new LocalParaswapSDK(network, dexKey, '');
   await sdk.initializePricing?.();
   // if sleepMs is provided, pause simulation for specified time

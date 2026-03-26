@@ -6,18 +6,18 @@ import { Tokens } from '../../../tests/constants-e2e';
 import { testInsertAmounts } from '../../../tests/utils-insert-amounts';
 import { ContractMethod, Network, SwapSide } from '../../constants';
 
-const dexKey = 'Ekubo';
+const dexKey = 'SolidlyV3';
 const network = Network.MAINNET;
 const tokens = Tokens[network];
 
 const tokenASymbol = 'USDC';
 const tokenBSymbol = 'USDT';
-const tokenAAmount = '10000000';
-const tokenBAmount = '10000000';
+const tokenAAmount = '4000000';
+const tokenBAmount = '5000000';
 
-describe(`Ekubo Insert Amounts [${network}]`, () => {
+describe(`SolidlyV3 Insert Amounts [${network}]`, () => {
   const sideToContractMethods = new Map([
-    // [SwapSide.SELL, [ContractMethod.swapExactAmountIn]],
+    [SwapSide.SELL, [ContractMethod.swapExactAmountIn]],
     [SwapSide.BUY, [ContractMethod.swapExactAmountOut]],
   ]);
 

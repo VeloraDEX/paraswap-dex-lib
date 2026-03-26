@@ -62,18 +62,17 @@ Object.entries(testConfigs).forEach(([networkStr, config]) => {
           describe(`${contractMethod}`, () => {
             config!.tokensToTest.forEach(({ pair: [tokenA, tokenB] }) => {
               it(`${tokenA.symbol} -> ${tokenB.symbol}`, async () => {
-                await testInsertAmounts(
-                  tokens[tokenA.symbol],
-                  tokens[tokenB.symbol],
-                  side === SwapSide.SELL ? tokenA.amount : tokenB.amount,
+                await testInsertAmounts({
+                  srcToken: tokens[tokenA.symbol],
+                  destToken: tokens[tokenB.symbol],
+                  amount:
+                    side === SwapSide.SELL ? tokenA.amount : tokenB.amount,
                   side,
                   dexKey,
                   contractMethod,
                   network,
-                  undefined,
-                  undefined,
                   sleepMs,
-                );
+                });
               });
             });
           });
