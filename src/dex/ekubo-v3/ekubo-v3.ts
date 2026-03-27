@@ -216,6 +216,7 @@ export class EkuboV3 extends SimpleExchange implements IDex<EkuboData> {
       targetExchange: ROUTER_ADDRESS,
       dexFuncHasRecipient: true,
       returnAmountPos: undefined,
+      amountsPacked128: true,
     };
   }
 
