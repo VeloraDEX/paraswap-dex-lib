@@ -34,7 +34,7 @@ import { generateConfig } from '../../config';
   Tokens or Holders map, you can update the './tests/constants-e2e'
 
   Other than the standard cases that are already added by the template
-  it is highly recommended to add test cases which could be specific
+  it is highly recommended to add test cases that could be specific
   to testing __DexName__ (Eg. Tests based on poolType, special tokens,
   etc).
 
