@@ -890,15 +890,6 @@ export class Bebop
     return null;
   }
 
-  getTokenFromAddress(address: Address): Token {
-    const bebopToken = this.tokensMap[address.toLowerCase()];
-    return {
-      address,
-      decimals: bebopToken.decimals,
-      symbol: bebopToken.ticker,
-    };
-  }
-
   releaseResources(): AsyncOrSync<void> {
     if (!this.dexHelper.config.isSlave) {
       this.rateFetcher.stop();

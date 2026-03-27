@@ -869,12 +869,6 @@ export class Hashflow
     );
   }
 
-  getTokenFromAddress?(address: Address): Token {
-    // We don't have predefined set of tokens with decimals
-    // Anyway we don't use decimals, so it is fine to do this
-    return { address, decimals: 0 };
-  }
-
   getAdapterParam(
     srcToken: string,
     destToken: string,

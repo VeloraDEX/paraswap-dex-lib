@@ -885,11 +885,6 @@ export class CurveV1
     return [DIRECT_METHOD_NAME];
   }
 
-  getTokenFromAddress(address: Address): Token {
-    // In this Dex decimals are not used
-    return { address, decimals: 0 };
-  }
-
   async preProcessTransaction(
     optimalSwapExchange: OptimalSwapExchange<CurveV1Data>,
     srcToken: Token,
