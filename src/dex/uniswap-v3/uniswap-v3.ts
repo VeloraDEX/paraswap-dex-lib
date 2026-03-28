@@ -835,6 +835,7 @@ export class UniswapV3
             zeroForOne,
             side,
             balanceDestToken,
+            pool.rustHandle,
           );
           const pricesResult = this._getOutputs(
             state,
@@ -842,6 +843,7 @@ export class UniswapV3
             zeroForOne,
             side,
             balanceDestToken,
+            pool.rustHandle,
           );
 
           if (!unitResult || !pricesResult) {
@@ -1470,15 +1472,28 @@ export class UniswapV3
     zeroForOne: boolean,
     side: SwapSide,
     destTokenBalance: bigint,
+    rustHandle?: {
+      queryOutputs(
+        amounts: bigint[],
+        zeroForOne: boolean,
+        side: number,
+      ): { outputs: bigint[]; tickCounts: number[] };
+    } | null,
   ): OutputResult | null {
     try {
-      const outputsResult = uniswapV3Math.queryOutputs(
-        state,
-        amounts,
-        zeroForOne,
-        side,
-        this.logger,
-      );
+      const outputsResult = rustHandle
+        ? rustHandle.queryOutputs(
+            amounts,
+            zeroForOne,
+            side === SwapSide.SELL ? 0 : 1,
+          )
+        : uniswapV3Math.queryOutputs(
+            state,
+            amounts,
+            zeroForOne,
+            side,
+            this.logger,
+          );
 
       if (side === SwapSide.SELL) {
         if (outputsResult.outputs[0] > destTokenBalance) {
