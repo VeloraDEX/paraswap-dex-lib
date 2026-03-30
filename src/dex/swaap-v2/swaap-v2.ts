@@ -662,21 +662,21 @@ export class SwaapV2
           `${prefix}: Too strict slippage, skipping restriction ${e}`,
         );
       } else {
-        const message =
-          e instanceof Error ? `${e.name}: ${e.message}` : 'Unknown error';
-        this.logger.warn(`${prefix}: Protocol is restricted ${e}`);
-
         const poolIdentifier = getPoolIdentifier(
           this.dexKey,
           normalizedSrcToken.address,
           normalizedDestToken.address,
         );
 
+        const message =
+          e instanceof Error ? `${e.name}: ${e.message}` : 'Unknown error';
+        this.logger.warn(
+          `[RESTRICTION] ${this.dexKey}-${this.network}: ${poolIdentifier} was restricted for ${SWAAP_POOL_RESTRICT_TTL_S} sec. due to fails, error: ${message}`,
+        );
         await this.restrictPairAndNotify(
           srcToken.address,
           destToken.address,
           message,
-          poolIdentifier,
         );
       }
 
@@ -688,12 +688,7 @@ export class SwaapV2
     token0: string,
     token1: string,
     message: string,
-    poolIdentifier: string,
   ): Promise<void> {
-    this.logger.warn(
-      `${this.dexKey}-${this.network}: ${poolIdentifier} was restricted for ${SWAAP_POOL_RESTRICT_TTL_S} sec. due to fails`,
-    );
-
     await this.restrictPair(token0, token1);
 
     this.rateFetcher

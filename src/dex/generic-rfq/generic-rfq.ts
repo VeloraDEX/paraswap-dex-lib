@@ -453,8 +453,10 @@ export class GenericRFQ extends ParaSwapLimitOrders {
           `${this.dexKey}-${this.network}: failed to build transaction on side ${side} with too strict slippage. Skipping restriction`,
         );
       } else {
+        const message =
+          e instanceof Error ? `${e.name}: ${e.message}` : 'Unknown error';
         this.logger.warn(
-          `${this.dexKey}-${this.network}: protocol is restricted for pair ${srcToken.address} -> ${destToken.address}`,
+          `[RESTRICTION] ${this.dexKey}-${this.network}: protocol is restricted for pair ${srcToken.address} -> ${destToken.address}, error: ${message}`,
         );
         await this.restrictPair(srcToken.address, destToken.address);
       }

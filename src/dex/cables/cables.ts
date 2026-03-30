@@ -245,6 +245,11 @@ export class Cables
 
       this.logger.error(message);
       if (!e?.isSlippageError) {
+        const restrictMessage =
+          e instanceof Error ? `${e.name}: ${e.message}` : 'Unknown error';
+        this.logger.warn(
+          `[RESTRICTION] ${this.dexKey}-${this.network}: whole dex is restricted, error: ${restrictMessage}`,
+        );
         this.restrict();
       }
       throw new Error(message);

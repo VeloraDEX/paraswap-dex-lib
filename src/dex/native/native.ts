@@ -366,6 +366,13 @@ export class Native
       );
 
       if (!error?.isSlippageError) {
+        const message =
+          error instanceof Error
+            ? `${error.name}: ${error.message}`
+            : 'Unknown error';
+        this.logger.warn(
+          `[RESTRICTION] ${this.dexKey}-${this.network}: whole dex is restricted, error: ${message}`,
+        );
         this.restrict();
       }
 

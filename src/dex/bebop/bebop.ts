@@ -854,6 +854,11 @@ export class Bebop
 
       this.logger.error(message);
       if (!e?.isSlippageError && !e?.isBlacklistError) {
+        const restrictMessage =
+          e instanceof Error ? `${e.name}: ${e.message}` : 'Unknown error';
+        this.logger.warn(
+          `[RESTRICTION] ${this.dexKey}-${this.network}: whole dex is restricted, error: ${restrictMessage}`,
+        );
         this.restrict();
       }
       throw new Error(message);
