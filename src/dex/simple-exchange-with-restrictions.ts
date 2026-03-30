@@ -206,7 +206,7 @@ export class SimpleExchangeWithRestrictions
 
   protected async restrict(errorMessage: string) {
     this.logger.warn(
-      `[RESTRICTION-dex] ${this.dexKey}-${this.network}: whole dex is restricted for ${this.restrictTtlS}s, error: ${errorMessage}`,
+      `[RESTRICTION-dex] ${this.dexKey}-${this.network}: restrict attempt, error: ${errorMessage}`,
     );
     const errorsDataRaw = await this.dexHelper.cache.get(
       this.dexKey,
@@ -239,9 +239,11 @@ export class SimpleExchangeWithRestrictions
     } else {
       if (errorsData.count + 1 >= this.restrictCountThreshold) {
         this.logger.warn(
-          `${this.dexKey}-${this.network}: Restricting due to error count=${
-            errorsData.count + 1
-          } within ${this.restrictCheckIntervalMs / 1000 / 60} minutes`,
+          `[RESTRICTION-dex] ${this.dexKey}-${
+            this.network
+          }: Restricting due to error count=${errorsData.count + 1} within ${
+            this.restrictCheckIntervalMs / 1000
+          }s for ${this.restrictTtlS}s`,
         );
         await this.dexHelper.cache.rawset(
           this.getRestrictedCacheKey(),
