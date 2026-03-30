@@ -191,8 +191,12 @@ export class SimpleExchangeWithRestrictions
   protected async restrictPair(
     token0: string,
     token1: string,
+    errorMessage: string,
     ttl = this.restrictPairTtlS,
   ) {
+    this.logger.warn(
+      `[RESTRICTION-pair] ${this.dexKey}-${this.network}: pair is restricted ${token0} -> ${token1} for ${ttl}s, error: ${errorMessage}`,
+    );
     const key = this.getRestrictedPairCacheKey(token0, token1);
 
     return this.dexHelper.cache
@@ -200,7 +204,10 @@ export class SimpleExchangeWithRestrictions
       .then(() => true);
   }
 
-  protected async restrict() {
+  protected async restrict(errorMessage: string) {
+    this.logger.warn(
+      `[RESTRICTION-dex] ${this.dexKey}-${this.network}: whole dex is restricted for ${this.restrictTtlS}s, error: ${errorMessage}`,
+    );
     const errorsDataRaw = await this.dexHelper.cache.get(
       this.dexKey,
       this.network,

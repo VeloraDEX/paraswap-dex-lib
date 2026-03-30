@@ -662,17 +662,8 @@ export class SwaapV2
           `${prefix}: Too strict slippage, skipping restriction ${e}`,
         );
       } else {
-        const poolIdentifier = getPoolIdentifier(
-          this.dexKey,
-          normalizedSrcToken.address,
-          normalizedDestToken.address,
-        );
-
         const message =
           e instanceof Error ? `${e.name}: ${e.message}` : 'Unknown error';
-        this.logger.warn(
-          `[RESTRICTION] ${this.dexKey}-${this.network}: ${poolIdentifier} was restricted for ${SWAAP_POOL_RESTRICT_TTL_S} sec. due to fails, error: ${message}`,
-        );
         await this.restrictPairAndNotify(
           srcToken.address,
           destToken.address,
@@ -689,7 +680,7 @@ export class SwaapV2
     token1: string,
     message: string,
   ): Promise<void> {
-    await this.restrictPair(token0, token1);
+    await this.restrictPair(token0, token1, message);
 
     this.rateFetcher
       .notify(SWAAP_BANNED_CODE, message, this.getNotifyReqParams())

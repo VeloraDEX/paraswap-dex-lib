@@ -748,10 +748,11 @@ export class Dexalot
         } else {
           const message =
             e instanceof Error ? `${e.name}: ${e.message}` : 'Unknown error';
-          this.logger.warn(
-            `[RESTRICTION] ${this.dexKey}-${this.network}: protocol is restricted for pair ${srcToken.address} -> ${destToken.address} due to swap: ${swapIdentifier}, error: ${message}`,
+          await this.restrictPair(
+            srcToken.address,
+            destToken.address,
+            `${message} (swap: ${swapIdentifier})`,
           );
-          await this.restrictPair(srcToken.address, destToken.address);
         }
       }
 

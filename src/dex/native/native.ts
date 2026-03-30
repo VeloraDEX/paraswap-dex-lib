@@ -370,10 +370,7 @@ export class Native
           error instanceof Error
             ? `${error.name}: ${error.message}`
             : 'Unknown error';
-        this.logger.warn(
-          `[RESTRICTION] ${this.dexKey}-${this.network}: whole dex is restricted, error: ${message}`,
-        );
-        this.restrict();
+        this.restrict(message);
       }
 
       throw new Error(error);
