@@ -39,6 +39,7 @@
     "yargs": "^17.0.1"
   },
   "scripts": {
+    "postinstall": "cd native && npm install && npm run build || true",
     "init-integration": "ts-node scripts/dex-integration.ts init",
     "test-integration": "ts-node scripts/dex-integration.ts test",
     "build": "yarn check:pq && yarn check:es && tsc",
