@@ -366,7 +366,11 @@ export class Native
       );
 
       if (!error?.isSlippageError) {
-        this.restrict();
+        const message =
+          error instanceof Error
+            ? `${error.name}: ${error.message}`
+            : 'Unknown error';
+        this.restrict(message);
       }
 
       throw new Error(error);
