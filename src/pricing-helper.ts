@@ -308,6 +308,7 @@ export class PricingHelper {
       destDexFee: 0,
     },
     rollupL1CalldataCostToL2GasCost?: (calldataCost: number) => number,
+    useRust: boolean = false,
   ): Promise<PoolPrices<any>[]> {
     const dexPoolPrices = await Promise.all(
       dexKeys.map(async key => {
@@ -342,6 +343,8 @@ export class PricingHelper {
                   blockNumber,
                   limitPools ? limitPools : undefined,
                   transferFees,
+                  undefined,
+                  useRust,
                 )
                 .then(poolPrices => {
                   try {

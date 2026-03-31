@@ -14,6 +14,7 @@ import {
   PreprocessTransactionOptions,
   SimpleExchangeParam,
   Token,
+  TransferFeeParams,
   TxInfo,
 } from '../../types';
 import { CACHE_PREFIX, Network, SwapSide } from '../../constants';
@@ -706,6 +707,9 @@ export class UniswapV3
     side: SwapSide,
     blockNumber: number,
     limitPools?: string[],
+    transferFees?: TransferFeeParams,
+    isFirstSwap?: boolean,
+    useRust?: boolean,
   ): Promise<null | ExchangePrices<UniswapV3Data>> {
     try {
       const _srcToken = this.dexHelper.config.wrapETH(srcToken);
@@ -829,13 +833,15 @@ export class UniswapV3
           const balanceDestToken =
             _destAddress === pool.token0 ? state.balance0 : state.balance1;
 
+          const rustHandle = useRust ? pool.rustHandle : null;
+
           const unitResult = this._getOutputs(
             state,
             [unitAmount],
             zeroForOne,
             side,
             balanceDestToken,
-            pool.rustHandle,
+            rustHandle,
           );
           const pricesResult = this._getOutputs(
             state,
@@ -843,7 +849,7 @@ export class UniswapV3
             zeroForOne,
             side,
             balanceDestToken,
-            pool.rustHandle,
+            rustHandle,
           );
 
           if (!unitResult || !pricesResult) {

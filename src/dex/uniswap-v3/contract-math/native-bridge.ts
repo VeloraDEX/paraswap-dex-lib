@@ -97,7 +97,7 @@ export function createRustHandle(
   state: DeepReadonly<PoolState>,
   variant: string = 'uniswap_v3',
 ): RustPoolHandleType | null {
-  if (!useNativeMath) return null;
+  if (!nativeAddonAvailable) return null;
   try {
     return nativeAddon.RustPoolHandle.create(toRustInit(state, variant));
   } catch {

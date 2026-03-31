@@ -202,6 +202,7 @@ export interface IDexPricing<ExchangeData> {
     // across all integrations, done it like this
     transferFees?: TransferFeeParams,
     isFirstSwap?: boolean,
+    useRust?: boolean,
   ): Promise<ExchangePrices<ExchangeData> | null>;
 
   // Returns estimated gas cost for calldata for DEX when used in multiSwap.
