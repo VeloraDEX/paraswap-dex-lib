@@ -10,7 +10,6 @@ import MaverickV2PoolLensABI from '../../abi/maverick-v2/MaverickV2PoolLens.json
 import { AbiItem } from 'web3-utils';
 import { Contract } from 'web3-eth-contract';
 import { MaverickPoolMath } from './maverick-math/maverick-pool-math';
-import _ from 'lodash';
 import { MultiResult } from '../../lib/multi-wrapper';
 import { BytesLike } from 'ethers';
 import { extractSuccessAndValue } from '../../lib/decoders';
@@ -307,7 +306,11 @@ export class MaverickV2EventPool extends StatefulEventSubscriber<PoolState> {
     exactOutput: boolean,
   ): [bigint, bigint] {
     try {
-      const tempState = _.cloneDeep(this.state!);
+      const s = this.state!;
+      const tempState: PoolState = {
+        ...s,
+        ticks: { ...s.ticks },
+      };
 
       const preActiveTick = tempState.activeTick;
 
