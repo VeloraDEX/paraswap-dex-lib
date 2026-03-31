@@ -133,15 +133,6 @@ export class UniswapV3EventPool extends StatefulEventSubscriber<PoolState> {
     await super.initialize(blockNumber, options);
   }
 
-  setState(
-    state: DeepReadonly<PoolState>,
-    blockNumber: number,
-    reason?: string,
-  ): void {
-    super.setState(state, blockNumber, reason);
-    this.rustHandle = createRustHandle(state);
-  }
-
   protected getPoolIdentifierData() {
     return {
       token0: this.token0,
@@ -305,6 +296,7 @@ export class UniswapV3EventPool extends StatefulEventSubscriber<PoolState> {
     // );
     // }
     super._setState(state, blockNumber);
+    this.rustHandle = state === null ? null : createRustHandle(state);
   }
 
   async generateState(blockNumber: number): Promise<Readonly<PoolState>> {
