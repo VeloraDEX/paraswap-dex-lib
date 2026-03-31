@@ -31,47 +31,100 @@ const dexHelper = new DummyDexHelper(network);
 const uniV3 = new UniswapV3(network, 'UniswapV3', dexHelper);
 const side = SwapSide.SELL;
 
+// --- Token addresses ---
+const WETH = '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2';
+const USDC = '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48';
+const USDT = '0xdAC17F958D2ee523a2206206994597C13D831ec7';
+const WBTC = '0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599';
+const DAI = '0x6B175474E89094C44Da98b954EedeAC495271d0F';
+const PEPE = '0x6982508145454Ce325dDbE47a25d4ec3d2311933';
+const LINK = '0x514910771AF9Ca656af840dff83E8264EcF986CA';
+const UNI = '0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984';
+const MKR = '0x9f8F72aA9304c8B593d555F12eF6589cC3A579A2';
+const SHIB = '0x95aD61b0a150d79219dCF64E1E6Cc01f0B64C4cE';
+
 // --- Token pairs to benchmark ---
 const pairs = [
+  // Stablecoin pairs (tight liquidity, many ticks)
   {
     name: 'USDC/WETH (stable, concentrated)',
-    src: { address: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48', decimals: 6 },
-    dest: {
-      address: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2',
-      decimals: 18,
-    },
+    src: { address: USDC, decimals: 6 },
+    dest: { address: WETH, decimals: 18 },
   },
+  {
+    name: 'USDT/WETH (stable)',
+    src: { address: USDT, decimals: 6 },
+    dest: { address: WETH, decimals: 18 },
+  },
+  {
+    name: 'DAI/WETH (stable 18-dec)',
+    src: { address: DAI, decimals: 18 },
+    dest: { address: WETH, decimals: 18 },
+  },
+  {
+    name: 'USDC/USDT (stablecoin pair)',
+    src: { address: USDC, decimals: 6 },
+    dest: { address: USDT, decimals: 6 },
+  },
+  // Major volatile pairs
   {
     name: 'WBTC/WETH (volatile, wider spread)',
-    src: { address: '0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599', decimals: 8 },
-    dest: {
-      address: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2',
-      decimals: 18,
-    },
+    src: { address: WBTC, decimals: 8 },
+    dest: { address: WETH, decimals: 18 },
   },
   {
+    name: 'LINK/WETH (mid-cap)',
+    src: { address: LINK, decimals: 18 },
+    dest: { address: WETH, decimals: 18 },
+  },
+  {
+    name: 'UNI/WETH (mid-cap)',
+    src: { address: UNI, decimals: 18 },
+    dest: { address: WETH, decimals: 18 },
+  },
+  {
+    name: 'MKR/WETH (low liquidity, few ticks)',
+    src: { address: MKR, decimals: 18 },
+    dest: { address: WETH, decimals: 18 },
+  },
+  // Meme / high-volatility (many tick crossings)
+  {
     name: 'PEPE/WETH (meme, very volatile)',
-    src: {
-      address: '0x6982508145454Ce325dDbE47a25d4ec3d2311933',
-      decimals: 18,
-    },
-    dest: {
-      address: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2',
-      decimals: 18,
-    },
+    src: { address: PEPE, decimals: 18 },
+    dest: { address: WETH, decimals: 18 },
+  },
+  {
+    name: 'SHIB/WETH (meme, high tick density)',
+    src: { address: SHIB, decimals: 18 },
+    dest: { address: WETH, decimals: 18 },
   },
 ];
 
-function generateAmounts(decimals: number, count: number = 50): bigint[] {
+function generateAmounts(decimals: number): bigint[] {
   const unit = getBigIntPow(decimals);
   const amounts: bigint[] = [0n];
-  for (let i = 1; i <= count; i++) {
-    amounts.push(unit * BigInt(i * 100));
+
+  // Small amounts (dust to modest)
+  for (let i = 1; i <= 10; i++) {
+    amounts.push(unit * BigInt(i));
   }
-  // Add some large amounts to stress tick crossings
-  amounts.push(unit * 100000n);
-  amounts.push(unit * 1000000n);
-  amounts.push(unit * 10000000n);
+  // Medium amounts (10–10k stepping by 50)
+  for (let i = 50; i <= 10_000; i += 50) {
+    amounts.push(unit * BigInt(i));
+  }
+  // Large amounts to stress tick crossings
+  for (const m of [
+    50_000n,
+    100_000n,
+    500_000n,
+    1_000_000n,
+    5_000_000n,
+    10_000_000n,
+    50_000_000n,
+  ]) {
+    amounts.push(unit * m);
+  }
+
   return amounts;
 }
 
@@ -94,6 +147,9 @@ const aggregateAndPrintMeasures = (measures: number[], label: string) => {
       )}ms`,
   );
 };
+
+let totalJsMs = 0;
+let totalRustMs = 0;
 
 async function benchmarkPair(
   pairConfig: (typeof pairs)[0],
@@ -158,7 +214,9 @@ async function benchmarkPair(
     for (let i = 0; i < runsNumber; i++) {
       const start = performance.now();
       uniswapV3Math.queryOutputs(pool.state, amounts, zeroForOne, side);
-      measures.push(performance.now() - start);
+      const elapsed = performance.now() - start;
+      measures.push(elapsed);
+      totalJsMs += elapsed;
     }
     aggregateAndPrintMeasures(measures, `JS fee=${pool.key}`);
   }
@@ -177,7 +235,9 @@ async function benchmarkPair(
       for (let i = 0; i < runsNumber; i++) {
         const start = performance.now();
         handle.queryOutputs(amounts, zeroForOne, 0);
-        measures.push(performance.now() - start);
+        const elapsed = performance.now() - start;
+        measures.push(elapsed);
+        totalRustMs += elapsed;
       }
       aggregateAndPrintMeasures(measures, `Rust fee=${pool.key}`);
 
@@ -230,6 +290,15 @@ async function benchmarkPair(
     logger.info(
       '\nRust addon not available. Build with: cd native && npm run build',
     );
+  }
+
+  logger.info(`\n${'='.repeat(60)}`);
+  logger.info('TOTALS');
+  logger.info(`${'='.repeat(60)}`);
+  logger.info(`  JS total:   ${totalJsMs.toFixed(3)}ms`);
+  if (nativeAddonAvailable) {
+    logger.info(`  Rust total: ${totalRustMs.toFixed(3)}ms`);
+    logger.info(`  Speedup:    ${(totalJsMs / totalRustMs).toFixed(2)}x`);
   }
 
   logger.info(`\nBenchmark complete.`);
