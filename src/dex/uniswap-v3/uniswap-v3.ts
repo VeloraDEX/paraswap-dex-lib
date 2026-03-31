@@ -872,10 +872,13 @@ export class UniswapV3
               }
             }),
           ];
+          const data = this.prepareData(_srcAddress, _destAddress, pool, state);
+          data.useRust = !!rustHandle;
+
           return {
             unit: unitResult.outputs[0],
             prices,
-            data: this.prepareData(_srcAddress, _destAddress, pool, state),
+            data,
             poolIdentifiers: [
               this.getPoolIdentifier(
                 pool.token0,
