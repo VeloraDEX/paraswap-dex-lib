@@ -37,6 +37,7 @@ import { isAxiosError, isETHAddress, uuidToBytes16 } from '../../utils';
 
 export const OVERORDER_BPS = 100;
 export const BPS_MAX_VALUE = 10000n;
+const PAIR_RESTRICTION_DUE_TO_TIMEOUT_TTL_S = 5 * 60;
 
 export const overOrder = (amount: string, bps: number) =>
   ((BigInt(amount) * (BPS_MAX_VALUE + BigInt(bps))) / BPS_MAX_VALUE).toString();
@@ -455,7 +456,19 @@ export class GenericRFQ extends ParaSwapLimitOrders {
       } else {
         const message =
           e instanceof Error ? `${e.name}: ${e.message}` : 'Unknown error';
-        await this.restrictPair(srcToken.address, destToken.address, message);
+        const isTimeoutError =
+          isAxiosError(e) &&
+          e.code === 'ECONNABORTED' &&
+          e.message.includes('timeout');
+
+        await this.restrictPair(
+          srcToken.address,
+          destToken.address,
+          message,
+          isTimeoutError
+            ? PAIR_RESTRICTION_DUE_TO_TIMEOUT_TTL_S
+            : this.restrictPairTtlS,
+        );
       }
 
       throw e;
