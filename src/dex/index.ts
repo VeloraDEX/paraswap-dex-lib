@@ -98,6 +98,7 @@ import { Blackhole } from './solidly/forks-override/blackhole';
 import { BlackholeCL } from './algebra-integral/forks/blackhole-cl';
 import { dETH } from './deth/dETH';
 import { Cap } from './cap/cap';
+import { Clear } from './clear/clear';
 
 const LegacyDexes = [
   CurveV2,
@@ -189,6 +190,7 @@ const Dexes = [
   Blackhole,
   BlackholeCL,
   Cap,
+  Clear,
 ];
 
 export type LegacyDexConstructor = new (dexHelper: IDexHelper) => IDexTxBuilder<
