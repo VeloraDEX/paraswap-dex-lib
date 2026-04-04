@@ -1,0 +1,88 @@
+[
+  {
+    "type": "function",
+    "name": "swapExactInputSingle",
+    "inputs": [
+      {
+        "name": "params",
+        "type": "tuple",
+        "internalType": "struct ExactInputSingleParams",
+        "components": [
+          { "name": "tokenIn", "type": "address", "internalType": "address" },
+          { "name": "tokenOut", "type": "address", "internalType": "address" },
+          { "name": "amountIn", "type": "uint256", "internalType": "uint256" },
+          {
+            "name": "amountOutMinimum",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          { "name": "to", "type": "address", "internalType": "address" },
+          {
+            "name": "userModule",
+            "type": "address",
+            "internalType": "address"
+          },
+          { "name": "moduleMask", "type": "uint8", "internalType": "uint8" },
+          {
+            "name": "baseFeeConfig",
+            "type": "tuple",
+            "internalType": "struct BaseFeeConfig",
+            "components": [
+              { "name": "baseFee", "type": "uint32", "internalType": "uint32" },
+              { "name": "wToken0", "type": "uint32", "internalType": "uint32" },
+              { "name": "wToken1", "type": "uint32", "internalType": "uint32" }
+            ]
+          },
+          { "name": "data", "type": "bytes", "internalType": "bytes" }
+        ]
+      }
+    ],
+    "outputs": [
+      { "name": "amountOut", "type": "uint256", "internalType": "uint256" }
+    ],
+    "stateMutability": "payable"
+  },
+  {
+    "type": "function",
+    "name": "swapExactOutputSingle",
+    "inputs": [
+      {
+        "name": "params",
+        "type": "tuple",
+        "internalType": "struct ExactOutputSingleParams",
+        "components": [
+          { "name": "tokenIn", "type": "address", "internalType": "address" },
+          { "name": "tokenOut", "type": "address", "internalType": "address" },
+          { "name": "amountOut", "type": "uint256", "internalType": "uint256" },
+          {
+            "name": "amountInMaximum",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          { "name": "to", "type": "address", "internalType": "address" },
+          {
+            "name": "userModule",
+            "type": "address",
+            "internalType": "address"
+          },
+          { "name": "moduleMask", "type": "uint8", "internalType": "uint8" },
+          {
+            "name": "baseFeeConfig",
+            "type": "tuple",
+            "internalType": "struct BaseFeeConfig",
+            "components": [
+              { "name": "baseFee", "type": "uint32", "internalType": "uint32" },
+              { "name": "wToken0", "type": "uint32", "internalType": "uint32" },
+              { "name": "wToken1", "type": "uint32", "internalType": "uint32" }
+            ]
+          },
+          { "name": "data", "type": "bytes", "internalType": "bytes" }
+        ]
+      }
+    ],
+    "outputs": [
+      { "name": "amountIn", "type": "uint256", "internalType": "uint256" }
+    ],
+    "stateMutability": "payable"
+  }
+]
