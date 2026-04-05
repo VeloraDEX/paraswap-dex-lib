@@ -54,6 +54,7 @@ export type UniswapV4Data = {
     zeroForOne: boolean;
     pool: Pool;
   }[];
+  useRust?: boolean;
 };
 
 export type Pool = {

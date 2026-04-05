@@ -2,6 +2,7 @@ pub mod config;
 pub mod math;
 pub mod pool_state;
 pub mod query_outputs;
+pub mod v4_query_outputs;
 
 use ethnum::{I256, U256};
 use napi::bindgen_prelude::*;
@@ -386,6 +387,138 @@ impl RustPoolRegistry {
             .collect();
 
         results.into_iter().collect()
+    }
+
+    #[napi]
+    pub fn pool_count(&self) -> u32 {
+        self.pools.len() as u32
+    }
+}
+
+// ---- V4 Pool Registry ----
+
+#[napi(object)]
+pub struct JsV4PoolStateInit {
+    pub sqrt_price_x96: BigInt,
+    pub tick: BigInt,
+    pub protocol_fee: BigInt,
+    pub lp_fee: BigInt,
+    pub liquidity: BigInt,
+    pub tick_spacing: BigInt,
+    pub fee_growth_global0_x128: BigInt,
+    pub fee_growth_global1_x128: BigInt,
+    pub bitmap_range: i32,
+    pub start_tick_bitmap: BigInt,
+    pub tick_bitmap: Vec<JsBitmapEntry>,
+    pub ticks: Vec<JsTickEntry>,
+}
+
+#[napi(object)]
+pub struct JsV4QueryResult {
+    pub key: String,
+    pub outputs: Vec<BigInt>,
+}
+
+fn build_v4_pool_state(init: &JsV4PoolStateInit) -> v4_query_outputs::V4PoolState {
+    let mut tick_bitmap = HashMap::with_capacity(init.tick_bitmap.len());
+    for entry in &init.tick_bitmap {
+        tick_bitmap.insert(entry.key as i16, bigint_to_u256(&entry.value));
+    }
+
+    let mut ticks = HashMap::with_capacity(init.ticks.len());
+    for entry in &init.ticks {
+        ticks.insert(
+            entry.key,
+            TickInfo {
+                liquidity_gross: bigint_to_u256(&entry.liquidity_gross),
+                liquidity_net: bigint_to_i256(&entry.liquidity_net),
+                initialized: true,
+            },
+        );
+    }
+
+    v4_query_outputs::V4PoolState {
+        sqrt_price_x96: bigint_to_u256(&init.sqrt_price_x96),
+        tick: bigint_to_i256(&init.tick),
+        protocol_fee: bigint_to_u256(&init.protocol_fee),
+        lp_fee: bigint_to_u256(&init.lp_fee),
+        liquidity: bigint_to_u256(&init.liquidity),
+        tick_spacing: bigint_to_i256(&init.tick_spacing),
+        fee_growth_global0_x128: bigint_to_u256(&init.fee_growth_global0_x128),
+        fee_growth_global1_x128: bigint_to_u256(&init.fee_growth_global1_x128),
+        tick_bitmap,
+        ticks,
+    }
+}
+
+#[napi]
+pub struct RustV4PoolRegistry {
+    pools: HashMap<String, (v4_query_outputs::V4PoolState, I256)>, // state + tickSpacing
+}
+
+#[napi]
+impl RustV4PoolRegistry {
+    #[napi(constructor)]
+    pub fn new() -> Self {
+        Self {
+            pools: HashMap::new(),
+        }
+    }
+
+    #[napi]
+    pub fn set_pool(&mut self, key: String, init: JsV4PoolStateInit) {
+        let tick_spacing = bigint_to_i256(&init.tick_spacing);
+        let state = build_v4_pool_state(&init);
+        self.pools.insert(key, (state, tick_spacing));
+    }
+
+    #[napi]
+    pub fn remove_pool(&mut self, key: String) {
+        self.pools.remove(&key);
+    }
+
+    #[napi]
+    pub fn query_many(
+        &self,
+        keys: Vec<String>,
+        amounts: Vec<BigInt>,
+        zero_for_one: bool,
+        side: u8,
+    ) -> Vec<JsV4QueryResult> {
+        let amounts_u256: Vec<U256> = amounts.iter().map(|a| bigint_to_u256(a)).collect();
+
+        let pool_refs: Vec<(&str, &v4_query_outputs::V4PoolState, I256)> = keys
+            .iter()
+            .filter_map(|k| {
+                self.pools
+                    .get(k)
+                    .map(|(p, ts)| (k.as_str(), p, *ts))
+            })
+            .collect();
+
+        pool_refs
+            .par_iter()
+            .map(|(key, pool, tick_spacing)| {
+                let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    v4_query_outputs::query_outputs(pool, *tick_spacing, &amounts_u256, zero_for_one, side)
+                }));
+
+                match result {
+                    Ok(outputs) => {
+                        let bigint_outputs: Vec<BigInt> =
+                            outputs.iter().map(|v| u256_to_bigint(*v)).collect();
+                        JsV4QueryResult {
+                            key: key.to_string(),
+                            outputs: bigint_outputs,
+                        }
+                    }
+                    Err(_) => JsV4QueryResult {
+                        key: key.to_string(),
+                        outputs: vec![],
+                    },
+                }
+            })
+            .collect()
     }
 
     #[napi]

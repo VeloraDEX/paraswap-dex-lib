@@ -10,6 +10,7 @@ import { DummyDexHelper } from '../../../dex-helper';
 import { UniswapV3 } from '../uniswap-v3';
 import { PancakeswapV3 } from '../../pancakeswap-v3/pancakeswap-v3';
 import { SolidlyV3 } from '../../solidly-v3/solidly-v3';
+import { UniswapV4 } from '../../uniswap-v4/uniswap-v4';
 import { performance } from 'perf_hooks';
 import { getBigIntPow } from '../../../utils';
 
@@ -104,6 +105,43 @@ const WETH = {
     console.log(
       `SolidlyV3     | ${poolCount} pools (${rustCount} rust, ${regCount} registry) | p50=${st.p50}ms  p99=${st.p99}ms  max=${st.max}ms`,
     );
+  }
+
+  // --- UniswapV4 ---
+  {
+    const dex = new UniswapV4(Network.MAINNET, 'UniswapV4', dh);
+    await dex.initializePricing(bn);
+    // V4 pools may use WETH or native ETH
+    const ETH = {
+      address: '0x0000000000000000000000000000000000000000',
+      decimals: 18,
+    };
+    await dex.getPoolIdentifiers(USDC, WETH, SwapSide.SELL, bn);
+    await dex.getPoolIdentifiers(USDC, ETH, SwapSide.SELL, bn);
+    // Wait for async pool state generation
+    await new Promise(resolve => setTimeout(resolve, 3000));
+    let r = await dex.getPricesVolume(USDC, WETH, amounts, SwapSide.SELL, bn);
+    if (!r || r.length === 0) {
+      r = await dex.getPricesVolume(USDC, ETH, amounts, SwapSide.SELL, bn);
+    }
+    const poolCount = r?.length ?? 0;
+    const regCount = (dex as any).v4Registry?.poolCount() ?? 0;
+    const rustCount = r?.filter(p => (p.data as any).useRust).length ?? 0;
+
+    if (poolCount > 0) {
+      const measures: number[] = [];
+      for (let i = 0; i < RUNS; i++) {
+        const s = performance.now();
+        await dex.getPricesVolume(USDC, WETH, amounts, SwapSide.SELL, bn);
+        measures.push(performance.now() - s);
+      }
+      const st = stats(measures);
+      console.log(
+        `UniswapV4     | ${poolCount} pools (${rustCount} rust, ${regCount} registry) | p50=${st.p50}ms  p99=${st.p99}ms  max=${st.max}ms`,
+      );
+    } else {
+      console.log(`UniswapV4     | 0 pools (no USDC/WETH pools found)`);
+    }
   }
 
   process.exit(0);
