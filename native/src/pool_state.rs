@@ -32,5 +32,10 @@ pub struct PoolState {
     pub lowest_known_tick: I256,
     pub highest_known_tick: I256,
 
+    /// Precomputed bitmap bounds for price queries.
+    /// wordPos must be within [bitmap_range_lower, bitmap_range_upper] during pricing.
+    pub bitmap_range_lower: i16,
+    pub bitmap_range_upper: i16,
+
     pub variant: MathVariant,
 }

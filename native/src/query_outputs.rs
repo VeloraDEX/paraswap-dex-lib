@@ -81,16 +81,15 @@ fn price_computation_cycles(
 
         let sqrt_price_start_x96 = state.sqrt_price_x96;
 
-        // Find next initialized tick — may panic if out of range
-        let bitmap_result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            tick_bitmap::next_initialized_tick_within_one_word(
-                &pool.tick_bitmap,
-                state.tick,
-                pool.tick_spacing,
-                zero_for_one,
-                true, // is_price_query
-            )
-        }));
+        // Find next initialized tick — returns Err if out of bitmap range
+        let bitmap_result = tick_bitmap::next_initialized_tick_within_one_word(
+            &pool.tick_bitmap,
+            state.tick,
+            pool.tick_spacing,
+            zero_for_one,
+            true, // is_price_query
+            Some((pool.bitmap_range_lower, pool.bitmap_range_upper)),
+        );
 
         let (tick_next_raw, initialized) = match bitmap_result {
             Ok(result) => result,
@@ -152,14 +151,14 @@ fn price_computation_cycles(
         }
 
         if cache.fee_protocol > U256::ZERO {
-            let delta = fee_amount / cache.fee_protocol;
+            let delta = pool.variant.protocol_fee_delta(fee_amount, cache.fee_protocol);
             fee_amount -= delta;
             state.protocol_fee += delta;
         }
 
         if state.sqrt_price_x96 == sqrt_price_next_x96 {
             if initialized {
-                if !cache.computed_latest_observation {
+                if pool.variant.has_oracle() && !cache.computed_latest_observation {
                     let (tc, splc) = oracle::observe_single(
                         &pool.observations,
                         cache.block_timestamp,
@@ -213,8 +212,9 @@ fn price_computation_cycles(
         latest_full_cycle_cache.tick_count += i - 1;
     }
 
-    if state.amount_specified_remaining != I256::ZERO && !is_sell {
-        // BUY side: zero out remaining
+    if state.amount_specified_remaining != I256::ZERO
+        && (!is_sell || pool.variant.zero_remaining_for_sell())
+    {
         state.amount_specified_remaining = I256::ZERO;
         state.amount_calculated = I256::ZERO;
     }

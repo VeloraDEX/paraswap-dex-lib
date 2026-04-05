@@ -6,7 +6,18 @@ pub mod query_outputs;
 use ethnum::{I256, U256};
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
+use rayon::prelude::*;
 use std::collections::HashMap;
+
+/// Set the number of threads rayon uses for parallel queries.
+/// Call once at startup. Defaults to all available cores if not called.
+#[napi]
+pub fn set_thread_count(n: u32) {
+    rayon::ThreadPoolBuilder::new()
+        .num_threads(n as usize)
+        .build_global()
+        .ok();
+}
 
 use config::MathVariant;
 use math::oracle::OracleObservation;
@@ -40,6 +51,7 @@ pub struct JsObservationEntry {
 #[napi(object)]
 pub struct JsPoolStateInit {
     pub variant: String,
+    pub bitmap_range: i32,
     pub block_timestamp: BigInt,
     pub tick_spacing: BigInt,
     pub fee: BigInt,
@@ -152,6 +164,15 @@ impl RustPoolHandle {
             );
         }
 
+        let start_tick_bitmap = bigint_to_i256(&init.start_tick_bitmap);
+
+        // bitmap_range is the total half-width (TICK_BITMAP_BUFFER + TICK_BITMAP_TO_USE)
+        // passed from TS since it varies per DEX and per network.
+        let start_i16 = start_tick_bitmap.as_i32() as i16;
+        let range = init.bitmap_range as i16;
+        let bitmap_range_lower = start_i16 - range;
+        let bitmap_range_upper = start_i16 + range;
+
         Ok(Self {
             state: PoolState {
                 block_timestamp: bigint_to_u256(&init.block_timestamp),
@@ -168,15 +189,17 @@ impl RustPoolHandle {
                 tick_bitmap,
                 ticks,
                 observations,
-                start_tick_bitmap: bigint_to_i256(&init.start_tick_bitmap),
+                start_tick_bitmap,
                 lowest_known_tick: bigint_to_i256(&init.lowest_known_tick),
                 highest_known_tick: bigint_to_i256(&init.highest_known_tick),
+                bitmap_range_lower,
+                bitmap_range_upper,
                 variant,
             },
         })
     }
 
-    /// HOT PATH: Price N amounts in one call.
+    /// HOT PATH: Price N amounts in one call (BigInt version).
     /// side: 0 = SELL, 1 = BUY
     #[napi]
     pub fn query_outputs(
@@ -212,5 +235,161 @@ impl RustPoolHandle {
                 Err(Error::new(Status::GenericFailure, msg))
             }
         }
+    }
+
+}
+
+// ---- Pool Registry: batch parallel queries ----
+
+fn build_pool_state(init: &JsPoolStateInit) -> Result<PoolState> {
+    let variant = MathVariant::from_str(&init.variant);
+
+    let mut tick_bitmap = HashMap::with_capacity(init.tick_bitmap.len());
+    for entry in &init.tick_bitmap {
+        tick_bitmap.insert(entry.key as i16, bigint_to_u256(&entry.value));
+    }
+
+    let mut ticks = HashMap::with_capacity(init.ticks.len());
+    for entry in &init.ticks {
+        ticks.insert(
+            entry.key,
+            TickInfo {
+                liquidity_gross: bigint_to_u256(&entry.liquidity_gross),
+                liquidity_net: bigint_to_i256(&entry.liquidity_net),
+                initialized: true,
+            },
+        );
+    }
+
+    let mut observations = HashMap::with_capacity(init.observations.len());
+    for entry in &init.observations {
+        observations.insert(
+            entry.key as u16,
+            OracleObservation {
+                block_timestamp: bigint_to_u256(&entry.block_timestamp),
+                tick_cumulative: bigint_to_i256(&entry.tick_cumulative),
+                seconds_per_liquidity_cumulative_x128: bigint_to_u256(
+                    &entry.seconds_per_liquidity_cumulative_x128,
+                ),
+                initialized: entry.initialized,
+            },
+        );
+    }
+
+    let start_tick_bitmap = bigint_to_i256(&init.start_tick_bitmap);
+    let start_i16 = start_tick_bitmap.as_i32() as i16;
+    let range = init.bitmap_range as i16;
+
+    Ok(PoolState {
+        block_timestamp: bigint_to_u256(&init.block_timestamp),
+        tick_spacing: bigint_to_i256(&init.tick_spacing),
+        fee: bigint_to_u256(&init.fee),
+        sqrt_price_x96: bigint_to_u256(&init.sqrt_price_x96),
+        tick: bigint_to_i256(&init.tick),
+        observation_index: init.observation_index as u16,
+        observation_cardinality: init.observation_cardinality as u16,
+        observation_cardinality_next: init.observation_cardinality_next as u16,
+        fee_protocol: bigint_to_u256(&init.fee_protocol),
+        liquidity: bigint_to_u256(&init.liquidity),
+        max_liquidity_per_tick: bigint_to_u256(&init.max_liquidity_per_tick),
+        tick_bitmap,
+        ticks,
+        observations,
+        start_tick_bitmap,
+        lowest_known_tick: bigint_to_i256(&init.lowest_known_tick),
+        highest_known_tick: bigint_to_i256(&init.highest_known_tick),
+        bitmap_range_lower: start_i16 - range,
+        bitmap_range_upper: start_i16 + range,
+        variant,
+    })
+}
+
+#[napi(object)]
+pub struct JsPoolQueryResult {
+    pub key: String,
+    pub outputs: Vec<BigInt>,
+    pub tick_counts: Vec<i32>,
+}
+
+#[napi]
+pub struct RustPoolRegistry {
+    pools: HashMap<String, PoolState>,
+}
+
+#[napi]
+impl RustPoolRegistry {
+    #[napi(constructor)]
+    pub fn new() -> Self {
+        Self {
+            pools: HashMap::new(),
+        }
+    }
+
+    /// Register or update a pool.
+    #[napi]
+    pub fn set_pool(&mut self, key: String, init: JsPoolStateInit) -> Result<()> {
+        let state = build_pool_state(&init)?;
+        self.pools.insert(key, state);
+        Ok(())
+    }
+
+    /// Remove a pool.
+    #[napi]
+    pub fn remove_pool(&mut self, key: String) {
+        self.pools.remove(&key);
+    }
+
+    /// Query multiple pools in parallel. Returns results for all registered pools
+    /// whose keys are in the provided list.
+    /// Each pool is queried with the SAME amounts and direction.
+    #[napi]
+    pub fn query_many(
+        &self,
+        keys: Vec<String>,
+        amounts: Vec<BigInt>,
+        zero_for_one: bool,
+        side: u8,
+    ) -> Result<Vec<JsPoolQueryResult>> {
+        let amounts_u256: Vec<U256> = amounts.iter().map(|a| bigint_to_u256(a)).collect();
+
+        // Collect references to pools that exist
+        let pool_refs: Vec<(&str, &PoolState)> = keys
+            .iter()
+            .filter_map(|k| self.pools.get(k).map(|p| (k.as_str(), p)))
+            .collect();
+
+        // Run all pool queries in parallel using rayon
+        let results: Vec<Result<JsPoolQueryResult>> = pool_refs
+            .par_iter()
+            .map(|(key, pool)| {
+                let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    query_outputs::query_outputs(pool, &amounts_u256, zero_for_one, side)
+                }));
+
+                match result {
+                    Ok(output) => {
+                        let outputs: Vec<BigInt> =
+                            output.outputs.iter().map(|v| u256_to_bigint(*v)).collect();
+                        Ok(JsPoolQueryResult {
+                            key: key.to_string(),
+                            outputs,
+                            tick_counts: output.tick_counts,
+                        })
+                    }
+                    Err(_) => Ok(JsPoolQueryResult {
+                        key: key.to_string(),
+                        outputs: vec![],
+                        tick_counts: vec![],
+                    }),
+                }
+            })
+            .collect();
+
+        results.into_iter().collect()
+    }
+
+    #[napi]
+    pub fn pool_count(&self) -> u32 {
+        self.pools.len() as u32
     }
 }

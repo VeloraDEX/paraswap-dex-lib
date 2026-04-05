@@ -38,16 +38,18 @@ pub fn flip_tick(bitmap: &mut HashMap<i16, U256>, tick: I256, tick_spacing: I256
 /// Returns the next initialized tick within one word of the current tick.
 ///
 /// `lte` indicates whether we're searching to the left (less-than-or-equal) or right.
-/// `is_price_query` controls whether we create default entries for missing bitmap words.
+/// `is_price_query` controls whether bounds are checked against bitmap range.
+/// `bitmap_range` is (lower, upper) inclusive bounds for valid wordPos values.
 ///
-/// Returns `(next_tick, initialized)`.
+/// Returns `Ok((next_tick, initialized))` or `Err` if out of bitmap range.
 pub fn next_initialized_tick_within_one_word(
     bitmap: &HashMap<i16, U256>,
     tick: I256,
     tick_spacing: I256,
     lte: bool,
-    _is_price_query: bool,
-) -> (I256, bool) {
+    is_price_query: bool,
+    bitmap_range: Option<(i16, i16)>,
+) -> Result<(I256, bool), &'static str> {
     let mut compressed = tick / tick_spacing;
     if tick < I256::ZERO && tick % tick_spacing != I256::ZERO {
         compressed = compressed - I256::ONE;
@@ -55,57 +57,75 @@ pub fn next_initialized_tick_within_one_word(
 
     if lte {
         let (word_pos, bit_pos) = position(compressed);
-        // mask = (1 << bitPos) - 1 + (1 << bitPos)  =  (2 << bitPos) - 1
-        // This creates a mask of all bits from 0 to bit_pos inclusive
+
+        // Bounds check — mirrors TS isWordPosOut
+        if is_price_query {
+            if let Some((lower, upper)) = bitmap_range {
+                if word_pos < lower || word_pos > upper {
+                    return Err("INVALID_TICK_BIT_MAP_RANGES");
+                }
+            }
+        }
+
         let mask = (U256::ONE << bit_pos) - U256::ONE + (U256::ONE << bit_pos);
-
-        // Read bitmap value, defaulting to 0 for missing entries
         let tick_bitmap_value = bitmap.get(&word_pos).copied().unwrap_or(U256::ZERO);
-
         let masked = tick_bitmap_value & mask;
 
         let initialized = masked != U256::ZERO;
         let next = if initialized {
             let msb = bit_math::most_significant_bit(masked);
-            // compressed - asIntN(24, bitPos - msb)
             let diff = I256::from(bit_pos as i32) - I256::from(msb as i32);
             let diff_i24 = sign_extend_i24(diff);
             (compressed - diff_i24) * tick_spacing
         } else {
-            // compressed - asIntN(24, bitPos)
             let bp = I256::from(bit_pos as i32);
             let bp_i24 = sign_extend_i24(bp);
             (compressed - bp_i24) * tick_spacing
         };
 
-        (next, initialized)
+        Ok((next, initialized))
     } else {
-        // Start from the word of the next tick
         let (word_pos, bit_pos) = position(compressed + I256::ONE);
-        // mask = ~((1 << bitPos) - 1)
-        // In 256-bit context: invert all bits of ((1 << bitPos) - 1)
+
+        // Bounds check
+        if is_price_query {
+            if let Some((lower, upper)) = bitmap_range {
+                if word_pos < lower || word_pos > upper {
+                    return Err("INVALID_TICK_BIT_MAP_RANGES");
+                }
+            }
+        }
+
         let mask = !((U256::ONE << bit_pos) - U256::ONE);
-
         let tick_bitmap_value = bitmap.get(&word_pos).copied().unwrap_or(U256::ZERO);
-
         let masked = tick_bitmap_value & mask;
 
         let initialized = masked != U256::ZERO;
         let next = if initialized {
             let lsb = bit_math::least_significant_bit(masked);
-            // compressed + 1 + asIntN(24, lsb - bitPos)
             let diff = I256::from(lsb as i32) - I256::from(bit_pos as i32);
             let diff_i24 = sign_extend_i24(diff);
             (compressed + I256::ONE + diff_i24) * tick_spacing
         } else {
-            // compressed + 1 + asIntN(24, 255 - bitPos)
             let diff = I256::from(255i32) - I256::from(bit_pos as i32);
             let diff_i24 = sign_extend_i24(diff);
             (compressed + I256::ONE + diff_i24) * tick_spacing
         };
 
-        (next, initialized)
+        Ok((next, initialized))
     }
+}
+
+/// Convenience wrapper without bounds checking (for tests and non-pricing calls).
+#[allow(dead_code)]
+fn next_initialized_tick_within_one_word_unchecked(
+    bitmap: &HashMap<i16, U256>,
+    tick: I256,
+    tick_spacing: I256,
+    lte: bool,
+    is_price_query: bool,
+) -> (I256, bool) {
+    next_initialized_tick_within_one_word(bitmap, tick, tick_spacing, lte, is_price_query, None).unwrap()
 }
 
 /// Sign-extend a value to 24-bit signed (equivalent to BigInt.asIntN(24, x)).
@@ -202,7 +222,7 @@ mod tests {
         flip_tick(&mut bitmap, I256::from(10i64), tick_spacing);
 
         // Search from tick 15, going left (lte=true)
-        let (next, initialized) = next_initialized_tick_within_one_word(
+        let (next, initialized) = next_initialized_tick_within_one_word_unchecked(
             &bitmap,
             I256::from(15i64),
             tick_spacing,
@@ -222,7 +242,7 @@ mod tests {
         flip_tick(&mut bitmap, I256::from(20i64), tick_spacing);
 
         // Search from tick 10, going right (lte=false)
-        let (next, initialized) = next_initialized_tick_within_one_word(
+        let (next, initialized) = next_initialized_tick_within_one_word_unchecked(
             &bitmap,
             I256::from(10i64),
             tick_spacing,
@@ -239,7 +259,7 @@ mod tests {
         let tick_spacing = I256::ONE;
 
         // No ticks initialized; searching left from tick 100
-        let (next, initialized) = next_initialized_tick_within_one_word(
+        let (next, initialized) = next_initialized_tick_within_one_word_unchecked(
             &bitmap,
             I256::from(100i64),
             tick_spacing,
@@ -258,7 +278,7 @@ mod tests {
         let tick_spacing = I256::ONE;
 
         // No ticks initialized; searching right from tick 0
-        let (next, initialized) = next_initialized_tick_within_one_word(
+        let (next, initialized) = next_initialized_tick_within_one_word_unchecked(
             &bitmap,
             I256::ZERO,
             tick_spacing,
@@ -279,7 +299,7 @@ mod tests {
         flip_tick(&mut bitmap, I256::from(-10i64), tick_spacing);
 
         // Search from tick -5, going left
-        let (next, initialized) = next_initialized_tick_within_one_word(
+        let (next, initialized) = next_initialized_tick_within_one_word_unchecked(
             &bitmap,
             I256::from(-5i64),
             tick_spacing,

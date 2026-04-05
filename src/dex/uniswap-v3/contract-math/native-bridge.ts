@@ -1,6 +1,12 @@
 import { DeepReadonly } from 'ts-essentials';
 import { PoolState } from '../types';
 import { NumberAsString } from '@paraswap/core';
+import {
+  TICK_BITMAP_TO_USE,
+  TICK_BITMAP_BUFFER,
+  TICK_BITMAP_TO_USE_BY_CHAIN,
+  TICK_BITMAP_BUFFER_BY_CHAIN,
+} from '../constants';
 
 // Try to load the native Rust addon
 let nativeAddon: any = null;
@@ -30,6 +36,7 @@ export type RustPoolHandleType = {
 function toRustInit(
   state: DeepReadonly<PoolState>,
   variant: string = 'uniswap_v3',
+  bitmapRangeOverride?: number,
 ) {
   const tickBitmap = Object.entries(
     state.tickBitmap as Record<NumberAsString, bigint>,
@@ -67,8 +74,16 @@ function toRustInit(
     initialized: obs.initialized,
   }));
 
+  const bitmapUse = Number(
+    TICK_BITMAP_TO_USE_BY_CHAIN[state.networkId] ?? TICK_BITMAP_TO_USE,
+  );
+  const bitmapBuffer = Number(
+    TICK_BITMAP_BUFFER_BY_CHAIN[state.networkId] ?? TICK_BITMAP_BUFFER,
+  );
+
   return {
     variant,
+    bitmapRange: bitmapRangeOverride ?? bitmapBuffer + bitmapUse,
     blockTimestamp: state.blockTimestamp,
     tickSpacing: state.tickSpacing,
     fee: state.fee,
@@ -96,11 +111,57 @@ function toRustInit(
 export function createRustHandle(
   state: DeepReadonly<PoolState>,
   variant: string = 'uniswap_v3',
+  bitmapRange?: number,
 ): RustPoolHandleType | null {
   if (!nativeAddonAvailable) return null;
   try {
-    return nativeAddon.RustPoolHandle.create(toRustInit(state, variant));
+    return nativeAddon.RustPoolHandle.create(
+      toRustInit(state, variant, bitmapRange),
+    );
   } catch {
     return null;
+  }
+}
+
+// ---- Pool Registry for batch parallel queries ----
+
+export type RegistryQueryResult = {
+  key: string;
+  outputs: bigint[];
+  tickCounts: number[];
+};
+
+export type RustPoolRegistryType = {
+  setPool(key: string, init: ReturnType<typeof toRustInit>): void;
+  removePool(key: string): void;
+  queryMany(
+    keys: string[],
+    amounts: bigint[],
+    zeroForOne: boolean,
+    side: number,
+  ): RegistryQueryResult[];
+  poolCount(): number;
+};
+
+export function createRegistry(): RustPoolRegistryType | null {
+  if (!nativeAddonAvailable) return null;
+  try {
+    return new nativeAddon.RustPoolRegistry();
+  } catch {
+    return null;
+  }
+}
+
+export function registrySetPool(
+  registry: RustPoolRegistryType,
+  key: string,
+  state: DeepReadonly<PoolState>,
+  variant: string = 'uniswap_v3',
+  bitmapRange?: number,
+): void {
+  try {
+    registry.setPool(key, toRustInit(state, variant, bitmapRange));
+  } catch {
+    // silently skip — pool will use JS fallback
   }
 }

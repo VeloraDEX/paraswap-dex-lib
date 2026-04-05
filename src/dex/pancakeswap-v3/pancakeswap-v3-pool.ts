@@ -30,6 +30,10 @@ import {
   _reduceTicks,
 } from '../uniswap-v3/contract-math/utils';
 import { INACTIVE_POOL_AGE_MS } from './constants';
+import {
+  registrySetPool,
+  RustPoolRegistryType,
+} from '../uniswap-v3/contract-math/native-bridge';
 
 export class PancakeSwapV3EventPool extends StatefulEventSubscriber<PoolState> {
   handlers: {
@@ -57,6 +61,8 @@ export class PancakeSwapV3EventPool extends StatefulEventSubscriber<PoolState> {
 
   public initFailed = false;
   public initRetryAttemptCount = 0;
+
+  public registry: RustPoolRegistryType | null = null;
 
   public readonly feeCodeAsString;
 
@@ -276,6 +282,9 @@ export class PancakeSwapV3EventPool extends StatefulEventSubscriber<PoolState> {
     //   );
     // }
     super._setState(state, blockNumber);
+    if (this.registry && state) {
+      registrySetPool(this.registry, this.name, state, 'pancakeswap_v3', 12);
+    }
   }
 
   async generateState(blockNumber: number): Promise<Readonly<PoolState>> {
