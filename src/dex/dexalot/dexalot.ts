@@ -746,10 +746,13 @@ export class Dexalot
             `${this.dexKey}-${this.network}: failed to build transaction on side ${side} with too strict slippage. Skipping restriction`,
           );
         } else {
-          this.logger.warn(
-            `${this.dexKey}-${this.network}: protocol is restricted for pair ${srcToken.address} -> ${destToken.address} due to swap: ${swapIdentifier}`,
+          const message =
+            e instanceof Error ? `${e.name}: ${e.message}` : 'Unknown error';
+          await this.restrictPair(
+            srcToken.address,
+            destToken.address,
+            `${message} (swap: ${swapIdentifier})`,
           );
-          await this.restrictPair(srcToken.address, destToken.address);
         }
       }
 

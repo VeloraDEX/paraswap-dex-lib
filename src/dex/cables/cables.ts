@@ -245,7 +245,9 @@ export class Cables
 
       this.logger.error(message);
       if (!e?.isSlippageError) {
-        this.restrict();
+        const restrictMessage =
+          e instanceof Error ? `${e.name}: ${e.message}` : 'Unknown error';
+        this.restrict(restrictMessage);
       }
       throw new Error(message);
     }

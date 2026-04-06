@@ -690,7 +690,9 @@ export class MaverickPoolMath {
   }
 
   allocateSwapValuesToTick(delta: Delta, tokenAIn: boolean, tick: bigint) {
-    let tickState = this.state.ticks[tick.toString()];
+    const key = tick.toString();
+    let tickState = { ...this.state.ticks[key] };
+    this.state.ticks[key] = tickState;
     let reserveA = tickState.reserveA;
     let reserveB = tickState.reserveB;
 

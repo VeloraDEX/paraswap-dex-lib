@@ -39,7 +39,7 @@ import {
 import { isContractAddress } from '../../utils';
 import { AxiosError } from 'axios';
 
-const GET_FIRM_RATE_TIMEOUT_MS = 2000;
+const GET_FIRM_RATE_TIMEOUT_MS = 4000;
 export const reversePrice = (price: PriceAndAmountBigNumber) =>
   [
     BN_1.dividedBy(price[0]),

@@ -30,6 +30,7 @@ import {
   NativeTxRequest,
 } from './types';
 import {
+  FIRM_RATE_TIMEOUT_MS,
   NATIVE_API_URL,
   NATIVE_BLACKLIST_POLLING_INTERVAL_MS,
   NATIVE_FIRM_QUOTE_EXPIRY_S,
@@ -366,7 +367,11 @@ export class Native
       );
 
       if (!error?.isSlippageError) {
-        this.restrict();
+        const message =
+          error instanceof Error
+            ? `${error.name}: ${error.message}`
+            : 'Unknown error';
+        this.restrict(message);
       }
 
       throw new Error(error);
@@ -695,6 +700,7 @@ export class Native
         headers: {
           apikey: this.nativeApiKey,
         },
+        timeout: FIRM_RATE_TIMEOUT_MS,
       });
 
     return response.data;

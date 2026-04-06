@@ -854,7 +854,9 @@ export class Bebop
 
       this.logger.error(message);
       if (!e?.isSlippageError && !e?.isBlacklistError) {
-        this.restrict();
+        const restrictMessage =
+          e instanceof Error ? `${e.name}: ${e.message}` : 'Unknown error';
+        this.restrict(restrictMessage);
       }
       throw new Error(message);
     }
