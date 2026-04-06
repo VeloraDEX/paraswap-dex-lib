@@ -1,15 +1,11 @@
-import { BigNumber } from 'ethers';
-
-const ONE = BigNumber.from(1);
-const TWO = BigNumber.from(2);
-
-export function sqrt(value: BigNumber) {
-  let x = value;
-  let z = x.add(ONE).div(TWO);
-  let y = x;
-  while (z.sub(y).isNegative()) {
-    y = z;
-    z = x.div(z).add(z).div(TWO);
+export function sqrt(value: bigint): bigint {
+  if (value < 0n) throw new Error('sqrt of negative');
+  if (value < 2n) return value;
+  let z = value;
+  let x = value / 2n + 1n;
+  while (x < z) {
+    z = x;
+    x = (value / x + x) / 2n;
   }
-  return y;
+  return z;
 }

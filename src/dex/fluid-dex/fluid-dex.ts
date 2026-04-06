@@ -945,10 +945,8 @@ export class FluidDex extends SimpleExchange implements IDex<FluidDexData> {
     y2: bigint,
   ): bigint {
     // Adding 1e18 precision
-    const xyRoot = sqrt(BigNumber.from(x).mul(y).mul(BigInt(1e18))).toBigInt();
-    const x2y2Root = sqrt(
-      BigNumber.from(x2).mul(y2).mul(BigInt(1e18)),
-    ).toBigInt();
+    const xyRoot = sqrt(x * y * 1000000000000000000n);
+    const x2y2Root = sqrt(x2 * y2 * 1000000000000000000n);
 
     // 1e18 precision gets cancelled out in division
     const numerator = t * xyRoot + y * x2y2Root - y2 * xyRoot;
@@ -980,11 +978,8 @@ export class FluidDex extends SimpleExchange implements IDex<FluidDexData> {
     y2: bigint,
   ): bigint {
     // Adding 1e18 precision
-
-    const xyRoot = sqrt(BigNumber.from(x).mul(y).mul(BigInt(1e18))).toBigInt();
-    const x2y2Root = sqrt(
-      BigNumber.from(x2).mul(y2).mul(BigInt(1e18)),
-    ).toBigInt();
+    const xyRoot = sqrt(x * y * 1000000000000000000n);
+    const x2y2Root = sqrt(x2 * y2 * 1000000000000000000n);
 
     // Calculating 'a' using the given formula
     const a = (y2 * xyRoot + t * xyRoot - y * x2y2Root) / (xyRoot + x2y2Root);
