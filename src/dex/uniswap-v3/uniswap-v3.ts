@@ -178,6 +178,12 @@ export class UniswapV3
       `${CACHE_PREFIX}_${network}_${dexKey}_not_existings_pool_set`.toLowerCase();
 
     this.factory = this.getFactoryInstance();
+
+    this.logger.info(
+      `${dexKey}: native Rust math ${
+        this.registry ? 'enabled' : 'not available'
+      }`,
+    );
   }
 
   get supportedFees() {

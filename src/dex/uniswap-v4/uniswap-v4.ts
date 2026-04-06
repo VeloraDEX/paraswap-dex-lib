@@ -96,6 +96,12 @@ export class UniswapV4 extends SimpleExchange implements IDex<UniswapV4Data> {
       this.cacheStateKey,
     );
     this.poolManager.v4Registry = this.v4Registry;
+
+    this.logger.info(
+      `${dexKey}: native Rust math ${
+        this.v4Registry ? 'enabled' : 'not available'
+      }`,
+    );
   }
 
   async initializePricing(blockNumber: number) {

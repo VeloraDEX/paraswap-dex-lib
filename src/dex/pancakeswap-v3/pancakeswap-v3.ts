@@ -160,6 +160,12 @@ export class PancakeswapV3
       this.logger,
       this.onPoolCreatedDeleteFromNonExistingSet,
     );
+
+    this.logger.info(
+      `${dexKey}: native Rust math ${
+        this.registry ? 'enabled' : 'not available'
+      }`,
+    );
   }
 
   get supportedFees() {

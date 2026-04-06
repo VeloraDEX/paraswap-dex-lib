@@ -135,6 +135,12 @@ export class SolidlyV3
 
     this.notExistingPoolSetKey =
       `${CACHE_PREFIX}_${network}_${dexKey}_not_existings_pool_set`.toLowerCase();
+
+    this.logger.info(
+      `${dexKey}: native Rust math ${
+        this.registry ? 'enabled' : 'not available'
+      }`,
+    );
   }
 
   get supportedTickSpacings() {
