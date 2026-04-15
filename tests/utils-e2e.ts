@@ -8,7 +8,7 @@ import {
   IParaSwapSDK,
   LocalParaswapSDK,
 } from '../src/implementations/local-paraswap-sdk';
-import { TenderlySimulator, StateOverride } from './tenderly-simulation';
+import { TenderlySimulator, StateOverride } from '../src/tenderly-simulation';
 import {
   SwapSide,
   ETHER_ADDRESS,

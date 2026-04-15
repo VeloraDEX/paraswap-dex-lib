@@ -36,3 +36,10 @@ export { IDex } from './dex/idex';
 export { ConfigHelper } from './config';
 
 export { SlippageCheckError, BlacklistError } from './dex/generic-rfq/types';
+
+export {
+  TenderlySimulator,
+  StateOverride,
+  SimulatedTransaction,
+  SimulationResult,
+} from './tenderly-simulation';

@@ -28,7 +28,6 @@ import { FluidDexConfig, FLUID_DEX_GAS_COST } from './config';
 import { FluidDexFactory } from './fluid-dex-factory';
 import { getDexKeysWithNetwork, getBigIntPow } from '../../utils';
 import { extractReturnAmountPosition } from '../../executor/utils';
-import { BigNumber } from 'ethers';
 import { sqrt } from './utils';
 import { FluidDexLiquidityProxy } from './fluid-dex-liquidity-proxy';
 import { FluidDexEventPool } from './fluid-dex-pool';
