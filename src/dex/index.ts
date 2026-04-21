@@ -98,6 +98,7 @@ import { Blackhole } from './solidly/forks-override/blackhole';
 import { BlackholeCL } from './algebra-integral/forks/blackhole-cl';
 import { dETH } from './deth/dETH';
 import { Cap } from './cap/cap';
+import { Metric } from './metric/metric';
 
 const LegacyDexes = [
   CurveV2,
@@ -109,6 +110,7 @@ const LegacyDexes = [
   Lido,
   AugustusRFQOrder,
   EtherFi,
+  Metric,
 ];
 
 const Dexes = [
