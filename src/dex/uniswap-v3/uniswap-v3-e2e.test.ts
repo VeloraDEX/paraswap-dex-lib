@@ -1129,4 +1129,84 @@ describe('UniswapV3 E2E', () => {
       );
     });
   });
+
+  describe('RamsesV3 E2E', () => {
+    const dexKey = 'RamsesV3';
+
+    describe('Arbitrum', () => {
+      const network = Network.ARBITRUM;
+      const provider = new StaticJsonRpcProvider(
+        generateConfig(network).privateHttpProvider,
+        network,
+      );
+      const tokens = Tokens[network];
+      const holders = Holders[network];
+
+      it(`SELL swapExactAmountIn USDC -> USDCe`, async () => {
+        await testE2E(
+          tokens['USDC'],
+          tokens['USDCe'],
+          holders['USDC'],
+          '1100000',
+          SwapSide.SELL,
+          dexKey,
+          ContractMethod.swapExactAmountIn,
+          network,
+          provider,
+        );
+      });
+
+      it(`BUY swapExactAmountOut USDC -> USDCe`, async () => {
+        await testE2E(
+          tokens['USDC'],
+          tokens['USDCe'],
+          holders['USDC'],
+          '1000000',
+          SwapSide.BUY,
+          dexKey,
+          ContractMethod.swapExactAmountOut,
+          network,
+          provider,
+        );
+      });
+    });
+
+    describe('Polygon', () => {
+      const network = Network.POLYGON;
+      const provider = new StaticJsonRpcProvider(
+        generateConfig(network).privateHttpProvider,
+        network,
+      );
+      const tokens = Tokens[network];
+      const holders = Holders[network];
+
+      it(`SELL swapExactAmountIn USDCn -> USDT`, async () => {
+        await testE2E(
+          tokens['USDCn'],
+          tokens['USDT'],
+          holders['USDCn'],
+          '1100000',
+          SwapSide.SELL,
+          dexKey,
+          ContractMethod.swapExactAmountIn,
+          network,
+          provider,
+        );
+      });
+
+      it(`BUY swapExactAmountOut USDCn -> USDT`, async () => {
+        await testE2E(
+          tokens['USDCn'],
+          tokens['USDT'],
+          holders['USDCn'],
+          '1000000',
+          SwapSide.BUY,
+          dexKey,
+          ContractMethod.swapExactAmountOut,
+          network,
+          provider,
+        );
+      });
+    });
+  });
 });
