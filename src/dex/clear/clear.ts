@@ -270,7 +270,11 @@ export class Clear extends SimpleExchange implements IDex<ClearData> {
     const metapoolSpecs = new Map<string, string>();
     for (const v of newVaults) {
       const baseAddr = v.curvePlainPool.toLowerCase();
-      if (baseAddr && !this.basePools[baseAddr]) {
+      if (
+        baseAddr &&
+        baseAddr !== NULL_ADDRESS &&
+        !this.basePools[baseAddr]
+      ) {
         basePoolSpecs.set(baseAddr, v.tokens.length);
       }
       const vaultState =

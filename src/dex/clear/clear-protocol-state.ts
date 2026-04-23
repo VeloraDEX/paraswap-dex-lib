@@ -175,9 +175,11 @@ export class ClearProtocolStateSubscriber extends StatefulEventSubscriber<ClearP
       if (!cfgRes.success) continue;
       const cfg = cfgRes.returnData as DecodedOracleConfig;
       if (!cfg.enabled) continue;
+      // getUSDPrice already returns the 8-decimal value; cfg.price is raw oracleDecimals
+      // and must be normalized when used as a fallback.
       const normalizedPrice = priceRes.success
         ? (priceRes.returnData as bigint)
-        : cfg.price;
+        : normalizeOraclePrice(cfg.price, cfg.oracleDecimals);
       newOracles[asset] = {
         enabled: cfg.enabled,
         assetDecimals: cfg.assetDecimals,
