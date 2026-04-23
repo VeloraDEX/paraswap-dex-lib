@@ -144,8 +144,8 @@ async function testPricingOnNetwork(
   expect(poolPrices).not.toBeNull();
   checkPoolPrices(poolPrices!, amounts, side, dexKey);
 
-  // Check if on-chain pricing equals calculated ones
-  const vaultAddress = pools[0].split('_')[1];
+  // Check if on-chain pricing equals calculated ones (use the vault we actually priced).
+  const vaultAddress = (poolPrices![0].data as { vault: string }).vault;
   await checkOnChainPricing(
     dexKey,
     network,
@@ -171,9 +171,6 @@ describe('Clear', function () {
 
     const tokens = Tokens[network];
 
-    const srcTokenSymbol = 'USDC';
-    const destTokenSymbol = 'GHO';
-
     const buildAmounts = (decimals: number) => [
       0n,
       1n * BI_POWS[decimals],
@@ -196,39 +193,49 @@ describe('Clear', function () {
       }
     });
 
-    it('getPoolIdentifiers and getPricesVolume SELL', async function () {
-      await testPricingOnNetwork(
-        clear,
-        network,
-        dexKey,
-        blockNumber,
-        srcTokenSymbol,
-        destTokenSymbol,
-        SwapSide.SELL,
-        buildAmounts(tokens[srcTokenSymbol].decimals),
-        'previewSwap',
-      );
-    });
+    // Pairs span every decimals combination of supported stablecoins (6↔6, 6↔18, 18↔18) so the
+    // scaling math + oracle normalization gets exercised end-to-end.
+    const pairsToTest: Array<[string, string]> = [
+      ['USDC', 'GHO'],
+      ['USDC', 'USDT'],
+      ['GHO', 'USDS'],
+    ];
 
-    it('getPoolIdentifiers and getPricesVolume SELL reverse', async function () {
-      await testPricingOnNetwork(
-        clear,
-        network,
-        dexKey,
-        blockNumber,
-        destTokenSymbol,
-        srcTokenSymbol,
-        SwapSide.SELL,
-        buildAmounts(tokens[destTokenSymbol].decimals),
-        'previewSwap',
-      );
+    pairsToTest.forEach(([src, dest]) => {
+      it(`getPricesVolume ${src} -> ${dest}`, async function () {
+        await testPricingOnNetwork(
+          clear,
+          network,
+          dexKey,
+          blockNumber,
+          src,
+          dest,
+          SwapSide.SELL,
+          buildAmounts(tokens[src].decimals),
+          'previewSwap',
+        );
+      });
+
+      it(`getPricesVolume ${dest} -> ${src}`, async function () {
+        await testPricingOnNetwork(
+          clear,
+          network,
+          dexKey,
+          blockNumber,
+          dest,
+          src,
+          SwapSide.SELL,
+          buildAmounts(tokens[dest].decimals),
+          'previewSwap',
+        );
+      });
     });
 
     it('BUY side should return null (not supported)', async function () {
       const poolPrices = await clear.getPricesVolume(
-        tokens[srcTokenSymbol],
-        tokens[destTokenSymbol],
-        buildAmounts(tokens[destTokenSymbol].decimals),
+        tokens['USDC'],
+        tokens['GHO'],
+        buildAmounts(tokens['GHO'].decimals),
         SwapSide.BUY,
         blockNumber,
       );
@@ -253,15 +260,15 @@ describe('Clear', function () {
         await newClear.updatePoolState();
       }
       const poolLiquidity = await newClear.getTopPoolsForToken(
-        tokens[srcTokenSymbol].address,
+        tokens['USDC'].address,
         10,
       );
-      console.log(`${srcTokenSymbol} Top Pools:`, poolLiquidity);
+      console.log(`USDC Top Pools:`, poolLiquidity);
 
       if (!newClear.hasConstantPriceLargeAmounts) {
         checkPoolsLiquidity(
           poolLiquidity,
-          Tokens[network][srcTokenSymbol].address,
+          Tokens[network]['USDC'].address,
           dexKey,
         );
       }

@@ -8,7 +8,7 @@ import { Network } from '../../constants';
 import { Address } from '../../types';
 import { DummyDexHelper } from '../../dex-helper/index';
 import { testEventSubscriber } from '../../../tests/utils-events';
-import { ClearVault } from './types';
+import { FactoryState } from './types';
 import { DeepReadonly } from 'ts-essentials';
 
 jest.setTimeout(50 * 1000);
@@ -16,7 +16,7 @@ jest.setTimeout(50 * 1000);
 async function fetchPoolState(
   clearFactory: ClearFactory,
   blockNumber: number,
-): Promise<DeepReadonly<ClearVault[]>> {
+): Promise<DeepReadonly<FactoryState>> {
   return clearFactory.generateState(blockNumber);
 }
 
@@ -33,10 +33,9 @@ describe('Clear EventPool Mainnet', function () {
   describe('Factory Events', () => {
     let clearFactory: ClearFactory;
 
-    // Factory address -> EventMappings
     const eventsToTest: Record<Address, EventMappings> = {
       [config.factoryAddress]: {
-        NewClearVault: [23969538],
+        NewClearVault: [24477549, 24841147],
       },
     };
 

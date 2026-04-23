@@ -141,6 +141,64 @@
     "type": "event"
   },
   {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "depegThresholdBps",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "maximalDepegThresholdBps",
+        "type": "uint256"
+      }
+    ],
+    "name": "DepegTresholdUpdated",
+    "type": "event"
+  },
+  {
+    "inputs": [],
+    "name": "oracle",
+    "outputs": [{ "internalType": "address", "name": "", "type": "address" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "depegThresholdBps",
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "maximalDepegThresholdBps",
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "getDepegTresholdBps",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "_depegThresholdBps",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "_maximalDepegThresholdBps",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
     "inputs": [],
     "name": "authority",
     "outputs": [

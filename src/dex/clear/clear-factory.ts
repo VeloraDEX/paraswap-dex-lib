@@ -1,33 +1,23 @@
 import { Contract } from 'ethers';
-import { Interface } from '@ethersproject/abi';
 import { DeepReadonly } from 'ts-essentials';
-import { Log, Logger } from '../../types';
+import { Log, Logger, Address } from '../../types';
 import { catchParseLogError } from '../../utils';
 import { StatefulEventSubscriber } from '../../stateful-event-subscriber';
 import { IDexHelper } from '../../dex-helper';
 import { MultiCallParams } from '../../lib/multi-wrapper';
-import { Address } from '../../types';
-import { DexParams, PoolState } from './types';
+import { addressArrayDecode, addressDecode } from '../../lib/decoders';
+import { DexParams, FactoryState, FactoryEntry } from './types';
 import ClearFactoryABI from '../../abi/clear/ClearFactory.json';
-import ClearVaultABI from '../../abi/clear/ClearVault.json';
-import { addressArrayDecode } from '../../lib/decoders';
+import { factoryIface, vaultIface } from './clear-ifaces';
 
-export class ClearFactory extends StatefulEventSubscriber<PoolState> {
-  handlers: {
-    [event: string]: (
-      event: any,
-      state: DeepReadonly<PoolState>,
-      log: Readonly<Log>,
-    ) => Promise<DeepReadonly<PoolState> | null>;
-  } = {};
+type Handler = (
+  event: any,
+  state: DeepReadonly<FactoryState>,
+) => DeepReadonly<FactoryState> | null;
 
-  logDecoder: (log: Log) => any;
-
+export class ClearFactory extends StatefulEventSubscriber<FactoryState> {
   addressesSubscribed: Address[];
-
-  protected factoryIface = new Interface(ClearFactoryABI);
-  protected vaultIface = new Interface(ClearVaultABI);
-  protected factoryContract: Contract;
+  protected handlers: Record<string, Handler> = {};
 
   constructor(
     readonly parentName: string,
@@ -37,56 +27,39 @@ export class ClearFactory extends StatefulEventSubscriber<PoolState> {
     logger: Logger,
   ) {
     super(parentName, 'factory', dexHelper, logger);
-
-    this.logDecoder = (log: Log) => this.factoryIface.parseLog(log);
     this.addressesSubscribed = [config.factoryAddress];
-    this.factoryContract = new Contract(
-      config.factoryAddress,
-      ClearFactoryABI,
-      dexHelper.provider,
-    );
-
     this.handlers['NewClearVault'] = this.handleNewClearVault.bind(this);
   }
 
-  async handleNewClearVault(
-    event: any,
-    state: DeepReadonly<PoolState>,
-    _log: Readonly<Log>,
-  ): Promise<DeepReadonly<PoolState> | null> {
-    const vaultAddress = event.args.vault.toLowerCase();
-    const tokens = (event.args.tokens as string[]).map(addr =>
-      addr.toLowerCase(),
-    );
-
-    return [
-      ...state,
-      {
-        address: vaultAddress,
-        tokens,
-      },
-    ];
-  }
-
-  async processLog(
-    state: DeepReadonly<PoolState>,
+  protected processLog(
+    state: DeepReadonly<FactoryState>,
     log: Readonly<Log>,
-  ): Promise<DeepReadonly<PoolState> | null> {
+  ): DeepReadonly<FactoryState> | null {
     try {
-      const event = this.logDecoder(log);
+      const event = factoryIface.parseLog(log);
       if (event.name in this.handlers) {
-        return this.handlers[event.name](event, state, log);
+        return this.handlers[event.name](event, state);
       }
     } catch (e) {
       catchParseLogError(e, this.logger);
     }
-
     return null;
+  }
+
+  protected handleNewClearVault(
+    event: any,
+    state: DeepReadonly<FactoryState>,
+  ): DeepReadonly<FactoryState> | null {
+    const address = String(event.args.vault).toLowerCase();
+    const tokens = (event.args.tokens as string[]).map(a => a.toLowerCase());
+    const curvePlainPool = String(event.args.curvePlainPool).toLowerCase();
+    if (state.some(v => v.address === address)) return null;
+    return [...state, { address, tokens, curvePlainPool }];
   }
 
   async getStateOrGenerate(
     blockNumber: number,
-  ): Promise<DeepReadonly<PoolState>> {
+  ): Promise<DeepReadonly<FactoryState>> {
     let state = this.getState(blockNumber);
     if (!state) {
       state = await this.generateState(blockNumber);
@@ -95,64 +68,62 @@ export class ClearFactory extends StatefulEventSubscriber<PoolState> {
     return state;
   }
 
-  /**
-   * Generate state:
-   * 1. vaultsLength() -> total count
-   * 2. getBatchVaultAddresses() -> all addresses
-   * 3. tokens() on each vault -> supported tokens
-   */
-  async generateState(blockNumber: number): Promise<DeepReadonly<PoolState>> {
-    // Step 1: Get total number of vaults
-    const vaultsLengthBN = await this.factoryContract.vaultsLength({
+  // Bootstrap: read all vault addresses, then per-vault tokens() and tokensCurvePool() in one batch.
+  async generateState(
+    blockNumber: number,
+  ): Promise<DeepReadonly<FactoryState>> {
+    const factoryContract = new Contract(
+      this.config.factoryAddress,
+      ClearFactoryABI,
+      this.dexHelper.provider,
+    );
+
+    const vaultsLengthBN = await factoryContract.vaultsLength({
       blockTag: blockNumber,
     });
     const vaultsLength = vaultsLengthBN.toNumber();
-
     if (vaultsLength === 0) return [];
 
-    // Step 2: Get all vault addresses
-    const vaultIndexes = [...Array(vaultsLength).keys()];
+    const indexes = [...Array(vaultsLength).keys()];
     const vaultAddressesRaw: string[] =
-      await this.factoryContract.getBatchVaultAddresses(vaultIndexes, {
+      await factoryContract.getBatchVaultAddresses(indexes, {
         blockTag: blockNumber,
       });
-
     const vaultAddresses = vaultAddressesRaw.map(a => a.toLowerCase());
 
-    // Step 3: Fetch tokens for each vault
-    const tokenCalls: MultiCallParams<string[]>[] = vaultAddresses.map(
-      vault => ({
+    type Decoded = string[] | string;
+    const calls: MultiCallParams<Decoded>[] = [];
+    for (const vault of vaultAddresses) {
+      calls.push({
         target: vault,
-        callData: this.vaultIface.encodeFunctionData('tokens'),
+        callData: vaultIface.encodeFunctionData('tokens'),
         decodeFunction: addressArrayDecode as any,
-      }),
+      });
+      calls.push({
+        target: vault,
+        callData: vaultIface.encodeFunctionData('tokensCurvePool'),
+        decodeFunction: addressDecode as any,
+      });
+    }
+    const results = await this.dexHelper.multiWrapper.tryAggregate<Decoded>(
+      false,
+      calls,
+      blockNumber,
     );
 
-    const tokenResults = await this.dexHelper.multiWrapper.tryAggregate<
-      string[]
-    >(false, tokenCalls, blockNumber);
-
-    // Collect all valid vault data first
-    const vaults: PoolState = vaultAddresses
-      .map((address, i) => {
-        const result = tokenResults[i];
-        if (!result.success || !result.returnData) {
-          this.logger.warn(
-            `${this.parentName}: Failed to fetch tokens for vault ${address}`,
-          );
-          return null;
-        }
-
-        return {
-          address,
-          tokens: result.returnData.map(addr => addr.toLowerCase()),
-        };
-      })
-      .filter(Boolean) as PoolState;
-
-    this.logger.info(
-      `${this.parentName}: Generated state with ${vaults.length} vaults`,
-    );
+    const vaults: FactoryEntry[] = [];
+    for (let i = 0; i < vaultAddresses.length; i++) {
+      const tokensRes = results[i * 2];
+      const curveRes = results[i * 2 + 1];
+      if (!tokensRes.success || !tokensRes.returnData) continue;
+      const tokens = (tokensRes.returnData as string[]).map(a =>
+        a.toLowerCase(),
+      );
+      const curvePlainPool = curveRes.success
+        ? String(curveRes.returnData).toLowerCase()
+        : '';
+      vaults.push({ address: vaultAddresses[i], tokens, curvePlainPool });
+    }
 
     return vaults;
   }

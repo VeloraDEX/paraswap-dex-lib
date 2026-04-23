@@ -1,4 +1,4 @@
-import { Interface } from '@ethersproject/abi';
+import { NumberAsString } from '@paraswap/core';
 
 import {
   Logger,
@@ -14,44 +14,65 @@ import {
 import { IDexHelper } from '../../dex-helper/idex-helper';
 import { IDex } from '../idex';
 import { SimpleExchange } from '../simple-exchange';
-import { ClearConfig } from './config';
-import { ClearData, ClearVault, DexParams } from './types';
-import { Network, SwapSide } from '../../constants';
+import { Network, NULL_ADDRESS, SwapSide } from '../../constants';
 import * as CALLDATA_GAS_COST from '../../calldata-gas-cost';
-import { getBigIntPow, getDexKeysWithNetwork } from '../../utils';
-import clearSwapAbi from '../../abi/clear/ClearSwap.json';
-import clearVaultAbi from '../../abi/clear/ClearVault.json';
-import { NumberAsString } from '@paraswap/core';
-import { MultiCallParams } from '../../lib/multi-wrapper';
-import { ClearFactory } from './clear-factory';
-import { uint256ToBigInt, uint8ToNumber } from '../../lib/decoders';
+import {
+  currentBigIntTimestampInS,
+  getBigIntPow,
+  getDexKeysWithNetwork,
+} from '../../utils';
+import { uint8ToNumber } from '../../lib/decoders';
 import { extractReturnAmountPosition } from '../../executor/utils';
 
-const CLEAR_GAS_COST = 150_000;
+import { ClearConfig } from './config';
+import { ClearData, DexParams, ClearVault } from './types';
+import { swapIface, vaultIface } from './clear-ifaces';
+import { ClearFactory } from './clear-factory';
+import { ClearProtocolStateSubscriber } from './clear-protocol-state';
+import { ClearVaultStateSubscriber } from './clear-vault-state';
+import { ClearCurvePoolState, ClearCurveMetapool } from './clear-curve-state';
+import {
+  validateDepeg,
+  computeSwapOutputs,
+  applyIouFees,
+  availableLiquidity,
+  checkExposureAfterSwap,
+  makeExposureContext,
+} from './math/clear-math';
+import { getDyUnderlying } from './math/stable-swap';
 
-/**
- * Clear DEX Integration for ParaSwap
- *
- * Clear is a depeg arbitrage protocol for stablecoins
- * - Vaults contain N tokens (multi-token, not pairs)
- * - Pricing via ClearSwap.previewSwap() - returns 0 when no depeg
- * - Discovery via StatefulEventSubscriber (getters + NewClearVault events)
- * - Each (vault, tokenA, tokenB) combination = one "pool" for ParaSwap
- */
+const CLEAR_GAS_COST = 150_000;
+const ORACLE_REFRESH_TTL = 30 * 1000;
+const CURVE_REFRESH_TTL = 60 * 1000;
+const VAULT_ADAPTER_REFRESH_TTL = 60 * 1000;
+const DISCOVERY_TTL = 5 * 60 * 1000;
+const ERC20_DECIMALS_SELECTOR = '0x313ce567';
+
 export class Clear extends SimpleExchange implements IDex<ClearData> {
   logger: Logger;
   protected config: DexParams;
+
   protected factory: ClearFactory;
+  protected protocolState: ClearProtocolStateSubscriber;
+  protected vaultStates: Record<string, ClearVaultStateSubscriber> = {};
+  protected metapools: Record<string, ClearCurveMetapool> = {};
+  protected basePools: Record<string, ClearCurvePoolState> = {};
+
+  protected oracleTimer?: NodeJS.Timeout;
+  protected curveTimer?: NodeJS.Timeout;
+  protected adapterTimer?: NodeJS.Timeout;
+  protected discoveryTimer?: NodeJS.Timeout;
+
+  // Vaults snapshot used by getTopPoolsForToken; refreshed in updatePoolState().
+  private cachedVaults: ClearVault[] = [];
 
   readonly hasConstantPriceLargeAmounts = false;
   readonly isFeeOnTransferSupported = false;
+  // Clear deals exclusively in ERC20 stablecoins, never the native token.
+  readonly needWrapNative = false;
 
   public static dexKeysWithNetwork: { key: string; networks: Network[] }[] =
     getDexKeysWithNetwork(ClearConfig);
-
-  readonly clearSwapIface = new Interface(clearSwapAbi);
-  readonly clearVaultIface = new Interface(clearVaultAbi);
-  private vaults: ClearVault[] = [];
 
   constructor(
     readonly network: Network,
@@ -69,6 +90,13 @@ export class Clear extends SimpleExchange implements IDex<ClearData> {
       dexHelper,
       this.logger,
     );
+
+    this.protocolState = new ClearProtocolStateSubscriber(
+      dexKey,
+      this.config,
+      dexHelper,
+      this.logger,
+    );
   }
 
   getAdapters(_side: SwapSide): null {
@@ -76,7 +104,222 @@ export class Clear extends SimpleExchange implements IDex<ClearData> {
   }
 
   async initializePricing(blockNumber: number): Promise<void> {
-    await this.factory.initialize(blockNumber);
+    await Promise.all([
+      this.factory.initialize(blockNumber),
+      this.protocolState.initialize(blockNumber),
+    ]);
+
+    const factoryState = this.factory.getState(blockNumber) || [];
+    await this.bootstrapVaults(
+      factoryState.map(v => ({
+        address: v.address,
+        tokens: [...v.tokens],
+        curvePlainPool: v.curvePlainPool,
+      })),
+      blockNumber,
+    );
+
+    const allAssets = new Set<string>();
+    for (const v of factoryState) {
+      for (const t of v.tokens) allAssets.add(t.toLowerCase());
+    }
+    if (allAssets.size > 0) {
+      await this.protocolState.hydrateAssets(
+        Array.from(allAssets),
+        blockNumber,
+      );
+    }
+
+    this.startRefreshLoops();
+  }
+
+  // Returns the union of assets across all known vaults. Recomputed each tick so
+  // newly-bootstrapped vaults' tokens are picked up automatically.
+  private allAssets(): string[] {
+    const acc = new Set<string>();
+    const factoryState = this.factory.getState(
+      this.dexHelper.blockManager.getLatestBlockNumber(),
+    );
+    if (factoryState) {
+      for (const v of factoryState) for (const t of v.tokens) acc.add(t);
+    }
+    return Array.from(acc);
+  }
+
+  private startRefreshLoops(): void {
+    const safeRun = async (label: string, fn: () => Promise<void>) => {
+      try {
+        await fn();
+      } catch (e) {
+        this.logger.warn(`${this.dexKey}: ${label} refresh failed: ${e}`);
+      }
+    };
+
+    // Curve metapool state is held in plain class fields (not StatefulEventSubscriber),
+    // so it doesn't propagate via the framework cache — every instance must refresh.
+    if (!this.curveTimer) {
+      this.curveTimer = setInterval(
+        () =>
+          safeRun('curve', async () => {
+            const bn = await this.dexHelper.provider.getBlockNumber();
+            await Promise.all(
+              Object.values(this.metapools).map(m => m.refresh(bn)),
+            );
+          }),
+        CURVE_REFRESH_TTL,
+      );
+    }
+
+    // Master/slave guard: refreshes that go through setState propagate via the framework cache,
+    // so only the master needs to do the RPC.
+    if (this.dexHelper.config.isSlave) return;
+
+    if (!this.oracleTimer) {
+      this.oracleTimer = setInterval(
+        () =>
+          safeRun('oracle', async () => {
+            const bn = await this.dexHelper.provider.getBlockNumber();
+            await this.protocolState.refreshPrices(this.allAssets(), bn);
+          }),
+        ORACLE_REFRESH_TTL,
+      );
+    }
+    if (!this.adapterTimer) {
+      this.adapterTimer = setInterval(
+        () =>
+          safeRun('adapter', async () => {
+            const bn = await this.dexHelper.provider.getBlockNumber();
+            await Promise.all(
+              Object.values(this.vaultStates).map(v => v.refreshAssets(bn)),
+            );
+          }),
+        VAULT_ADAPTER_REFRESH_TTL,
+      );
+    }
+    // Pick up vaults created post-init: subscribers/metapools for them aren't auto-built.
+    if (!this.discoveryTimer) {
+      this.discoveryTimer = setInterval(
+        () =>
+          safeRun('discovery', async () => {
+            const bn = await this.dexHelper.provider.getBlockNumber();
+            const factoryState = this.factory.getState(bn) || [];
+            const assets = new Set<string>();
+            for (const v of factoryState) {
+              for (const t of v.tokens) assets.add(t);
+            }
+            await this.bootstrapVaults(
+              factoryState.map(v => ({
+                address: v.address,
+                tokens: [...v.tokens],
+                curvePlainPool: v.curvePlainPool,
+              })),
+              bn,
+            );
+            if (assets.size > 0) {
+              await this.protocolState.hydrateAssets(Array.from(assets), bn);
+            }
+          }),
+        DISCOVERY_TTL,
+      );
+    }
+  }
+
+  releaseResources(): void {
+    for (const timer of [
+      this.oracleTimer,
+      this.curveTimer,
+      this.adapterTimer,
+      this.discoveryTimer,
+    ]) {
+      if (timer) clearInterval(timer);
+    }
+    this.oracleTimer = undefined;
+    this.curveTimer = undefined;
+    this.adapterTimer = undefined;
+    this.discoveryTimer = undefined;
+  }
+
+  private async bootstrapVaults(
+    factoryState: {
+      address: string;
+      tokens: string[];
+      curvePlainPool: string;
+    }[],
+    blockNumber: number,
+  ): Promise<void> {
+    // Phase 1: instantiate + initialize all vault subscribers in parallel.
+    const newVaults = factoryState.filter(
+      v => !this.vaultStates[v.address.toLowerCase()],
+    );
+    await Promise.all(
+      newVaults.map(async v => {
+        const sub = new ClearVaultStateSubscriber(
+          this.dexKey,
+          v.address,
+          v.curvePlainPool,
+          this.dexHelper,
+          this.logger,
+        );
+        await sub.initialize(blockNumber);
+        this.vaultStates[v.address.toLowerCase()] = sub;
+      }),
+    );
+
+    // Phase 2: collect base pools + metapools to instantiate, dedup, then refresh in parallel.
+    const basePoolSpecs = new Map<string, number>();
+    const metapoolSpecs = new Map<string, string>();
+    for (const v of newVaults) {
+      const baseAddr = v.curvePlainPool.toLowerCase();
+      if (baseAddr && !this.basePools[baseAddr]) {
+        basePoolSpecs.set(baseAddr, v.tokens.length);
+      }
+      const vaultState =
+        this.vaultStates[v.address.toLowerCase()].getState(blockNumber);
+      if (!vaultState) continue;
+      for (const t of Object.values(vaultState.tokens)) {
+        const meta = t.iouCurveMetaPool;
+        if (!meta || meta === NULL_ADDRESS || this.metapools[meta]) continue;
+        metapoolSpecs.set(meta, baseAddr);
+      }
+    }
+
+    for (const [addr, nCoins] of basePoolSpecs) {
+      this.basePools[addr] = new ClearCurvePoolState(
+        addr,
+        nCoins,
+        this.dexHelper,
+        this.logger,
+      );
+    }
+    for (const [meta, baseAddr] of metapoolSpecs) {
+      // Defensive: skip metapool wiring if its base pool didn't get instantiated
+      // (e.g. the vault's curvePlainPool wasn't readable). Otherwise getMetapoolState() would NPE.
+      const basePool = this.basePools[baseAddr];
+      if (!basePool) {
+        this.logger.warn(
+          `${this.dexKey}: metapool ${meta} skipped — base pool ${
+            baseAddr || '(empty)'
+          } unavailable`,
+        );
+        continue;
+      }
+      const metaPool = new ClearCurvePoolState(
+        meta,
+        2,
+        this.dexHelper,
+        this.logger,
+      );
+      this.metapools[meta] = new ClearCurveMetapool(metaPool, basePool);
+    }
+
+    await Promise.all([
+      ...Array.from(basePoolSpecs.keys()).map(addr =>
+        this.basePools[addr].refresh(blockNumber),
+      ),
+      ...Array.from(metapoolSpecs.keys())
+        .filter(meta => this.metapools[meta])
+        .map(meta => this.metapools[meta].metapool.refresh(blockNumber)),
+    ]);
   }
 
   async getPoolIdentifiers(
@@ -87,18 +330,15 @@ export class Clear extends SimpleExchange implements IDex<ClearData> {
   ): Promise<string[]> {
     if (side === SwapSide.BUY) return [];
 
-    const allVaults = this.factory.getState(blockNumber) || [];
+    const factoryState = this.factory.getState(blockNumber) || [];
     const src = srcToken.address.toLowerCase();
     const dest = destToken.address.toLowerCase();
 
-    const matchingVaults = allVaults.filter(vault => {
-      const addrs = vault.tokens;
-      return addrs.includes(src) && addrs.includes(dest);
-    });
-
-    return matchingVaults.map(vault =>
-      `${this.dexKey}_${vault.address}_${srcToken.address}_${destToken.address}`.toLowerCase(),
-    );
+    return factoryState
+      .filter(v => v.tokens.includes(src) && v.tokens.includes(dest))
+      .map(v =>
+        `${this.dexKey}_${v.address}_${srcToken.address}_${destToken.address}`.toLowerCase(),
+      );
   }
 
   async getPricesVolume(
@@ -109,89 +349,108 @@ export class Clear extends SimpleExchange implements IDex<ClearData> {
     blockNumber: number,
     limitPools?: string[],
   ): Promise<null | ExchangePrices<ClearData>> {
-    // Only SELL side supported
-    if (side === SwapSide.BUY) {
-      return null;
-    }
+    if (side === SwapSide.BUY) return null;
 
     const poolIdentifiers =
       limitPools ||
       (await this.getPoolIdentifiers(srcToken, destToken, side, blockNumber));
+    if (poolIdentifiers.length === 0) return null;
 
-    if (poolIdentifiers.length === 0) {
+    const protoState = this.protocolState.getState(blockNumber);
+    if (!protoState || protoState.swap.paused) return null;
+
+    const srcAddr = srcToken.address.toLowerCase();
+    const destAddr = destToken.address.toLowerCase();
+    const fromOracle = protoState.oracles[srcAddr];
+    const toOracle = protoState.oracles[destAddr];
+    if (!fromOracle || !toOracle || !fromOracle.enabled || !toOracle.enabled) {
       return null;
     }
 
-    try {
-      const calls: MultiCallParams<bigint>[] = [];
-      const vaultInfos = [];
+    // Amount-invariant: skip the whole pool family if the depeg/redemption guards fail.
+    const depeg = validateDepeg(
+      fromOracle,
+      toOracle,
+      protoState.swap.depegThresholdBps,
+      protoState.swap.maximalDepegThresholdBps,
+    );
+    if (!depeg) return null;
 
-      for (const poolIdentifier of poolIdentifiers) {
-        const vaultAddress = poolIdentifier.split('_')[1];
-        const startIdx = calls.length;
+    const blockTimestamp = currentBigIntTimestampInS();
+    const poolPrices: PoolPrices<ClearData>[] = [];
 
-        for (const amount of amounts.slice(1)) {
-          calls.push({
-            target: this.config.swapAddress,
-            callData: this.clearSwapIface.encodeFunctionData('previewSwap', [
-              vaultAddress,
-              srcToken.address,
-              destToken.address,
-              amount,
-              false,
-            ]),
-            decodeFunction: (result: any) =>
-              BigInt(
-                this.clearSwapIface
-                  .decodeFunctionResult('previewSwap', result)
-                  .amountOut.toString(),
-              ),
-          });
+    const idPrefix = `${this.dexKey.toLowerCase()}_`;
+    for (const poolIdentifier of poolIdentifiers) {
+      const lower = poolIdentifier.toLowerCase();
+      if (!lower.startsWith(idPrefix)) continue;
+      const vaultAddress = lower.slice(idPrefix.length).split('_')[0];
+      const vaultSub = this.vaultStates[vaultAddress];
+      if (!vaultSub) continue;
+      const vaultState = vaultSub.getState(blockNumber);
+      if (!vaultState) continue;
+      const fromVaultToken = vaultState.tokens[srcAddr];
+      const toVaultToken = vaultState.tokens[destAddr];
+      if (!fromVaultToken || !toVaultToken) continue;
+
+      const exposureCtx = makeExposureContext(vaultState, srcAddr);
+      if (!exposureCtx) continue;
+
+      const metaState =
+        this.metapools[fromVaultToken.iouCurveMetaPool]?.getMetapoolState() ??
+        null;
+      const liquidity = availableLiquidity(toVaultToken);
+      // Metapool IOU lives at index 0; underlying lives at index 1+poolIndex of `to`.
+      const j = 1 + Number(toVaultToken.tokensCurvePoolIndex);
+
+      const prices = amounts.map(amount => {
+        if (amount === 0n) return 0n;
+        const swap = computeSwapOutputs(
+          fromOracle,
+          toOracle,
+          amount,
+          depeg.iouRedemption,
+        );
+        if (liquidity < swap.amountOut) return 0n;
+        if (!checkExposureAfterSwap(exposureCtx, amount)) return 0n;
+
+        const iousAfterFees = applyIouFees(
+          swap.ious,
+          vaultState.iouLpFeeBps,
+          vaultState.iouTreasuryFeeBps,
+        );
+        if (iousAfterFees === 0n) return swap.amountOut;
+        if (!metaState) return 0n;
+        try {
+          const iouSwapOut = getDyUnderlying(
+            metaState,
+            0,
+            j,
+            iousAfterFees,
+            blockTimestamp,
+          );
+          return swap.amountOut + iouSwapOut;
+        } catch (e) {
+          this.logger.warn(`${this.dexKey}: curve dy failed: ${e}`);
+          return 0n;
         }
+      });
 
-        vaultInfos.push({ address: vaultAddress, poolIdentifier, startIdx });
-      }
+      if (prices.every(p => p === 0n)) continue;
 
-      const results = await this.dexHelper.multiWrapper.tryAggregate<bigint>(
-        false,
-        calls,
-        blockNumber,
-        this.dexHelper.multiWrapper.defaultBatchSize,
-        false,
-      );
-
-      const poolPrices: PoolPrices<ClearData>[] = [];
-
-      for (const { address, poolIdentifier, startIdx } of vaultInfos) {
-        const prices = [
-          0n,
-          ...amounts.slice(1).map((_, i) => {
-            const r = results[startIdx + i];
-            return r.success ? r.returnData : 0n;
-          }),
-        ];
-
-        if (prices.every(p => p === 0n)) continue;
-
-        poolPrices.push({
-          prices,
-          unit: getBigIntPow(destToken.decimals),
-          data: { vault: address },
-          poolIdentifiers: [poolIdentifier],
-          exchange: this.dexKey,
-          gasCost: this.config.poolGasCost || CLEAR_GAS_COST,
-          poolAddresses: [address],
-        });
-      }
-
-      return poolPrices.length > 0 ? poolPrices : null;
-    } catch (error) {
-      this.logger.error(`getPricesVolume error: ${error}`);
-      return null;
+      poolPrices.push({
+        prices,
+        unit: getBigIntPow(destToken.decimals),
+        data: { vault: vaultAddress },
+        poolIdentifiers: [poolIdentifier],
+        exchange: this.dexKey,
+        gasCost: this.config.poolGasCost || CLEAR_GAS_COST,
+        poolAddresses: [vaultAddress],
+      });
     }
+
+    return poolPrices.length > 0 ? poolPrices : null;
   }
 
-  // Not used in V6, but required by interface
   getAdapterParam(): AdapterExchangeParam {
     return {
       targetExchange: '0x',
@@ -209,7 +468,7 @@ export class Clear extends SimpleExchange implements IDex<ClearData> {
     data: ClearData,
     _side: SwapSide,
   ): DexExchangeParam {
-    const exchangeData = this.clearSwapIface.encodeFunctionData('swap', [
+    const exchangeData = swapIface.encodeFunctionData('swap', [
       recipient,
       data.vault,
       srcToken,
@@ -225,102 +484,94 @@ export class Clear extends SimpleExchange implements IDex<ClearData> {
       exchangeData,
       targetExchange: this.config.swapAddress,
       returnAmountPos: extractReturnAmountPosition(
-        this.clearSwapIface,
+        swapIface,
         'swap',
         'amountOut',
       ),
     };
   }
 
-  /**
-   * Gas cost for exchangeData calldata
-   * swap(address recipient, address vault, address srcToken, address destToken, uint256 srcAmount, uint256 destAmount, bool useIous)
-   */
   getCalldataGasCost(_poolPrices: PoolPrices<ClearData>): number | number[] {
     return (
       CALLDATA_GAS_COST.FUNCTION_SELECTOR +
-      CALLDATA_GAS_COST.ADDRESS + // recipient
-      CALLDATA_GAS_COST.ADDRESS + // vault
-      CALLDATA_GAS_COST.ADDRESS + // srcToken
-      CALLDATA_GAS_COST.ADDRESS + // destToken
-      CALLDATA_GAS_COST.AMOUNT + // srcAmount
-      CALLDATA_GAS_COST.AMOUNT + // destAmount
-      CALLDATA_GAS_COST.BOOL // useIous
+      CALLDATA_GAS_COST.ADDRESS +
+      CALLDATA_GAS_COST.ADDRESS +
+      CALLDATA_GAS_COST.ADDRESS +
+      CALLDATA_GAS_COST.ADDRESS +
+      CALLDATA_GAS_COST.AMOUNT +
+      CALLDATA_GAS_COST.AMOUNT +
+      CALLDATA_GAS_COST.BOOL
     );
   }
 
-  /**
-   * Fetch vaults with tokens, decimals and TVL for getTopPoolsForToken
-   * This method is called by PoolTracker service which doesn't call initializePricing
-   */
+  // PoolTracker calls this before getTopPoolsForToken on a service that doesn't run event subscribers,
+  // so we self-contain the RPC fetch here.
   async updatePoolState(): Promise<void> {
     const blockNumber = await this.dexHelper.provider.getBlockNumber();
-    const vaults = await this.factory.getStateOrGenerate(blockNumber);
-
-    if (vaults.length === 0) {
+    const factoryState = await this.factory.getStateOrGenerate(blockNumber);
+    if (factoryState.length === 0) {
       return this.logger.info(
-        `${this.dexKey}: No vaults found in updatePoolState`,
+        `${this.dexKey}: no vaults found in updatePoolState`,
       );
     }
 
-    const uniqueTokens = [...new Set(vaults.flatMap(v => v.tokens))];
-
-    const decimalCalls: MultiCallParams<bigint>[] = uniqueTokens.map(token => ({
+    const allTokens = Array.from(new Set(factoryState.flatMap(v => v.tokens)));
+    const decimalCalls = allTokens.map(token => ({
       target: token,
-      callData: '0x313ce567', // decimals()
-      decodeFunction: (result: any) => BigInt(uint8ToNumber(result)),
+      callData: ERC20_DECIMALS_SELECTOR,
     }));
-
-    // Build tokenAssets(tokenAddress) calls for each token in each vault
-    const tokenAssetsCalls: MultiCallParams<bigint>[] = [];
-    const tokenAssetsMap: { vaultIdx: number; tokenAddress: string }[] = [];
-    for (let i = 0; i < vaults.length; i++) {
-      for (const token of vaults[i].tokens) {
-        tokenAssetsCalls.push({
-          target: vaults[i].address,
-          callData: this.clearVaultIface.encodeFunctionData('tokenAssets', [
-            token,
-          ]),
-          decodeFunction: uint256ToBigInt,
+    const tokenAssetCalls: { target: string; callData: string }[] = [];
+    type Pair = { vaultIdx: number; tokenAddress: string };
+    const tokenAssetMap: Pair[] = [];
+    for (let i = 0; i < factoryState.length; i++) {
+      for (const token of factoryState[i].tokens) {
+        tokenAssetCalls.push({
+          target: factoryState[i].address,
+          callData: vaultIface.encodeFunctionData('tokenAssets', [token]),
         });
-        tokenAssetsMap.push({ vaultIdx: i, tokenAddress: token });
+        tokenAssetMap.push({ vaultIdx: i, tokenAddress: token });
       }
     }
 
-    const results = await this.dexHelper.multiWrapper.tryAggregate<bigint>(
-      false,
-      [...decimalCalls, ...tokenAssetsCalls],
-      blockNumber,
-      this.dexHelper.multiWrapper.defaultBatchSize,
-      false,
+    const allCalls = [
+      ...decimalCalls.map(c => ({
+        ...c,
+        decodeFunction: (raw: any): number => Number(uint8ToNumber(raw)),
+      })),
+      ...tokenAssetCalls.map(c => ({
+        ...c,
+        decodeFunction: (raw: any): bigint =>
+          BigInt(
+            vaultIface.decodeFunctionResult('tokenAssets', raw)[0].toString(),
+          ),
+      })),
+    ];
+    const aggResult = await this.dexHelper.multiWrapper.tryAggregate<
+      number | bigint
+    >(false, allCalls, blockNumber);
+
+    const decimals: Record<string, number> = {};
+    for (let i = 0; i < allTokens.length; i++) {
+      const r = aggResult[i];
+      decimals[allTokens[i]] = r.success ? (r.returnData as number) : 18;
+    }
+
+    const vaultTokenAssets: Record<string, bigint>[] = factoryState.map(
+      () => ({}),
     );
-
-    const decimalsOffset = uniqueTokens.length;
-
-    const tokenDecimals: Record<string, number> = {};
-    for (let i = 0; i < decimalsOffset; i++) {
-      const result = results[i];
-      tokenDecimals[uniqueTokens[i]] = result.success
-        ? Number(result.returnData)
-        : 18;
+    for (let i = 0; i < tokenAssetMap.length; i++) {
+      const r = aggResult[allTokens.length + i];
+      if (!r.success) continue;
+      const { vaultIdx, tokenAddress } = tokenAssetMap[i];
+      vaultTokenAssets[vaultIdx][tokenAddress.toLowerCase()] =
+        r.returnData as bigint;
     }
 
-    // Group tokenAssets results by vault index
-    const vaultTokenAssets: Record<string, bigint>[] = vaults.map(() => ({}));
-    for (let i = 0; i < tokenAssetsMap.length; i++) {
-      const { vaultIdx, tokenAddress } = tokenAssetsMap[i];
-      const result = results[decimalsOffset + i];
-      if (result.success) {
-        vaultTokenAssets[vaultIdx][tokenAddress.toLowerCase()] =
-          result.returnData;
-      }
-    }
-
-    this.vaults = vaults.map((vault, i) => ({
+    this.cachedVaults = factoryState.map((vault, i) => ({
       address: vault.address,
       tokens: vault.tokens.map(t => ({
         address: t,
-        decimals: tokenDecimals[t.toLowerCase()] ?? 18,
+        decimals: decimals[t] ?? 18,
       })),
       tokenAssets: vaultTokenAssets[i],
     }));
@@ -330,24 +581,21 @@ export class Clear extends SimpleExchange implements IDex<ClearData> {
     tokenAddress: Address,
     limit: number,
   ): Promise<PoolLiquidity[]> {
-    const tokenAddrLower = tokenAddress.toLowerCase();
-
-    const vaultsWithToken = this.vaults.filter(vault =>
-      vault.tokens.some(t => t.address.toLowerCase() === tokenAddrLower),
+    const target = tokenAddress.toLowerCase();
+    const matching = this.cachedVaults.filter(v =>
+      v.tokens.some(t => t.address.toLowerCase() === target),
     );
+    if (matching.length === 0) return [];
 
-    if (vaultsWithToken.length === 0) {
-      return [];
-    }
-
-    // Build a flat list of [tokenAddress, assets] for all tokens across all vaults
     const tokenAmountPairs: [Address, bigint | null][] = [];
-    const vaultTokenCounts: number[] = [];
-    for (const vault of vaultsWithToken) {
-      vaultTokenCounts.push(vault.tokens.length);
+    const counts: number[] = [];
+    for (const vault of matching) {
+      counts.push(vault.tokens.length);
       for (const t of vault.tokens) {
-        const addr = t.address.toLowerCase();
-        tokenAmountPairs.push([t.address, vault.tokenAssets[addr] ?? null]);
+        tokenAmountPairs.push([
+          t.address,
+          vault.tokenAssets[t.address.toLowerCase()] ?? null,
+        ]);
       }
     }
 
@@ -355,24 +603,22 @@ export class Clear extends SimpleExchange implements IDex<ClearData> {
       tokenAmountPairs,
     );
 
-    // Map per-token USD amounts to PoolLiquidity entries
     let offset = 0;
-    const poolLiquidities = vaultsWithToken
+    const liquidities: PoolLiquidity[] = matching
       .map((vault, i) => {
-        const count = vaultTokenCounts[i];
-        const tokenUsdMap: Record<string, number> = {};
+        const count = counts[i];
+        const map: Record<string, number> = {};
         for (let j = 0; j < count; j++) {
-          const addr = vault.tokens[j].address.toLowerCase();
-          tokenUsdMap[addr] = usdAmounts[offset + j];
+          map[vault.tokens[j].address.toLowerCase()] = usdAmounts[offset + j];
         }
         offset += count;
 
         const connectorTokens: ConnectorToken[] = vault.tokens
-          .filter(t => t.address.toLowerCase() !== tokenAddrLower)
+          .filter(t => t.address.toLowerCase() !== target)
           .map(t => ({
             address: t.address,
             decimals: t.decimals ?? 18,
-            liquidityUSD: tokenUsdMap[t.address.toLowerCase()],
+            liquidityUSD: map[t.address.toLowerCase()],
           }));
 
         if (connectorTokens.length === 0) return null;
@@ -381,12 +627,12 @@ export class Clear extends SimpleExchange implements IDex<ClearData> {
           exchange: this.dexKey,
           address: vault.address,
           connectorTokens,
-          liquidityUSD: tokenUsdMap[tokenAddrLower] ?? 0,
-        };
+          liquidityUSD: map[target] ?? 0,
+        } as PoolLiquidity;
       })
-      .filter((p): p is PoolLiquidity => p !== null);
+      .filter((x): x is PoolLiquidity => x !== null);
 
-    return poolLiquidities
+    return liquidities
       .sort((a, b) => b.liquidityUSD - a.liquidityUSD)
       .slice(0, limit);
   }
