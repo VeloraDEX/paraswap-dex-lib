@@ -53,12 +53,6 @@ export class ClearCurvePoolState {
     };
   }
 
-  // Returns the live virtual price (used as storedRates[1] of an NG metapool).
-  async fetchVirtualPrice(blockNumber: number): Promise<bigint> {
-    const snapshot = await this.fetchSnapshot(blockNumber);
-    return snapshot?.virtualPrice ?? 0n;
-  }
-
   // Uses tryAggregate so a single revert (e.g. get_virtual_price on an empty pool) doesn't kill
   // the batch — we surface it as a null snapshot and the consumer skips the metapool gracefully.
   protected async fetchSnapshot(
