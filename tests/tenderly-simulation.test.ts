@@ -1,5 +1,5 @@
 import { ethers } from 'ethers';
-import { TenderlySimulator } from './tenderly-simulation';
+import { TenderlySimulator } from '../src/tenderly-simulation';
 
 describe('Tenderly', () => {
   const tenderly = TenderlySimulator.getInstance();

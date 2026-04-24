@@ -174,6 +174,7 @@ export type DexExchangeParam = {
   preSwapUnwrapCalldata?: string;
   returnAmountPos?: number;
   insertFromAmountPos?: number;
+  amountsPacked128?: boolean;
   permit2Approval?: boolean;
 };
 

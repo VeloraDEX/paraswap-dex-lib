@@ -693,11 +693,6 @@ export class SolidlyV3
     return arr;
   }
 
-  getTokenFromAddress(address: Address): Token {
-    // In this Dex decimals are not used
-    return { address, decimals: 0 };
-  }
-
   async getSimpleParam(
     srcToken: string,
     destToken: string,

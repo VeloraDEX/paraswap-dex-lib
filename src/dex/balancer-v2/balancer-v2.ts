@@ -1369,11 +1369,6 @@ export class BalancerV2
     return [DirectMethods.directSell, DirectMethods.directBuy];
   }
 
-  getTokenFromAddress(address: Address): Token {
-    // In this Dex decimals are not used
-    return { address, decimals: 0 };
-  }
-
   async preProcessTransaction(
     optimalSwapExchange: OptimalSwapExchange<OptimizedBalancerV2Data>,
     srcToken: Token,

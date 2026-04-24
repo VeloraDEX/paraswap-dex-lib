@@ -257,12 +257,6 @@ export class LocalParaswapSDK implements IParaSwapSDK {
                   );
 
                   if (dexLibExchange && dexLibExchange.preProcessTransaction) {
-                    if (!dexLibExchange.getTokenFromAddress) {
-                      throw new Error(
-                        'If you want to test preProcessTransaction, first need to implement getTokenFromAddress function',
-                      );
-                    }
-
                     const { recipient } =
                       priceRoute.version === ParaSwapVersion.V5
                         ? this.transactionBuilderV5.getDexCallsParams(
@@ -286,11 +280,20 @@ export class LocalParaswapSDK implements IParaSwapSDK {
                             executionContractAddress,
                           );
 
+                    const srcToken: Token = {
+                      address: swap.srcToken,
+                      decimals: swap.srcDecimals,
+                    };
+                    const destToken: Token = {
+                      address: swap.destToken,
+                      decimals: swap.destDecimals,
+                    };
+
                     const [preprocessedRoute, txInfo] =
                       await dexLibExchange.preProcessTransaction(
                         se,
-                        dexLibExchange.getTokenFromAddress(swap.srcToken),
-                        dexLibExchange.getTokenFromAddress(swap.destToken),
+                        srcToken,
+                        destToken,
                         priceRoute.side,
                         {
                           slippageFactor,

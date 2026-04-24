@@ -37,6 +37,7 @@ import { isAxiosError, isETHAddress, uuidToBytes16 } from '../../utils';
 
 export const OVERORDER_BPS = 100;
 export const BPS_MAX_VALUE = 10000n;
+const PAIR_RESTRICTION_DUE_TO_TIMEOUT_TTL_S = 5 * 60;
 
 export const overOrder = (amount: string, bps: number) =>
   ((BigInt(amount) * (BPS_MAX_VALUE + BigInt(bps))) / BPS_MAX_VALUE).toString();
@@ -453,10 +454,21 @@ export class GenericRFQ extends ParaSwapLimitOrders {
           `${this.dexKey}-${this.network}: failed to build transaction on side ${side} with too strict slippage. Skipping restriction`,
         );
       } else {
-        this.logger.warn(
-          `${this.dexKey}-${this.network}: protocol is restricted for pair ${srcToken.address} -> ${destToken.address}`,
+        const message =
+          e instanceof Error ? `${e.name}: ${e.message}` : 'Unknown error';
+        const isTimeoutError =
+          isAxiosError(e) &&
+          e.code === 'ECONNABORTED' &&
+          e.message.includes('timeout');
+
+        await this.restrictPair(
+          srcToken.address,
+          destToken.address,
+          message,
+          isTimeoutError
+            ? PAIR_RESTRICTION_DUE_TO_TIMEOUT_TTL_S
+            : this.restrictPairTtlS,
         );
-        await this.restrictPair(srcToken.address, destToken.address);
       }
 
       throw e;

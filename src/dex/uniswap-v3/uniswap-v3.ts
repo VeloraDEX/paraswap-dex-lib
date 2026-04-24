@@ -951,11 +951,6 @@ export class UniswapV3
     return arr;
   }
 
-  getTokenFromAddress(address: Address): Token {
-    // In this Dex decimals are not used
-    return { address, decimals: 0 };
-  }
-
   async preProcessTransaction(
     optimalSwapExchange: OptimalSwapExchange<UniswapV3Data>,
     srcToken: Token,

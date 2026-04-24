@@ -245,7 +245,9 @@ export class Cables
 
       this.logger.error(message);
       if (!e?.isSlippageError) {
-        this.restrict();
+        const restrictMessage =
+          e instanceof Error ? `${e.name}: ${e.message}` : 'Unknown error';
+        this.restrict(restrictMessage);
       }
       throw new Error(message);
     }
@@ -336,10 +338,6 @@ export class Cables
 
   normalizeTokenAddress(address: Address): Address {
     return address.toLowerCase();
-  }
-
-  getTokenFromAddress(address: Address): Token {
-    return this.tokensMap[this.normalizeAddress(address)];
   }
 
   getPoolIdentifier(srcAddress: Address, destAddress: Address) {

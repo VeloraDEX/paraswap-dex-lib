@@ -1,6 +1,6 @@
 {
   "name": "@paraswap/dex-lib",
-  "version": "4.8.25",
+  "version": "4.8.38",
   "main": "build/index.js",
   "types": "build/index.d.ts",
   "repository": "https://github.com/paraswap/paraswap-dex-lib",
@@ -57,7 +57,7 @@
     "@ethersproject/abi": "^5.7.0",
     "@hashflow/sdk": "^2.2.7",
     "@hashflow/taker-js": "^0.4.1",
-    "@paraswap/core": "2.4.2",
+    "@paraswap/core": "2.4.3",
     "@types/ws": "^8.5.12",
     "async": "^3.2.4",
     "axios": "0.27.2",
@@ -81,5 +81,6 @@
     "web3-utils": "1.6.0",
     "ws": "^8.18.0"
   },
-  "sideEffects": false
+  "sideEffects": false,
+  "packageManager": "yarn@1.22.19+sha1.4ba7fc5c6e704fce2066ecbfb0b0d8976fe62447"
 }
