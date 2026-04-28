@@ -84,12 +84,17 @@ export class Executor02BytecodeBuilder extends ExecutorBytecodeBuilder<
     const {
       dexFuncHasRecipient,
       needWrapNative,
+      needUnwrapNative,
       specialDexFlag,
       specialDexSupportsInsertFromAmount,
       swappedAmountNotPresentInExchangeData,
-      preSwapUnwrapCalldata,
       sendEthButSupportsInsertFromAmount,
     } = exchangeParam;
+
+    const isWETHSrc =
+      !!needUnwrapNative && this.dexHelper.config.isWETH(srcToken);
+    const isWETHDest =
+      !!needUnwrapNative && this.dexHelper.config.isWETH(destToken);
 
     const needWrap = needWrapNative && isEthSrc && maybeWethCallData?.deposit;
     const needUnwrap =
@@ -125,11 +130,16 @@ export class Executor02BytecodeBuilder extends ExecutorBytecodeBuilder<
         : Flag.INSERT_FROM_AMOUNT_CHECK_SRC_TOKEN_BALANCE_AFTER_SWAP; // 8 or 11
     }
 
-    // Actual srcToken is eth, because we'll unwrap weth before swap.
-    // Need to check balance, some dexes don't have 1:1 ETH -> custom_ETH rate
-    if (preSwapUnwrapCalldata) {
+    // DEX operates on native ETH; we unwrap WETH to ETH before the call, then
+    // check WETH src balance (should be 0) after. Some DEXes don't have a 1:1
+    // ETH -> custom_ETH rate.
+    if (isWETHSrc) {
       dexFlag =
         Flag.SEND_ETH_EQUAL_TO_FROM_AMOUNT_CHECK_SRC_TOKEN_BALANCE_AFTER_SWAP;
+    } else if (isWETHDest) {
+      dexFlag = forcePreventInsertFromAmount
+        ? Flag.DONT_INSERT_FROM_AMOUNT_CHECK_ETH_BALANCE_AFTER_SWAP
+        : Flag.INSERT_FROM_AMOUNT_CHECK_ETH_BALANCE_AFTER_SWAP;
     }
 
     return {
@@ -179,12 +189,12 @@ export class Executor02BytecodeBuilder extends ExecutorBytecodeBuilder<
     const {
       dexFuncHasRecipient,
       needWrapNative,
+      needUnwrapNative,
       specialDexFlag,
       specialDexSupportsInsertFromAmount,
       swappedAmountNotPresentInExchangeData,
       wethAddress,
       sendEthButSupportsInsertFromAmount,
-      preSwapUnwrapCalldata,
     } = exchangeParam;
 
     const isEthSrc = isETHAddress(srcToken);
@@ -192,6 +202,10 @@ export class Executor02BytecodeBuilder extends ExecutorBytecodeBuilder<
     const isWethDest =
       (wethAddress && destToken.toLowerCase() === wethAddress.toLowerCase()) ||
       this.dexHelper.config.isWETH(destToken);
+    const isWETHSrcUnwrap =
+      !!needUnwrapNative && this.dexHelper.config.isWETH(srcToken);
+    const isWETHDestWrap =
+      !!needUnwrapNative && this.dexHelper.config.isWETH(destToken);
 
     const isSpecialDex =
       specialDexFlag !== undefined && specialDexFlag !== SpecialDex.DEFAULT;
@@ -272,11 +286,16 @@ export class Executor02BytecodeBuilder extends ExecutorBytecodeBuilder<
           : Flag.INSERT_FROM_AMOUNT_DONT_CHECK_BALANCE_AFTER_SWAP; // 3
     }
 
-    // Actual srcToken is eth, because we'll unwrap weth before swap.
-    // Need to check balance, some dexes don't have 1:1 ETH -> custom_ETH rate
-    if (preSwapUnwrapCalldata) {
+    // DEX operates on native ETH; we unwrap WETH to ETH before the call, then
+    // check WETH src balance (should be 0) after. Some DEXes don't have a 1:1
+    // ETH -> custom_ETH rate.
+    if (isWETHSrcUnwrap) {
       dexFlag =
         Flag.SEND_ETH_EQUAL_TO_FROM_AMOUNT_CHECK_SRC_TOKEN_BALANCE_AFTER_SWAP;
+    } else if (isWETHDestWrap) {
+      dexFlag = forcePreventInsertFromAmount
+        ? Flag.DONT_INSERT_FROM_AMOUNT_CHECK_ETH_BALANCE_AFTER_SWAP
+        : Flag.INSERT_FROM_AMOUNT_CHECK_ETH_BALANCE_AFTER_SWAP;
     }
 
     return {
@@ -630,14 +649,32 @@ export class Executor02BytecodeBuilder extends ExecutorBytecodeBuilder<
       swapExchange,
     });
 
-    if (curExchangeParam.preSwapUnwrapCalldata) {
+    const isWETHSrcUnwrap =
+      !!curExchangeParam.needUnwrapNative &&
+      this.dexHelper.config.isWETH(swap.srcToken);
+    const isWETHDestWrap =
+      !!curExchangeParam.needUnwrapNative &&
+      this.dexHelper.config.isWETH(swap.destToken);
+
+    if (isWETHSrcUnwrap) {
       const withdrawCallData = this.buildUnwrapEthCallData(
         this.getWETHAddress(curExchangeParam),
-        curExchangeParam.preSwapUnwrapCalldata,
+        this.erc20Interface.encodeFunctionData('withdraw', [
+          swapExchange.srcAmount,
+        ]),
       );
       swapExchangeCallData = hexConcat([withdrawCallData, dexCallData]);
     } else {
       swapExchangeCallData = hexConcat([dexCallData]);
+    }
+
+    if (isWETHDestWrap) {
+      const depositCallData = this.buildWrapEthCallData(
+        this.getWETHAddress(curExchangeParam),
+        this.erc20Interface.encodeFunctionData('deposit'),
+        Flag.SEND_ETH_EQUAL_TO_FROM_AMOUNT_DONT_CHECK_BALANCE_AFTER_SWAP, // 9
+      );
+      swapExchangeCallData = hexConcat([swapExchangeCallData, depositCallData]);
     }
 
     const isLastSwap =

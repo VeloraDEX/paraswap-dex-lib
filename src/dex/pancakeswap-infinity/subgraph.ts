@@ -16,12 +16,11 @@ export async function queryAvailablePoolsForToken(
   pools0: SubgraphConnectorPool[];
   pools1: SubgraphConnectorPool[];
 }> {
-  const poolsQuery = `query ($token: Bytes!, $count: Int, $minTVL: Int!) {
+  const poolsQuery = `query ($token: Bytes!, $count: Int) {
     pools0: pools(
       where: {
         token0: $token
         liquidity_gt: 0
-        totalValueLockedUSD_gte: $minTVL
       }
       orderBy: totalValueLockedUSD
       orderDirection: desc
@@ -42,7 +41,6 @@ export async function queryAvailablePoolsForToken(
       where: {
         token1: $token
         liquidity_gt: 0
-        totalValueLockedUSD_gte: $minTVL
       }
       orderBy: totalValueLockedUSD
       orderDirection: desc
@@ -74,7 +72,7 @@ export async function queryAvailablePoolsForToken(
       variables: {
         token: tokenAddress,
         count: limit,
-        minTVL: POOL_MIN_TVL_USD,
+        // minTVL: POOL_MIN_TVL_USD,
       },
     },
     { timeout: SUBGRAPH_TIMEOUT },

@@ -13,9 +13,11 @@ describe('dETH E2E', () => {
     const network = Network.MAINNET;
 
     const nativeTokenSymbol = 'ETH';
+    const wethTokenSymbol = 'WETH';
     const wrappedTokenSymbol = 'dETH';
 
     const nativeAmount = '100000000000000000';
+    const wethAmount = '100000000000000000';
     const wrappedAmount = '100000000000000000';
 
     const tokens = Tokens[network];
@@ -25,6 +27,7 @@ describe('dETH E2E', () => {
     );
 
     const nativeToken = tokens[nativeTokenSymbol];
+    const wethToken = tokens[wethTokenSymbol];
     const wrappedToken = tokens[wrappedTokenSymbol];
 
     describe('swapExactAmountIn SELL', () => {
@@ -50,6 +53,64 @@ describe('dETH E2E', () => {
           nativeToken,
           '',
           wrappedAmount,
+          side,
+          dexKey,
+          contractMethod,
+          network,
+          provider,
+        );
+      });
+      it('WETH -> dETH', async () => {
+        await testE2E(
+          wethToken,
+          wrappedToken,
+          '',
+          wethAmount,
+          side,
+          dexKey,
+          contractMethod,
+          network,
+          provider,
+        );
+      });
+      it('dETH -> WETH', async () => {
+        await testE2E(
+          wrappedToken,
+          wethToken,
+          '',
+          wrappedAmount,
+          side,
+          dexKey,
+          contractMethod,
+          network,
+          provider,
+        );
+      });
+    });
+
+    describe('swapExactAmountOut BUY', () => {
+      const contractMethod = ContractMethod.swapExactAmountOut;
+      const side = SwapSide.BUY;
+
+      it('WETH -> dETH', async () => {
+        await testE2E(
+          wethToken,
+          wrappedToken,
+          '',
+          wrappedAmount,
+          side,
+          dexKey,
+          contractMethod,
+          network,
+          provider,
+        );
+      });
+      it('dETH -> WETH', async () => {
+        await testE2E(
+          wrappedToken,
+          wethToken,
+          '',
+          wethAmount,
           side,
           dexKey,
           contractMethod,

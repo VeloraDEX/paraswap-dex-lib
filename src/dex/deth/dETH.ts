@@ -50,6 +50,17 @@ export class dETH extends SimpleExchange implements IDex<null, DexParams> {
     return this.config.wrappedToken === tokenAddress.toLowerCase();
   }
 
+  isWETH(tokenAddress: Address) {
+    return this.dexHelper.config.isWETH(tokenAddress);
+  }
+
+  // Treats native ETH and WETH as equivalent for routing/pricing purposes. The
+  // delta adapter itself only handles native ETH; WETH is auto-(un)wrapped by
+  // the executor via the `needUnwrapNative` flag in getDexParam.
+  isETHOrWETH(tokenAddress: Address) {
+    return isETHAddress(tokenAddress) || this.isWETH(tokenAddress);
+  }
+
   getAdapters(_side: SwapSide): null {
     return null;
   }
@@ -62,11 +73,11 @@ export class dETH extends SimpleExchange implements IDex<null, DexParams> {
     srcToken: Token,
     destToken: Token,
   ): Promise<string[]> {
-    if (isETHAddress(srcToken.address) && this.isDETH(destToken.address)) {
+    if (this.isETHOrWETH(srcToken.address) && this.isDETH(destToken.address)) {
       return [this.getPoolIdentifier()];
     } else if (
       this.isDETH(srcToken.address) &&
-      isETHAddress(destToken.address)
+      this.isETHOrWETH(destToken.address)
     ) {
       return [this.getPoolIdentifier()];
     } else {
@@ -83,12 +94,17 @@ export class dETH extends SimpleExchange implements IDex<null, DexParams> {
     limitPools?: string[],
   ): Promise<null | ExchangePrices<null>> {
     const canSwap =
-      (isETHAddress(srcToken.address) && this.isDETH(destToken.address)) ||
-      (this.isDETH(srcToken.address) && isETHAddress(destToken.address));
+      (this.isETHOrWETH(srcToken.address) && this.isDETH(destToken.address)) ||
+      (this.isDETH(srcToken.address) && this.isETHOrWETH(destToken.address));
 
     if (!canSwap) return null;
 
-    const gasCost = isETHAddress(srcToken.address) ? 6_500 : 9_000;
+    const srcIsEthOrWeth = this.isETHOrWETH(srcToken.address);
+    // deposit is cheaper than withdraw; WETH side adds a wrap/unwrap hop.
+    const involvesWETH =
+      this.isWETH(srcToken.address) || this.isWETH(destToken.address);
+    const gasCost =
+      (srcIsEthOrWeth ? 6_500 : 9_000) + (involvesWETH ? 25_000 : 0);
 
     return [
       {
@@ -132,42 +148,45 @@ export class dETH extends SimpleExchange implements IDex<null, DexParams> {
     data: null,
     side: SwapSide,
   ): DexExchangeParam {
-    const swapData = isETHAddress(srcToken)
+    // Delta adapter speaks native ETH only. WETH on either side is routed via
+    // executor-level unwrap/wrap (see needUnwrapNative).
+    const swapData = this.isETHOrWETH(srcToken)
       ? DELTA_INTERFACE.encodeFunctionData('depositNative')
       : DELTA_INTERFACE.encodeFunctionData('withdrawNative', [srcAmount]);
 
     return {
       needWrapNative: false,
+      needUnwrapNative: true,
       dexFuncHasRecipient: false,
       exchangeData: swapData,
       targetExchange: this.config.deltaAdapter,
-      returnAmountPos: undefined,
     };
   }
 
   async getTopPoolsForToken(tokenAddress: Address): Promise<PoolLiquidity[]> {
-    const isETH = isETHAddress(tokenAddress);
+    const isEthOrWeth = this.isETHOrWETH(tokenAddress);
     const isDETH = this.isDETH(tokenAddress);
 
-    if (!isETH && !isDETH) {
+    if (!isEthOrWeth && !isDETH) {
       return [];
     }
+
+    const connectorTokens = isDETH
+      ? [
+          { address: ETHER_ADDRESS, decimals: 18 },
+          {
+            address:
+              this.dexHelper.config.data.wrappedNativeTokenAddress.toLowerCase(),
+            decimals: 18,
+          },
+        ]
+      : [{ address: this.config.wrappedToken, decimals: 18 }];
 
     return [
       {
         exchange: this.dexKey,
         address: this.config.wrappedToken,
-        connectorTokens: [
-          isETH
-            ? {
-                address: this.config.wrappedToken,
-                decimals: 18,
-              }
-            : {
-                address: ETHER_ADDRESS,
-                decimals: 18,
-              },
-        ],
+        connectorTokens,
         liquidityUSD: UNLIMITED_USD_LIQUIDITY,
       },
     ];

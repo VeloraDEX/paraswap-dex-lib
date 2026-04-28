@@ -1,5 +1,5 @@
 /* eslint-disable no-console */
-import { TenderlySimulator, StateOverride } from './tenderly-simulation';
+import { TenderlySimulator, StateOverride } from '../src';
 import {
   ContractMethod,
   ETHER_ADDRESS,

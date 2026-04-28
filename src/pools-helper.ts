@@ -12,7 +12,7 @@ export class PoolsHelper {
   }
 
   public getAllDexKeys(): string[] {
-    return this.dexAdapterService.getAllDexKeys();
+    return this.dexAdapterService.getPoolTrackerDexKeys();
   }
 
   private async getTopPoolsDex(
@@ -21,7 +21,7 @@ export class PoolsHelper {
     count: number,
   ): Promise<PoolLiquidity[] | string> {
     try {
-      const dex = this.dexAdapterService.getDexByKey(dexKey);
+      const dex = this.dexAdapterService.getPoolTrackerByKey(dexKey);
       return await dex.getTopPoolsForToken(tokenAddress, count);
     } catch (e) {
       this.logger.error(`getTopPools_${dexKey}`, e);
@@ -31,7 +31,7 @@ export class PoolsHelper {
 
   async updateDexPoolState(dexKey: string) {
     try {
-      const dexInstance = this.dexAdapterService.getDexByKey(dexKey);
+      const dexInstance = this.dexAdapterService.getPoolTrackerByKey(dexKey);
       if (!dexInstance.updatePoolState) return;
 
       return await dexInstance.updatePoolState();

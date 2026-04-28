@@ -6,7 +6,13 @@ import { Log, Logger } from '../../types';
 import { catchParseLogError } from '../../utils';
 import { StatefulEventSubscriber } from '../../stateful-event-subscriber';
 import { IDexHelper } from '../../dex-helper/idex-helper';
-import { PoolState, PoolStateMap, Step, TokenInfo } from './types';
+import {
+  BufferStateExt,
+  PoolState,
+  PoolStateMap,
+  Step,
+  TokenInfo,
+} from './types';
 import { getPoolsApi } from './getPoolsApi';
 import vaultExtensionAbi_V3 from '../../abi/balancer-v3/vault-extension.json';
 import {
@@ -92,6 +98,8 @@ export class BalancerV3EventPool extends StatefulEventSubscriber<PoolStateMap> {
         'function convertToAssets(uint256 shares) external view returns (uint256 assets)',
         'function maxDeposit(address receiver) external view returns (uint256 maxAssets)',
         'function maxMint(address receiver) external view returns (uint256 maxShares)',
+        'function maxWithdraw(address owner) external view returns (uint256 maxAssets)',
+        'function maxRedeem(address owner) external view returns (uint256 maxShares)',
       ]),
       ['QUANT_AMM_WEIGHTED']: new Interface([
         'function getQuantAMMWeightedPoolDynamicData() external view returns (tuple(uint256[] balancesLiveScaled18, uint256[] tokenRates, uint256 totalSupply, bool isPoolInitialized, bool isPoolPaused, bool isPoolInRecoveryMode, int256[] firstFourWeightsAndMultipliers, int256[] secondFourWeightsAndMultipliers, uint40 lastUpdateTime, uint40 lastInteropTime) data)',
@@ -581,6 +589,28 @@ export class BalancerV3EventPool extends StatefulEventSubscriber<PoolStateMap> {
           BigInt(timestamp);
       }
 
+      // ERC4626 unwrap: the underlying balancer-maths BufferState only
+      // enforces maxDeposit/maxMint for wraps. On-chain, the Vault will call
+      // withdraw/redeem on the wrapper which reverts against maxWithdraw /
+      // maxRedeem(vault). Check those ourselves so we return a 0 price
+      // instead of producing a quote that would revert on execution.
+      if (step.isBuffer && step.poolState.poolType === 'Buffer') {
+        const buffer = step.poolState as BufferStateExt;
+        const isUnwrap =
+          step.swapInput.tokenIn.toLowerCase() ===
+          buffer.poolAddress.toLowerCase();
+        if (isUnwrap) {
+          // GivenIn  → amount is shares (redeem); GivenOut → amount is assets (withdraw)
+          const limit =
+            swapKind === SwapKind.GivenIn
+              ? buffer.maxRedeem
+              : buffer.maxWithdraw;
+          if (amount > limit) {
+            return 0n;
+          }
+        }
+      }
+
       // try/catch as the swap can fail for e.g. wrapAmountTooSmall, etc
       try {
         outputAmountRaw = this.vault.swap(
@@ -630,6 +660,8 @@ export class BalancerV3EventPool extends StatefulEventSubscriber<PoolStateMap> {
           erc4626Rates,
           erc4626MaxDeposit,
           erc4626MaxMint,
+          erc4626MaxWithdraw,
+          erc4626MaxRedeem,
         },
         i,
       ) => {
@@ -637,6 +669,8 @@ export class BalancerV3EventPool extends StatefulEventSubscriber<PoolStateMap> {
         poolState[poolAddress].erc4626Rates = erc4626Rates;
         poolState[poolAddress].erc4626MaxDeposit = erc4626MaxDeposit;
         poolState[poolAddress].erc4626MaxMint = erc4626MaxMint;
+        poolState[poolAddress].erc4626MaxWithdraw = erc4626MaxWithdraw;
+        poolState[poolAddress].erc4626MaxRedeem = erc4626MaxRedeem;
       },
     );
 
@@ -649,6 +683,7 @@ export class BalancerV3EventPool extends StatefulEventSubscriber<PoolStateMap> {
     const erc4626MultiCallData = getErc4626MultiCallData(
       this.interfaces['ERC4626'],
       poolState,
+      BalancerV3Config.BalancerV3[this.network].vaultAddress,
     );
 
     const poolAddresses = Object.keys(poolState);
@@ -715,6 +750,14 @@ export class BalancerV3EventPool extends StatefulEventSubscriber<PoolStateMap> {
           if (!tokensWithRates[t]) return null;
           return tokensWithRates[t].maxMint;
         }),
+        erc4626MaxWithdraw: poolState[address].tokens.map(t => {
+          if (!tokensWithRates[t]) return null;
+          return tokensWithRates[t].maxWithdraw;
+        }),
+        erc4626MaxRedeem: poolState[address].tokens.map(t => {
+          if (!tokensWithRates[t]) return null;
+          return tokensWithRates[t].maxRedeem;
+        }),
       };
     });
   }
@@ -737,6 +780,8 @@ export class BalancerV3EventPool extends StatefulEventSubscriber<PoolStateMap> {
         rate: poolState.tokenRates[tokenIndex],
         maxDeposit: 0n, // N/A As non-erc4626
         maxMint: 0n,
+        maxWithdraw: 0n,
+        maxRedeem: 0n,
       };
     }
 
@@ -761,6 +806,8 @@ export class BalancerV3EventPool extends StatefulEventSubscriber<PoolStateMap> {
           rate: poolState.erc4626Rates[tokenIndex]!,
           maxDeposit: poolState.erc4626MaxDeposit[tokenIndex]!,
           maxMint: poolState.erc4626MaxMint[tokenIndex]!,
+          maxWithdraw: poolState.erc4626MaxWithdraw[tokenIndex]!,
+          maxRedeem: poolState.erc4626MaxRedeem[tokenIndex]!,
         };
       }
     }
@@ -849,6 +896,8 @@ export class BalancerV3EventPool extends StatefulEventSubscriber<PoolStateMap> {
         tokens: [token.mainToken, token.underlyingToken], // staticToken & underlying
         maxDeposit: token.maxDeposit,
         maxMint: token.maxMint,
+        maxWithdraw: token.maxWithdraw,
+        maxRedeem: token.maxRedeem,
       },
     };
   }
@@ -859,6 +908,17 @@ export class BalancerV3EventPool extends StatefulEventSubscriber<PoolStateMap> {
         `Buffer unwrap: token has no underlying. ${token.mainToken}`,
       );
     // Vault expects pool to be the ERC4626 wrapped token, e.g. aUSDC
+    const poolState: BufferStateExt = {
+      poolType: 'Buffer',
+      // TODO: for ERC4626 fetch the wrap/unwrap rate
+      rate: token.rate,
+      poolAddress: token.mainToken,
+      tokens: [token.mainToken, token.underlyingToken], // staticToken & underlying
+      maxDeposit: token.maxDeposit,
+      maxMint: token.maxMint,
+      maxWithdraw: token.maxWithdraw,
+      maxRedeem: token.maxRedeem,
+    };
     return {
       pool: token.mainToken,
       isBuffer: true,
@@ -866,15 +926,7 @@ export class BalancerV3EventPool extends StatefulEventSubscriber<PoolStateMap> {
         tokenIn: token.mainToken,
         tokenOut: token.underlyingToken,
       },
-      poolState: {
-        poolType: 'Buffer',
-        // TODO: for ERC4626 fetch the wrap/unwrap rate
-        rate: token.rate,
-        poolAddress: token.mainToken,
-        tokens: [token.mainToken, token.underlyingToken], // staticToken & underlying
-        maxDeposit: token.maxDeposit,
-        maxMint: token.maxMint,
-      },
+      poolState,
     };
   }
 

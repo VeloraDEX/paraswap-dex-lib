@@ -478,6 +478,14 @@ export abstract class ExecutorBytecodeBuilder<S = {}, D = {}> {
 
     const target = exchangeParam.spender || exchangeParam.targetExchange;
 
+    // WETH src gets unwrapped to ETH before the DEX call; nothing to approve.
+    if (
+      exchangeParam.needUnwrapNative &&
+      this.dexHelper.config.isWETH(swap.srcToken)
+    ) {
+      return null;
+    }
+
     if (
       !isETHAddress(swap.srcToken) &&
       !exchangeParam.transferSrcTokenBeforeSwap

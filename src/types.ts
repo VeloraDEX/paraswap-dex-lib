@@ -160,6 +160,11 @@ export type AdapterExchangeParam = {
 
 export type DexExchangeParam = {
   needWrapNative: boolean | NeedWrapNativeFunc;
+  // When true, the executor unwraps WETH -> ETH before calling the DEX (if src
+  // is WETH) and wraps ETH -> WETH after the DEX call (if dest is WETH). The
+  // DEX itself operates on native ETH. Mirror of needWrapNative for protocols
+  // that only expose a native-ETH interface.
+  needUnwrapNative?: boolean;
   skipApproval?: boolean;
   wethAddress?: string;
   exchangeData: string;
@@ -171,7 +176,6 @@ export type DexExchangeParam = {
   sendEthButSupportsInsertFromAmount?: boolean;
   specialDexSupportsInsertFromAmount?: boolean;
   swappedAmountNotPresentInExchangeData?: boolean;
-  preSwapUnwrapCalldata?: string;
   returnAmountPos?: number;
   insertFromAmountPos?: number;
   amountsPacked128?: boolean;

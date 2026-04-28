@@ -1,7 +1,13 @@
 import _ from 'lodash';
 import { UnoptimizedRate } from '../types';
 import { CurveV2 } from './curve-v2/curve-v2';
-import { IDexTxBuilder, DexConstructor, IDex, IRouteOptimizer } from './idex';
+import {
+  IDexTxBuilder,
+  DexConstructor,
+  IDex,
+  IDexPooltracker,
+  IRouteOptimizer,
+} from './idex';
 import { StablePool } from './stable-pool/stable-pool';
 import { Weth } from './weth/weth';
 import { PolygonMigrator } from './polygon-migrator/polygon-migrator';
@@ -217,6 +223,9 @@ export class DexAdapterService {
   isLegacy: { [dexKey: string]: boolean } = {};
   // dexKeys only has keys for non legacy dexes
   dexKeys: string[] = [];
+  // legacy dex keys whose class implements `getTopPoolsForToken` and was
+  // successfully constructed for the current network
+  legacyPoolTrackerDexKeys: string[] = [];
   genericRFQDexKeys: Set<string> = new Set();
   uniswapV2Alias: string | null;
 
@@ -272,6 +281,28 @@ export class DexAdapterService {
         if (networks.includes(network)) {
           const dex = new DexAdapter(network, key, dexHelper);
           handleDex(dex, key);
+        }
+      });
+    });
+
+    LegacyDexes.forEach(DexAdapter => {
+      const proto = DexAdapter.prototype as Partial<IDexPooltracker>;
+      if (typeof proto.getTopPoolsForToken !== 'function') return;
+
+      DexAdapter.dexKeys.forEach(key => {
+        const _key = key.toLowerCase();
+        try {
+          const dex = new DexAdapter(dexHelper);
+          this.dexInstances[_key] = dex as unknown as IDexTxBuilder<any, any>;
+          this.legacyPoolTrackerDexKeys.push(key);
+        } catch (e) {
+          dexHelper
+            .getLogger('DexAdapterService')
+            .warn(
+              `Skipping legacy pool-tracker dex "${key}" on network ${network}: ${
+                (e as Error)?.message ?? e
+              }`,
+            );
         }
       });
     });
@@ -345,12 +376,27 @@ export class DexAdapterService {
     return _.uniq(this.dexKeys);
   }
 
+  getPoolTrackerDexKeys(): string[] {
+    return _.uniq([...this.dexKeys, ...this.legacyPoolTrackerDexKeys]);
+  }
+
   getDexByKey(key: string): IDex<any, any, any> {
     const _key = key.toLowerCase();
     if (!(_key in this.isLegacy) || this.isLegacy[_key])
       throw new Error(`Invalid Dex Key ${key}`);
 
     return this.dexInstances[_key] as IDex<any, any, any>;
+  }
+
+  getPoolTrackerByKey(key: string): IDexPooltracker {
+    const _key = key.toLowerCase();
+    const instance = this.dexInstances[_key] as
+      | Partial<IDexPooltracker>
+      | undefined;
+    if (!instance || typeof instance.getTopPoolsForToken !== 'function')
+      throw new Error(`Invalid pool-tracker dex key ${key}`);
+
+    return instance as IDexPooltracker;
   }
 
   getAllDexAdapters(side: SwapSide = SwapSide.SELL) {
