@@ -13,7 +13,9 @@ function buildMetricRoute(params: {
   destAmount: string;
   pool: string;
   zeroForOne: boolean;
+  side?: 'SELL' | 'BUY';
 }): OptimalRate {
+  const side = params.side ?? 'SELL';
   return {
     blockNumber: params.blockNumber,
     network: params.network,
@@ -52,11 +54,12 @@ function buildMetricRoute(params: {
     gasCostUSD: '0',
     gasCost: '150000',
     others: [],
-    side: 'SELL',
+    side,
     version: '6.2',
     contractAddress: '0x6a000f20005980200259b80c5102003040001068',
     tokenTransferProxy: '0x6a000f20005980200259b80c5102003040001068',
-    contractMethod: 'swapExactAmountIn',
+    contractMethod:
+      side === 'SELL' ? 'swapExactAmountIn' : 'swapExactAmountOut',
     partnerFee: 0,
     srcUSD: '0',
     destUSD: '0',
@@ -132,16 +135,15 @@ describe('Metric E2E', () => {
       await testPriceRoute(route);
     });
 
-    // Base tx 0x9e623c0126df14b0ed63d5c2631ccff788873103d3c8d01ddda230beda761e10
-    // 1,250 USDC → ~0.572 WETH (zeroForOne=false)
+    // ~5.006 USDC → ~0.00223 WETH (zeroForOne=false)
     const baseUsdcReverseShared = {
       network: 8453,
-      blockNumber: 44495533,
+      blockNumber: 45353456,
       srcToken: BASE_USDC,
       srcDecimals: 6,
-      srcAmount: '1250000000',
+      srcAmount: '5006456',
       destDecimals: 18,
-      destAmount: '572250811824233202',
+      destAmount: '2232395713582392',
       pool: '0xa6929e903c42a79394f09365f59e916cb0accfd9',
       zeroForOne: false,
     };
@@ -158,6 +160,24 @@ describe('Metric E2E', () => {
       const route = buildMetricRoute({
         ...baseUsdcReverseShared,
         destToken: ETHER_ADDRESS,
+      });
+      await testPriceRoute(route);
+    });
+
+    it('USDC → WETH (BUY)', async () => {
+      const route = buildMetricRoute({
+        ...baseUsdcReverseShared,
+        destToken: BASE_WETH,
+        side: 'BUY',
+      });
+      await testPriceRoute(route);
+    });
+
+    it('USDC → ETH (BUY, unwraps WETH)', async () => {
+      const route = buildMetricRoute({
+        ...baseUsdcReverseShared,
+        destToken: ETHER_ADDRESS,
+        side: 'BUY',
       });
       await testPriceRoute(route);
     });

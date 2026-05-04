@@ -61,34 +61,35 @@ export class Metric
     data: MetricData,
     side: SwapSide,
   ): DexExchangeParam {
-    if (side === SwapSide.BUY) throw new Error(`Buy not supported`);
-
     const deadline = getLocalDeadlineAsFriendlyPlaceholder();
     const priceLimit = this.getPriceLimit(data.zeroForOne);
 
-    const swapData = this.routerInterface.encodeFunctionData(
-      'swapExactInput(address,address,bool,uint128,uint128,uint256,uint256)',
-      [
-        data.pool,
-        recipient,
-        data.zeroForOne,
-        srcAmount,
-        priceLimit,
-        '1',
-        deadline,
-      ],
-    );
+    const swapFunction =
+      side === SwapSide.SELL ? 'swapExactInput' : 'swapExactOutput';
+
+    const swapData = this.routerInterface.encodeFunctionData(swapFunction, [
+      data.pool,
+      recipient,
+      data.zeroForOne,
+      side === SwapSide.SELL ? srcAmount : destAmount,
+      priceLimit,
+      side === SwapSide.SELL ? '1' : srcAmount,
+      deadline,
+    ]);
 
     return {
       needWrapNative: this.needWrapNative,
       dexFuncHasRecipient: true,
       exchangeData: swapData,
       targetExchange: this.routerAddress,
-      returnAmountPos: extractReturnAmountPosition(
-        this.routerInterface,
-        'swapExactInput',
-        'amountOut',
-      ),
+      returnAmountPos:
+        side === SwapSide.SELL
+          ? extractReturnAmountPosition(
+              this.routerInterface,
+              'swapExactInput',
+              'amountOut',
+            )
+          : undefined,
     };
   }
 }
