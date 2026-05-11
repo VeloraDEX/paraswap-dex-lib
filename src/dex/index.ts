@@ -106,6 +106,7 @@ import { dETH } from './deth/dETH';
 import { Cap } from './cap/cap';
 import { PancakeSwapInfinity } from './pancakeswap-infinity/pancakeswap-infinity';
 import { Metric } from './metric/metric';
+import { Tessera } from './tessera/tessera';
 
 const LegacyDexes = [
   CurveV2,
@@ -119,6 +120,7 @@ const LegacyDexes = [
   EtherFi,
   PancakeSwapInfinity,
   Metric,
+  Tessera,
 ];
 
 const Dexes = [
