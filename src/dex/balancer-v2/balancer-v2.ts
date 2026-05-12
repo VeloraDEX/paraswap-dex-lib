@@ -39,7 +39,7 @@ import {
   getDexKeysWithNetwork,
   uuidToBytes16,
 } from '../../utils';
-import { Context, IDex } from '../../dex/idex';
+import { IDex } from '../../dex/idex';
 import { IDexHelper } from '../../dex-helper';
 import {
   BalancerV2BatchSwapParam,
@@ -1654,7 +1654,6 @@ export class BalancerV2
     recipient: Address,
     data: OptimizedBalancerV2Data,
     side: SwapSide,
-    context: Context,
     executor: Address,
   ): DexExchangeParam {
     const balancerBatchSwapParam = this.getBalancerV2BatchSwapParam(

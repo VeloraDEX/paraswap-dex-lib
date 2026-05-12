@@ -20,7 +20,7 @@ import {
 } from '../../constants';
 import * as CALLDATA_GAS_COST from '../../calldata-gas-cost';
 import { getDexKeysWithNetwork, getBigIntPow } from '../../utils';
-import { Context, IDex } from '../../dex/idex';
+import { IDex } from '../../dex/idex';
 import { IDexHelper } from '../../dex-helper/idex-helper';
 import { OSwapData, OSwapPool, OSwapPoolState } from './types';
 import {
@@ -403,7 +403,6 @@ export class OSwap extends SimpleExchange implements IDex<OSwapData> {
     recipient: Address,
     data: OSwapData,
     side: SwapSide,
-    _: Context,
     executorAddress: Address,
   ): DexExchangeParam {
     let method: string;

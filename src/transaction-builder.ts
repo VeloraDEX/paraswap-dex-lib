@@ -104,7 +104,7 @@ export class TransactionBuilder {
     swapIndex: number,
     se: OptimalSwapExchange<any>,
     minMaxAmount: string,
-    dex: IDexTxBuilder<any, any>,
+    dexNeedWrapNative: boolean,
     executionContractAddress: string,
   ): {
     srcToken: Address;

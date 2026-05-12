@@ -13,7 +13,7 @@ import {
 import { SwapSide, Network, NULL_ADDRESS } from '../../constants';
 import * as CALLDATA_GAS_COST from '../../calldata-gas-cost';
 import { getBigIntPow, getDexKeysWithNetwork, isTruthy } from '../../utils';
-import { Context, IDex } from '../../dex/idex';
+import { IDex } from '../../dex/idex';
 import { IDexHelper } from '../../dex-helper/idex-helper';
 import { MaverickV2Data, PoolAPIResponse } from './types';
 import { SimpleExchange } from '../simple-exchange';

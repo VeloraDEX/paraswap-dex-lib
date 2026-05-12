@@ -76,6 +76,10 @@ class APIParaswapSDK implements IParaSwapSDK {
     );
     this.transactionBuilder = new GenericSwapTransactionBuilder(
       this.dexAdapterService,
+      undefined,
+      undefined,
+      undefined,
+      true,
     );
     this.pricingHelper = new PricingHelper(
       this.dexAdapterService,

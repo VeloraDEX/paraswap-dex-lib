@@ -3,7 +3,7 @@ import Joi from 'joi';
 import * as CALLDATA_GAS_COST from '../../calldata-gas-cost';
 import { ETHER_ADDRESS, Network, SwapSide } from '../../constants';
 import { IDexHelper } from '../../dex-helper/idex-helper';
-import { Context, IDex } from '../../dex/idex';
+import { IDex } from '../../dex/idex';
 import {
   AdapterExchangeParam,
   Address,
@@ -488,7 +488,6 @@ export class Ekubo extends SimpleExchange implements IDex<EkuboData> {
     recipient: Address,
     data: EkuboData,
     side: SwapSide,
-    _context: Context,
     _executorAddress: Address,
   ): DexExchangeParam {
     const amount = BigInt(side === SwapSide.BUY ? `-${destAmount}` : srcAmount);

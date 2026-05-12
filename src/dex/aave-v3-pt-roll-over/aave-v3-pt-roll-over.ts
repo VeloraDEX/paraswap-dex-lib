@@ -17,7 +17,7 @@ import {
 } from '../../constants';
 import * as CALLDATA_GAS_COST from '../../calldata-gas-cost';
 import { getDexKeysWithNetwork } from '../../utils';
-import { Context, IDex } from '../../dex/idex';
+import { IDex } from '../../dex/idex';
 import { IDexHelper } from '../../dex-helper/idex-helper';
 import { AaveV3PtRollOverData, DexParams, PendleSDKMarket } from './types';
 import { SimpleExchange } from '../simple-exchange';
@@ -408,7 +408,6 @@ export class AaveV3PtRollOver
     recipient: Address,
     data: AaveV3PtRollOverData,
     side: SwapSide,
-    context: Context,
     executorAddress: Address,
   ): Promise<DexExchangeParam> {
     // Call Pendle SDK roll-over-pt endpoint for PT rollover

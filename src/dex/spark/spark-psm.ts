@@ -7,7 +7,6 @@ import {
   SparkSUSDSPsmFunctions,
 } from './types';
 import { SwapSide } from '@paraswap/core/build/constants';
-import { Context } from '../idex';
 import {
   ConnectorToken,
   DexConfigMap,
@@ -320,7 +319,6 @@ export class SparkPsm extends Spark {
     recipient: Address,
     data: SparkData,
     side: SwapSide,
-    _: Context,
     executorAddress: Address,
   ): DexExchangeParam {
     const isSell = side === SwapSide.SELL;

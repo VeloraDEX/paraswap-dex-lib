@@ -3,19 +3,19 @@ import { Address } from '../../types';
 
 export const MetricConfig: Record<number, { routerAddress: Address }> = {
   [Network.MAINNET]: {
-    routerAddress: '0xcB41C10c6414aCbea022c7662df4005dd8FBEF91',
+    routerAddress: '0xcb41c10c6414acbea022c7662df4005dd8fbef91',
   },
   [Network.BASE]: {
-    routerAddress: '0xA6A16C00B7E9DBE1D54acEd7d6FE264fc4732eaF',
+    routerAddress: '0xa6a16c00b7e9dbe1d54aced7d6fe264fc4732eaf',
   },
   [Network.BSC]: {
-    routerAddress: '0xa9a63266bB70eb3419C34C245F4318983f325Bbd',
+    routerAddress: '0xa9a63266bb70eb3419c34c245f4318983f325bbd',
   },
   [Network.ARBITRUM]: {
-    routerAddress: '0x82A562fD9F02d4346B95D3a2a501411979C8F920',
+    routerAddress: '0x82a562fd9f02d4346b95d3a2a501411979c8f920',
   },
   [Network.POLYGON]: {
-    routerAddress: '0x976c26402E1EC10454c5Fe6D2C9857DD57aE78f3',
+    routerAddress: '0x976c26402e1ec10454c5fe6d2c9857dd57ae78f3',
   },
 };
 

@@ -15,7 +15,7 @@ import type {
 import { SwapSide, Network, UNLIMITED_USD_LIQUIDITY } from '../../constants';
 import * as CALLDATA_GAS_COST from '../../calldata-gas-cost';
 import { getDexKeysWithNetwork } from '../../utils';
-import type { Context, IDex } from '../../dex/idex';
+import type { IDex } from '../../dex/idex';
 import type { IDexHelper } from '../../dex-helper/idex-helper';
 import type { AngleStakedStableData, DexParams } from './types';
 import { SimpleExchange } from '../simple-exchange';
@@ -240,7 +240,6 @@ export class AngleStakedStable
     recipient: Address,
     data: AngleStakedStableData,
     side: SwapSide,
-    _: Context,
     executorAddress: Address,
   ): DexExchangeParam {
     const { exchange } = data;

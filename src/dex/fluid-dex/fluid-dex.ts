@@ -11,7 +11,7 @@ import {
 } from '../../types';
 import { SwapSide, Network } from '../../constants';
 import * as CALLDATA_GAS_COST from '../../calldata-gas-cost';
-import { Context, IDex } from '../idex';
+import { IDex } from '../idex';
 import { IDexHelper } from '../../dex-helper';
 import {
   CollateralReserves,
@@ -474,7 +474,6 @@ export class FluidDex extends SimpleExchange implements IDex<FluidDexData> {
     recipient: Address,
     data: FluidDexData,
     side: SwapSide,
-    context: Context,
     executorAddress: Address,
   ): Promise<DexExchangeParam> {
     let args: any;

@@ -2,7 +2,7 @@ import { Interface } from '@ethersproject/abi';
 import * as CALLDATA_GAS_COST from '../../calldata-gas-cost';
 import { ETHER_ADDRESS, Network, SwapSide } from '../../constants';
 import { IDexHelper } from '../../dex-helper/idex-helper';
-import { Context, IDex } from '../idex';
+import { IDex } from '../idex';
 import {
   AdapterExchangeParam,
   Address,
@@ -184,7 +184,6 @@ export class EkuboV3 extends SimpleExchange implements IDex<EkuboData> {
     recipient: Address,
     data: EkuboData,
     side: SwapSide,
-    _context: Context,
     _executorAddress: Address,
   ): DexExchangeParam {
     const amount = BigInt(side === SwapSide.BUY ? `-${destAmount}` : srcAmount);
