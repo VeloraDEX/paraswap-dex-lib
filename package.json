@@ -48,7 +48,9 @@
     "check:pq": "pretty-quick --staged",
     "check:tsc": "tsc",
     "check:es": "eslint \"src/**/*.ts\" --ignore-pattern=\"*.test.ts\"",
-    "checks": "yarn check:pq && yarn check:tsc && yarn check:es"
+    "fixtures:generate": "ts-node tests/generic-swap-transaction-builder/fixtures/generate-resolved-build-fixtures.ts",
+    "fixtures:check": "yarn fixtures:generate && git diff --exit-code -- tests/generic-swap-transaction-builder/fixtures/resolved-build && test -z \"$(git ls-files --others --exclude-standard -- tests/generic-swap-transaction-builder/fixtures/resolved-build)\"",
+    "checks": "yarn check:pq && yarn check:tsc && yarn check:es && yarn fixtures:check"
   },
   "dependencies": {
     "@balancer-labs/balancer-maths": "^0.0.36",

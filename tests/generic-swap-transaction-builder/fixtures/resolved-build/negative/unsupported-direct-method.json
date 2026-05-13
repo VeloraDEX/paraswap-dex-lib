@@ -1,0 +1,39 @@
+{
+  "coverage": [
+    "negative",
+    "validation-error",
+    "unsupported-method"
+  ],
+  "expectedError": "unsupported direct contract method for resolved build: swapExactAmountIn",
+  "input": {
+    "augustusV6Address": "0x6a000f20005980200259b80c5102003040001068",
+    "contractMethod": "swapExactAmountIn",
+    "gas": {
+      "gasPrice": "1",
+      "maxFeePerGas": "2",
+      "maxPriorityFeePerGas": "3"
+    },
+    "minMaxAmount": "990",
+    "params": [
+      [
+        "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "1000",
+        "990",
+        "995",
+        "0x1111111111111111111111111111111111111111111111111111111111111111",
+        "0x0000000000000000000000000000000000000000",
+        "0x1234"
+      ],
+      "0",
+      "0x"
+    ],
+    "side": "SELL",
+    "srcAmount": "1000",
+    "srcToken": "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "userAddress": "0x1111111111111111111111111111111111111111"
+  },
+  "kind": "negative",
+  "name": "unsupported-direct-method",
+  "schemaVersion": 1
+}

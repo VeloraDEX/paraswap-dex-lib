@@ -1,0 +1,39 @@
+{
+  "coverage": [
+    "negative",
+    "validation-error",
+    "direct-side-method-mismatch"
+  ],
+  "expectedError": "direct contract method swapExactAmountOutOnUniswapV2 is inconsistent with side SELL; expected BUY",
+  "input": {
+    "augustusV6Address": "0x6a000f20005980200259b80c5102003040001068",
+    "contractMethod": "swapExactAmountOutOnUniswapV2",
+    "gas": {
+      "gasPrice": "1",
+      "maxFeePerGas": "2",
+      "maxPriorityFeePerGas": "3"
+    },
+    "minMaxAmount": "990",
+    "params": [
+      [
+        "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "1000",
+        "990",
+        "995",
+        "0x1111111111111111111111111111111111111111111111111111111111111111",
+        "0x0000000000000000000000000000000000000000",
+        "0x1234"
+      ],
+      "0",
+      "0x"
+    ],
+    "side": "SELL",
+    "srcAmount": "1000",
+    "srcToken": "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "userAddress": "0x1111111111111111111111111111111111111111"
+  },
+  "kind": "negative",
+  "name": "direct-side-method-mismatch",
+  "schemaVersion": 1
+}

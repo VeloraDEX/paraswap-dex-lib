@@ -1,0 +1,103 @@
+{
+  "coverage": [
+    "negative",
+    "validation-error",
+    "duplicate-resolved-leg"
+  ],
+  "expectedError": "duplicate resolved leg route position(s): 0:0:0",
+  "input": {
+    "augustusV6Address": "0x6a000f20005980200259b80c5102003040001068",
+    "beneficiary": "0x0000000000000000000000000000000000000000",
+    "blockNumber": 18812722,
+    "contractMethod": "swapExactAmountIn",
+    "destAmount": "1000967",
+    "destToken": "0xdac17f958d2ee523a2206206994597c13d831ec7",
+    "executorAddress": "0x000010036c0190e009a000d0fc3541100a07380a",
+    "executorType": "Executor01",
+    "fee": {
+      "isCapSurplus": true,
+      "isDirectFeeTransfer": false,
+      "isSurplusToUser": false,
+      "partnerAddress": "0x0000000000000000000000000000000000000000",
+      "partnerFeePercent": "0",
+      "takeSurplus": false
+    },
+    "gas": {
+      "gasPrice": "1",
+      "maxFeePerGas": "2",
+      "maxPriorityFeePerGas": "3"
+    },
+    "minMaxAmount": "990000",
+    "network": 1,
+    "permit": "0x",
+    "quotedAmount": "1000967",
+    "resolvedLegs": [
+      {
+        "exchangeParam": {
+          "dexFuncHasDestToken": true,
+          "dexFuncHasRecipient": true,
+          "exchangeData": "0xc04b8d59000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000a0000000000000000000000000e6f1c1f58e34df3892cb1b1c193f82462bc0a86e000000000000000000000000000000000000000000000000000000006589737000000000000000000000000000000000000000000000000000000000000f42400000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000002ba0b86991c6218b36c1d19d4a2e9eb0ce3606eb48000064dac17f958d2ee523a2206206994597c13d831ec7000000000000000000000000000000000000000000",
+          "needWrapNative": true,
+          "targetExchange": "0xe592427a0aece92de3edee1f18e0157c05861564"
+        },
+        "normalizedDestAmount": "1",
+        "normalizedDestToken": "0xdac17f958d2ee523a2206206994597c13d831ec7",
+        "normalizedSrcAmount": "1000000",
+        "normalizedSrcToken": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+        "recipient": "0x6a000f20005980200259b80c5102003040001068",
+        "routeIndex": 0,
+        "swapExchangeIndex": 0,
+        "swapIndex": 0
+      },
+      {
+        "exchangeParam": {
+          "dexFuncHasDestToken": true,
+          "dexFuncHasRecipient": true,
+          "exchangeData": "0xc04b8d59000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000a0000000000000000000000000e6f1c1f58e34df3892cb1b1c193f82462bc0a86e000000000000000000000000000000000000000000000000000000006589737000000000000000000000000000000000000000000000000000000000000f42400000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000002ba0b86991c6218b36c1d19d4a2e9eb0ce3606eb48000064dac17f958d2ee523a2206206994597c13d831ec7000000000000000000000000000000000000000000",
+          "needWrapNative": true,
+          "targetExchange": "0xe592427a0aece92de3edee1f18e0157c05861564"
+        },
+        "normalizedDestAmount": "1",
+        "normalizedDestToken": "0xdac17f958d2ee523a2206206994597c13d831ec7",
+        "normalizedSrcAmount": "1000000",
+        "normalizedSrcToken": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+        "recipient": "0x6a000f20005980200259b80c5102003040001068",
+        "routeIndex": 0,
+        "swapExchangeIndex": 0,
+        "swapIndex": 0
+      }
+    ],
+    "routePlan": {
+      "routes": [
+        {
+          "percent": 100,
+          "swaps": [
+            {
+              "destAmount": "1000967",
+              "destToken": "0xdac17f958d2ee523a2206206994597c13d831ec7",
+              "srcAmount": "1000000",
+              "srcToken": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+              "swapExchanges": [
+                {
+                  "destAmount": "1000967",
+                  "exchange": "UniswapV3",
+                  "percent": 100,
+                  "srcAmount": "1000000"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "side": "SELL",
+    "srcAmount": "1000000",
+    "srcToken": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+    "userAddress": "0x1111111111111111111111111111111111111111",
+    "uuid": "11111111-1111-1111-1111-111111111111",
+    "wrappedNativeTokenAddress": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+  },
+  "kind": "negative",
+  "name": "duplicate-resolved-leg",
+  "schemaVersion": 1
+}

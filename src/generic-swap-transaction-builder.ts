@@ -46,6 +46,8 @@ import {
   buildTransactionFromResolved,
   routePositionKey,
   walkRoutePlan,
+  type BuildInput,
+  type DirectBuildInput,
   type ResolvedBuildOutput,
   type ResolvedDirectCall,
   type ResolvedLeg,
@@ -57,6 +59,11 @@ const REMOTE_DEX_PARAM_TIMEOUT_MS = 10_000;
 export type GenericSwapTransactionBuildParams =
   | ResolvedBuildOutput['params']
   | ResolvedDirectCall['params'];
+
+export type ResolvedBuildInputObserver = {
+  onGenericBuildInput?: (input: BuildInput) => void;
+  onDirectBuildInput?: (input: DirectBuildInput) => void;
+};
 
 // `.empty(null)` makes joi treat a JSON `null` as missing (i.e. undefined),
 // which is what downstream `value !== undefined` checks expect — see
@@ -135,6 +142,7 @@ export class GenericSwapTransactionBuilder {
     // `buildCalls` invocations and the next call will see the new state.
     protected newDexs?: NewDexsConfig,
     protected skipApprovalCheck = false, // used only for testing outdated price routes
+    protected resolvedBuildInputObserver?: ResolvedBuildInputObserver,
   ) {
     this.abiCoder = new AbiCoder();
     this.erc20Interface = new Interface(ERC20ABI);
@@ -426,51 +434,51 @@ export class GenericSwapTransactionBuilder {
       bytecodeBuilder,
     );
 
-    return buildTransactionFromResolved(
-      {
-        routePlan,
-        resolvedLegs,
-        wethPlan: maybeWethCallData,
-        executorType: executorName,
-        executorAddress: this.normalizeAddress(executionContractAddress),
-        augustusV6Address: this.normalizeAddress(this.augustusV6Address),
-        wrappedNativeTokenAddress: this.normalizeAddress(
-          this.dexAdapterService.dexHelper.config.data
-            .wrappedNativeTokenAddress,
-        ),
-        network: this.dexAdapterService.network,
-        srcToken: this.normalizeAddress(priceRoute.srcToken),
-        destToken: this.normalizeAddress(priceRoute.destToken),
-        srcAmount: priceRoute.srcAmount,
-        destAmount: priceRoute.destAmount,
-        minMaxAmount,
-        quotedAmount,
-        side: priceRoute.side,
-        contractMethod: priceRoute.contractMethod as ContractMethodV6,
-        blockNumber: priceRoute.blockNumber,
-        userAddress: this.normalizeAddress(userAddress),
-        beneficiary: this.normalizeAddress(beneficiary),
-        permit,
-        uuid,
-        fee: {
-          partnerAddress: this.normalizeAddress(partnerAddress),
-          partnerFeePercent,
-          referrerAddress:
-            referrerAddress === undefined
-              ? undefined
-              : this.normalizeAddress(referrerAddress),
-          takeSurplus,
-          isCapSurplus,
-          isSurplusToUser,
-          isDirectFeeTransfer,
-        },
-        gas,
+    const buildInput: BuildInput = {
+      routePlan,
+      resolvedLegs,
+      wethPlan: maybeWethCallData,
+      executorType: executorName,
+      executorAddress: this.normalizeAddress(executionContractAddress),
+      augustusV6Address: this.normalizeAddress(this.augustusV6Address),
+      wrappedNativeTokenAddress: this.normalizeAddress(
+        this.dexAdapterService.dexHelper.config.data.wrappedNativeTokenAddress,
+      ),
+      network: this.dexAdapterService.network,
+      srcToken: this.normalizeAddress(priceRoute.srcToken),
+      destToken: this.normalizeAddress(priceRoute.destToken),
+      srcAmount: priceRoute.srcAmount,
+      destAmount: priceRoute.destAmount,
+      minMaxAmount,
+      quotedAmount,
+      side: priceRoute.side,
+      contractMethod: priceRoute.contractMethod as ContractMethodV6,
+      blockNumber: priceRoute.blockNumber,
+      userAddress: this.normalizeAddress(userAddress),
+      beneficiary: this.normalizeAddress(beneficiary),
+      permit,
+      uuid,
+      fee: {
+        partnerAddress: this.normalizeAddress(partnerAddress),
+        partnerFeePercent,
+        referrerAddress:
+          referrerAddress === undefined
+            ? undefined
+            : this.normalizeAddress(referrerAddress),
+        takeSurplus,
+        isCapSurplus,
+        isSurplusToUser,
+        isDirectFeeTransfer,
       },
-      {
-        bytecodeBuilder,
-        augustusV6Interface: this.augustusV6Interface,
-      },
-    );
+      gas,
+    };
+
+    this.resolvedBuildInputObserver?.onGenericBuildInput?.(buildInput);
+
+    return buildTransactionFromResolved(buildInput, {
+      bytecodeBuilder,
+      augustusV6Interface: this.augustusV6Interface,
+    });
   }
 
   // TODO: Improve
@@ -676,21 +684,25 @@ export class GenericSwapTransactionBuilder {
         _beneficiary,
       );
 
-      const resolvedDirectOutput = buildDirectTransactionFromResolved(
-        {
-          ...directCall,
-          userAddress: this.normalizeAddress(userAddress),
-          augustusV6Address: this.normalizeAddress(this.augustusV6Address),
-          srcToken: this.normalizeAddress(priceRoute.srcToken),
-          srcAmount: priceRoute.srcAmount,
-          minMaxAmount,
-          side: priceRoute.side,
-          gas: {
-            gasPrice,
-            maxFeePerGas,
-            maxPriorityFeePerGas,
-          },
+      const directBuildInput: DirectBuildInput = {
+        ...directCall,
+        userAddress: this.normalizeAddress(userAddress),
+        augustusV6Address: this.normalizeAddress(this.augustusV6Address),
+        srcToken: this.normalizeAddress(priceRoute.srcToken),
+        srcAmount: priceRoute.srcAmount,
+        minMaxAmount,
+        side: priceRoute.side,
+        gas: {
+          gasPrice,
+          maxFeePerGas,
+          maxPriorityFeePerGas,
         },
+      };
+
+      this.resolvedBuildInputObserver?.onDirectBuildInput?.(directBuildInput);
+
+      const resolvedDirectOutput = buildDirectTransactionFromResolved(
+        directBuildInput,
         {
           augustusV6Interface: this.augustusV6Interface,
         },

@@ -899,20 +899,20 @@ narrowed to only string arrays. RFQ setup must inject preprocessed
 
 ## Phase 4 Tasks
 
-| Status | Task                                  | Notes                                                                                                                                                                                                 |
-| ------ | ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Done   | Review direct baseline                | Inspected `_buildDirect()`, the inline direct `build()` branch, `DirectBuildInput`, and representative direct encoders for UniswapV2, UniswapV3, BalancerV2, Curve, LitePsm, and RFQ.                 |
-| Done   | Add direct resolved output type       | Added `ResolvedDirectBuildOutput = ResolvedDirectCall & { txObject: TxObject }`, preserving `params: unknown[]`.                                                                                      |
+| Status | Task                                  | Notes                                                                                                                                                                                                                            |
+| ------ | ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Done   | Review direct baseline                | Inspected `_buildDirect()`, the inline direct `build()` branch, `DirectBuildInput`, and representative direct encoders for UniswapV2, UniswapV3, BalancerV2, Curve, LitePsm, and RFQ.                                            |
+| Done   | Add direct resolved output type       | Added `ResolvedDirectBuildOutput = ResolvedDirectCall & { txObject: TxObject }`, preserving `params: unknown[]`.                                                                                                                 |
 | Done   | Add direct boundary entrypoint        | Added `buildDirectTransactionFromResolved(input, deps)` with the 10-method V6 direct allowlist, side/method consistency validation, wrapper validation, Augustus V6 ABI encoding, native value calculation, and gas passthrough. |
-| Done   | Wire direct branch through boundary   | Direct public builds now keep `getDirectParamV6()` outside the boundary, build normalized `DirectBuildInput`, and return direct boundary params or tx output from `build()`.                          |
-| Done   | Remove direct `TxObject` duplication  | Removed the inline direct `value`, `data`, and gas assembly plus the phase 2 TODO from `build()`.                                                                                                      |
-| Done   | Add direct helper tests               | Added focused tests in `tests/generic-swap-transaction-builder/resolved/build-direct-transaction.test.ts`, isolated from route-plan generic helpers.                                                   |
-| Done   | Assert DEX encoder byte parity        | Every covered direct method compares the mocked DEX encoder output to `buildDirectTransactionFromResolved(...).txObject.data`; paired-method mocks derive the encoded method from `side` like real DEX encoders. |
-| Done   | Cover representative direct methods   | Covered UniswapV2 SELL and BUY, UniswapV3 SELL, BalancerV2 BUY, CurveV1 SELL, LitePsm, and Augustus RFQ try-batch-fill with nested tuple params for LitePsm/RFQ.                                      |
-| Done   | Cover direct native value and gas     | Covered ETH-source SELL value from `srcAmount`, BUY native value from `minMaxAmount`, and gas field passthrough.                                                                                      |
-| Done   | Cover direct validation errors        | Added direct boundary rejection coverage for unsupported direct method, side/method mismatch, invalid side, malformed lowercase address, malformed decimal amount/gas, `null` params, and non-array params. |
-| Done   | Update docs with implementation notes | Recorded direct boundary implementation, mock coverage choices, `unknown[]` direct params, and no deferred representative method families below.                                                       |
-| Done   | Run checks                            | `yarn jest tests/generic-swap-transaction-builder/resolved --runInBand`, `yarn check:tsc`, and `yarn check:es` passed on 2026-05-13.                                                                  |
+| Done   | Wire direct branch through boundary   | Direct public builds now keep `getDirectParamV6()` outside the boundary, build normalized `DirectBuildInput`, and return direct boundary params or tx output from `build()`.                                                     |
+| Done   | Remove direct `TxObject` duplication  | Removed the inline direct `value`, `data`, and gas assembly plus the phase 2 TODO from `build()`.                                                                                                                                |
+| Done   | Add direct helper tests               | Added focused tests in `tests/generic-swap-transaction-builder/resolved/build-direct-transaction.test.ts`, isolated from route-plan generic helpers.                                                                             |
+| Done   | Assert DEX encoder byte parity        | Every covered direct method compares the mocked DEX encoder output to `buildDirectTransactionFromResolved(...).txObject.data`; paired-method mocks derive the encoded method from `side` like real DEX encoders.                 |
+| Done   | Cover representative direct methods   | Covered UniswapV2 SELL and BUY, UniswapV3 SELL, BalancerV2 BUY, CurveV1 SELL, LitePsm, and Augustus RFQ try-batch-fill with nested tuple params for LitePsm/RFQ.                                                                 |
+| Done   | Cover direct native value and gas     | Covered ETH-source SELL value from `srcAmount`, BUY native value from `minMaxAmount`, and gas field passthrough.                                                                                                                 |
+| Done   | Cover direct validation errors        | Added direct boundary rejection coverage for unsupported direct method, side/method mismatch, invalid side, malformed lowercase address, malformed decimal amount/gas, `null` params, and non-array params.                      |
+| Done   | Update docs with implementation notes | Recorded direct boundary implementation, mock coverage choices, `unknown[]` direct params, and no deferred representative method families below.                                                                                 |
+| Done   | Run checks                            | `yarn jest tests/generic-swap-transaction-builder/resolved --runInBand`, `yarn check:tsc`, and `yarn check:es` passed on 2026-05-13.                                                                                             |
 
 ### Phase 4 Completion Notes
 
@@ -944,6 +944,11 @@ narrowed to only string arrays. RFQ setup must inject preprocessed
   encoders derive the encoded method from `side`, matching the real UniswapV2,
   UniswapV3, and BalancerV2 direct encoder behavior.
 - No representative direct method family from the phase 4 scope was deferred.
+- Phase 5 added committed, RPC-free resolved-build golden fixtures under
+  `tests/generic-swap-transaction-builder/fixtures/resolved-build/`. Fixture
+  playback now asserts boundary output, public builder parity for all success
+  fixtures, canonical JSON bytes, schema/coverage validation, and exact
+  negative validation errors.
 
 ## Phase 4 Acceptance Criteria
 
@@ -963,6 +968,599 @@ narrowed to only string arrays. RFQ setup must inject preprocessed
 - Nested direct params are supported as `unknown[]`.
 - Runtime validation rejects `null` and non-array direct params.
 - Generic phase 1-3 parity tests still pass.
+- TypeScript compilation and source lint pass.
+
+## Phase 5 Scope
+
+Phase 5 means checkpoint 5 from `implementation.md`: generate complete golden
+fixtures.
+
+The goal is to turn the behavior proven by phases 1-4 into a stable, RPC-free
+fixture contract that can be consumed by both TypeScript tests and the future Go
+implementation. The fixtures should serialize the exact `BuildInput` or
+`DirectBuildInput` passed to the resolved boundary and the expected boundary
+output. They should not depend on live RPC, current approval state, remote DEX
+APIs, or mutable runtime configuration.
+
+### In Scope
+
+- Add a committed fixture set under a test-owned path, recommended:
+  - `tests/generic-swap-transaction-builder/fixtures/resolved-build/`
+- Define a versioned JSON fixture shape for both generic and direct boundary
+  inputs.
+- Include the full boundary output in each fixture:
+  - `expectedParams` for `onlyParams` parity
+  - `expectedTx` for normal transaction parity
+- Convert the existing phase 2-4 parity cases into persisted golden fixtures
+  instead of keeping them only as in-memory test cases.
+- Add JSON-driven fixture tests that load every golden fixture and assert:
+  - `buildTransactionFromResolved(input, deps)` or
+    `buildDirectTransactionFromResolved(input, deps)` matches the expected
+    output
+  - public `GenericSwapTransactionBuilder.build()` still matches the fixture
+    for both normal tx and `onlyParams` for every success fixture that is not
+    explicitly marked `boundaryOnly`
+- Keep fixtures deterministic:
+  - explicit approval decisions
+  - explicit WETH deposit/withdraw calldata
+  - explicit direct params
+  - stable UUID, block number, addresses, gas fields, and quoted amounts
+- Add negative golden fixtures for boundary validation errors with
+  `expectedError` strings that the Go implementation must match.
+- Add fee and edge-value fixtures that exercise partner-and-fee packing,
+  non-empty permit bytes, native value behavior, and zero-valued quoted or
+  amount fields where valid.
+- Cover the remaining high-level fixture matrix gaps:
+  - Executor02 mega swap
+  - same-token-pair internal split
+  - `permit2Approval`
+  - `transferSrcTokenBeforeSwap`
+  - `needUnwrapNative`
+- Add direct golden fixtures for the full current V6 direct allowlist, not only
+  the representative method families from phase 4.
+- Keep all phase 1-4 tests passing while adding fixture-driven coverage.
+
+### Out Of Scope
+
+- Do not add the Go implementation yet.
+- Do not replace the phase 2 `ResolvedBuildDeps` executor-builder dependency
+  seam yet.
+- Do not move DEX-specific `getDexParam()` or `getDirectParamV6()` logic into
+  fixture playback.
+- Do not rely on Tenderly, RPC, live approvals, or remote new-dex APIs to
+  generate or validate committed fixtures.
+- Do not broaden direct coverage to every fork of a method family unless the
+  fork changes direct boundary input or calldata semantics.
+
+## Phase 5 Design Details
+
+### Fixture Contract And Shape
+
+Use compact versioned shapes so fixtures can be migrated intentionally. The
+cross-language fixture contract is:
+
+- `schemaVersion`
+- `name`
+- `kind`
+- `coverage`
+- `input`
+- either `expectedParams` plus `expectedTx`, or `expectedError`
+
+The `orchestration` field is TypeScript-only test metadata. It exists only to
+replay the public `GenericSwapTransactionBuilder.build()` path with
+deterministic mocks. Go consumers must ignore `orchestration`; it is not part of
+the Go build boundary contract.
+
+```ts
+type ResolvedBuildSuccessFixture = {
+  schemaVersion: 1;
+  name: string;
+  kind: 'generic' | 'direct';
+  description?: string;
+  coverage: CoverageTag[];
+  input: BuildInput | DirectBuildInput;
+  expectedParams: unknown[];
+  expectedTx: TxObject;
+  orchestration: {
+    priceRouteFixture?: string;
+    exchangeParamsFixture?: string;
+    wethPlanFixture?: string;
+    approvalDecisions?: boolean[];
+    directDexKey?: string;
+  };
+  boundaryOnly?: false;
+};
+
+type ResolvedBuildBoundaryOnlySuccessFixture = Omit<
+  ResolvedBuildSuccessFixture,
+  'orchestration' | 'boundaryOnly'
+> & {
+  boundaryOnly: true;
+  boundaryOnlyReason: string;
+};
+
+type ResolvedBuildNegativeFixture = {
+  schemaVersion: 1;
+  name: string;
+  kind: 'negative';
+  description?: string;
+  coverage: CoverageTag[];
+  input: BuildInput | DirectBuildInput;
+  expectedError: string;
+};
+```
+
+Success fixtures should include `orchestration` by default. Converted phase 2-4
+fixtures must include it so Phase 5 preserves the public-builder parity
+contract already proven by those phases. A success fixture may omit
+`orchestration` only when it is explicitly marked `boundaryOnly: true` with a
+`boundaryOnlyReason`; boundary-only fixtures are exceptions and must be reviewed
+as such. Negative fixtures normally omit `orchestration` because they assert
+boundary validation errors rather than successful public-builder replay.
+
+`schemaVersion: 1` must be enforced by fixture loaders. Bumping the schema
+version requires a migration script that rewrites all committed fixtures, and CI
+must reject fixtures with unsupported or mixed schema versions.
+
+Keep every numeric value that can exceed JavaScript safe integer range as a
+string. Addresses in top-level boundary fields must be lowercase. Opaque
+DEX-owned nested params should be serialized exactly as supplied to the
+boundary, without lowercasing or deep validation.
+
+`expectedParams` is intentionally part of the fixture contract. The public
+builder preserves `onlyParams`, and the future Go implementation needs to match
+both calldata-producing params and final `TxObject`.
+
+`DirectBuildInput` intentionally has no top-level fee or permit fields. For
+direct methods, fee, permit, UUID, beneficiary, and block-number metadata are
+already baked into the DEX-owned direct `params` before the boundary is called.
+
+`input.wethPlan`, when present, is the post-normalization boundary shape. In
+particular, `deposit.callee` and `withdraw.callee` must be lowercase. Any raw
+`maybe-weth-calldata/*.json` fixture path belongs only in
+`orchestration.wethPlanFixture`.
+
+`DexExchangeBuildParam` JSON conventions:
+
+- Optional fields whose TypeScript value is `undefined` are omitted from JSON,
+  not serialized as `null`.
+- Safe small numeric fields remain JSON numbers:
+  `returnAmountPos`, `insertFromAmountPos`, and `specialDexFlag`.
+- Amounts, packed fee values, token amounts, gas fields, and any value that can
+  exceed JavaScript safe integer range are decimal strings.
+- `needWrapNative` must be a boolean in committed fixtures, never a function.
+
+Native token fields must use the literal lowercase
+`src/constants.ts:ETHER_ADDRESS` value. The generic and direct boundaries
+compare native source tokens by exact string equality before calculating
+transaction `value`.
+
+### Coverage Tags
+
+`coverage` is a controlled vocabulary, not free-form text. Fixture loaders
+should reject unknown tags. Initial tags:
+
+```ts
+type CoverageTag =
+  | 'generic'
+  | 'direct'
+  | 'negative'
+  | 'executor01'
+  | 'executor02'
+  | 'executor03'
+  | 'executor-weth'
+  | 'simple-swap'
+  | 'multi-swap'
+  | 'mega-swap'
+  | 'vertical-branch'
+  | 'sell'
+  | 'buy'
+  | 'approval-present'
+  | 'approval-missing'
+  | 'weth-deposit'
+  | 'weth-withdraw'
+  | 'weth-only'
+  | 'same-token-internal-split'
+  | 'permit2-approval'
+  | 'transfer-src-token-before-swap'
+  | 'need-unwrap-native'
+  | 'fee-nonzero'
+  | 'fee-take-surplus'
+  | 'fee-surplus-to-user'
+  | 'fee-direct-transfer'
+  | 'fee-referrer'
+  | 'permit-nonempty'
+  | 'zero-quoted-amount'
+  | 'native-source'
+  | 'validation-error';
+```
+
+### Fixture Directory Layout
+
+Recommended layout:
+
+```text
+tests/generic-swap-transaction-builder/fixtures/resolved-build/
+  generic/
+    executor01-simple-sell-approved.json
+    executor01-simple-sell-approval-missing.json
+    executor01-eth-weth-deposit.json
+    executor01-weth-eth-withdraw.json
+    executor01-multiswap-sell.json
+    executor02-vertical-branch-sell.json
+    executor02-multiswap-sell.json
+    executor02-megaswap-sell.json
+    executor03-buy.json
+    weth-only-eth-to-weth.json
+    same-token-internal-split.json
+    permit2-approval.json
+    transfer-src-token-before-swap.json
+    need-unwrap-native.json
+    fee-nonzero-partner.json
+    fee-referrer.json
+    fee-take-surplus.json
+    fee-surplus-to-user.json
+    fee-direct-transfer.json
+    edge-nonempty-permit.json
+    edge-zero-quoted-amount.json
+  direct/
+    uniswap-v2-sell.json
+    uniswap-v2-buy.json
+    uniswap-v3-sell.json
+    uniswap-v3-buy.json
+    balancer-v2-sell.json
+    balancer-v2-buy.json
+    curve-v1-sell.json
+    curve-v2-sell.json
+    lite-psm.json
+    augustus-rfq-try-batch-fill.json
+  negative/
+    duplicate-resolved-leg.json
+    malformed-address.json
+    malformed-amount.json
+    malformed-weth-plan.json
+    non-boolean-need-wrap-native.json
+    unsupported-generic-method.json
+    unsupported-direct-method.json
+    direct-side-method-mismatch.json
+    executor-address-mismatch.json
+```
+
+The exact filenames can change during implementation, but the final fixture
+set should make coverage obvious from the filename and `coverage` tags.
+
+`generic/` and `direct/` success fixtures must include `orchestration` metadata
+so public-builder parity can be replayed. A success fixture without
+`orchestration` must set `boundaryOnly: true` and explain why with
+`boundaryOnlyReason`. `negative/` fixtures normally omit `orchestration` and
+are boundary-loader tests only.
+
+Fee and edge-value fixtures are coverage dimensions rather than separate top-
+level fixture kinds. Keep them under `generic/` or `direct/` depending on which
+boundary path they exercise, and use `coverage` tags to make their purpose
+machine-checkable.
+
+### Canonical JSON Serialization
+
+Fixtures must be written with one canonical serializer:
+
+```ts
+JSON.stringify(value, recursiveKeySortReplacer, 2) + '\n';
+```
+
+The replacer must recursively sort object keys, preserve array order, and omit
+keys whose value is `undefined`. This rule is part of the fixture contract so
+fixture bytes are deterministic across generator runs and reviewer machines.
+
+### Generator Strategy
+
+Prefer extracting the phase 3 and phase 4 parity helpers into reusable test
+utilities first. The fixture generator should call those helpers with
+deterministic data, write JSON with stable key order, and then the fixture test
+should read the committed JSON back.
+
+The generator is snapshot-and-commit, not hand-author-by-default. It should run
+the TypeScript orchestrator with deterministic mocks, capture the actual
+`BuildInput` or `DirectBuildInput` passed to the resolved boundary, run the
+boundary to produce `expectedParams` and `expectedTx`, and write the committed
+fixture. Manual fixture editing should be reserved for narrow flag mutations or
+explicitly reviewed authored scenarios.
+
+Do not use live chain state while generating fixtures. Approval behavior should
+come from explicit fixture metadata, not `skipApprovalCheck` alone:
+
+- approval-present fixtures should set approval decisions to `true`
+- approval-missing fixtures should set approval decisions to `false` and
+  include expected `approveData`
+- mixed multi-leg approval fixtures should list one boolean per approval pair
+
+For WETH fixtures, include the already-resolved `wethPlan` calldata. The
+fixture should not call a live WETH depositor/withdrawer or infer calldata from
+chain state.
+
+For direct fixtures, store the resolved direct params returned by mocked or
+fixture-backed `getDirectParamV6()`. Direct fixtures should also assert
+side/method consistency for directional methods so the phase 4 regression guard
+remains covered by golden data.
+
+Side/method consistency must be validated by the fixture loader, not only by the
+generator. Loader-side validation protects committed fixtures on every test run.
+
+Required generator/check commands:
+
+```bash
+yarn fixtures:generate
+yarn fixtures:check
+```
+
+`yarn fixtures:check` should run the generator and then fail if committed
+fixture bytes changed:
+
+```bash
+yarn fixtures:generate
+git diff --exit-code -- tests/generic-swap-transaction-builder/fixtures/resolved-build
+```
+
+This check should be part of CI once Phase 5 lands.
+
+### Test Utility And Playback Policy
+
+Shared fixture helpers should live under
+`tests/generic-swap-transaction-builder/fixtures/` alongside the JSON fixture
+root, not inside the `resolved/` test-case folder. The `resolved/` folder should
+contain tests; the fixture folder should contain reusable fixture schema,
+generator, loader, and diff utilities.
+
+After Phase 5, fixture playback owns the cross-language boundary contract.
+In-memory tests should remain only for orchestration-specific assertions that
+fixtures cannot express well, such as `getDirectParamV6()` call arguments,
+approval-pair construction, and DEX/WETH lookup behavior. Avoid maintaining
+duplicate in-memory tests whose only assertion is already covered by a golden
+fixture.
+
+Fixture playback should include a failure helper for `tx.data` mismatches. When
+outer Augustus calldata differs, decode the function name and params with the
+Augustus V6 ABI, print params element-by-element, and highlight the first
+different element. Raw 4KB hex string diffs are not useful for boundary
+regressions.
+
+### Fixture Playback Dependencies
+
+Fixture playback must not recreate mutable application wiring. Add deterministic
+dependency factories that construct only the resolved-boundary dependencies from
+fixture data:
+
+```ts
+function createResolvedBuildDeps(input: BuildInput): ResolvedBuildDeps;
+function createDirectResolvedBuildDeps(
+  input: DirectBuildInput,
+): ResolvedDirectBuildDeps;
+```
+
+`createResolvedBuildDeps(input)` should derive the executor bytecode builder
+from `input.executorType` and a fixture-safe encoding context built only from
+serialized boundary fields:
+
+- `input.network`
+- `input.augustusV6Address`
+- `input.wrappedNativeTokenAddress`
+- `input.executorAddress`
+- a deterministic `isWETH(address)` implementation based on
+  `input.wrappedNativeTokenAddress`
+- a no-op logger
+
+It must use the repo Augustus V6 ABI for `augustusV6Interface`. It must not
+read live `DexAdapterService`, chain RPC, mutable config files, current
+executor config, current token-transfer proxy config, or live approval state.
+
+`createDirectResolvedBuildDeps(input)` should only provide the repo Augustus V6
+ABI interface. Direct fixture playback must not reconstruct DEX adapters or use
+DEX-returned encoder functions; direct params are already serialized in
+`input.params`.
+
+Success fixture playback should use these dependency factories for boundary
+assertions, then use `orchestration` metadata only for the separate public
+`GenericSwapTransactionBuilder.build()` replay. Boundary-only success fixtures
+skip the public-builder replay by design and must explain why.
+
+### Coverage Notes From Phases 1-4
+
+Already covered in in-memory parity tests and ready to convert to golden
+fixtures:
+
+- Executor01 simple SELL with approvals present
+- Executor01 simple SELL with approval missing
+- Executor01 ETH -> token WETH deposit
+- Executor01 token -> ETH WETH withdraw
+- Executor01 multiswap SELL
+- Executor02 vertical branch SELL
+- Executor02 multiswap SELL
+- Executor03 BUY
+- WETH-only ETH -> WETH
+- Direct UniswapV2 SELL and BUY
+- Direct UniswapV3 SELL
+- Direct BalancerV2 BUY
+- Direct CurveV1 SELL
+- Direct LitePsm
+- Direct Augustus RFQ try-batch-fill
+
+Still needs authored or located data before Phase 5 is complete:
+
+- Executor02 mega swap fixture, because phase 3 deferred it when existing
+  Executor02 price-route fixtures all had `bestRoute.length === 1`
+- same-token-pair internal split
+- `permit2Approval`
+- `transferSrcTokenBeforeSwap`
+- `needUnwrapNative`
+- Direct UniswapV3 BUY, BalancerV2 SELL, and CurveV2 SELL golden fixtures
+- Fee fixtures for:
+  - `partnerFeePercent` non-zero
+  - `takeSurplus: true`
+  - `isSurplusToUser: true`
+  - `isDirectFeeTransfer: true`
+  - `referrerAddress` set
+- Edge fixtures for:
+  - non-empty `permit`
+  - `NULL_ADDRESS` beneficiary behavior
+  - zero `quotedAmount` where the ABI and boundary allow it
+- Negative fixtures for each boundary validation family:
+  - duplicate resolved leg
+  - missing resolved leg
+  - out-of-route resolved leg
+  - malformed lowercase address
+  - malformed decimal amount
+  - malformed hex bytes
+  - non-boolean `needWrapNative`
+  - malformed WETH plan
+  - unsupported generic/direct method
+  - executor address mismatch
+  - invalid direct side
+  - direct side/method mismatch
+
+The `permit2Approval`, `transferSrcTokenBeforeSwap`, and `needUnwrapNative`
+fixtures can be one-line `DexExchangeBuildParam` flag mutations of existing
+route fixtures when that exercises the boundary semantics. They do not require
+new route families unless the executor behavior demands it.
+
+The Executor02 mega-swap fixture must be meaningful: at least two top-level
+routes, and at least one route must include a vertical branch
+(`swapExchanges.length > 1`). Avoid a degenerate two-route fixture that does
+not exercise Executor02 mega traversal and branch concatenation.
+
+### Snapshot Baseline
+
+The phase 3 note about executor snapshot suites still applies. If Phase 5 adds
+or changes shared fixtures under `src/executor/fixtures/`, the corresponding
+snapshot suites must compile and pass. If the existing snapshot cast baseline is
+still broken, keep Phase 5 golden fixtures under
+`tests/generic-swap-transaction-builder/fixtures/` and avoid shared fixture
+churn until the snapshot baseline is fixed.
+
+## Phase 5 Tasks
+
+| Status | Task                               | Notes                                                                                                                                                                                                                                        |
+| ------ | ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Done   | Confirm fixture root and schema    | Added schema/types under `tests/generic-swap-transaction-builder/fixtures/` and fixtures under `tests/generic-swap-transaction-builder/fixtures/resolved-build/`.                                                                            |
+| Done   | Separate fixture contract metadata | Added `getGoContractFixtureFields()` so Go-facing fields exclude TypeScript-only `orchestration`, `boundaryOnly`, and `boundaryOnlyReason`.                                                                                                  |
+| Done   | Define coverage tag enum           | Added controlled `CoverageTag` vocabulary and loader rejection for unknown tags.                                                                                                                                                             |
+| Done   | Add negative fixture schema        | Added `{ kind: 'negative', input, expectedError }` support plus schema-version validation.                                                                                                                                                   |
+| Done   | Extract reusable fixture helpers   | Added reusable generic/direct public-builder replay helpers in `resolved-build-fixture-cases.ts`.                                                                                                                                            |
+| Done   | Add fixture dependency factories   | Added deterministic `createResolvedBuildDeps(input)` and `createDirectResolvedBuildDeps(input)` helpers that construct only boundary deps from serialized fixture inputs.                                                                    |
+| Done   | Add stable JSON writer/generator   | Added generator and canonical writer using sorted keys, 2-space JSON, trailing newline, omitted `undefined`, deterministic local mocks, and captured actual boundary input.                                                                  |
+| Done   | Add fixture determinism command    | Added `yarn fixtures:generate` and `yarn fixtures:check`; `fixtures:check` now catches untracked generated fixture files and `yarn checks` includes it.                                                                                      |
+| Done   | Convert existing generic coverage  | Persisted phase 2-3 generic coverage as golden fixtures for Executor01, Executor02, Executor03, WETH deposit/withdraw, approval missing, and WETH-only paths.                                                                                |
+| Done   | Convert existing direct coverage   | Persisted phase 4 direct representative cases with nested tuple params and explicit side-derived encoder byte parity.                                                                                                                        |
+| Done   | Add missing generic fixtures       | Added heterogeneous Executor02 mega swap, same-token internal split, `permit2Approval`, `transferSrcTokenBeforeSwap`, `needUnwrapNative`, and non-null beneficiary fixtures.                                                                 |
+| Done   | Complete direct allowlist fixtures | Added missing UniswapV3 BUY, BalancerV2 SELL, and CurveV2 SELL fixtures; all 10 current V6 direct methods are covered.                                                                                                                       |
+| Done   | Add fee and edge fixtures          | Added non-zero partner fee, take-surplus, surplus-to-user, direct-fee-transfer, referrer, non-empty permit, NULL/non-null beneficiary, native source, and zero quoted amount coverage.                                                       |
+| Done   | Add negative validation fixtures   | Added 13 negative fixtures covering duplicate/missing/out-of-route legs, malformed fields, unsupported methods, executor mismatch, and direct side errors.                                                                                   |
+| Done   | Add fixture playback tests         | Added JSON-driven playback tests that assert boundary output for every success fixture, public-builder parity for every non-boundary-only success fixture, and exact negative errors.                                                        |
+| Done   | Add decoded calldata diff helper   | Added Augustus V6 calldata decode helper that reports function and first differing param for `tx.data` mismatches.                                                                                                                           |
+| Done   | Validate fixture determinism       | `yarn fixtures:generate` is deterministic; `fixtures:check` now also rejects untracked fixture files and should pass once generated fixtures are tracked.                                                                                    |
+| Done   | Update docs with fixture inventory | Recorded inventory and snapshot decision below.                                                                                                                                                                                              |
+| Done   | Run checks                         | `yarn fixtures:generate`, `yarn jest tests/generic-swap-transaction-builder/resolved --runInBand`, `yarn check:tsc`, and `yarn check:es` passed on 2026-05-13. `yarn fixtures:check` was verified to fail while fixture files are untracked. |
+
+### Phase 5 Completion Notes
+
+- Added 45 golden fixtures under
+  `tests/generic-swap-transaction-builder/fixtures/resolved-build/`:
+  22 generic success fixtures, 10 direct success fixtures, and 13 negative
+  validation fixtures.
+- Generic fixture inventory:
+  `edge-nonempty-permit`, `edge-zero-quoted-amount`,
+  `executor01-eth-weth-deposit`, `executor01-multiswap-sell`,
+  `executor01-simple-sell-approval-missing`,
+  `executor01-simple-sell-approved`, `executor01-simple-sell-beneficiary`,
+  `executor01-weth-eth-withdraw`, `executor02-megaswap-sell`,
+  `executor02-multiswap-sell`,
+  `executor02-vertical-branch-sell`, `executor03-buy`,
+  `fee-direct-transfer`, `fee-nonzero-partner`, `fee-referrer`,
+  `fee-surplus-to-user`, `fee-take-surplus`, `need-unwrap-native`,
+  `permit2-approval`, `same-token-internal-split`,
+  `transfer-src-token-before-swap`, and `weth-only-eth-to-weth`.
+- Direct fixture inventory:
+  `augustus-rfq-try-batch-fill`, `balancer-v2-buy`, `balancer-v2-sell`,
+  `curve-v1-sell`, `curve-v2-sell`, `lite-psm`, `uniswap-v2-buy`,
+  `uniswap-v2-sell`, `uniswap-v3-buy`, and `uniswap-v3-sell`.
+- Negative fixture inventory:
+  `direct-side-method-mismatch`, `duplicate-resolved-leg`,
+  `executor-address-mismatch`, `invalid-direct-side`, `malformed-address`,
+  `malformed-amount`, `malformed-hex-bytes`, `malformed-weth-plan`,
+  `missing-resolved-leg`, `non-boolean-need-wrap-native`,
+  `out-of-route-resolved-leg`, `unsupported-direct-method`, and
+  `unsupported-generic-method`.
+- All generic and direct success fixtures include TypeScript-only
+  `orchestration` metadata and are replayed through
+  `GenericSwapTransactionBuilder.build()` for both normal tx and `onlyParams`.
+  No success fixture is currently marked `boundaryOnly`.
+- `orchestration` stores deterministic replay data directly in the fixture
+  JSON. The loader exposes Go-facing contract fields separately so Go consumers
+  can ignore this metadata.
+- The generator records the actual `BuildInput` / `DirectBuildInput` passed by
+  `GenericSwapTransactionBuilder.build()` to the resolved boundary through a
+  test observer, and fixture input is written from that captured value.
+- Direct fixture generation asserts each direct boundary calldata is
+  byte-identical to the mocked DEX encoder output.
+- `same-token-internal-split` now contains two `swapExchanges` on the same
+  token pair and exercises Executor02 vertical-branch handling.
+- The Executor02 mega-swap fixture is authored from local deterministic route
+  data with two heterogeneous top-level ETH -> USDC routes:
+  `SushiSwapV3/SushiSwapV3/BalancerV1` at 91% and `UniswapV3` at 9%. Its
+  serialized WETH deposit plan is the sum of both precomputed deposit plans.
+  It does not use RPC or shared executor snapshot fixture churn.
+- Negative fixtures are generated from name-selected base fixtures rather than
+  positional array entries. `executor-address-mismatch` is self-contained in
+  fixture input; playback no longer uses coverage tags as control metadata.
+- Fixture playback enforces required fixture names, verifies every declared
+  coverage tag is used at least once, and no longer depends on a brittle exact
+  fixture count.
+- `tests/generic-swap-transaction-builder/fixtures/resolved-build/README.md`
+  documents that `expectedParams`, `expectedTx`, and negative `expectedError`
+  values are generated and describes the schema-version migration policy.
+- No Phase 5 scenarios were deferred. The shared `src/executor/fixtures/`
+  snapshot baseline was left untouched; Phase 5 fixtures live under the
+  test-owned fixture root only.
+
+## Phase 5 Acceptance Criteria
+
+- Golden fixtures are committed and loadable without RPC or remote network
+  access.
+- Every fixture has `schemaVersion`, `kind`, `input`, `expectedParams`, and
+  `expectedTx`; negative fixtures instead have `expectedError`.
+- Fixture loaders reject unsupported `schemaVersion` values and unknown
+  `coverage` tags.
+- Go-facing fixture consumers ignore `orchestration`, and TypeScript fixture
+  tests use it only for public-builder replay.
+- Generic fixtures include the coverage required by `implementation.md`:
+  Executor01 simple/multiswap, Executor02 vertical/mega, Executor03 BUY,
+  WETH-only, same-token internal split, ETH/WETH deposit and withdraw,
+  `permit2Approval`, `transferSrcTokenBeforeSwap`, and `needUnwrapNative`.
+- Direct fixtures cover every current V6 direct allowlist method:
+  UniswapV2 in/out, UniswapV3 in/out, BalancerV2 in/out, CurveV1 in,
+  CurveV2 in, LitePsm, and Augustus RFQ try-batch-fill.
+- Fixture playback asserts both `expectedParams` and `expectedTx`.
+- Public builder parity is replayed for every success fixture unless it is
+  explicitly marked `boundaryOnly: true` with `boundaryOnlyReason`.
+- Every `generic/` and `direct/` success fixture includes `orchestration`;
+  any exception must be marked `boundaryOnly`; `negative/` fixtures do not need
+  public-builder orchestration.
+- Fixture playback uses deterministic `createResolvedBuildDeps(input)` and
+  `createDirectResolvedBuildDeps(input)` helpers rather than live
+  `DexAdapterService`, RPC, mutable config, or current approval state.
+- Approval-present and approval-missing behavior is represented with explicit
+  approval decisions.
+- Fee packing has fixture coverage for non-zero partner fee, take-surplus,
+  surplus-to-user, direct-fee-transfer, and referrer paths.
+- Edge-value coverage includes non-empty permit and native source value
+  behavior, plus any valid zero-value fields chosen for the fixture set.
+- Negative fixtures cover boundary validation errors and assert exact
+  `expectedError` strings.
+- WETH plans use precomputed calldata and values.
+- Fixtures follow canonical JSON serialization with recursive key sorting,
+  2-space indentation, omitted `undefined` keys, and trailing newline.
+- `yarn fixtures:check` passes, proving the generator produces no diff when
+  inputs are unchanged.
+- Existing phase 1-4 resolved-boundary tests still pass.
 - TypeScript compilation and source lint pass.
 
 ## Suggested Test Commands
@@ -996,6 +1594,22 @@ Phase 4:
 yarn jest tests/generic-swap-transaction-builder/resolved --runInBand
 yarn check:tsc
 yarn check:es
+```
+
+Phase 5:
+
+```bash
+yarn fixtures:check
+yarn jest tests/generic-swap-transaction-builder/resolved --runInBand
+yarn check:tsc
+yarn check:es
+```
+
+Optional manual phase 5 determinism check after the generator exists:
+
+```bash
+yarn fixtures:generate
+git diff --exit-code -- tests/generic-swap-transaction-builder/fixtures/resolved-build
 ```
 
 Optional manual phase 4 sanity after merge:

@@ -1,0 +1,112 @@
+{
+  "coverage": [
+    "direct",
+    "buy"
+  ],
+  "description": "Direct BalancerV2 BUY method.",
+  "expectedParams": [
+    [
+      "1200",
+      "1000",
+      "1100",
+      "0x1111111111111111111111111111111111111111111111111111111111111111",
+      "0"
+    ],
+    "0",
+    "0x",
+    "0x1234"
+  ],
+  "expectedTx": {
+    "data": "0xd6ed22e600000000000000000000000000000000000000000000000000000000000004b000000000000000000000000000000000000000000000000000000000000003e8000000000000000000000000000000000000000000000000000000000000044c11111111111111111111111111111111111111111111111111111111111111110000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000000120000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000021234000000000000000000000000000000000000000000000000000000000000",
+    "from": "0x1111111111111111111111111111111111111111",
+    "gasPrice": "1",
+    "maxFeePerGas": "2",
+    "maxPriorityFeePerGas": "3",
+    "to": "0x6a000f20005980200259b80c5102003040001068",
+    "value": "0"
+  },
+  "input": {
+    "augustusV6Address": "0x6a000f20005980200259b80c5102003040001068",
+    "contractMethod": "swapExactAmountOutOnBalancerV2",
+    "gas": {
+      "gasPrice": "1",
+      "maxFeePerGas": "2",
+      "maxPriorityFeePerGas": "3"
+    },
+    "minMaxAmount": "1200",
+    "params": [
+      [
+        "1200",
+        "1000",
+        "1100",
+        "0x1111111111111111111111111111111111111111111111111111111111111111",
+        "0"
+      ],
+      "0",
+      "0x",
+      "0x1234"
+    ],
+    "side": "BUY",
+    "srcAmount": "1000",
+    "srcToken": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "userAddress": "0x1111111111111111111111111111111111111111"
+  },
+  "kind": "direct",
+  "name": "balancer-v2-buy",
+  "orchestration": {
+    "directDestAmount": "995",
+    "directDestToken": "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "directDexKey": "BalancerV2",
+    "minMaxAmount": "1200",
+    "priceRoute": {
+      "bestRoute": [
+        {
+          "percent": 100,
+          "swaps": [
+            {
+              "destDecimals": 18,
+              "destToken": "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "srcDecimals": 18,
+              "srcToken": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "swapExchanges": [
+                {
+                  "data": {
+                    "directCase": "balancer-v2-buy"
+                  },
+                  "destAmount": "995",
+                  "exchange": "BalancerV2",
+                  "percent": 100,
+                  "poolAddresses": [
+                    "0x4444444444444444444444444444444444444444"
+                  ],
+                  "srcAmount": "1000"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "blockNumber": 1,
+      "contractAddress": "0x6a000f20005980200259b80c5102003040001068",
+      "contractMethod": "swapExactAmountOutOnBalancerV2",
+      "destAmount": "995",
+      "destDecimals": 18,
+      "destToken": "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "destUSD": "0",
+      "gasCost": "0",
+      "gasCostUSD": "0",
+      "hmac": "",
+      "network": 1,
+      "partnerFee": 0,
+      "side": "BUY",
+      "srcAmount": "1000",
+      "srcDecimals": 18,
+      "srcToken": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "srcUSD": "0",
+      "tokenTransferProxy": "0x0000000000000000000000000000000000000000",
+      "version": "6.2"
+    },
+    "quotedAmount": "1100"
+  },
+  "schemaVersion": 1
+}

@@ -1,0 +1,39 @@
+{
+  "coverage": [
+    "negative",
+    "validation-error",
+    "invalid-direct-side"
+  ],
+  "expectedError": "direct side must be SELL or BUY: INVALID",
+  "input": {
+    "augustusV6Address": "0x6a000f20005980200259b80c5102003040001068",
+    "contractMethod": "swapExactAmountInOnUniswapV2",
+    "gas": {
+      "gasPrice": "1",
+      "maxFeePerGas": "2",
+      "maxPriorityFeePerGas": "3"
+    },
+    "minMaxAmount": "990",
+    "params": [
+      [
+        "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "1000",
+        "990",
+        "995",
+        "0x1111111111111111111111111111111111111111111111111111111111111111",
+        "0x0000000000000000000000000000000000000000",
+        "0x1234"
+      ],
+      "0",
+      "0x"
+    ],
+    "side": "INVALID",
+    "srcAmount": "1000",
+    "srcToken": "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "userAddress": "0x1111111111111111111111111111111111111111"
+  },
+  "kind": "negative",
+  "name": "invalid-direct-side",
+  "schemaVersion": 1
+}

@@ -1,0 +1,116 @@
+{
+  "coverage": [
+    "direct",
+    "sell"
+  ],
+  "description": "Direct UniswapV3 SELL method.",
+  "expectedParams": [
+    [
+      "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "1000",
+      "990",
+      "995",
+      "0x1111111111111111111111111111111111111111111111111111111111111111",
+      "0x0000000000000000000000000000000000000000",
+      "0x1234"
+    ],
+    "0",
+    "0x"
+  ],
+  "expectedTx": {
+    "data": "0x876a02f60000000000000000000000000000000000000000000000000000000000000060000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001a0000000000000000000000000aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa000000000000000000000000bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb00000000000000000000000000000000000000000000000000000000000003e800000000000000000000000000000000000000000000000000000000000003de00000000000000000000000000000000000000000000000000000000000003e3111111111111111111111111111111111111111111111111111111111111111100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000000212340000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "from": "0x1111111111111111111111111111111111111111",
+    "gasPrice": "1",
+    "maxFeePerGas": "2",
+    "maxPriorityFeePerGas": "3",
+    "to": "0x6a000f20005980200259b80c5102003040001068",
+    "value": "0"
+  },
+  "input": {
+    "augustusV6Address": "0x6a000f20005980200259b80c5102003040001068",
+    "contractMethod": "swapExactAmountInOnUniswapV3",
+    "gas": {
+      "gasPrice": "1",
+      "maxFeePerGas": "2",
+      "maxPriorityFeePerGas": "3"
+    },
+    "minMaxAmount": "990",
+    "params": [
+      [
+        "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "1000",
+        "990",
+        "995",
+        "0x1111111111111111111111111111111111111111111111111111111111111111",
+        "0x0000000000000000000000000000000000000000",
+        "0x1234"
+      ],
+      "0",
+      "0x"
+    ],
+    "side": "SELL",
+    "srcAmount": "1000",
+    "srcToken": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "userAddress": "0x1111111111111111111111111111111111111111"
+  },
+  "kind": "direct",
+  "name": "uniswap-v3-sell",
+  "orchestration": {
+    "directDestAmount": "995",
+    "directDestToken": "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "directDexKey": "UniswapV3",
+    "minMaxAmount": "990",
+    "priceRoute": {
+      "bestRoute": [
+        {
+          "percent": 100,
+          "swaps": [
+            {
+              "destDecimals": 18,
+              "destToken": "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "srcDecimals": 18,
+              "srcToken": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "swapExchanges": [
+                {
+                  "data": {
+                    "directCase": "uniswap-v3-sell"
+                  },
+                  "destAmount": "995",
+                  "exchange": "UniswapV3",
+                  "percent": 100,
+                  "poolAddresses": [
+                    "0x4444444444444444444444444444444444444444"
+                  ],
+                  "srcAmount": "1000"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "blockNumber": 1,
+      "contractAddress": "0x6a000f20005980200259b80c5102003040001068",
+      "contractMethod": "swapExactAmountInOnUniswapV3",
+      "destAmount": "995",
+      "destDecimals": 18,
+      "destToken": "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "destUSD": "0",
+      "gasCost": "0",
+      "gasCostUSD": "0",
+      "hmac": "",
+      "network": 1,
+      "partnerFee": 0,
+      "side": "SELL",
+      "srcAmount": "1000",
+      "srcDecimals": 18,
+      "srcToken": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "srcUSD": "0",
+      "tokenTransferProxy": "0x0000000000000000000000000000000000000000",
+      "version": "6.2"
+    },
+    "quotedAmount": "995"
+  },
+  "schemaVersion": 1
+}
