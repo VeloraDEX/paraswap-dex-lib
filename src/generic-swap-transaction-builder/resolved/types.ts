@@ -105,4 +105,8 @@ export type ResolvedBuildOutput = {
   txObject: TxObject;
 };
 
+export type ResolvedDirectBuildOutput = ResolvedDirectCall & {
+  txObject: TxObject;
+};
+
 export type BuildOutput = ResolvedBuildOutput;

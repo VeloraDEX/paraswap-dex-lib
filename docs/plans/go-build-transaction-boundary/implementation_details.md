@@ -27,9 +27,10 @@ resolved-build boundary described in:
   planning, and approval enrichment. It returns `ResolvedLeg[]` plus `wethPlan`
   and no longer builds executor bytecode directly.
 - `_buildDirect()` delegates direct V6 param construction to DEX-specific
-  `getDirectParamV6()` implementations. Direct swaps remain outside the
-  resolved boundary after phase 2; the direct `TxObject` assembly in `build()`
-  is intentionally duplicated until the direct boundary phase.
+  `getDirectParamV6()` implementations and now returns only the resolved direct
+  call `{ contractMethod, params }`. Phase 4 keeps DEX-specific direct params
+  outside the boundary while `buildDirectTransactionFromResolved()` owns direct
+  wrapper validation, calldata encoding, native `value`, and gas fields.
 - Phase 1 implementation note: current `OptimalSwap` objects do not carry
   swap-level `srcAmount`/`destAmount` fields. `buildRoutePlan()` preserves any
   such fields if present and otherwise derives swap-level amounts by summing
@@ -42,9 +43,9 @@ resolved-build boundary described in:
   compatibility adapter with a route-plan-native bytecode path.
 - Existing executor snapshot fixtures under `src/executor/fixtures/` already
   cover useful Executor01 and Executor02 route shapes and can be reused for
-  generic parity tests. There is currently no `executor03` or WETH-only fixture
-  folder under `src/executor/fixtures/`; phase 3 should add focused fixtures or
-  test-local inputs for those paths.
+  generic parity tests. There is currently no shared `executor03` or WETH-only
+  fixture folder under `src/executor/fixtures/`; phase 3 covered those paths
+  with focused test-local route data.
 - Jest only auto-runs tests under `tests/**` and `src/(dex|lib|executor)/**`.
   New resolved-boundary tests should go under `tests/generic-swap-transaction-builder/`.
 
@@ -639,6 +640,331 @@ missing fields with broad `as unknown as OptimalRate` casts.
 - Existing phase 1 route-plan and phase 2 simple parity tests still pass.
 - TypeScript compilation and source lint pass.
 
+## Phase 4 Scope
+
+Phase 4 means checkpoint 4 from `implementation.md`: add direct boundary parity.
+
+The goal is to remove the remaining direct-path `TxObject` assembly duplication
+from `GenericSwapTransactionBuilder.build()` without moving DEX-specific direct
+parameter construction into the resolved boundary. DEX implementations still own
+`getDirectParamV6()`. The resolved direct boundary should receive the already
+resolved direct method and params, validate the serializable wrapper fields,
+encode Augustus V6 calldata, compute transaction `value`, and return the same
+public builder output.
+
+### In Scope
+
+- Add a direct resolved-build entrypoint, either in
+  `src/generic-swap-transaction-builder/resolved/build-transaction.ts` or a
+  sibling resolved module:
+  - `buildDirectTransactionFromResolved(input, deps)`
+  - `ResolvedDirectBuildOutput` or equivalent output type
+- Reuse and, if needed, refine `DirectBuildInput` / `ResolvedDirectCall` from
+  phase 1.
+- Keep `getDirectParamV6()` outside the boundary. It should still produce the
+  DEX-specific direct params.
+- Move direct transaction object assembly out of `build()`:
+  - `from`
+  - `to`
+  - `value`
+  - calldata encoding
+  - gas fields
+- Preserve `onlyParams` behavior for direct methods by returning the direct
+  boundary params, not reassembling them in the wrapper.
+- Add direct parity tests that compare:
+  - full direct `TxObject`
+  - direct `onlyParams`
+  - direct transaction `value` for native source tokens
+  - gas field passthrough
+  - byte-identical `tx.data` against the current DEX-provided encoder output
+- Cover representative direct V6 method families:
+  - UniswapV2 SELL and BUY
+  - UniswapV3 SELL or BUY
+  - BalancerV2 SELL or BUY
+  - CurveV1 or CurveV2 SELL; Curve direct BUY is not available
+  - LitePsm for `swapExactAmountInOutOnMakerPSM`
+  - Augustus RFQ try-batch-fill
+- Keep all generic phase 1-3 tests passing.
+
+### Out Of Scope
+
+- Do not move DEX-specific `getDirectParamV6()` logic into the boundary.
+- Do not force direct swaps into `RoutePlan` or `ResolvedLeg[]`.
+- Do not generate golden JSON fixtures yet.
+- Do not replace generic executor builders with a pure encoding context yet.
+- Do not change public `GenericSwapTransactionBuilder.build()` arguments or
+  return shape.
+- Do not broaden direct coverage to every DEX/fork if representative method
+  families prove the boundary contract.
+
+## Phase 4 Design Details
+
+### Current Baseline
+
+After phase 3, all non-direct generic V6 builds route through
+`buildTransactionFromResolved()`. Direct V6 methods still branch in
+`GenericSwapTransactionBuilder.build()`, call `_buildDirect()`, and then inline
+direct `TxObject` assembly in the wrapper.
+
+Current direct path shape:
+
+- `build()` normalizes `_quotedAmount`, `_beneficiary`, default booleans, and
+  `permit`.
+- `_buildDirect()` validates the route is direct-compatible, finds the DEX from
+  the single swap exchange, computes direct `srcAmount`/`destAmount`, packs
+  `partnerAndFee`, and calls `dex.getDirectParamV6()`.
+- `dex.getDirectParamV6()` returns `{ encoder, params, networkFee }`.
+- `build()` returns `params` immediately for `onlyParams`.
+- Otherwise `build()` computes `value` and calls `encoder.apply(null, params)`
+  to produce `tx.data`.
+
+Phase 4 should preserve the first two bullets and replace only the final wrapper
+assembly with a resolved direct boundary.
+
+### Direct Boundary Shape
+
+Prefer a return shape parallel to the generic boundary:
+
+```ts
+type ResolvedDirectBuildOutput = ResolvedDirectCall & {
+  txObject: TxObject;
+};
+
+type DirectResolvedBuildDeps = {
+  augustusV6Interface: Interface;
+};
+
+buildDirectTransactionFromResolved(
+  input: DirectBuildInput,
+  deps: DirectResolvedBuildDeps,
+): ResolvedDirectBuildOutput
+```
+
+`DirectBuildInput` already contains the important phase 1 fields:
+
+- `contractMethod`
+- `params`
+- `userAddress`
+- `augustusV6Address`
+- `srcToken`
+- `srcAmount`
+- `minMaxAmount`
+- `side`
+- optional `gas`
+
+Phase 4 should add or confirm any missing fields explicitly. Do not pass the DEX
+`encoder` function across the boundary; that function is not serializable and is
+not part of the Go contract. The direct boundary should encode with the Augustus
+V6 ABI using `input.contractMethod` and `input.params`. Parity tests must prove
+this matches the DEX-provided encoder output currently used by `build()`.
+
+Unlike generic `BuildInput`, direct `DirectBuildInput` should not carry `fee`,
+`uuid`, `permit`, `beneficiary`, or `blockNumber` as top-level boundary fields.
+Those values are already baked into the DEX-returned direct params by
+`getDirectParamV6()`.
+
+Boundary address normalization applies to wrapper fields such as
+`DirectBuildInput.srcToken`, which is used for transaction `value` calculation.
+Do not normalize or assert lowercase casing inside opaque DEX-returned nested
+params, such as a direct Uniswap tuple's embedded source token. ABI address
+encoding is case-insensitive, and those params are DEX-owned payloads.
+
+### Direct Orchestration Split
+
+Keep `_buildDirect()` or replace it with a clearer helper such as
+`buildResolvedDirectCall()`, but its responsibility should end at producing
+DEX-specific direct call params.
+
+Recommended flow:
+
+1. `build()` computes the existing `_quotedAmount`, `_beneficiary`, boolean
+   defaults, and `permit` default before entering the direct path.
+2. `build()` detects `isDirectFunctionNameV6(priceRoute.contractMethod)`.
+3. Direct orchestration calls `getDirectParamV6()` and receives the direct DEX
+   result.
+4. `_buildDirect()` or `buildResolvedDirectCall()` should return only
+   `ResolvedDirectCall` data: `{ contractMethod, params }`. Drop the
+   DEX-returned `encoder` and `networkFee` from the data flow once encoder
+   parity is covered by tests.
+5. `build()` constructs `DirectBuildInput` with normalized boundary addresses.
+6. `buildDirectTransactionFromResolved()` validates and returns
+   `{ params, txObject }`.
+7. `build()` returns `output.params` for `onlyParams`, otherwise
+   `output.txObject`.
+
+This removes the direct branch's duplicated value/gas/calldata assembly while
+leaving DEX lookup and direct param construction in TypeScript orchestration.
+
+### Direct Method Coverage
+
+The direct boundary should explicitly allow current V6 direct methods:
+
+- `swapExactAmountInOnUniswapV2`
+- `swapExactAmountOutOnUniswapV2`
+- `swapExactAmountInOnUniswapV3`
+- `swapExactAmountOutOnUniswapV3`
+- `swapExactAmountInOnBalancerV2`
+- `swapExactAmountOutOnBalancerV2`
+- `swapExactAmountInOnCurveV1`
+- `swapExactAmountInOnCurveV2`
+- `swapOnAugustusRFQTryBatchFill`
+- `swapExactAmountInOutOnMakerPSM`
+
+Curve direct methods are SELL-only in V6; there is no
+`swapExactAmountOutOnCurve*` method. Phase 4 BUY coverage must come from
+UniswapV2, UniswapV3, or BalancerV2.
+
+`swapExactAmountInOutOnMakerPSM` is implemented by
+`src/dex/lite-psm/lite-psm.ts` (`LitePsm`), not by a `maker-psm` direct module.
+
+Do not include the generic executor methods
+`swapExactAmountIn`, `swapExactAmountOut`, `swapExactAmountInPro`, or
+`swapExactAmountOutPro` in the direct allowlist.
+
+Hardcode the 10-method direct V6 allowlist above. Avoid importing
+`DirectContractMethods` from `@paraswap/core`; it also contains legacy V5
+methods and generic Pro methods through the fee-model list, so it is too broad
+for this boundary. The wrapper can still rely on
+`isDirectFunctionNameV6(priceRoute.contractMethod)` before constructing
+`DirectBuildInput`.
+
+### Direct Validation
+
+Add validation near the direct boundary, following the phase 2 validation style:
+
+- `contractMethod` is in the direct V6 allowlist.
+- `params` is an array; reject `null`, `undefined`, and non-array values at
+  runtime.
+- `userAddress`, `augustusV6Address`, and `srcToken` are lowercase addresses.
+- `srcAmount` and `minMaxAmount` are decimal amount strings.
+- optional gas fields are decimal amount strings.
+- direct `permit` bytes do not need separate validation here because permit is
+  already inside DEX-specific `params`; deep param validation is deferred to
+  golden fixtures unless a helper can validate the common tuple safely.
+
+Native value calculation should match the current wrapper exactly:
+
+- if `srcToken` is ETH and side is SELL, value is `srcAmount`
+- if `srcToken` is ETH and side is BUY, value is `minMaxAmount`
+- otherwise value is `0`
+
+### Direct Test Strategy
+
+Place phase 4 direct tests in
+`tests/generic-swap-transaction-builder/resolved/build-direct-transaction.test.ts`
+so Jest picks them up through the existing resolved-boundary path and direct
+tests stay isolated from the route-plan generic helper.
+
+The phase 3 parity helper should not be stretched to direct routes if it makes
+the fixture setup opaque. Direct routes are intentionally not route-plan based.
+Prefer a focused helper that:
+
+- builds a single-route/single-swap `OptimalRate`
+- mocks `isDirectFunctionNameV6()` true for the selected method
+- mocks `getTxBuilderDexByKey()` to return a direct DEX with
+  `getDirectParamV6()`
+- returns both the current DEX-provided encoder result and the resolved direct
+  boundary result for comparison
+- for each covered method, captures
+  `dexResult.encoder(...dexResult.params)` and asserts it equals
+  `boundary.txObject.data`
+- checks `builder.build()` normal tx and `onlyParams`
+
+For UniswapV2/UniswapV3/Balancer/Curve, a minimal deterministic mock DEX is
+acceptable because phase 4 is testing the direct boundary contract, not
+DEX-specific pool encoding. For LitePsm and RFQ, use representative params that
+exercise nested tuple payloads so `unknown[]` direct params are not accidentally
+narrowed to only string arrays. RFQ setup must inject preprocessed
+`data.orderInfos` directly or call `GenericRFQ.preProcessTransaction()` before
+`getDirectParamV6()`; `GenericRFQ.getDirectParamV6()` throws when
+`orderInfos === null`.
+
+### Phase 4 Watchpoints
+
+- `TxInfo<DirectParam>.params` is generic and can contain nested tuples. Avoid
+  typing direct params as `(string | string[])[]`; use `unknown[]`.
+- Some direct DEX implementations return an `encoder` that already wraps
+  `augustusV6Interface.encodeFunctionData(contractMethod, params)`. The new
+  boundary should reproduce that with the Augustus V6 interface rather than
+  carrying the encoder function forward.
+- `_buildDirect()` has special route validation for
+  `swapOnAugustusRFQTryBatchFill`, where the route may not have exactly one
+  swap exchange. Keep that behavior outside the boundary.
+- Direct value assembly currently uses the top-level `priceRoute.srcToken`,
+  `priceRoute.srcAmount`, and `minMaxAmount`, not the DEX-returned params. The
+  direct boundary should preserve that contract.
+- Direct-path address normalization should match the generic boundary
+  precondition: normalize before constructing `DirectBuildInput`, then validate
+  at boundary entry.
+
+## Phase 4 Tasks
+
+| Status | Task                                  | Notes                                                                                                                                                                                                 |
+| ------ | ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Done   | Review direct baseline                | Inspected `_buildDirect()`, the inline direct `build()` branch, `DirectBuildInput`, and representative direct encoders for UniswapV2, UniswapV3, BalancerV2, Curve, LitePsm, and RFQ.                 |
+| Done   | Add direct resolved output type       | Added `ResolvedDirectBuildOutput = ResolvedDirectCall & { txObject: TxObject }`, preserving `params: unknown[]`.                                                                                      |
+| Done   | Add direct boundary entrypoint        | Added `buildDirectTransactionFromResolved(input, deps)` with the 10-method V6 direct allowlist, side/method consistency validation, wrapper validation, Augustus V6 ABI encoding, native value calculation, and gas passthrough. |
+| Done   | Wire direct branch through boundary   | Direct public builds now keep `getDirectParamV6()` outside the boundary, build normalized `DirectBuildInput`, and return direct boundary params or tx output from `build()`.                          |
+| Done   | Remove direct `TxObject` duplication  | Removed the inline direct `value`, `data`, and gas assembly plus the phase 2 TODO from `build()`.                                                                                                      |
+| Done   | Add direct helper tests               | Added focused tests in `tests/generic-swap-transaction-builder/resolved/build-direct-transaction.test.ts`, isolated from route-plan generic helpers.                                                   |
+| Done   | Assert DEX encoder byte parity        | Every covered direct method compares the mocked DEX encoder output to `buildDirectTransactionFromResolved(...).txObject.data`; paired-method mocks derive the encoded method from `side` like real DEX encoders. |
+| Done   | Cover representative direct methods   | Covered UniswapV2 SELL and BUY, UniswapV3 SELL, BalancerV2 BUY, CurveV1 SELL, LitePsm, and Augustus RFQ try-batch-fill with nested tuple params for LitePsm/RFQ.                                      |
+| Done   | Cover direct native value and gas     | Covered ETH-source SELL value from `srcAmount`, BUY native value from `minMaxAmount`, and gas field passthrough.                                                                                      |
+| Done   | Cover direct validation errors        | Added direct boundary rejection coverage for unsupported direct method, side/method mismatch, invalid side, malformed lowercase address, malformed decimal amount/gas, `null` params, and non-array params. |
+| Done   | Update docs with implementation notes | Recorded direct boundary implementation, mock coverage choices, `unknown[]` direct params, and no deferred representative method families below.                                                       |
+| Done   | Run checks                            | `yarn jest tests/generic-swap-transaction-builder/resolved --runInBand`, `yarn check:tsc`, and `yarn check:es` passed on 2026-05-13.                                                                  |
+
+### Phase 4 Completion Notes
+
+- Added `buildDirectTransactionFromResolved()` to the resolved build module. It
+  validates the direct V6 method allowlist, rejects invalid sides and
+  side/method mismatches for directional direct methods, checks serialized
+  wrapper fields, encodes calldata with the Augustus V6 ABI, calculates direct
+  native `value` from top-level `srcToken`/`srcAmount`/`minMaxAmount`, and
+  passes gas fields through to `TxObject`.
+- Added `ResolvedDirectBuildOutput` while keeping direct params typed as
+  `unknown[]`, so nested tuple payloads from LitePsm and RFQ remain supported.
+- `GenericSwapTransactionBuilder.build()` now routes direct V6 methods through
+  the direct resolved boundary after `_buildDirect()` returns DEX-owned
+  `{ contractMethod, params }`. The DEX-returned `encoder` and `networkFee` no
+  longer flow into direct wrapper assembly.
+- `getDirectParamV6()` remains outside the boundary and still owns all
+  DEX-specific direct params. The boundary does not inspect or normalize opaque
+  nested direct params.
+- Direct parity tests use deterministic mock DEX direct results for:
+  - UniswapV2 SELL and BUY
+  - UniswapV3 SELL
+  - BalancerV2 BUY
+  - CurveV1 SELL
+  - LitePsm `swapExactAmountInOutOnMakerPSM`
+  - Augustus RFQ `swapOnAugustusRFQTryBatchFill`
+- For each covered direct method, tests compare the DEX-provided encoder bytes
+  to the new boundary calldata, then compare public `builder.build()` normal tx
+  and `onlyParams` output to the boundary output. Paired direct-method test
+  encoders derive the encoded method from `side`, matching the real UniswapV2,
+  UniswapV3, and BalancerV2 direct encoder behavior.
+- No representative direct method family from the phase 4 scope was deferred.
+
+## Phase 4 Acceptance Criteria
+
+- Direct V6 methods still call DEX-specific `getDirectParamV6()` outside the
+  resolved boundary.
+- Normal direct `builder.build()` output is assembled by
+  `buildDirectTransactionFromResolved()`.
+- Direct `onlyParams` returns the direct boundary params.
+- The inline direct `TxObject` assembly in `build()` is removed.
+- Direct boundary validation rejects unsupported direct methods and malformed
+  serialized wrapper fields.
+- Direct parity is proven for representative V6 direct method families,
+  including at least one BUY method from UniswapV2, UniswapV3, or BalancerV2
+  and one native-source SELL route.
+- For every covered direct method, boundary calldata is byte-identical to the
+  current DEX-provided encoder output.
+- Nested direct params are supported as `unknown[]`.
+- Runtime validation rejects `null` and non-array direct params.
+- Generic phase 1-3 parity tests still pass.
+- TypeScript compilation and source lint pass.
+
 ## Suggested Test Commands
 
 Phase 1:
@@ -662,6 +988,21 @@ Phase 3:
 yarn jest tests/generic-swap-transaction-builder/resolved --runInBand
 yarn check:tsc
 yarn check:es
+```
+
+Phase 4:
+
+```bash
+yarn jest tests/generic-swap-transaction-builder/resolved --runInBand
+yarn check:tsc
+yarn check:es
+```
+
+Optional manual phase 4 sanity after merge:
+
+```bash
+# Run one representative V6 direct E2E simulation, for example a UniswapV2 direct test.
+# Exact command/filter depends on the local Tenderly-enabled test setup.
 ```
 
 Optional phase 3 snapshot check after fixing the pre-existing snapshot fixture

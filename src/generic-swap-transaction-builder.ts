@@ -41,16 +41,22 @@ import {
   SwapSide,
 } from '@paraswap/core';
 import {
+  buildDirectTransactionFromResolved,
   buildRoutePlan,
   buildTransactionFromResolved,
   routePositionKey,
   walkRoutePlan,
   type ResolvedBuildOutput,
+  type ResolvedDirectCall,
   type ResolvedLeg,
   type RoutePlan,
 } from './generic-swap-transaction-builder/resolved';
 
 const REMOTE_DEX_PARAM_TIMEOUT_MS = 10_000;
+
+export type GenericSwapTransactionBuildParams =
+  | ResolvedBuildOutput['params']
+  | ResolvedDirectCall['params'];
 
 // `.empty(null)` makes joi treat a JSON `null` as missing (i.e. undefined),
 // which is what downstream `value !== undefined` checks expect — see
@@ -482,7 +488,7 @@ export class GenericSwapTransactionBuilder {
     permit: string,
     uuid: string,
     beneficiary: Address,
-  ) {
+  ): Promise<ResolvedDirectCall> {
     const isRfqTryBatchFill =
       priceRoute.contractMethod ===
       ContractMethod.swapOnAugustusRFQTryBatchFill;
@@ -529,7 +535,7 @@ export class GenericSwapTransactionBuilder {
       priceRoute,
     });
 
-    return dex.getDirectParamV6!(
+    const directTxInfo = dex.getDirectParamV6!(
       priceRoute.srcToken,
       priceRoute.destToken,
       srcAmount,
@@ -544,6 +550,11 @@ export class GenericSwapTransactionBuilder {
       priceRoute.blockNumber,
       priceRoute.contractMethod,
     );
+
+    return {
+      contractMethod: priceRoute.contractMethod as ContractMethodV6,
+      params: directTxInfo.params,
+    };
   }
 
   private buildFeesV6({
@@ -631,7 +642,7 @@ export class GenericSwapTransactionBuilder {
     uuid: string;
     beneficiary?: Address;
     onlyParams?: boolean;
-  }): Promise<TxObject | (string | string[])[]> {
+  }): Promise<TxObject | GenericSwapTransactionBuildParams> {
     // if quotedAmount wasn't passed, use the amount from the route
     const _quotedAmount = quotedAmount
       ? quotedAmount
@@ -649,7 +660,7 @@ export class GenericSwapTransactionBuilder {
     if (
       this.dexAdapterService.isDirectFunctionNameV6(priceRoute.contractMethod)
     ) {
-      const { encoder, params } = await this._buildDirect(
+      const directCall = await this._buildDirect(
         priceRoute,
         minMaxAmount,
         _quotedAmount,
@@ -665,28 +676,29 @@ export class GenericSwapTransactionBuilder {
         _beneficiary,
       );
 
-      if (onlyParams) return params;
+      const resolvedDirectOutput = buildDirectTransactionFromResolved(
+        {
+          ...directCall,
+          userAddress: this.normalizeAddress(userAddress),
+          augustusV6Address: this.normalizeAddress(this.augustusV6Address),
+          srcToken: this.normalizeAddress(priceRoute.srcToken),
+          srcAmount: priceRoute.srcAmount,
+          minMaxAmount,
+          side: priceRoute.side,
+          gas: {
+            gasPrice,
+            maxFeePerGas,
+            maxPriorityFeePerGas,
+          },
+        },
+        {
+          augustusV6Interface: this.augustusV6Interface,
+        },
+      );
 
-      // TODO: Port direct TxObject assembly to buildDirectTransactionFromResolved.
-      const value = (
-        priceRoute.srcToken.toLowerCase() === ETHER_ADDRESS.toLowerCase()
-          ? BigInt(
-              priceRoute.side === SwapSide.SELL
-                ? priceRoute.srcAmount
-                : minMaxAmount,
-            )
-          : BigInt(0)
-      ).toString();
-
-      return {
-        from: userAddress,
-        to: this.dexAdapterService.dexHelper.config.data.augustusV6Address,
-        value,
-        data: encoder.apply(null, params),
-        gasPrice,
-        maxFeePerGas,
-        maxPriorityFeePerGas,
-      };
+      return onlyParams
+        ? resolvedDirectOutput.params
+        : resolvedDirectOutput.txObject;
     }
 
     const resolvedOutput = await this._build(

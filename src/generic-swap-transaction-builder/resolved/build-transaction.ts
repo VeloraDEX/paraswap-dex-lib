@@ -34,8 +34,10 @@ import {
 import { routePositionKey, walkRoutePlan } from './route-plan';
 import type {
   BuildInput,
+  DirectBuildInput,
   FeeInput,
   ResolvedBuildOutput,
+  ResolvedDirectBuildOutput,
   ResolvedLeg,
   RoutePlan,
   RoutePlanSwap,
@@ -53,8 +55,36 @@ const GENERIC_CONTRACT_METHODS = new Set<string>([
   ContractMethodV6.swapExactAmountOutPro,
 ]);
 
+const DIRECT_CONTRACT_METHODS = new Set<string>([
+  ContractMethodV6.swapExactAmountInOnUniswapV2,
+  ContractMethodV6.swapExactAmountOutOnUniswapV2,
+  ContractMethodV6.swapExactAmountInOnUniswapV3,
+  ContractMethodV6.swapExactAmountOutOnUniswapV3,
+  ContractMethodV6.swapExactAmountInOnBalancerV2,
+  ContractMethodV6.swapExactAmountOutOnBalancerV2,
+  ContractMethodV6.swapExactAmountInOnCurveV1,
+  ContractMethodV6.swapExactAmountInOnCurveV2,
+  ContractMethodV6.swapOnAugustusRFQTryBatchFill,
+  ContractMethodV6.swapExactAmountInOutOnMakerPSM,
+]);
+
+const DIRECT_CONTRACT_METHOD_SIDES = new Map<string, SwapSide>([
+  [ContractMethodV6.swapExactAmountInOnUniswapV2, SwapSide.SELL],
+  [ContractMethodV6.swapExactAmountOutOnUniswapV2, SwapSide.BUY],
+  [ContractMethodV6.swapExactAmountInOnUniswapV3, SwapSide.SELL],
+  [ContractMethodV6.swapExactAmountOutOnUniswapV3, SwapSide.BUY],
+  [ContractMethodV6.swapExactAmountInOnBalancerV2, SwapSide.SELL],
+  [ContractMethodV6.swapExactAmountOutOnBalancerV2, SwapSide.BUY],
+  [ContractMethodV6.swapExactAmountInOnCurveV1, SwapSide.SELL],
+  [ContractMethodV6.swapExactAmountInOnCurveV2, SwapSide.SELL],
+]);
+
 export type ResolvedBuildDeps = {
   bytecodeBuilder: ExecutorBytecodeBuilder;
+  augustusV6Interface: Interface;
+};
+
+export type ResolvedDirectBuildDeps = {
   augustusV6Interface: Interface;
 };
 
@@ -99,6 +129,25 @@ export function buildTransactionFromResolved(
   return { params, txObject };
 }
 
+export function buildDirectTransactionFromResolved(
+  input: DirectBuildInput,
+  deps: ResolvedDirectBuildDeps,
+): ResolvedDirectBuildOutput {
+  validateDirectBuildInput(input);
+
+  const txObject = buildDirectTxObject(
+    input,
+    input.params,
+    deps.augustusV6Interface,
+  );
+
+  return {
+    contractMethod: input.contractMethod,
+    params: input.params,
+    txObject,
+  };
+}
+
 function validateBuildInput(
   input: BuildInput,
   deps: ResolvedBuildDeps,
@@ -139,12 +188,48 @@ function validateBuildInput(
   return resolvedLegByKey;
 }
 
+function validateDirectBuildInput(input: DirectBuildInput): void {
+  validateSupportedDirectContractMethod(input.contractMethod);
+  validateDirectSide(input.side);
+  validateDirectSideContractMethod(input.contractMethod, input.side);
+  validateDirectTopLevelFields(input);
+}
+
 function validateSupportedContractMethod(
   contractMethod: ContractMethodV6,
 ): void {
   if (!GENERIC_CONTRACT_METHODS.has(contractMethod)) {
     throw new Error(
       `unsupported generic contract method for resolved build: ${contractMethod}`,
+    );
+  }
+}
+
+function validateSupportedDirectContractMethod(
+  contractMethod: ContractMethodV6,
+): void {
+  if (!DIRECT_CONTRACT_METHODS.has(contractMethod)) {
+    throw new Error(
+      `unsupported direct contract method for resolved build: ${contractMethod}`,
+    );
+  }
+}
+
+function validateDirectSide(side: SwapSide): void {
+  if (side !== SwapSide.SELL && side !== SwapSide.BUY) {
+    throw new Error(`direct side must be SELL or BUY: ${side}`);
+  }
+}
+
+function validateDirectSideContractMethod(
+  contractMethod: ContractMethodV6,
+  side: SwapSide,
+): void {
+  const expectedSide = DIRECT_CONTRACT_METHOD_SIDES.get(contractMethod);
+
+  if (expectedSide !== undefined && side !== expectedSide) {
+    throw new Error(
+      `direct contract method ${contractMethod} is inconsistent with side ${side}; expected ${expectedSide}`,
     );
   }
 }
@@ -189,6 +274,33 @@ function validateTopLevelFields(input: BuildInput): void {
     'fee.partnerFeePercent',
   );
   assertHexBytes(input.permit, 'permit');
+
+  if (input.gas?.gasPrice !== undefined) {
+    assertDecimalAmountString(input.gas.gasPrice, 'gas.gasPrice');
+  }
+
+  if (input.gas?.maxFeePerGas !== undefined) {
+    assertDecimalAmountString(input.gas.maxFeePerGas, 'gas.maxFeePerGas');
+  }
+
+  if (input.gas?.maxPriorityFeePerGas !== undefined) {
+    assertDecimalAmountString(
+      input.gas.maxPriorityFeePerGas,
+      'gas.maxPriorityFeePerGas',
+    );
+  }
+}
+
+function validateDirectTopLevelFields(input: DirectBuildInput): void {
+  if (!Array.isArray(input.params)) {
+    throw new Error('direct params must be an array');
+  }
+
+  assertLowercaseAddress(input.userAddress, 'userAddress');
+  assertLowercaseAddress(input.augustusV6Address, 'augustusV6Address');
+  assertLowercaseAddress(input.srcToken, 'srcToken');
+  assertDecimalAmountString(input.srcAmount, 'srcAmount');
+  assertDecimalAmountString(input.minMaxAmount, 'minMaxAmount');
 
   if (input.gas?.gasPrice !== undefined) {
     assertDecimalAmountString(input.gas.gasPrice, 'gas.gasPrice');
@@ -427,6 +539,34 @@ function buildTxObject(
     to: input.augustusV6Address,
     value,
     data: augustusV6Interface.encodeFunctionData(input.contractMethod, params),
+    gasPrice: input.gas?.gasPrice,
+    maxFeePerGas: input.gas?.maxFeePerGas,
+    maxPriorityFeePerGas: input.gas?.maxPriorityFeePerGas,
+  };
+}
+
+function buildDirectTxObject(
+  input: DirectBuildInput,
+  params: unknown[],
+  augustusV6Interface: Interface,
+): TxObject {
+  // Boundary validation requires lowercase addresses before this ETH check.
+  const value = (
+    input.srcToken === ETHER_ADDRESS
+      ? BigInt(
+          input.side === SwapSide.SELL ? input.srcAmount : input.minMaxAmount,
+        )
+      : BigInt(0)
+  ).toString();
+
+  return {
+    from: input.userAddress,
+    to: input.augustusV6Address,
+    value,
+    data: augustusV6Interface.encodeFunctionData(
+      input.contractMethod,
+      params,
+    ),
     gasPrice: input.gas?.gasPrice,
     maxFeePerGas: input.gas?.maxFeePerGas,
     maxPriorityFeePerGas: input.gas?.maxPriorityFeePerGas,
