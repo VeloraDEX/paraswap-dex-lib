@@ -2,13 +2,12 @@ import {
   Address,
   DexExchangeBuildParam,
   DexExchangeParam,
-  DexExchangeParamWithBooleanNeedWrapNative,
   OptimalRate,
   OptimalSwap,
   OptimalSwapExchange,
   TxObject,
 } from './types';
-import { BigNumber, ethers } from 'ethers';
+import { BigNumber } from 'ethers';
 import {
   ETHER_ADDRESS,
   FEE_PERCENT_IN_BASIS_POINTS_MASK,
@@ -24,7 +23,7 @@ import { AbiCoder, Interface } from '@ethersproject/abi';
 import joi from 'joi';
 import AugustusV6ABI from './abi/augustus-v6/ABI.json';
 import { validateAndCast } from './lib/validators';
-import { isETHAddress, uuidToBytes16 } from './utils';
+import { isETHAddress } from './utils';
 import {
   DepositWithdrawReturn,
   IWethDepositorWithdrawer,
@@ -41,10 +40,15 @@ import {
   ParaSwapVersion,
   SwapSide,
 } from '@paraswap/core';
-
-const {
-  utils: { hexlify, hexConcat, hexZeroPad },
-} = ethers;
+import {
+  buildRoutePlan,
+  buildTransactionFromResolved,
+  routePositionKey,
+  walkRoutePlan,
+  type ResolvedBuildOutput,
+  type ResolvedLeg,
+  type RoutePlan,
+} from './generic-swap-transaction-builder/resolved';
 
 const REMOTE_DEX_PARAM_TIMEOUT_MS = 10_000;
 
@@ -140,16 +144,16 @@ export class GenericSwapTransactionBuilder {
     srcAmountWeth: bigint,
     destAmountWeth: bigint,
     side: SwapSide,
-    priceRoute: OptimalRate,
-    exchangeParams: DexExchangeParamWithBooleanNeedWrapNative[],
+    routePlan: RoutePlan,
+    resolvedLegs: ResolvedLeg[],
   ) {
     if (srcAmountWeth === 0n && destAmountWeth === 0n) return;
 
     if (
       srcAmountWeth === destAmountWeth &&
       !this.hasAnyRouteWithEthAndDifferentNeedWrapNative(
-        priceRoute,
-        exchangeParams,
+        routePlan,
+        resolvedLegs,
       )
     )
       return;
@@ -179,142 +183,163 @@ export class GenericSwapTransactionBuilder {
       : { key: newDexKey, ...this.newDexs[newDexKey] };
   }
 
-  protected async buildCalls(
+  protected async buildResolvedCalls(
     priceRoute: OptimalRate,
+    routePlan: RoutePlan,
     minMaxAmount: string,
     bytecodeBuilder: ExecutorBytecodeBuilder,
-    userAddress: string,
-  ): Promise<string> {
+  ): Promise<{
+    resolvedLegs: ResolvedLeg[];
+    maybeWethCallData?: DepositWithdrawReturn;
+  }> {
     const side = priceRoute.side;
-    const rawDexParams = await Promise.all(
-      priceRoute.bestRoute.flatMap((route, routeIndex) =>
-        route.swaps.flatMap((swap, swapIndex) =>
-          swap.swapExchanges.map(async se => {
-            const newDex = this.findNewDex(se.exchange);
-            const executorAddress = bytecodeBuilder.getAddress();
+    const executorAddress = bytecodeBuilder.getAddress();
+    const rawResolvedLegs = await Promise.all(
+      walkRoutePlan(routePlan).map(async routePosition => {
+        const { routeIndex, swapIndex, swapExchangeIndex } = routePosition;
+        const swap = priceRoute.bestRoute[routeIndex].swaps[swapIndex];
+        const se = swap.swapExchanges[swapExchangeIndex];
+        const newDex = this.findNewDex(se.exchange);
 
-            let dexNeedWrapNative: boolean;
-            let dex: IDexTxBuilder<any, any> | undefined;
-            if (newDex) {
-              dexNeedWrapNative = newDex.needWrapNative;
-            } else {
-              dex = this.dexAdapterService.getTxBuilderDexByKey(se.exchange);
-              dexNeedWrapNative =
-                typeof dex.needWrapNative === 'function'
-                  ? dex.needWrapNative(priceRoute, swap, se)
-                  : dex.needWrapNative;
-            }
+        let dexNeedWrapNative: boolean;
+        let dex: IDexTxBuilder<any, any> | undefined;
+        if (newDex) {
+          dexNeedWrapNative = newDex.needWrapNative;
+        } else {
+          dex = this.dexAdapterService.getTxBuilderDexByKey(se.exchange);
+          dexNeedWrapNative =
+            typeof dex.needWrapNative === 'function'
+              ? dex.needWrapNative(priceRoute, swap, se)
+              : dex.needWrapNative;
+        }
 
-            const {
-              srcToken,
-              destToken,
-              srcAmount,
-              destAmount,
-              recipient,
-              wethDeposit,
-              wethWithdraw,
-            } = this.getDexCallsParams(
-              priceRoute,
-              routeIndex,
-              swap,
-              swapIndex,
-              se,
-              minMaxAmount,
-              dexNeedWrapNative,
-              executorAddress,
-            );
+        const {
+          srcToken,
+          destToken,
+          srcAmount,
+          destAmount,
+          recipient,
+          wethDeposit,
+          wethWithdraw,
+        } = this.getDexCallsParams(
+          priceRoute,
+          routeIndex,
+          swap,
+          swapIndex,
+          se,
+          minMaxAmount,
+          dexNeedWrapNative,
+          executorAddress,
+        );
 
-            let dexParams: DexExchangeParam;
-            if (newDex) {
-              dexParams = await this.fetchRemoteDexParam({
-                dexKey: newDex.key,
-                srcToken,
-                destToken,
-                srcAmount: side === SwapSide.BUY ? se.srcAmount : srcAmount,
-                destAmount,
-                recipient,
-                data: se.data,
-                side,
-                executorAddress,
-              });
+        let dexParams: DexExchangeParam;
+        if (newDex) {
+          dexParams = await this.fetchRemoteDexParam({
+            dexKey: newDex.key,
+            srcToken,
+            destToken,
+            srcAmount: side === SwapSide.BUY ? se.srcAmount : srcAmount,
+            destAmount,
+            recipient,
+            data: se.data,
+            side,
+            executorAddress,
+          });
 
-              // The local `newDexs[*].needWrapNative` is the single source of
-              // truth: it already drove `getDexCallsParams` (and therefore
-              // `wethDeposit`/`wethWithdraw`). Keep the executor builder in
-              // lockstep so the wrap accounting and the bytecode wiring
-              // can't diverge.
-              dexParams.needWrapNative = newDex.needWrapNative;
-            } else {
-              dexParams = await dex!.getDexParam!(
-                srcToken,
-                destToken,
-                side === SwapSide.BUY ? se.srcAmount : srcAmount, // in other case we would not be able to make insert from amount on Ex3
-                destAmount,
-                recipient,
-                se.data,
-                side,
-                executorAddress,
-              );
-            }
+          // The local `newDexs[*].needWrapNative` is the single source of
+          // truth: it already drove `getDexCallsParams` (and therefore
+          // `wethDeposit`/`wethWithdraw`). Keep the executor builder in
+          // lockstep so the wrap accounting and the bytecode wiring
+          // can't diverge.
+          dexParams.needWrapNative = newDex.needWrapNative;
+        } else {
+          dexParams = await dex!.getDexParam!(
+            srcToken,
+            destToken,
+            side === SwapSide.BUY ? se.srcAmount : srcAmount, // in other case we would not be able to make insert from amount on Ex3
+            destAmount,
+            recipient,
+            se.data,
+            side,
+            executorAddress,
+          );
+        }
 
-            if (typeof dexParams.needWrapNative === 'function') {
-              dexParams.needWrapNative = dexParams.needWrapNative(
-                priceRoute,
-                swap,
-                se,
-              );
-            }
+        if (typeof dexParams.needWrapNative === 'function') {
+          dexParams.needWrapNative = dexParams.needWrapNative(
+            priceRoute,
+            swap,
+            se,
+          );
+        }
 
-            return {
-              dexParams: <DexExchangeParamWithBooleanNeedWrapNative>dexParams,
-              wethDeposit,
-              wethWithdraw,
-            };
-          }),
-        ),
-      ),
+        if (typeof dexParams.needWrapNative !== 'boolean') {
+          throw new Error(
+            `Invalid DEX: needWrapNative must resolve to boolean for ${se.exchange}`,
+          );
+        }
+
+        return {
+          resolvedLeg: {
+            routeIndex,
+            swapIndex,
+            swapExchangeIndex,
+            exchangeParam: this.normalizeDexExchangeBuildParam(
+              dexParams as DexExchangeBuildParam,
+            ),
+            normalizedSrcToken: this.normalizeAddress(srcToken),
+            normalizedDestToken: this.normalizeAddress(destToken),
+            normalizedSrcAmount: srcAmount,
+            normalizedDestAmount: destAmount,
+            recipient: this.normalizeAddress(recipient),
+          },
+          wethDeposit,
+          wethWithdraw,
+        };
+      }),
     );
 
-    const { exchangeParams, srcAmountWethToDeposit, destAmountWethToWithdraw } =
-      await rawDexParams.reduce<{
-        exchangeParams: DexExchangeParamWithBooleanNeedWrapNative[];
+    const { resolvedLegs, srcAmountWethToDeposit, destAmountWethToWithdraw } =
+      rawResolvedLegs.reduce<{
+        resolvedLegs: ResolvedLeg[];
         srcAmountWethToDeposit: bigint;
         destAmountWethToWithdraw: bigint;
       }>(
         (acc, se) => {
           acc.srcAmountWethToDeposit += BigInt(se.wethDeposit);
           acc.destAmountWethToWithdraw += BigInt(se.wethWithdraw);
-          acc.exchangeParams.push(se.dexParams);
+          acc.resolvedLegs.push(se.resolvedLeg);
           return acc;
         },
         {
-          exchangeParams: [],
+          resolvedLegs: [],
           srcAmountWethToDeposit: 0n,
           destAmountWethToWithdraw: 0n,
         },
       );
 
-    const maybeWethCallData = this.getDepositWithdrawWethCallData(
-      srcAmountWethToDeposit,
-      destAmountWethToWithdraw,
-      side,
-      priceRoute,
-      exchangeParams,
+    const maybeWethCallData = this.normalizeWethPlan(
+      this.getDepositWithdrawWethCallData(
+        srcAmountWethToDeposit,
+        destAmountWethToWithdraw,
+        side,
+        routePlan,
+        resolvedLegs,
+      ),
     );
 
-    const buildExchangeParams = await this.addDexExchangeApproveParams(
+    const resolvedLegsWithApprovals = await this.addDexExchangeApproveParams(
       bytecodeBuilder,
       priceRoute,
-      exchangeParams,
+      routePlan,
+      resolvedLegs,
       maybeWethCallData,
     );
 
-    return bytecodeBuilder.buildByteCode(
-      priceRoute,
-      buildExchangeParams,
-      userAddress,
+    return {
+      resolvedLegs: resolvedLegsWithApprovals,
       maybeWethCallData,
-    );
+    };
   }
 
   protected async fetchRemoteDexParam(args: {
@@ -376,64 +401,70 @@ export class GenericSwapTransactionBuilder {
     beneficiary: Address,
     permit: string,
     uuid: string,
-  ) {
+    gas?: {
+      gasPrice?: string;
+      maxFeePerGas?: string;
+      maxPriorityFeePerGas?: string;
+    },
+  ): Promise<ResolvedBuildOutput> {
     const executorName =
       this.executorDetector.getExecutorByPriceRoute(priceRoute);
-    const executionContractAddress =
-      this.getExecutionContractAddress(priceRoute);
-
     const bytecodeBuilder =
       this.executorDetector.getBytecodeBuilder(executorName);
-    const bytecode = await this.buildCalls(
+    const executionContractAddress = bytecodeBuilder.getAddress();
+    const routePlan = buildRoutePlan(priceRoute);
+    const { resolvedLegs, maybeWethCallData } = await this.buildResolvedCalls(
       priceRoute,
+      routePlan,
       minMaxAmount,
       bytecodeBuilder,
-      userAddress,
     );
 
-    const side = priceRoute.side;
-    const isSell = side === SwapSide.SELL;
-
-    const partnerAndFee = this.buildFeesV6({
-      referrerAddress,
-      partnerAddress,
-      partnerFeePercent,
-      takeSurplus,
-      isCapSurplus,
-      isSurplusToUser,
-      isDirectFeeTransfer,
-      priceRoute,
-    });
-
-    const swapParams = [
-      executionContractAddress,
-      [
-        priceRoute.srcToken,
-        priceRoute.destToken,
-        isSell ? priceRoute.srcAmount : minMaxAmount,
-        isSell ? minMaxAmount : priceRoute.destAmount,
+    return buildTransactionFromResolved(
+      {
+        routePlan,
+        resolvedLegs,
+        wethPlan: maybeWethCallData,
+        executorType: executorName,
+        executorAddress: this.normalizeAddress(executionContractAddress),
+        augustusV6Address: this.normalizeAddress(this.augustusV6Address),
+        wrappedNativeTokenAddress: this.normalizeAddress(
+          this.dexAdapterService.dexHelper.config.data
+            .wrappedNativeTokenAddress,
+        ),
+        network: this.dexAdapterService.network,
+        srcToken: this.normalizeAddress(priceRoute.srcToken),
+        destToken: this.normalizeAddress(priceRoute.destToken),
+        srcAmount: priceRoute.srcAmount,
+        destAmount: priceRoute.destAmount,
+        minMaxAmount,
         quotedAmount,
-        hexConcat([
-          hexZeroPad(uuidToBytes16(uuid), 16),
-          hexZeroPad(hexlify(priceRoute.blockNumber), 16),
-        ]),
-        beneficiary,
-      ],
-      partnerAndFee,
-      permit,
-      bytecode,
-    ];
-
-    const encoder = (...params: any[]) =>
-      this.augustusV6Interface.encodeFunctionData(
-        priceRoute.contractMethod,
-        params,
-      );
-
-    return {
-      encoder,
-      params: swapParams,
-    };
+        side: priceRoute.side,
+        contractMethod: priceRoute.contractMethod as ContractMethodV6,
+        blockNumber: priceRoute.blockNumber,
+        userAddress: this.normalizeAddress(userAddress),
+        beneficiary: this.normalizeAddress(beneficiary),
+        permit,
+        uuid,
+        fee: {
+          partnerAddress: this.normalizeAddress(partnerAddress),
+          partnerFeePercent,
+          referrerAddress:
+            referrerAddress === undefined
+              ? undefined
+              : this.normalizeAddress(referrerAddress),
+          takeSurplus,
+          isCapSurplus,
+          isSurplusToUser,
+          isDirectFeeTransfer,
+        },
+        gas,
+      },
+      {
+        bytecodeBuilder,
+        augustusV6Interface: this.augustusV6Interface,
+      },
+    );
   }
 
   // TODO: Improve
@@ -615,13 +646,10 @@ export class GenericSwapTransactionBuilder {
         ? beneficiary
         : NULL_ADDRESS;
 
-    let encoder: (...params: any[]) => string;
-    let params: (string | string[])[];
-
     if (
       this.dexAdapterService.isDirectFunctionNameV6(priceRoute.contractMethod)
     ) {
-      ({ encoder, params } = await this._buildDirect(
+      const { encoder, params } = await this._buildDirect(
         priceRoute,
         minMaxAmount,
         _quotedAmount,
@@ -635,47 +663,55 @@ export class GenericSwapTransactionBuilder {
         permit || '0x',
         uuid,
         _beneficiary,
-      ));
-    } else {
-      ({ encoder, params } = await this._build(
-        priceRoute,
-        minMaxAmount,
-        _quotedAmount,
-        userAddress,
-        referrerAddress,
-        partnerAddress,
-        partnerFeePercent,
-        takeSurplus ?? false,
-        isCapSurplus ?? true,
-        isSurplusToUser ?? false,
-        isDirectFeeTransfer ?? false,
-        _beneficiary,
-        permit || '0x',
-        uuid,
-      ));
+      );
+
+      if (onlyParams) return params;
+
+      // TODO: Port direct TxObject assembly to buildDirectTransactionFromResolved.
+      const value = (
+        priceRoute.srcToken.toLowerCase() === ETHER_ADDRESS.toLowerCase()
+          ? BigInt(
+              priceRoute.side === SwapSide.SELL
+                ? priceRoute.srcAmount
+                : minMaxAmount,
+            )
+          : BigInt(0)
+      ).toString();
+
+      return {
+        from: userAddress,
+        to: this.dexAdapterService.dexHelper.config.data.augustusV6Address,
+        value,
+        data: encoder.apply(null, params),
+        gasPrice,
+        maxFeePerGas,
+        maxPriorityFeePerGas,
+      };
     }
 
-    if (onlyParams) return params;
+    const resolvedOutput = await this._build(
+      priceRoute,
+      minMaxAmount,
+      _quotedAmount,
+      userAddress,
+      referrerAddress,
+      partnerAddress,
+      partnerFeePercent,
+      takeSurplus ?? false,
+      isCapSurplus ?? true,
+      isSurplusToUser ?? false,
+      isDirectFeeTransfer ?? false,
+      _beneficiary,
+      permit || '0x',
+      uuid,
+      {
+        gasPrice,
+        maxFeePerGas,
+        maxPriorityFeePerGas,
+      },
+    );
 
-    const value = (
-      priceRoute.srcToken.toLowerCase() === ETHER_ADDRESS.toLowerCase()
-        ? BigInt(
-            priceRoute.side === SwapSide.SELL
-              ? priceRoute.srcAmount
-              : minMaxAmount,
-          )
-        : BigInt(0)
-    ).toString();
-
-    return {
-      from: userAddress,
-      to: this.dexAdapterService.dexHelper.config.data.augustusV6Address,
-      value,
-      data: encoder.apply(null, params),
-      gasPrice,
-      maxFeePerGas,
-      maxPriorityFeePerGas,
-    };
+    return onlyParams ? resolvedOutput.params : resolvedOutput.txObject;
   }
 
   private packPartnerAndFeeData({
@@ -848,41 +884,46 @@ export class GenericSwapTransactionBuilder {
   private async addDexExchangeApproveParams(
     bytecodeBuilder: ExecutorBytecodeBuilder,
     priceRoute: OptimalRate,
-    dexExchangeParams: DexExchangeParamWithBooleanNeedWrapNative[],
+    routePlan: RoutePlan,
+    resolvedLegs: ResolvedLeg[],
     maybeWethCallData?: DepositWithdrawReturn,
-  ): Promise<DexExchangeBuildParam[]> {
+  ): Promise<ResolvedLeg[]> {
     const spender = bytecodeBuilder.getAddress();
     const tokenTargetMapping: {
       params: [token: Address, target: Address, permit2: boolean];
-      exchangeParamIndex: number;
+      routePositionKey: string;
     }[] = [];
+    const resolvedLegByKey = this.buildResolvedLegMap(resolvedLegs);
 
-    let currentExchangeParamIndex = 0;
+    walkRoutePlan(routePlan).forEach(routePosition => {
+      const key = routePositionKey(routePosition);
+      const curResolvedLeg = resolvedLegByKey.get(key);
 
-    priceRoute.bestRoute.flatMap(route =>
-      route.swaps.flatMap(swap =>
-        swap.swapExchanges.map(async se => {
-          const curExchangeParam = dexExchangeParams[currentExchangeParamIndex];
-          const approveParams = bytecodeBuilder.getApprovalTokenAndTarget(
-            swap,
-            curExchangeParam,
-          );
+      if (!curResolvedLeg) {
+        throw new Error(`missing resolved leg for route position ${key}`);
+      }
 
-          if (approveParams) {
-            tokenTargetMapping.push({
-              params: [
-                approveParams.token,
-                approveParams.target,
-                !!curExchangeParam.permit2Approval,
-              ],
-              exchangeParamIndex: currentExchangeParamIndex,
-            });
-          }
+      const swap =
+        priceRoute.bestRoute[routePosition.routeIndex].swaps[
+          routePosition.swapIndex
+        ];
+      const curExchangeParam = curResolvedLeg.exchangeParam;
+      const approveParams = bytecodeBuilder.getApprovalTokenAndTarget(
+        swap,
+        curExchangeParam,
+      );
 
-          currentExchangeParamIndex++;
-        }),
-      ),
-    );
+      if (approveParams) {
+        tokenTargetMapping.push({
+          params: [
+            approveParams.token,
+            approveParams.target,
+            !!curExchangeParam.permit2Approval,
+          ],
+          routePositionKey: key,
+        });
+      }
+    });
 
     const approvals = this.skipApprovalCheck // used only for testing outdated price routes
       ? tokenTargetMapping.map(t => false)
@@ -891,50 +932,73 @@ export class GenericSwapTransactionBuilder {
           tokenTargetMapping.map(t => t.params),
         );
 
-    const dexExchangeBuildParams: DexExchangeBuildParam[] = [
-      ...dexExchangeParams,
-    ];
-
     approvals.forEach((alreadyApproved, index) => {
       if (!alreadyApproved) {
         const [token, target] = tokenTargetMapping[index].params;
-        const exchangeParamIndex = tokenTargetMapping[index].exchangeParamIndex;
-        const curExchangeParam = dexExchangeParams[exchangeParamIndex];
-        dexExchangeBuildParams[exchangeParamIndex] = {
-          ...curExchangeParam,
-          approveData: { token, target },
-        };
+        const key = tokenTargetMapping[index].routePositionKey;
+        const curResolvedLeg = resolvedLegByKey.get(key);
+
+        if (!curResolvedLeg) {
+          throw new Error(`missing resolved leg for route position ${key}`);
+        }
+
+        resolvedLegByKey.set(key, {
+          ...curResolvedLeg,
+          exchangeParam: {
+            ...curResolvedLeg.exchangeParam,
+            approveData: {
+              token: this.normalizeAddress(token),
+              target: this.normalizeAddress(target),
+            },
+          },
+        });
       }
     });
 
-    return dexExchangeBuildParams;
+    return resolvedLegs.map(resolvedLeg => {
+      const key = routePositionKey(resolvedLeg);
+      const curResolvedLeg = resolvedLegByKey.get(key);
+
+      if (!curResolvedLeg) {
+        throw new Error(`missing resolved leg for route position ${key}`);
+      }
+
+      return curResolvedLeg;
+    });
   }
 
   private hasAnyRouteWithEthAndDifferentNeedWrapNative(
-    priceRoute: OptimalRate,
-    exchangeParams: DexExchangeParamWithBooleanNeedWrapNative[],
+    routePlan: RoutePlan,
+    resolvedLegs: ResolvedLeg[],
   ) {
     const eth = ETHER_ADDRESS.toLowerCase();
     const weth =
       this.dexAdapterService.dexHelper.config.data.wrappedNativeTokenAddress.toLowerCase();
+    const resolvedLegByKey = this.buildResolvedLegMap(resolvedLegs);
 
-    let currentExchangeParamIndex = 0;
+    return !routePlan.routes.every((route, routeIndex) => {
+      const swapExchangeParams: DexExchangeBuildParam[] = [];
 
-    return !priceRoute.bestRoute.every(route => {
-      const swapExchangeParams: DexExchangeParamWithBooleanNeedWrapNative[] =
-        [];
+      route.swaps.forEach((swap, swapIndex) => {
+        swap.swapExchanges.forEach((_swapExchange, swapExchangeIndex) => {
+          const key = routePositionKey({
+            routeIndex,
+            swapIndex,
+            swapExchangeIndex,
+          });
+          const curResolvedLeg = resolvedLegByKey.get(key);
 
-      route.swaps.forEach(swap => {
-        swap.swapExchanges.forEach(se => {
-          const curExchangeParam = exchangeParams[currentExchangeParamIndex];
-          currentExchangeParamIndex++;
+          if (!curResolvedLeg) {
+            throw new Error(`missing resolved leg for route position ${key}`);
+          }
+
           if (
             swap.destToken.toLowerCase() === weth ||
             swap.destToken.toLowerCase() === eth ||
             swap.srcToken.toLowerCase() === weth ||
             swap.srcToken.toLowerCase() === eth
           ) {
-            swapExchangeParams.push(curExchangeParam);
+            swapExchangeParams.push(curResolvedLeg.exchangeParam);
           }
         });
       });
@@ -944,5 +1008,71 @@ export class GenericSwapTransactionBuilder {
         swapExchangeParams.every(p => p.needWrapNative === false)
       );
     });
+  }
+
+  private buildResolvedLegMap(
+    resolvedLegs: ResolvedLeg[],
+  ): Map<string, ResolvedLeg> {
+    return new Map(
+      resolvedLegs.map(resolvedLeg => [
+        routePositionKey(resolvedLeg),
+        resolvedLeg,
+      ]),
+    );
+  }
+
+  private normalizeDexExchangeBuildParam(
+    exchangeParam: DexExchangeBuildParam,
+  ): DexExchangeBuildParam {
+    return {
+      ...exchangeParam,
+      targetExchange: this.normalizeAddress(exchangeParam.targetExchange),
+      wethAddress:
+        exchangeParam.wethAddress === undefined
+          ? undefined
+          : this.normalizeAddress(exchangeParam.wethAddress),
+      transferSrcTokenBeforeSwap:
+        exchangeParam.transferSrcTokenBeforeSwap === undefined
+          ? undefined
+          : this.normalizeAddress(exchangeParam.transferSrcTokenBeforeSwap),
+      spender:
+        exchangeParam.spender === undefined
+          ? undefined
+          : this.normalizeAddress(exchangeParam.spender),
+      approveData:
+        exchangeParam.approveData === undefined
+          ? undefined
+          : {
+              token: this.normalizeAddress(exchangeParam.approveData.token),
+              target: this.normalizeAddress(exchangeParam.approveData.target),
+            },
+    };
+  }
+
+  private normalizeWethPlan(
+    wethPlan?: DepositWithdrawReturn,
+  ): DepositWithdrawReturn | undefined {
+    if (!wethPlan) return undefined;
+
+    return {
+      deposit:
+        wethPlan.deposit === undefined
+          ? undefined
+          : {
+              ...wethPlan.deposit,
+              callee: this.normalizeAddress(wethPlan.deposit.callee),
+            },
+      withdraw:
+        wethPlan.withdraw === undefined
+          ? undefined
+          : {
+              ...wethPlan.withdraw,
+              callee: this.normalizeAddress(wethPlan.withdraw.callee),
+            },
+    };
+  }
+
+  private normalizeAddress(address: Address): Address {
+    return address.toLowerCase();
   }
 }

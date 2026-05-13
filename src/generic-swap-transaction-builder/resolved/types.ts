@@ -100,4 +100,9 @@ export type DirectBuildInput = ResolvedDirectCall & {
   gas?: GasInput;
 };
 
-export type BuildOutput = TxObject;
+export type ResolvedBuildOutput = {
+  params: (string | string[])[];
+  txObject: TxObject;
+};
+
+export type BuildOutput = ResolvedBuildOutput;
