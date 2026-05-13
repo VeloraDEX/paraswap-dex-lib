@@ -15,14 +15,21 @@ resolved-build boundary described in:
 - `GenericSwapTransactionBuilder.build()` is still the public API and already
   owns input defaults, direct/generic routing, `onlyParams`, transaction
   `value`, and gas fields.
-- `_build()` currently owns executor selection, executor bytecode generation,
-  `partnerAndFee`, generic Augustus V6 params, and generic V6 calldata encoding.
-- `buildCalls()` currently mixes DEX param resolution, `needWrapNative`
-  function resolution, normalized per-leg amounts/tokens, WETH planning,
-  approval enrichment, and executor bytecode construction.
+- Phase 2 changed the generic `_build()` path into orchestration only:
+  executor selection, `RoutePlan` conversion, resolved-leg construction,
+  `BuildInput` construction, and dependency passing to
+  `buildTransactionFromResolved()`.
+- `buildTransactionFromResolved()` now owns generic executor bytecode encoding,
+  generic Augustus V6 params, `partnerAndFee`, permit passthrough, transaction
+  `value`, and gas fields for the four generic V6 executor methods.
+- `buildResolvedCalls()` owns DEX param resolution, function-typed
+  `needWrapNative` resolution, normalized per-leg amounts/tokens, WETH
+  planning, and approval enrichment. It returns `ResolvedLeg[]` plus `wethPlan`
+  and no longer builds executor bytecode directly.
 - `_buildDirect()` delegates direct V6 param construction to DEX-specific
-  `getDirectParamV6()` implementations. Direct swaps should remain outside
-  phase 1 except for type shape notes.
+  `getDirectParamV6()` implementations. Direct swaps remain outside the
+  resolved boundary after phase 2; the direct `TxObject` assembly in `build()`
+  is intentionally duplicated until the direct boundary phase.
 - Phase 1 implementation note: current `OptimalSwap` objects do not carry
   swap-level `srcAmount`/`destAmount` fields. `buildRoutePlan()` preserves any
   such fields if present and otherwise derives swap-level amounts by summing
@@ -30,11 +37,14 @@ resolved-build boundary described in:
   copied unchanged.
 - `Executor01BytecodeBuilder`, `Executor02BytecodeBuilder`, and
   `Executor03BytecodeBuilder` still consume `OptimalRate` plus a flat
-  `DexExchangeBuildParam[]`. The first implementation should not refactor these
-  builders yet. A later phase can replace the compatibility adapter with a
-  route-plan-native bytecode path.
+  `DexExchangeBuildParam[]`. Phase 2 added an internal executor-compatible
+  `OptimalRate` adapter in the resolved boundary. A later phase can replace the
+  compatibility adapter with a route-plan-native bytecode path.
 - Existing executor snapshot fixtures under `src/executor/fixtures/` already
-  cover useful route shapes and can be reused for route-plan conversion tests.
+  cover useful Executor01 and Executor02 route shapes and can be reused for
+  generic parity tests. There is currently no `executor03` or WETH-only fixture
+  folder under `src/executor/fixtures/`; phase 3 should add focused fixtures or
+  test-local inputs for those paths.
 - Jest only auto-runs tests under `tests/**` and `src/(dex|lib|executor)/**`.
   New resolved-boundary tests should go under `tests/generic-swap-transaction-builder/`.
 
@@ -380,6 +390,255 @@ comparison checks the intended contract rather than incidental checksum casing.
 - Existing Phase 1 route-plan tests still pass.
 - TypeScript compilation and source lint pass.
 
+## Phase 3 Scope
+
+Phase 3 means checkpoint 3 from `implementation.md`: expand generic resolved
+boundary parity to Executor01, Executor02, Executor03, and WETH routes.
+
+The goal is to prove the phase 2 boundary holds across the executor families and
+route shapes that the future Go boundary must preserve. The existing public
+`GenericSwapTransactionBuilder.build()` API remains the entrypoint. Direct V6
+methods still use `_buildDirect()`. DEX lookup, remote DEX params, WETH
+decisioning, and approval checks still happen before the resolved boundary.
+
+### In Scope
+
+- Broaden generic parity coverage beyond the phase 2 Executor01 simple SELL
+  fixture.
+- Cover representative generic executor paths:
+  - Executor01 simple and multiswap SELL
+  - Executor02 vertical branch SELL
+  - Executor02 multiswap and/or mega swap SELL
+  - Executor03 BUY
+  - WETH-only ETH -> WETH route
+- Cover approval-present and approval-missing behavior with deterministic
+  approval decisions, not chain state.
+- Cover WETH deposit and withdraw plans with precomputed WETH calldata.
+- Add reusable test helpers for building public-builder parity inputs from
+  route/exchange-param fixtures.
+- Keep comparing both public builder surfaces:
+  - full `TxObject`
+  - `onlyParams` array
+- Keep the phase 2 resolved boundary return shape and explicit temporary deps.
+
+### Out Of Scope
+
+- Do not port direct swaps to `DirectBuildInput` yet.
+- Do not implement `buildDirectTransactionFromResolved()` yet.
+- Do not remove the phase 2 `ResolvedBuildDeps` dependency seam yet.
+- Do not replace executor builders with a pure encoding context yet.
+- Do not refactor executor builders away from `IDexHelper` yet.
+- Do not fix pre-existing executor snapshot test TypeScript failures unless
+  phase 3 explicitly chooses to rely on those snapshot suites.
+- Do not generate the complete Go contract fixture suite yet.
+- Do not add a Go module.
+
+## Phase 3 Design Details
+
+### Current Baseline
+
+Phase 2 already routes all non-direct generic V6 builds through
+`buildTransactionFromResolved()`. The boundary validates serialized input,
+reconstructs flat exchange params by `RoutePlan` position, builds a temporary
+executor-compatible `OptimalRate`, and returns `{ params, txObject }`.
+
+Phase 2 test coverage is intentionally narrow:
+
+- one Executor01 simple SELL public-builder parity test
+- method allowlisting and param assembly for the four generic V6 executor
+  methods
+- boundary validation error tests
+
+Phase 3 should not rewrite this architecture. It should primarily harden it by
+adding route-shape coverage and fixing any parity gaps those tests expose.
+
+Current local baseline notes:
+
+- `yarn jest src/executor/executor01-bytecode-builder-snapshot.test.ts src/executor/executor02-bytecode-builder-snapshot.test.ts --runInBand`
+  currently fails before running tests because the snapshot suites cast fixture
+  exchange params to `DexExchangeParam[]`, while `buildByteCode()` now expects
+  `DexExchangeBuildParam[]` with boolean `needWrapNative`. Phase 3 should either
+  fix those snapshot test casts as a separate pre-task or avoid treating the
+  snapshot command as a blocking phase-3 check.
+- Existing Executor02 JSON fixtures under `src/executor/fixtures/executor02/`
+  all have `bestRoute.length === 1`. Phase 3 should explicitly choose
+  multiswap-only coverage for Executor02 or add a focused mega-swap fixture.
+- Direct-path `TxObject` assembly remains duplicated in `build()` until the
+  direct-boundary phase. Phase 3 should not clean it up except for comments or
+  documentation.
+
+### Parity Matrix
+
+Use existing fixture files where possible. Proposed minimum matrix:
+
+| Executor   | Scenario                            | Candidate fixture(s)                                                                                                                  | Notes                                                                                                                                     |
+| ---------- | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| Executor01 | simple SELL, approval present       | `src/executor/fixtures/executor01/routes/price-route-simpleSwap-univ3-usdc-usdt.json`                                                 | Already covered in phase 2; keep as the baseline.                                                                                         |
+| Executor01 | simple ETH/WETH deposit or withdraw | `price-route-simpleSwap-univ3-eth-usdc.json`, `price-route-simpleSwap-univ3-usdc-eth.json` plus matching `maybe-weth-calldata/` files | Proves WETH plan passthrough and transaction `value`.                                                                                     |
+| Executor01 | multiswap SELL                      | `price-route-multiswap-sushiv3-usdc-eth-wbtc.json` or `price-route-multiswap-sushiv3-usdt-usdc-dai.json`                              | Proves nested route traversal and flat exchange-param reconstruction.                                                                     |
+| Executor01 | approval missing                    | Any non-ETH Executor01 route with `hasApprovals()` mocked false                                                                       | Expected boundary input must include `approveData`; compare calldata and `onlyParams`.                                                    |
+| Executor02 | vertical branch SELL                | `src/executor/fixtures/executor02/routes/price-route-simpleSwap-sushiv3-balancerv1-eth-usdc.json`                                     | Proves same-swap parallel branches.                                                                                                       |
+| Executor02 | multiswap SELL                      | `price-route-multiswap-univ3-usdt-dai-eth.json` or `price-route-multiswap-curvev1-univ3-dai-usdc-eth.json`                            | Proves multi-step branch traversal and WETH withdraw paths.                                                                               |
+| Executor02 | mega swap SELL                      | Add a focused fixture only if phase 3 chooses mega coverage                                                                           | Existing Executor02 fixtures are single-route; otherwise explicitly defer mega to a later phase.                                          |
+| Executor03 | BUY                                 | Add focused test-local BUY route data in the resolved-boundary tests                                                                  | No Executor03 JSON fixtures exist today; defer `src/executor/fixtures/executor03/` until there is an executor snapshot suite to share it. |
+| WETH       | single ETH -> WETH route            | Add a focused test-local WETH-only route with one `Weth` swap exchange                                                                | `WETHBytecodeBuilder.buildByteCode()` returns `0x`; assert `output.params[4] === '0x'`, executor address, and transaction value.          |
+
+If a listed fixture is stale or does not pass current executor snapshot
+behavior, prefer creating a smaller focused fixture over weakening the parity
+assertions.
+
+### Test Helper Shape
+
+Add a reusable helper in
+`tests/generic-swap-transaction-builder/resolved/build-transaction.test.ts` or
+a sibling test utility. It should accept:
+
+- `priceRoute`
+- flat `exchangeParams`
+- optional `maybeWethCallData`
+- `contractMethod`
+- `minMaxAmount`
+- `quotedAmount`
+- approval decision function, e.g. `(pairs) => boolean[]`
+- optional gas fields
+
+The helper should:
+
+- mock `DexAdapterService.isDirectFunctionNameV6()` as false
+- mock `getTxBuilderDexByKey()` by exchange name and return fixture
+  `exchangeParams` in route-position order
+- mock WETH `getDepositWithdrawParam()` to return the precomputed
+  `maybe-weth-calldata/*.json` payload when a route requires `wethPlan`
+- mock `augustusApprovals.hasApprovals()` from the provided approval decision
+  function with `mockImplementation((_spender, pairs) => decisionFn(pairs))`
+- build the expected `BuildInput` with lowercase boundary addresses
+- compare public `builder.build()` output to
+  `buildTransactionFromResolved(input, deps)` for both normal tx and
+  `onlyParams`
+- provide a `buildTestPriceRoute(partial): OptimalRate` helper for hand-rolled
+  Executor03 and WETH-only routes; it should fill required placeholders such as
+  `srcDecimals`, `destDecimals`, `srcUSD`, `destUSD`, `gasCost`, `gasCostUSD`,
+  `hmac`, `tokenTransferProxy`, `partnerFee`, and `version`
+
+Do not rely on RPC, live approvals, or the remote new-dex API in phase 3 tests.
+
+### Approval Coverage
+
+Phase 2 only covers approval-present behavior. Phase 3 should add at least one
+approval-missing parity case where `hasApprovals()` returns false for the
+approval pair(s). The expected `ResolvedLeg.exchangeParam.approveData` must be
+present, and the final executor bytecode must be compared byte-for-byte through
+the outer Augustus calldata.
+
+For multi-leg routes, avoid fixed-length approval mocks. Return one boolean per
+requested approval pair so later fixture expansion does not silently mismatch
+the approval count.
+
+### WETH Coverage
+
+Phase 3 should cover both ordinary executor WETH plans and the WETH-only
+executor:
+
+- ordinary WETH plan: Executor01 or Executor02 route with existing
+  `maybe-weth-calldata` fixture; compare deposit/withdraw calldata passthrough
+  and transaction value
+- WETH-only route: route detected as `Executors.WETH` by `isSingleWrapRoute()`;
+  set `priceRoute.network` to a supported WETH executor network (`MAINNET`,
+  `AVALANCHE`, `BSC`, `BASE`, `POLYGON`, `OPTIMISM`, `GNOSIS`, `UNICHAIN`, or
+  `SONIC`), verify `executorAddress` is the wrapped native token address,
+  assert the executor-data params entry (`output.params[4]`) is `0x`, and verify
+  transaction value equals the sell source amount
+
+If WETH-only orchestration exposes that `buildResolvedCalls()` still expects a
+DEX param for the `Weth` leg, keep the fix narrowly scoped to preserving current
+public build behavior and document the resulting resolved input shape here.
+
+### Executor03 Notes
+
+Executor03 can reorder exchange params internally by `needWrapNative`. Phase 3
+tests should compare final public outputs, not intermediate flat array order.
+Resolved legs must still be keyed by route position, and the boundary must still
+reconstruct the executor input by walking `RoutePlan`.
+
+Because there are no current `src/executor/fixtures/executor03/` JSON fixtures,
+phase 3 should keep the BUY route data test-local to the resolved-boundary
+tests. Defer a shared `src/executor/fixtures/executor03/` directory until an
+Executor03 snapshot suite exists and can reuse it.
+
+### Compatibility Adapter Watchpoints
+
+The phase 2 compatibility adapter sets only serialized fields needed by current
+executor builders. During phase 3, if Executor02, Executor03, or WETH requires
+a field missing from `BuildInput`/`RoutePlan`, add that serializable field
+explicitly to the boundary type and update phase 1 route-plan tests. Do not hide
+missing fields with broad `as unknown as OptimalRate` casts.
+
+## Phase 3 Tasks
+
+| Status | Task                                  | Notes                                                                                                                                                                                        |
+| ------ | ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Done   | Review phase 2 baseline               | Confirmed phase 2 boundary, helper names, validation, and the Executor01 simple public-builder parity test before broadening fixtures.                                                       |
+| Done   | Decide executor snapshot baseline     | Kept executor snapshot suites out of phase-3 blocking checks because they still fail to compile on fixture casts to `DexExchangeParam[]`.                                                    |
+| Done   | Add reusable parity helper            | Added a table-capable helper that builds expected `BuildInput`, mocks DEX params/WETH/approvals, provides `buildTestPriceRoute(partial)`, and compares both `TxObject` and `onlyParams`.     |
+| Done   | Add Executor01 simple WETH cases      | Covered ETH -> USDC deposit and USDC -> ETH withdraw routes using existing Executor01 WETH calldata fixtures.                                                                                |
+| Done   | Add Executor01 multiswap parity       | Covered `price-route-multiswap-sushiv3-usdc-eth-wbtc.json` and verified multi-swap route-position traversal through parity.                                                                  |
+| Done   | Add approval-missing parity           | Mocked `hasApprovals()` false for the Executor01 USDC -> USDT route and asserted resolved `approveData` is injected while final calldata stays in parity.                                    |
+| Done   | Add Executor02 vertical branch parity | Covered `price-route-simpleSwap-sushiv3-balancerv1-eth-usdc.json` with three same-swap branches.                                                                                             |
+| Done   | Add Executor02 multiswap parity       | Covered `price-route-multiswap-univ3-usdt-dai-eth.json` with existing WETH calldata.                                                                                                         |
+| Done   | Decide Executor02 mega coverage       | Deferred mega coverage; current Executor02 fixtures all have `bestRoute.length === 1`, so adding mega would require a new authored fixture.                                                  |
+| Done   | Add Executor03 BUY parity             | Added a focused test-local BUY route derived from the simple USDC -> USDT fixture and forced through Executor03 with `swapExactAmountOut`.                                                   |
+| Done   | Add WETH-only parity                  | Added a supported MAINNET ETH -> WETH route detected as `Executors.WETH`; verified wrapped-native executor address, `output.params[4] === '0x'`, tx value, and params parity.                |
+| Done   | Update docs with fixture outcomes     | Fixture choices, WETH-only behavior, no-new-field outcome, and deferred mega coverage are recorded below.                                                                                    |
+| Done   | Run checks                            | `yarn jest tests/generic-swap-transaction-builder/resolved --runInBand`, `yarn check:tsc`, and `yarn check:es` pass. Snapshot suites remain non-blocking due the pre-existing cast baseline. |
+
+### Phase 3 Completion Notes
+
+- Added a reusable resolved-boundary parity helper in
+  `tests/generic-swap-transaction-builder/resolved/build-transaction.test.ts`.
+  It builds explicit `BuildInput` values, mocks DEX params, mocks WETH
+  deposit/withdraw payloads, derives approval decisions from the observed
+  approval pairs, and compares both full `TxObject` output and `onlyParams`.
+- Executor01 parity now covers:
+  - simple USDC -> USDT SELL with approvals present
+  - ETH -> USDC WETH deposit
+  - USDC -> ETH WETH withdraw
+  - multiswap `price-route-multiswap-sushiv3-usdc-eth-wbtc.json`
+  - approval-missing USDC -> USDT with injected `approveData`
+- Executor02 parity now covers:
+  - vertical branch `price-route-simpleSwap-sushiv3-balancerv1-eth-usdc.json`
+  - multiswap `price-route-multiswap-univ3-usdt-dai-eth.json`
+- Executor03 BUY parity uses a focused test-local route derived from the simple
+  USDC -> USDT fixture and forced through `swapExactAmountOut`.
+- WETH-only parity uses a focused MAINNET ETH -> WETH route with a `Weth` leg;
+  it verifies `Executors.WETH`, wrapped-native executor address,
+  `output.params[4] === '0x'`, transaction `value`, and `onlyParams` parity.
+- No new serializable `BuildInput` or `RoutePlan` fields were needed.
+- Executor02 mega coverage is intentionally deferred because the existing
+  Executor02 fixture set has only single-route price routes. Adding mega
+  coverage requires authoring a new `bestRoute.length > 1` fixture, and should
+  be carried into a later parity/backlog phase when that fixture exists.
+
+## Phase 3 Acceptance Criteria
+
+- Generic `GenericSwapTransactionBuilder.build()` still routes through
+  `buildTransactionFromResolved()` for non-direct V6 methods.
+- Direct V6 methods still use `_buildDirect()`.
+- Public builder parity is proven for Executor01, Executor02, Executor03, and
+  WETH-only routes.
+- At least one approval-present and one approval-missing route are covered.
+- At least one WETH deposit/withdraw plan is covered.
+- WETH-only route produces `0x` executor data and correct transaction `value`.
+- `onlyParams` parity is checked for every phase 3 route fixture.
+- No DEX lookup, remote HTTP, WETH decisioning, or approval checking is added
+  inside `buildTransactionFromResolved()`.
+- Any new fields required by executor compatibility are added explicitly to
+  `BuildInput`/`RoutePlan` and documented here.
+- If phase 3 adds or changes shared `src/executor/fixtures/`, relevant executor
+  snapshot tests must compile and pass; otherwise shared fixture changes should
+  be deferred.
+- Existing phase 1 route-plan and phase 2 simple parity tests still pass.
+- TypeScript compilation and source lint pass.
+
 ## Suggested Test Commands
 
 Phase 1:
@@ -395,4 +654,19 @@ Phase 2:
 yarn jest tests/generic-swap-transaction-builder/resolved --runInBand
 yarn check:tsc
 yarn check:es
+```
+
+Phase 3:
+
+```bash
+yarn jest tests/generic-swap-transaction-builder/resolved --runInBand
+yarn check:tsc
+yarn check:es
+```
+
+Optional phase 3 snapshot check after fixing the pre-existing snapshot fixture
+cast baseline:
+
+```bash
+yarn jest src/executor/executor01-bytecode-builder-snapshot.test.ts src/executor/executor02-bytecode-builder-snapshot.test.ts --runInBand
 ```
