@@ -29,45 +29,47 @@ When making fixes based on code review comments or feedback, add a concise descr
 
 ## Common Commands
 
+Package manager: **pnpm** (pinned via `packageManager` in `package.json`, activated by corepack which ships with Node 22). Run `corepack enable` once locally if `pnpm` isn't yet on your PATH.
+
 ### Installation
 
 ```bash
-yarn install
+pnpm install
 ```
 
 ### Building
 
 ```bash
-yarn build              # Run prettier, eslint, and compile TypeScript
-yarn watch              # Watch mode for development
-yarn check:tsc          # TypeScript compilation check only
-yarn check:es           # ESLint check only
-yarn check:pq           # Prettier check only
-yarn checks             # Run all checks (prettier, tsc, eslint)
+pnpm build              # Run prettier, eslint, and compile TypeScript
+pnpm watch              # Watch mode for development
+pnpm check:tsc          # TypeScript compilation check only
+pnpm check:es           # ESLint check only
+pnpm check:pq           # Prettier check only
+pnpm checks             # Run all checks (prettier, tsc, eslint)
 ```
 
 ### Testing
 
 ```bash
 # Run all tests
-yarn test
+pnpm test
 
 # Run integration-specific tests (includes integration, events, and e2e tests)
-yarn test-integration <dex-name>
+pnpm test-integration <dex-name>
 
 # Run a single test file
-yarn test <path-to-test-file>
+pnpm test <path-to-test-file>
 
 # Examples:
-yarn test src/dex/uniswap-v3/uniswap-v3-integration.test.ts
-yarn test src/dex/curve-v1/curve-v1-events.test.ts
+pnpm test src/dex/uniswap-v3/uniswap-v3-integration.test.ts
+pnpm test src/dex/curve-v1/curve-v1-events.test.ts
 ```
 
 ### DEX Integration
 
 ```bash
 # Initialize a new DEX integration (creates template code)
-yarn init-integration <your-dex-name>
+pnpm init-integration <your-dex-name>
 ```
 
 DEX names must be in `param-case` format. After initialization, add the DEX to the `Dexes` array in `src/dex/index.ts`.

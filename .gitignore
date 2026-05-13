@@ -1,7 +1,7 @@
 node_modules
 .DS_Store
 build/
-yarn-error.log
+pnpm-debug.log
 .env*
 !.env.example
 !.env.sample
@@ -13,6 +13,7 @@ tests/configs.json
 local-scripts
 tests/debug-price-route.json
 .husky/.git-secrets-installed
+.claude/
 
 # Rust / NAPI-RS native addon
 native/target/

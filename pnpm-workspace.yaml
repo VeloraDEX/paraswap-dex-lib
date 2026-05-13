@@ -1,0 +1,22 @@
+# pnpm v11+ reads all non-auth/registry settings from here instead of
+# `.npmrc` and the `pnpm` field in package.json (both of which it
+# previously honoured). Even single-package projects use this file —
+# it's not workspace-specific despite the name.
+
+autoInstallPeers: true
+
+# Native modules / packages that ship install or postinstall scripts
+# pnpm v11 blocks by default. Allowlisted here so `pnpm install`
+# doesn't error with ERR_PNPM_IGNORED_BUILDS.
+allowBuilds:
+  bufferutil: true
+  es5-ext: false
+  husky: true
+  keccak: true
+  protobufjs: true
+  secp256k1: true
+  unrs-resolver: true
+  utf-8-validate: true
+  web3: true
+  web3-bzz: true
+  web3-shh: true
