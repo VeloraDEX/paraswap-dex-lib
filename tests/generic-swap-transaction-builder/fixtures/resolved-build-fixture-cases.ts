@@ -9,7 +9,9 @@ import path from 'path';
 import { ETHER_ADDRESS, Network, NULL_ADDRESS } from '../../../src/constants';
 import type { DexAdapterService } from '../../../src/dex';
 import type { DepositWithdrawReturn } from '../../../src/dex/weth/types';
-import type { ExecutorBytecodeBuilder } from '../../../src/executor/ExecutorBytecodeBuilder';
+import { getApprovalTokenAndTarget } from '../../../src/executor/approval';
+import { createExecutorEncodingContextFromDexHelper } from '../../../src/executor/encoding-context';
+import type { ExecutorEncodingContext } from '../../../src/executor/encoding-types';
 import { Executors } from '../../../src/executor/types';
 import { GenericSwapTransactionBuilder } from '../../../src/generic-swap-transaction-builder';
 import {
@@ -1177,7 +1179,6 @@ function buildExpectedInput({
   gas,
   dexHelper,
   builder,
-  bytecodeBuilder,
   executorType,
   exchangeParams,
   maybeWethCallData,
@@ -1190,7 +1191,6 @@ function buildExpectedInput({
   gas: BuildInput['gas'];
   dexHelper: ReturnType<typeof buildDexHelper>;
   builder: GenericSwapTransactionBuilder;
-  bytecodeBuilder: ExecutorBytecodeBuilder;
   executorType: Executors;
   exchangeParams: DexExchangeBuildParam[];
   maybeWethCallData?: DepositWithdrawReturn;
@@ -1199,6 +1199,8 @@ function buildExpectedInput({
 }): ExpectedInputResult {
   const routePlan = buildRoutePlan(priceRoute);
   const routePositions = walkRoutePlan(routePlan);
+  const encodingContext = createExecutorEncodingContextFromDexHelper(dexHelper);
+  const executorAddress = encodingContext.executorsAddresses[executorType];
 
   if (exchangeParams.length !== routePositions.length) {
     throw new Error('exchange params length must match route positions');
@@ -1221,7 +1223,7 @@ function buildExpectedInput({
           swapExchange,
           minMaxAmount,
           exchangeParam.needWrapNative,
-          bytecodeBuilder.getAddress(),
+          executorAddress,
         );
 
       return {
@@ -1238,7 +1240,7 @@ function buildExpectedInput({
     },
   );
   const approvalResult = addApprovalData({
-    bytecodeBuilder,
+    encodingContext,
     priceRoute,
     routePlan,
     resolvedLegs: resolvedLegsWithoutApprovals,
@@ -1267,7 +1269,7 @@ function buildExpectedInput({
       resolvedLegs: approvalResult.resolvedLegs,
       wethPlan: normalizeWethPlan(maybeWethCallData),
       executorType,
-      executorAddress: normalizeAddress(bytecodeBuilder.getAddress()),
+      executorAddress: normalizeAddress(executorAddress),
       augustusV6Address: normalizeAddress(
         dexHelper.config.data.augustusV6Address!,
       ),
@@ -1295,13 +1297,13 @@ function buildExpectedInput({
 }
 
 function addApprovalData({
-  bytecodeBuilder,
+  encodingContext,
   priceRoute,
   routePlan,
   resolvedLegs,
   approvalDecision,
 }: {
-  bytecodeBuilder: ExecutorBytecodeBuilder;
+  encodingContext: ExecutorEncodingContext;
   priceRoute: OptimalRate;
   routePlan: BuildInput['routePlan'];
   resolvedLegs: ResolvedLeg[];
@@ -1331,9 +1333,10 @@ function addApprovalData({
       priceRoute.bestRoute[routePosition.routeIndex].swaps[
         routePosition.swapIndex
       ];
-    const approveParams = bytecodeBuilder.getApprovalTokenAndTarget(
+    const approveParams = getApprovalTokenAndTarget(
       swap,
       resolvedLeg.exchangeParam,
+      encodingContext,
     );
 
     if (approveParams) {

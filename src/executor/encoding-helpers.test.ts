@@ -8,7 +8,6 @@ import {
   createNoopExecutorEncodingLogger,
 } from './encoding-context';
 import type { ResolvedLeg, RoutePlan, RoutePosition } from './encoding-types';
-import { Executor01BytecodeBuilder } from './Executor01BytecodeBuilder';
 import {
   Executor03BytecodeBuilder,
   type Executor03SingleSwapCallDataParams,
@@ -277,41 +276,49 @@ describe('executor encoding helpers', () => {
   });
 
   describe('getApprovalTokenAndTarget', () => {
-    it('matches the current executor builder approval behavior', () => {
+    it('returns the expected approval token and target', () => {
       const dexHelper = createMixedCaseDexHelper();
       const context = createExecutorEncodingContextFromDexHelper(dexHelper);
-      const builder = new Executor01BytecodeBuilder(context);
 
       const cases: ApprovalCase[] = [
         {
           name: 'default non-ETH source',
           srcToken: TOKEN_A,
           exchangeParam: {},
+          expected: { token: TOKEN_A, target: TARGET_EXCHANGE },
         },
         {
           name: 'skip approval',
           srcToken: TOKEN_A,
           exchangeParam: { skipApproval: true },
+          expected: null,
         },
         {
           name: 'skip approval short-circuits wrap logic',
           srcToken: ETHER_ADDRESS,
           exchangeParam: { skipApproval: true, needWrapNative: true },
+          expected: null,
         },
         {
           name: 'WETH source unwrapped before DEX call',
           srcToken: context.wrappedNativeTokenAddress,
           exchangeParam: { needUnwrapNative: true },
+          expected: null,
         },
         {
           name: 'non-WETH source with unwrap flag falls through',
           srcToken: TOKEN_A,
           exchangeParam: { needUnwrapNative: true },
+          expected: { token: TOKEN_A, target: TARGET_EXCHANGE },
         },
         {
           name: 'ETH source wrapped before DEX call',
           srcToken: ETHER_ADDRESS,
           exchangeParam: { needWrapNative: true },
+          expected: {
+            token: context.wrappedNativeTokenAddress,
+            target: TARGET_EXCHANGE,
+          },
         },
         {
           name: 'ETH source wrapped with custom WETH address',
@@ -320,6 +327,7 @@ describe('executor encoding helpers', () => {
             needWrapNative: true,
             wethAddress: CUSTOM_WETH_ADDRESS,
           },
+          expected: { token: CUSTOM_WETH_ADDRESS, target: TARGET_EXCHANGE },
         },
         {
           name: 'ETH source wrapped with transfer before swap',
@@ -328,26 +336,29 @@ describe('executor encoding helpers', () => {
             needWrapNative: true,
             transferSrcTokenBeforeSwap: TRANSFER_TARGET,
           },
+          expected: {
+            token: context.wrappedNativeTokenAddress,
+            target: TARGET_EXCHANGE,
+          },
         },
         {
           name: 'source token transferred before swap',
           srcToken: TOKEN_A,
           exchangeParam: { transferSrcTokenBeforeSwap: TRANSFER_TARGET },
+          expected: null,
         },
         {
           name: 'custom spender',
           srcToken: TOKEN_A,
           exchangeParam: { spender: SPENDER },
+          expected: { token: TOKEN_A, target: SPENDER },
         },
       ];
 
-      cases.forEach(({ name, srcToken, exchangeParam }) => {
-        const swap = { srcToken } as Parameters<
-          Executor01BytecodeBuilder['getApprovalTokenAndTarget']
-        >[0];
+      cases.forEach(({ name, srcToken, exchangeParam, expected }) => {
+        const swap = { srcToken };
         const buildParam = buildExchangeParam(exchangeParam);
         const result = getApprovalTokenAndTarget(swap, buildParam, context);
-        const expected = builder.getApprovalTokenAndTarget(swap, buildParam);
 
         expect({ name, result }).toEqual({ name, result: expected });
       });
@@ -398,6 +409,7 @@ type ApprovalCase = {
   name: string;
   srcToken: Address;
   exchangeParam: ExchangeParamOverrides;
+  expected: { target: Address; token: Address } | null;
 };
 
 type ExchangeParamOverrides = Partial<

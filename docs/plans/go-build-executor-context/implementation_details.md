@@ -363,6 +363,34 @@ yarn check:es
 
 No committed fixture JSON should change.
 
+### Status
+
+Completed on 2026-05-14.
+
+- `ResolvedBuildDeps` now carries `encodingContext` instead of a prebuilt
+  bytecode builder. `buildTransactionFromResolved()` validates
+  `input.executorAddress` against
+  `encodingContext.executorsAddresses[input.executorType]`, validates
+  `input.network`, `input.augustusV6Address`, and
+  `input.wrappedNativeTokenAddress` against the same context, creates the
+  executor builder with `createExecutorBytecodeBuilder()`, and passes
+  `ExecutorBytecodeBuildInput` directly to `buildByteCode()`.
+- `GenericSwapTransactionBuilder` now passes the selected executor address and
+  encoding context through resolved-call construction. Approval enrichment uses
+  the pure `getApprovalTokenAndTarget()` helper and the selected executor
+  address as the Augustus approval spender.
+- Fixture helpers and resolved-boundary tests now create `ResolvedBuildDeps`
+  from an encoding context. The legacy
+  `ExecutorBytecodeBuilder.getApprovalTokenAndTarget()` method was removed.
+- Acceptance commands passed:
+  - `yarn check:tsc`
+  - `yarn jest tests/generic-swap-transaction-builder/resolved --runInBand`
+  - `yarn jest src/executor/encoding-helpers.test.ts --runInBand`
+  - `yarn fixtures:check`
+  - `yarn jest src/executor/executor01-bytecode-builder-snapshot.test.ts src/executor/executor02-bytecode-builder-snapshot.test.ts --runInBand`
+  - `yarn check:es`
+- No committed fixture JSON or executor snapshots changed.
+
 ## Phase 5: Final Verification And Documentation
 
 ### Goal

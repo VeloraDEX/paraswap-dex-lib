@@ -32,10 +32,9 @@ import { DexAdapterService } from './dex';
 import { Weth } from './dex/weth/weth';
 import ERC20ABI from './abi/erc20.json';
 import { ExecutorDetector } from './executor/ExecutorDetector';
-import { ExecutorBytecodeBuilder } from './executor/ExecutorBytecodeBuilder';
+import { getApprovalTokenAndTarget } from './executor/approval';
 import { createExecutorEncodingContextFromDexHelper } from './executor/encoding-context';
 import type { ExecutorEncodingContext } from './executor/encoding-types';
-import { createExecutorBytecodeBuilder } from './executor/factory';
 import { IDexTxBuilder } from './dex/idex';
 import {
   ContractMethod,
@@ -213,13 +212,13 @@ export class GenericSwapTransactionBuilder {
     priceRoute: OptimalRate,
     routePlan: RoutePlan,
     minMaxAmount: string,
-    bytecodeBuilder: ExecutorBytecodeBuilder,
+    executorAddress: Address,
+    executorEncodingContext: ExecutorEncodingContext,
   ): Promise<{
     resolvedLegs: ResolvedLeg[];
     maybeWethCallData?: DepositWithdrawReturn;
   }> {
     const side = priceRoute.side;
-    const executorAddress = bytecodeBuilder.getAddress();
     const rawResolvedLegs = await Promise.all(
       walkRoutePlan(routePlan).map(async routePosition => {
         const { routeIndex, swapIndex, swapExchangeIndex } = routePosition;
@@ -355,11 +354,11 @@ export class GenericSwapTransactionBuilder {
     );
 
     const resolvedLegsWithApprovals = await this.addDexExchangeApproveParams(
-      bytecodeBuilder,
+      executorEncodingContext,
+      executorAddress,
       priceRoute,
       routePlan,
       resolvedLegs,
-      maybeWethCallData,
     );
 
     return {
@@ -436,17 +435,15 @@ export class GenericSwapTransactionBuilder {
     const executorName =
       this.executorDetector.getExecutorByPriceRoute(priceRoute);
     const executorEncodingContext = this.ensureExecutorEncodingContext();
-    const bytecodeBuilder = createExecutorBytecodeBuilder(
-      executorName,
-      executorEncodingContext,
-    );
-    const executionContractAddress = bytecodeBuilder.getAddress();
+    const executionContractAddress =
+      executorEncodingContext.executorsAddresses[executorName];
     const routePlan = buildRoutePlan(priceRoute);
     const { resolvedLegs, maybeWethCallData } = await this.buildResolvedCalls(
       priceRoute,
       routePlan,
       minMaxAmount,
-      bytecodeBuilder,
+      executionContractAddress,
+      executorEncodingContext,
     );
 
     const buildInput: BuildInput = {
@@ -491,7 +488,7 @@ export class GenericSwapTransactionBuilder {
     this.resolvedBuildInputObserver?.onGenericBuildInput?.(buildInput);
 
     return buildTransactionFromResolved(buildInput, {
-      bytecodeBuilder,
+      encodingContext: executorEncodingContext,
       augustusV6Interface: this.augustusV6Interface,
     });
   }
@@ -920,13 +917,12 @@ export class GenericSwapTransactionBuilder {
   }
 
   private async addDexExchangeApproveParams(
-    bytecodeBuilder: ExecutorBytecodeBuilder,
+    executorEncodingContext: ExecutorEncodingContext,
+    spender: Address,
     priceRoute: OptimalRate,
     routePlan: RoutePlan,
     resolvedLegs: ResolvedLeg[],
-    maybeWethCallData?: DepositWithdrawReturn,
   ): Promise<ResolvedLeg[]> {
-    const spender = bytecodeBuilder.getAddress();
     const tokenTargetMapping: {
       params: [token: Address, target: Address, permit2: boolean];
       routePositionKey: string;
@@ -946,9 +942,10 @@ export class GenericSwapTransactionBuilder {
           routePosition.swapIndex
         ];
       const curExchangeParam = curResolvedLeg.exchangeParam;
-      const approveParams = bytecodeBuilder.getApprovalTokenAndTarget(
+      const approveParams = getApprovalTokenAndTarget(
         swap,
         curExchangeParam,
+        executorEncodingContext,
       );
 
       if (approveParams) {

@@ -465,39 +465,6 @@ export abstract class ExecutorBytecodeBuilder<S = {}, D = {}> {
     return callData;
   }
 
-  getApprovalTokenAndTarget(
-    swap: { srcToken: Address },
-    exchangeParam: DexExchangeParam,
-  ): { target: string; token: Address } | null {
-    if (exchangeParam.skipApproval) return null;
-
-    const target = exchangeParam.spender || exchangeParam.targetExchange;
-
-    // WETH src gets unwrapped to ETH before the DEX call; nothing to approve.
-    if (exchangeParam.needUnwrapNative && this.isWETH(swap.srcToken)) {
-      return null;
-    }
-
-    if (
-      !isETHAddress(swap.srcToken) &&
-      !exchangeParam.transferSrcTokenBeforeSwap
-    ) {
-      return {
-        token: swap.srcToken,
-        target,
-      };
-    }
-
-    if (exchangeParam.needWrapNative && isETHAddress(swap.srcToken)) {
-      return {
-        token: this.getWETHAddress(exchangeParam),
-        target,
-      };
-    }
-
-    return null;
-  }
-
   protected getWETHAddress(exchangeParam: DexExchangeParam): string {
     const { wethAddress } = exchangeParam;
     return wethAddress || this.context.wrappedNativeTokenAddress;

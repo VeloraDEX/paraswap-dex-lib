@@ -9,9 +9,9 @@ import AugustusV6ABI from '../../../src/abi/augustus-v6/ABI.json';
 import { ETHER_ADDRESS, Network, NULL_ADDRESS } from '../../../src/constants';
 import type { DexAdapterService } from '../../../src/dex';
 import type { DepositWithdrawReturn } from '../../../src/dex/weth/types';
-import type { ExecutorBytecodeBuilder } from '../../../src/executor/ExecutorBytecodeBuilder';
+import { getApprovalTokenAndTarget } from '../../../src/executor/approval';
 import { createExecutorEncodingContextFromDexHelper } from '../../../src/executor/encoding-context';
-import { createExecutorBytecodeBuilder } from '../../../src/executor/factory';
+import type { ExecutorEncodingContext } from '../../../src/executor/encoding-types';
 import { Executors } from '../../../src/executor/types';
 import { GenericSwapTransactionBuilder } from '../../../src/generic-swap-transaction-builder';
 import {
@@ -237,9 +237,9 @@ describe('resolved generic transaction build', () => {
     ContractMethodV6.swapExactAmountInPro,
     ContractMethodV6.swapExactAmountOutPro,
   ])('assembles generic params for %s', contractMethod => {
-    const { input, bytecodeBuilder } = buildBoundaryFixture(contractMethod);
+    const { input, encodingContext } = buildBoundaryFixture(contractMethod);
     const output = buildTransactionFromResolved(input, {
-      bytecodeBuilder,
+      encodingContext,
       augustusV6Interface: AUGUSTUS_V6_INTERFACE,
     });
     const swapData = output.params[1] as string[];
@@ -262,7 +262,7 @@ describe('resolved generic transaction build', () => {
   });
 
   it('rejects unsupported generic contract methods', () => {
-    const { input, bytecodeBuilder } = buildBoundaryFixture(
+    const { input, encodingContext } = buildBoundaryFixture(
       ContractMethodV6.swapExactAmountIn,
     );
 
@@ -272,7 +272,7 @@ describe('resolved generic transaction build', () => {
           ...input,
           contractMethod: ContractMethodV6.swapExactAmountInOnUniswapV2,
         },
-        { bytecodeBuilder, augustusV6Interface: AUGUSTUS_V6_INTERFACE },
+        { encodingContext, augustusV6Interface: AUGUSTUS_V6_INTERFACE },
       ),
     ).toThrow(
       'unsupported generic contract method for resolved build: swapExactAmountInOnUniswapV2',
@@ -280,7 +280,7 @@ describe('resolved generic transaction build', () => {
   });
 
   it('rejects executor address mismatches', () => {
-    const { input, bytecodeBuilder } = buildBoundaryFixture(
+    const { input, encodingContext } = buildBoundaryFixture(
       ContractMethodV6.swapExactAmountIn,
     );
 
@@ -290,13 +290,71 @@ describe('resolved generic transaction build', () => {
           ...input,
           executorAddress: '0x2222222222222222222222222222222222222222',
         },
-        { bytecodeBuilder, augustusV6Interface: AUGUSTUS_V6_INTERFACE },
+        { encodingContext, augustusV6Interface: AUGUSTUS_V6_INTERFACE },
       ),
     ).toThrow('executor address mismatch');
   });
 
+  it('rejects network mismatches between input and encoding context', () => {
+    const { input, encodingContext } = buildBoundaryFixture(
+      ContractMethodV6.swapExactAmountIn,
+    );
+
+    expect(() =>
+      buildTransactionFromResolved(input, {
+        encodingContext: {
+          ...encodingContext,
+          network: input.network + 1,
+        },
+        augustusV6Interface: AUGUSTUS_V6_INTERFACE,
+      }),
+    ).toThrow(
+      `network mismatch: input ${input.network}, context ${input.network + 1}`,
+    );
+  });
+
+  it('rejects Augustus V6 address mismatches between input and encoding context', () => {
+    const { input, encodingContext } = buildBoundaryFixture(
+      ContractMethodV6.swapExactAmountIn,
+    );
+    const contextAugustusV6Address =
+      '0x9999999999999999999999999999999999999999';
+
+    expect(() =>
+      buildTransactionFromResolved(input, {
+        encodingContext: {
+          ...encodingContext,
+          augustusV6Address: contextAugustusV6Address,
+        },
+        augustusV6Interface: AUGUSTUS_V6_INTERFACE,
+      }),
+    ).toThrow(
+      `augustusV6Address mismatch: input ${input.augustusV6Address}, context ${contextAugustusV6Address}`,
+    );
+  });
+
+  it('rejects wrapped native token address mismatches between input and encoding context', () => {
+    const { input, encodingContext } = buildBoundaryFixture(
+      ContractMethodV6.swapExactAmountIn,
+    );
+    const contextWrappedNativeTokenAddress =
+      '0x8888888888888888888888888888888888888888';
+
+    expect(() =>
+      buildTransactionFromResolved(input, {
+        encodingContext: {
+          ...encodingContext,
+          wrappedNativeTokenAddress: contextWrappedNativeTokenAddress,
+        },
+        augustusV6Interface: AUGUSTUS_V6_INTERFACE,
+      }),
+    ).toThrow(
+      `wrappedNativeTokenAddress mismatch: input ${input.wrappedNativeTokenAddress}, context ${contextWrappedNativeTokenAddress}`,
+    );
+  });
+
   it('rejects out-of-route resolved leg keys', () => {
-    const { input, bytecodeBuilder } = buildBoundaryFixture(
+    const { input, encodingContext } = buildBoundaryFixture(
       ContractMethodV6.swapExactAmountIn,
     );
     const invalidInput = cloneBuildInput(input);
@@ -304,14 +362,14 @@ describe('resolved generic transaction build', () => {
 
     expect(() =>
       buildTransactionFromResolved(invalidInput, {
-        bytecodeBuilder,
+        encodingContext,
         augustusV6Interface: AUGUSTUS_V6_INTERFACE,
       }),
     ).toThrow('resolved leg route position 0:0:1 is not in route plan');
   });
 
   it('rejects non-boolean resolved needWrapNative values', () => {
-    const { input, bytecodeBuilder } = buildBoundaryFixture(
+    const { input, encodingContext } = buildBoundaryFixture(
       ContractMethodV6.swapExactAmountIn,
     );
     const invalidInput = cloneBuildInput(input);
@@ -320,14 +378,14 @@ describe('resolved generic transaction build', () => {
 
     expect(() =>
       buildTransactionFromResolved(invalidInput, {
-        bytecodeBuilder,
+        encodingContext,
         augustusV6Interface: AUGUSTUS_V6_INTERFACE,
       }),
     ).toThrow('resolvedLegs[0].exchangeParam.needWrapNative must be boolean');
   });
 
   it('rejects malformed WETH plans', () => {
-    const { input, bytecodeBuilder } = buildBoundaryFixture(
+    const { input, encodingContext } = buildBoundaryFixture(
       ContractMethodV6.swapExactAmountIn,
     );
     const invalidInput = {
@@ -343,7 +401,7 @@ describe('resolved generic transaction build', () => {
 
     expect(() =>
       buildTransactionFromResolved(invalidInput, {
-        bytecodeBuilder,
+        encodingContext,
         augustusV6Interface: AUGUSTUS_V6_INTERFACE,
       }),
     ).toThrow(
@@ -379,10 +437,7 @@ async function expectPublicBuilderParity(
   const builder = new GenericSwapTransactionBuilder(dexAdapterService);
   const executorType =
     builder.executorDetector.getExecutorByPriceRoute(priceRoute);
-  const bytecodeBuilder = createTestExecutorBytecodeBuilder(
-    dexHelper,
-    executorType,
-  );
+  const encodingContext = createTestExecutorEncodingContext(dexHelper);
   const expectedInput = buildExpectedInput({
     priceRoute,
     minMaxAmount,
@@ -390,14 +445,14 @@ async function expectPublicBuilderParity(
     gas,
     dexHelper,
     builder,
-    bytecodeBuilder,
+    encodingContext,
     executorType,
     exchangeParams: fixture.exchangeParams,
     maybeWethCallData: fixture.maybeWethCallData,
     approvalDecision,
   });
   const expectedOutput = buildTransactionFromResolved(expectedInput.input, {
-    bytecodeBuilder,
+    encodingContext,
     augustusV6Interface: AUGUSTUS_V6_INTERFACE,
   });
 
@@ -433,7 +488,7 @@ function buildExpectedInput({
   gas,
   dexHelper,
   builder,
-  bytecodeBuilder,
+  encodingContext,
   executorType,
   exchangeParams,
   maybeWethCallData,
@@ -445,7 +500,7 @@ function buildExpectedInput({
   gas: BuildInput['gas'];
   dexHelper: ReturnType<typeof buildDexHelper>;
   builder: GenericSwapTransactionBuilder;
-  bytecodeBuilder: ExecutorBytecodeBuilder;
+  encodingContext: ExecutorEncodingContext;
   executorType: Executors;
   exchangeParams: DexExchangeBuildParam[];
   maybeWethCallData?: DepositWithdrawReturn;
@@ -453,6 +508,7 @@ function buildExpectedInput({
 }): ExpectedInputResult {
   const routePlan = buildRoutePlan(priceRoute);
   const routePositions = walkRoutePlan(routePlan);
+  const executorAddress = encodingContext.executorsAddresses[executorType];
 
   expect(exchangeParams).toHaveLength(routePositions.length);
 
@@ -473,7 +529,7 @@ function buildExpectedInput({
           swapExchange,
           minMaxAmount,
           exchangeParam.needWrapNative,
-          bytecodeBuilder.getAddress(),
+          executorAddress,
         );
 
       return {
@@ -490,7 +546,7 @@ function buildExpectedInput({
     },
   );
   const approvalResult = addApprovalData({
-    bytecodeBuilder,
+    encodingContext,
     priceRoute,
     routePlan,
     resolvedLegs: resolvedLegsWithoutApprovals,
@@ -504,7 +560,7 @@ function buildExpectedInput({
       resolvedLegs: approvalResult.resolvedLegs,
       wethPlan: normalizeWethPlan(maybeWethCallData),
       executorType,
-      executorAddress: normalizeAddress(bytecodeBuilder.getAddress()),
+      executorAddress: normalizeAddress(executorAddress),
       augustusV6Address: normalizeAddress(
         dexHelper.config.data.augustusV6Address!,
       ),
@@ -539,13 +595,13 @@ function buildExpectedInput({
 }
 
 function addApprovalData({
-  bytecodeBuilder,
+  encodingContext,
   priceRoute,
   routePlan,
   resolvedLegs,
   approvalDecision,
 }: {
-  bytecodeBuilder: ExecutorBytecodeBuilder;
+  encodingContext: ExecutorEncodingContext;
   priceRoute: OptimalRate;
   routePlan: BuildInput['routePlan'];
   resolvedLegs: ResolvedLeg[];
@@ -571,9 +627,10 @@ function addApprovalData({
       priceRoute.bestRoute[routePosition.routeIndex].swaps[
         routePosition.swapIndex
       ];
-    const approveParams = bytecodeBuilder.getApprovalTokenAndTarget(
+    const approveParams = getApprovalTokenAndTarget(
       swap,
       resolvedLeg.exchangeParam,
+      encodingContext,
     );
 
     if (approveParams) {
@@ -632,7 +689,7 @@ function addApprovalData({
 
 function buildBoundaryFixture(contractMethod: ContractMethodV6): {
   input: BuildInput;
-  bytecodeBuilder: ExecutorBytecodeBuilder;
+  encodingContext: ExecutorEncodingContext;
 } {
   const priceRoute = buildPriceRouteFromFixture(executor01SimpleRouteFixture, {
     contractMethod,
@@ -647,10 +704,7 @@ function buildBoundaryFixture(contractMethod: ContractMethodV6): {
   const builder = new GenericSwapTransactionBuilder(dexAdapterService);
   const executorType =
     builder.executorDetector.getExecutorByPriceRoute(priceRoute);
-  const bytecodeBuilder = createTestExecutorBytecodeBuilder(
-    dexHelper,
-    executorType,
-  );
+  const encodingContext = createTestExecutorEncodingContext(dexHelper);
 
   return {
     input: buildExpectedInput({
@@ -660,14 +714,14 @@ function buildBoundaryFixture(contractMethod: ContractMethodV6): {
       gas: GAS,
       dexHelper,
       builder,
-      bytecodeBuilder,
+      encodingContext,
       executorType,
       exchangeParams: buildExchangeParams(
         executor01SimpleExchangeParamsFixture,
       ),
       approvalDecision: pairs => pairs.map(() => true),
     }).input,
-    bytecodeBuilder,
+    encodingContext,
   };
 }
 
@@ -683,14 +737,10 @@ function buildPriceRouteFromFixture(
   });
 }
 
-function createTestExecutorBytecodeBuilder(
+function createTestExecutorEncodingContext(
   dexHelper: ReturnType<typeof buildDexHelper>,
-  executorType: Executors,
-): ExecutorBytecodeBuilder {
-  return createExecutorBytecodeBuilder(
-    executorType,
-    createExecutorEncodingContextFromDexHelper(dexHelper),
-  );
+): ExecutorEncodingContext {
+  return createExecutorEncodingContextFromDexHelper(dexHelper);
 }
 
 function buildExecutor03BuyPriceRoute(): OptimalRate {

@@ -12,7 +12,8 @@ import {
   IS_USER_SURPLUS_MASK,
   NULL_ADDRESS,
 } from '../../constants';
-import type { ExecutorBytecodeBuilder } from '../../executor/ExecutorBytecodeBuilder';
+import type { ExecutorEncodingContext } from '../../executor/encoding-types';
+import { createExecutorBytecodeBuilder } from '../../executor/factory';
 import { Executors } from '../../executor/types';
 import type { Address, DexExchangeBuildParam, TxObject } from '../../types';
 import { uuidToBytes16 } from '../../utils';
@@ -70,7 +71,7 @@ const DIRECT_CONTRACT_METHOD_SIDES = new Map<string, SwapSide>([
 ]);
 
 export type ResolvedBuildDeps = {
-  bytecodeBuilder: ExecutorBytecodeBuilder;
+  encodingContext: ExecutorEncodingContext;
   augustusV6Interface: Interface;
 };
 
@@ -95,7 +96,11 @@ export function buildTransactionFromResolved(
 ): ResolvedBuildOutput {
   validateBuildInput(input, deps);
 
-  const bytecode = deps.bytecodeBuilder.buildByteCode({
+  const bytecodeBuilder = createExecutorBytecodeBuilder(
+    input.executorType,
+    deps.encodingContext,
+  );
+  const bytecode = bytecodeBuilder.buildByteCode({
     routePlan: input.routePlan,
     resolvedLegs: input.resolvedLegs,
     sender: input.userAddress,
@@ -137,6 +142,7 @@ function validateBuildInput(
   validateSupportedContractMethod(input.contractMethod);
   validateExecutor(input, deps);
   validateTopLevelFields(input);
+  validateEncodingContext(input, deps);
   validateRoutePlan(input.routePlan);
   validateWethPlan(input);
 
@@ -223,11 +229,40 @@ function validateExecutor(input: BuildInput, deps: ResolvedBuildDeps): void {
     throw new Error(`unsupported executor type: ${input.executorType}`);
   }
 
-  const builderAddress = deps.bytecodeBuilder.getAddress().toLowerCase();
+  const builderAddress =
+    deps.encodingContext.executorsAddresses[input.executorType].toLowerCase();
 
   if (input.executorAddress !== builderAddress) {
     throw new Error(
       `executor address mismatch: input ${input.executorAddress}, builder ${builderAddress}`,
+    );
+  }
+}
+
+function validateEncodingContext(
+  input: BuildInput,
+  deps: ResolvedBuildDeps,
+): void {
+  const { encodingContext } = deps;
+
+  if (input.network !== encodingContext.network) {
+    throw new Error(
+      `network mismatch: input ${input.network}, context ${encodingContext.network}`,
+    );
+  }
+
+  if (input.augustusV6Address !== encodingContext.augustusV6Address) {
+    throw new Error(
+      `augustusV6Address mismatch: input ${input.augustusV6Address}, context ${encodingContext.augustusV6Address}`,
+    );
+  }
+
+  if (
+    input.wrappedNativeTokenAddress !==
+    encodingContext.wrappedNativeTokenAddress
+  ) {
+    throw new Error(
+      `wrappedNativeTokenAddress mismatch: input ${input.wrappedNativeTokenAddress}, context ${encodingContext.wrappedNativeTokenAddress}`,
     );
   }
 }

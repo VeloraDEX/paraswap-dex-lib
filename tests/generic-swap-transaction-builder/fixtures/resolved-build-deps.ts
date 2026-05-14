@@ -2,7 +2,6 @@ import { Interface } from '@ethersproject/abi';
 import AugustusV6ABI from '../../../src/abi/augustus-v6/ABI.json';
 import { Executors } from '../../../src/executor/types';
 import { createExecutorEncodingContextFromDexHelper } from '../../../src/executor/encoding-context';
-import { createExecutorBytecodeBuilder } from '../../../src/executor/factory';
 import type {
   BuildInput,
   DirectBuildInput,
@@ -41,7 +40,7 @@ export function createResolvedBuildDeps(input: BuildInput): ResolvedBuildDeps {
   const context = createExecutorEncodingContextFromDexHelper(dexHelper);
 
   return {
-    bytecodeBuilder: createExecutorBytecodeBuilder(input.executorType, context),
+    encodingContext: context,
     augustusV6Interface: AUGUSTUS_V6_INTERFACE,
   };
 }
