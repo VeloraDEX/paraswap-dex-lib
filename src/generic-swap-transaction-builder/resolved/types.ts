@@ -1,7 +1,18 @@
-import type { Address, DexExchangeBuildParam, TxObject } from '../../types';
+import type { Address, TxObject } from '../../types';
 import type { DepositWithdrawReturn } from '../../dex/weth/types';
 import type { Executors } from '../../executor/types';
 import type { ContractMethodV6, SwapSide } from '@paraswap/core';
+import type { ResolvedLeg, RoutePlan } from '../../executor/encoding-types';
+export type {
+  OrderedExecutorLeg,
+  ResolvedLeg,
+  RoutePlan,
+  RoutePlanExchange,
+  RoutePlanRoute,
+  RoutePlanSwap,
+  RoutePlanSwapExchange,
+  RoutePosition,
+} from '../../executor/encoding-types';
 
 export type GasInput = {
   gasPrice?: string;
@@ -18,45 +29,6 @@ export type FeeInput = {
   isSurplusToUser: boolean;
   isDirectFeeTransfer: boolean;
   isSkipBlacklist?: boolean;
-};
-
-export type RoutePlan = {
-  routes: RoutePlanRoute[];
-};
-
-export type RoutePlanRoute = {
-  percent: number;
-  swaps: RoutePlanSwap[];
-};
-
-export type RoutePlanSwap = {
-  srcToken: Address;
-  destToken: Address;
-  srcAmount: string;
-  destAmount: string;
-  swapExchanges: RoutePlanSwapExchange[];
-};
-
-export type RoutePlanSwapExchange = {
-  exchange: string;
-  percent: number;
-  srcAmount: string;
-  destAmount: string;
-};
-
-export type RoutePosition = {
-  routeIndex: number;
-  swapIndex: number;
-  swapExchangeIndex: number;
-};
-
-export type ResolvedLeg = RoutePosition & {
-  exchangeParam: DexExchangeBuildParam;
-  normalizedSrcToken: Address;
-  normalizedDestToken: Address;
-  normalizedSrcAmount: string;
-  normalizedDestAmount: string;
-  recipient: Address;
 };
 
 export type BuildInput = {

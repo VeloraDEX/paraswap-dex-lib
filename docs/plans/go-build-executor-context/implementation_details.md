@@ -160,6 +160,51 @@ yarn check:es
 
 No fixture JSON should change.
 
+### Status
+
+Completed on 2026-05-14.
+
+- Added executor-owned encoding primitives:
+  - `src/executor/encoding-types.ts` owns `ExecutorEncodingContext`,
+    `ExecutorEncodingLogger`, `ExecutorBytecodeBuildInput`, route-plan types,
+    `ResolvedLeg`, and ordered-leg output.
+  - `src/executor/route-plan.ts` owns `buildRoutePlan`, `flattenRoutePlan`,
+    `walkRoutePlan`, `routePositionKey`, `getRoutePlanLegCount`, and
+    `getOrderedExecutorLegs`.
+  - `src/executor/encoding-context.ts` owns the no-op logger and the
+    `IDexHelper` adapter. The adapter lowercases executor context addresses,
+    synthesizes `Executors.WETH` from `wrappedNativeTokenAddress`, normalizes
+    `isWETH`, and forwards logger methods from
+    `dexHelper.getLogger('ExecutorBytecodeBuilder')`.
+  - `src/executor/approval.ts` owns the pure
+    `getApprovalTokenAndTarget()` helper.
+- `src/generic-swap-transaction-builder/resolved/types.ts` and
+  `src/generic-swap-transaction-builder/resolved/route-plan.ts` now re-export
+  the moved executor-owned shapes/helpers so existing resolved imports and
+  fixture JSON remain stable.
+- Added `src/executor/encoding-helpers.test.ts` covering ordered-leg traversal,
+  missing-leg rejection, context normalization/WETH synthesis/logger wiring,
+  the no-op logger shape, and approval-helper parity with the current executor
+  builder method.
+- Follow-up review findings were addressed before Phase 3:
+  - approval parity now covers explicit `wethAddress`, unwrap on a non-WETH
+    source, wrap plus transfer-before-swap, and skip-approval short-circuiting
+  - context creation fails with explicit missing-address errors for
+    `augustusV6Address` and `wrappedNativeTokenAddress`
+  - a configured `executorsAddresses.WETH` must match the wrapped native token
+    address instead of being silently ignored
+  - `getOrderedExecutorLegs()` rejects duplicate and out-of-route resolved-leg
+    positions; ordered-leg tests cover single-leg, mega-route, and empty
+    route-plan cases
+  - comments document the mixed-case test config and bound logger methods
+- Acceptance commands passed:
+  - `yarn jest src/executor/encoding-helpers.test.ts --runInBand`
+  - `yarn jest tests/generic-swap-transaction-builder/resolved --runInBand`
+  - `yarn jest src/executor/executor01-bytecode-builder-snapshot.test.ts src/executor/executor02-bytecode-builder-snapshot.test.ts --runInBand`
+  - `yarn check:tsc`
+  - `yarn check:es`
+- No fixture JSON or executor snapshots changed.
+
 ## Phase 3: Refactor Executor Builders To Context Inputs
 
 ### Goal

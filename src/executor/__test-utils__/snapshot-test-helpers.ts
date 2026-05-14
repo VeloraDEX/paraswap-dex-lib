@@ -38,6 +38,8 @@ function createNoOpLogger(): ReturnType<IDexHelper['getLogger']> {
 }
 
 export function createExecutorDexHelper(network: Network): IDexHelper {
+  // Snapshot tests use generated network config so encoded addresses match the
+  // executor fixtures they lock.
   return {
     config: new ConfigHelper(
       false,
