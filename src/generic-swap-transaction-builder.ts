@@ -33,6 +33,9 @@ import { Weth } from './dex/weth/weth';
 import ERC20ABI from './abi/erc20.json';
 import { ExecutorDetector } from './executor/ExecutorDetector';
 import { ExecutorBytecodeBuilder } from './executor/ExecutorBytecodeBuilder';
+import { createExecutorEncodingContextFromDexHelper } from './executor/encoding-context';
+import type { ExecutorEncodingContext } from './executor/encoding-types';
+import { createExecutorBytecodeBuilder } from './executor/factory';
 import { IDexTxBuilder } from './dex/idex';
 import {
   ContractMethod,
@@ -126,6 +129,7 @@ export class GenericSwapTransactionBuilder {
   abiCoder: AbiCoder;
 
   executorDetector: ExecutorDetector;
+  executorEncodingContext?: ExecutorEncodingContext;
 
   constructor(
     protected dexAdapterService: DexAdapterService,
@@ -149,9 +153,17 @@ export class GenericSwapTransactionBuilder {
     this.augustusV6Interface = new Interface(AugustusV6ABI);
     this.augustusV6Address =
       this.dexAdapterService.dexHelper.config.data.augustusV6Address!;
-    this.executorDetector = new ExecutorDetector(
-      this.dexAdapterService.dexHelper,
-    );
+    this.executorDetector = new ExecutorDetector();
+  }
+
+  private ensureExecutorEncodingContext(): ExecutorEncodingContext {
+    if (!this.executorEncodingContext) {
+      this.executorEncodingContext = createExecutorEncodingContextFromDexHelper(
+        this.dexAdapterService.dexHelper,
+      );
+    }
+
+    return this.executorEncodingContext;
   }
 
   protected getDepositWithdrawWethCallData(
@@ -423,8 +435,11 @@ export class GenericSwapTransactionBuilder {
   ): Promise<ResolvedBuildOutput> {
     const executorName =
       this.executorDetector.getExecutorByPriceRoute(priceRoute);
-    const bytecodeBuilder =
-      this.executorDetector.getBytecodeBuilder(executorName);
+    const executorEncodingContext = this.ensureExecutorEncodingContext();
+    const bytecodeBuilder = createExecutorBytecodeBuilder(
+      executorName,
+      executorEncodingContext,
+    );
     const executionContractAddress = bytecodeBuilder.getAddress();
     const routePlan = buildRoutePlan(priceRoute);
     const { resolvedLegs, maybeWethCallData } = await this.buildResolvedCalls(
@@ -814,10 +829,9 @@ export class GenericSwapTransactionBuilder {
 
     const executorName =
       this.executorDetector.getExecutorByPriceRoute(priceRoute);
-    const bytecodeBuilder =
-      this.executorDetector.getBytecodeBuilder(executorName);
+    const executorEncodingContext = this.ensureExecutorEncodingContext();
 
-    return bytecodeBuilder.getAddress();
+    return executorEncodingContext.executorsAddresses[executorName];
   }
 
   public getDexCallsParams(

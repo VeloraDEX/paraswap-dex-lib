@@ -14,7 +14,6 @@ export type ExecutorEncodingContext = {
   augustusV6Address: Address;
   wrappedNativeTokenAddress: Address;
   executorsAddresses: Record<Executors, Address>;
-  isWETH: (address: Address) => boolean;
   logger: ExecutorEncodingLogger;
 };
 
@@ -41,6 +40,17 @@ export type RoutePlanSwapExchange = {
   srcAmount: string;
   destAmount: string;
 };
+
+export type ExecutorRoute = {
+  srcToken: Address;
+  destToken: Address;
+  destAmount: string;
+  bestRoute: RoutePlanRoute[];
+};
+
+export type ExecutorRouteRoute = RoutePlanRoute;
+export type ExecutorRouteSwap = RoutePlanSwap;
+export type ExecutorRouteSwapExchange = RoutePlanSwapExchange;
 
 export type RoutePosition = {
   routeIndex: number;

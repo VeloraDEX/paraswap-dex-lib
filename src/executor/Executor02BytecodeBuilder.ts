@@ -1,11 +1,5 @@
 import { ethers } from 'ethers';
 import {
-  OptimalRoute,
-  OptimalRate,
-  OptimalSwap,
-  OptimalSwapExchange,
-} from '@paraswap/core';
-import {
   DexExchangeBuildParam,
   DexExchangeParamWithBooleanNeedWrapNative,
 } from '../types';
@@ -27,6 +21,13 @@ import {
   ZEROS_4_BYTES,
   DEFAULT_RETURN_AMOUNT_POS,
 } from './constants';
+import type {
+  ExecutorBytecodeBuildInput,
+  ExecutorRoute,
+  ExecutorRouteRoute,
+  ExecutorRouteSwap,
+  ExecutorRouteSwapExchange,
+} from './encoding-types';
 
 const {
   utils: { hexlify, hexDataLength, hexConcat, hexZeroPad, solidityPack },
@@ -38,11 +39,11 @@ export type Executor02SingleSwapCallDataParams = {
   wrapToSwapMap: { [key: number]: boolean };
   unwrapToSwapMap: { [key: number]: boolean };
   wrapToSwapExchangeMap: { [key: string]: boolean };
-  swap: OptimalSwap;
+  swap: ExecutorRouteSwap;
 };
 
 export type Executor02DexCallDataParams = {
-  swapExchange: OptimalSwapExchange<any>;
+  swapExchange: ExecutorRouteSwapExchange;
 };
 
 /**
@@ -67,7 +68,7 @@ export class Executor02BytecodeBuilder extends ExecutorBytecodeBuilder<
    * case 2: check destToken balance after swap
    */
   protected buildSimpleSwapFlags(
-    priceRoute: OptimalRate,
+    priceRoute: ExecutorRoute,
     exchangeParams: DexExchangeBuildParam[],
     routeIndex: number,
     swapIndex: number,
@@ -91,10 +92,8 @@ export class Executor02BytecodeBuilder extends ExecutorBytecodeBuilder<
       sendEthButSupportsInsertFromAmount,
     } = exchangeParam;
 
-    const isWETHSrc =
-      !!needUnwrapNative && this.dexHelper.config.isWETH(srcToken);
-    const isWETHDest =
-      !!needUnwrapNative && this.dexHelper.config.isWETH(destToken);
+    const isWETHSrc = !!needUnwrapNative && this.isWETH(srcToken);
+    const isWETHDest = !!needUnwrapNative && this.isWETH(destToken);
 
     const needWrap = needWrapNative && isEthSrc && maybeWethCallData?.deposit;
     const needUnwrap =
@@ -162,7 +161,7 @@ export class Executor02BytecodeBuilder extends ExecutorBytecodeBuilder<
    * case 2: check destToken balance after swap
    */
   protected buildMultiMegaSwapFlags(
-    priceRoute: OptimalRate,
+    priceRoute: ExecutorRoute,
     exchangeParams: DexExchangeBuildParam[],
     routeIndex: number,
     swapIndex: number,
@@ -201,11 +200,9 @@ export class Executor02BytecodeBuilder extends ExecutorBytecodeBuilder<
     const isEthDest = isETHAddress(destToken);
     const isWethDest =
       (wethAddress && destToken.toLowerCase() === wethAddress.toLowerCase()) ||
-      this.dexHelper.config.isWETH(destToken);
-    const isWETHSrcUnwrap =
-      !!needUnwrapNative && this.dexHelper.config.isWETH(srcToken);
-    const isWETHDestWrap =
-      !!needUnwrapNative && this.dexHelper.config.isWETH(destToken);
+      this.isWETH(destToken);
+    const isWETHSrcUnwrap = !!needUnwrapNative && this.isWETH(srcToken);
+    const isWETHDestWrap = !!needUnwrapNative && this.isWETH(destToken);
 
     const isSpecialDex =
       specialDexFlag !== undefined && specialDexFlag !== SpecialDex.DEFAULT;
@@ -417,11 +414,11 @@ export class Executor02BytecodeBuilder extends ExecutorBytecodeBuilder<
   }
 
   private addMultiSwapMetadata(
-    priceRoute: OptimalRate,
+    priceRoute: ExecutorRoute,
     exchangeParams: DexExchangeBuildParam[],
     callData: string,
     percentage: number,
-    swap: OptimalSwap,
+    swap: ExecutorRouteSwap,
     exchangeParamIndex: number,
     wrapWasAddedInSwapExchange: boolean,
     addedUnwrapForDexWithNoNeedWrapNative = false,
@@ -449,7 +446,7 @@ export class Executor02BytecodeBuilder extends ExecutorBytecodeBuilder<
       srcTokenAddress =
         exchangeParamIndex > -1
           ? this.getWETHAddress(exchangeParams[exchangeParamIndex])
-          : this.dexHelper.config.data.wrappedNativeTokenAddress;
+          : this.context.wrappedNativeTokenAddress;
     }
 
     let srcTokenAddressLowered = srcTokenAddress.toLowerCase();
@@ -522,10 +519,10 @@ export class Executor02BytecodeBuilder extends ExecutorBytecodeBuilder<
   }
 
   private buildVerticalBranchingCallData(
-    priceRoute: OptimalRate,
+    priceRoute: ExecutorRoute,
     routeIndex: number,
     exchangeParams: DexExchangeBuildParam[],
-    swap: OptimalSwap,
+    swap: ExecutorRouteSwap,
     swapCallData: string,
     flag: Flag,
     isRoot = false,
@@ -581,7 +578,7 @@ export class Executor02BytecodeBuilder extends ExecutorBytecodeBuilder<
         .replace('0x', '')
         .indexOf(
           (isEthDest
-            ? this.dexHelper.config.data.wrappedNativeTokenAddress.toLowerCase()
+            ? this.context.wrappedNativeTokenAddress
             : destTokenAddrLowered.toLowerCase()
           ).replace('0x', ''),
         );
@@ -600,7 +597,7 @@ export class Executor02BytecodeBuilder extends ExecutorBytecodeBuilder<
   }
 
   private buildSingleSwapExchangeCallData(
-    priceRoute: OptimalRate,
+    priceRoute: ExecutorRoute,
     routeIndex: number,
     swapIndex: number,
     swapExchangeIndex: number,
@@ -650,11 +647,9 @@ export class Executor02BytecodeBuilder extends ExecutorBytecodeBuilder<
     });
 
     const isWETHSrcUnwrap =
-      !!curExchangeParam.needUnwrapNative &&
-      this.dexHelper.config.isWETH(swap.srcToken);
+      !!curExchangeParam.needUnwrapNative && this.isWETH(swap.srcToken);
     const isWETHDestWrap =
-      !!curExchangeParam.needUnwrapNative &&
-      this.dexHelper.config.isWETH(swap.destToken);
+      !!curExchangeParam.needUnwrapNative && this.isWETH(swap.destToken);
 
     if (isWETHSrcUnwrap) {
       const withdrawCallData = this.buildUnwrapEthCallData(
@@ -878,7 +873,7 @@ export class Executor02BytecodeBuilder extends ExecutorBytecodeBuilder<
     ) {
       const transferCallData = this.buildTransferCallData(
         this.erc20Interface.encodeFunctionData('transfer', [
-          this.dexHelper.config.data.augustusV6Address,
+          this.context.augustusV6Address,
           swapExchange.destAmount,
         ]),
         swap.destToken,
@@ -931,12 +926,12 @@ export class Executor02BytecodeBuilder extends ExecutorBytecodeBuilder<
       const callData = checkWethBalanceAfter
         ? this.addTokenAddressToCallData(
             maybeWethCallData.deposit.calldata,
-            this.dexHelper.config.data.wrappedNativeTokenAddress.toLowerCase(),
+            this.context.wrappedNativeTokenAddress,
           )
         : maybeWethCallData.deposit.calldata;
 
       const depositCallData = this.buildWrapEthCallData(
-        this.dexHelper.config.data.wrappedNativeTokenAddress.toLowerCase(),
+        this.context.wrappedNativeTokenAddress,
         callData,
         checkWethBalanceAfter
           ? Flag.SEND_ETH_EQUAL_TO_FROM_AMOUNT_CHECK_SRC_TOKEN_BALANCE_AFTER_SWAP // 5
@@ -951,8 +946,8 @@ export class Executor02BytecodeBuilder extends ExecutorBytecodeBuilder<
   }
 
   private eachDexOnSwapNeedsWrapNative(
-    priceRoute: OptimalRate,
-    swap: OptimalSwap,
+    priceRoute: ExecutorRoute,
+    swap: ExecutorRouteSwap,
     exchangeParams: DexExchangeBuildParam[],
   ): boolean {
     return swap.swapExchanges.every(curSe => {
@@ -976,8 +971,8 @@ export class Executor02BytecodeBuilder extends ExecutorBytecodeBuilder<
   }
 
   private anyDexOnSwapNeedsWrapNative(
-    priceRoute: OptimalRate,
-    swap: OptimalSwap,
+    priceRoute: ExecutorRoute,
+    swap: ExecutorRouteSwap,
     exchangeParams: DexExchangeBuildParam[],
   ): boolean {
     const res = swap.swapExchanges.map(curSe => {
@@ -1003,8 +998,8 @@ export class Executor02BytecodeBuilder extends ExecutorBytecodeBuilder<
   }
 
   private isLastExchangeWithNeedWrapNative(
-    priceRoute: OptimalRate,
-    swap: OptimalSwap,
+    priceRoute: ExecutorRoute,
+    swap: ExecutorRouteSwap,
     exchangeParams: DexExchangeBuildParam[],
     exchangeParamIndex: number,
   ): boolean {
@@ -1041,8 +1036,8 @@ export class Executor02BytecodeBuilder extends ExecutorBytecodeBuilder<
   }
 
   private getSwapExchangesWhichNeedWrapNative(
-    priceRoute: OptimalRate,
-    swap: OptimalSwap,
+    priceRoute: ExecutorRoute,
+    swap: ExecutorRouteSwap,
     exchangeParams: DexExchangeBuildParam[],
   ) {
     return swap.swapExchanges.filter(curSe => {
@@ -1066,8 +1061,8 @@ export class Executor02BytecodeBuilder extends ExecutorBytecodeBuilder<
   }
 
   private getSwapExchangesWhichDontNeedWrapNative(
-    priceRoute: OptimalRate,
-    swap: OptimalSwap,
+    priceRoute: ExecutorRoute,
+    swap: ExecutorRouteSwap,
     exchangeParams: DexExchangeBuildParam[],
   ) {
     return swap.swapExchanges.filter(curSe => {
@@ -1091,8 +1086,8 @@ export class Executor02BytecodeBuilder extends ExecutorBytecodeBuilder<
   }
 
   private anyDexOnSwapDoesntNeedWrapNative(
-    priceRoute: OptimalRate,
-    swap: OptimalSwap,
+    priceRoute: ExecutorRoute,
+    swap: ExecutorRouteSwap,
     exchangeParams: DexExchangeBuildParam[],
   ): boolean {
     return swap.swapExchanges
@@ -1118,8 +1113,8 @@ export class Executor02BytecodeBuilder extends ExecutorBytecodeBuilder<
   }
 
   private everyDexOnSwapNeedWrapNative(
-    priceRoute: OptimalRate,
-    swap: OptimalSwap,
+    priceRoute: ExecutorRoute,
+    swap: ExecutorRouteSwap,
     exchangeParams: DexExchangeBuildParam[],
   ): boolean {
     if (!swap) {
@@ -1149,8 +1144,8 @@ export class Executor02BytecodeBuilder extends ExecutorBytecodeBuilder<
   }
 
   private everyDexOnSwapDoesntNeedWrapNative(
-    priceRoute: OptimalRate,
-    swap: OptimalSwap,
+    priceRoute: ExecutorRoute,
+    swap: ExecutorRouteSwap,
     exchangeParams: DexExchangeBuildParam[],
   ): boolean {
     if (!swap) {
@@ -1180,9 +1175,9 @@ export class Executor02BytecodeBuilder extends ExecutorBytecodeBuilder<
   }
 
   private doesSwapNeedToApplyVerticalBranching(
-    priceRoute: OptimalRate,
+    priceRoute: ExecutorRoute,
     routeIndex: number,
-    swap: OptimalSwap,
+    swap: ExecutorRouteSwap,
   ): boolean {
     const isMegaSwap = priceRoute.bestRoute.length > 1;
     const isMultiSwap =
@@ -1192,8 +1187,8 @@ export class Executor02BytecodeBuilder extends ExecutorBytecodeBuilder<
   }
 
   private buildVerticalBranchingFlag(
-    priceRoute: OptimalRate,
-    swap: OptimalSwap,
+    priceRoute: ExecutorRoute,
+    swap: ExecutorRouteSwap,
     exchangeParams: DexExchangeBuildParam[],
     routeIndex: number,
     swapIndex: number,
@@ -1358,9 +1353,9 @@ export class Executor02BytecodeBuilder extends ExecutorBytecodeBuilder<
   }
 
   protected buildSingleRouteCallData(
-    priceRoute: OptimalRate,
+    priceRoute: ExecutorRoute,
     exchangeParams: DexExchangeBuildParam[],
-    route: OptimalRoute,
+    route: ExecutorRouteRoute,
     routeIndex: number,
     flags: { approves: Flag[]; dexes: Flag[]; wrap: Flag },
     sender: string,
@@ -1421,7 +1416,7 @@ export class Executor02BytecodeBuilder extends ExecutorBytecodeBuilder<
   }
 
   private doesRouteNeedsRootWrapEth(
-    priceRoute: OptimalRate,
+    priceRoute: ExecutorRoute,
     exchangeParams: DexExchangeBuildParam[],
   ): boolean {
     if (!isETHAddress(priceRoute.srcToken)) {
@@ -1443,7 +1438,7 @@ export class Executor02BytecodeBuilder extends ExecutorBytecodeBuilder<
   }
 
   private doesRouteNeedsRootUnwrapEth(
-    priceRoute: OptimalRate,
+    priceRoute: ExecutorRoute,
     exchangeParams: DexExchangeParamWithBooleanNeedWrapNative[],
   ): boolean {
     if (!isETHAddress(priceRoute.destToken)) {
@@ -1465,15 +1460,14 @@ export class Executor02BytecodeBuilder extends ExecutorBytecodeBuilder<
   }
 
   public getAddress(): string {
-    return this.dexHelper.config.data.executorsAddresses![Executors.TWO];
+    return this.context.executorsAddresses[Executors.TWO];
   }
 
-  public buildByteCode(
-    priceRoute: OptimalRate,
-    exchangeParams: DexExchangeBuildParam[],
-    sender: string,
-    maybeWethCallData?: DepositWithdrawReturn,
-  ): string {
+  public buildByteCode(input: ExecutorBytecodeBuildInput): string {
+    const priceRoute = this.buildExecutorRoute(input);
+    const exchangeParams = this.getExchangeParams(input);
+    const sender = input.sender;
+    const maybeWethCallData = input.wethPlan;
     const isMegaSwap = priceRoute.bestRoute.length > 1;
     const isMultiSwap = !isMegaSwap && priceRoute.bestRoute[0].swaps.length > 1;
 
@@ -1533,7 +1527,7 @@ export class Executor02BytecodeBuilder extends ExecutorBytecodeBuilder<
     // ETH wrap
     if (needWrapEth && routeNeedsRootWrapEth) {
       let depositCallData = this.buildWrapEthCallData(
-        this.dexHelper.config.data.wrappedNativeTokenAddress,
+        this.context.wrappedNativeTokenAddress,
         maybeWethCallData.deposit!.calldata,
         Flag.SEND_ETH_EQUAL_TO_FROM_AMOUNT_DONT_CHECK_BALANCE_AFTER_SWAP, // 9
       );
@@ -1571,7 +1565,7 @@ export class Executor02BytecodeBuilder extends ExecutorBytecodeBuilder<
       (isMultiSwap || isMegaSwap)
     ) {
       const withdrawCallData = this.buildUnwrapEthCallData(
-        this.dexHelper.config.data.wrappedNativeTokenAddress,
+        this.context.wrappedNativeTokenAddress,
         maybeWethCallData.withdraw!.calldata,
       );
       swapsCalldata = hexConcat([swapsCalldata, withdrawCallData]);

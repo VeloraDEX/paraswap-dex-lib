@@ -10,6 +10,8 @@ import { ETHER_ADDRESS, Network, NULL_ADDRESS } from '../../../src/constants';
 import type { DexAdapterService } from '../../../src/dex';
 import type { DepositWithdrawReturn } from '../../../src/dex/weth/types';
 import type { ExecutorBytecodeBuilder } from '../../../src/executor/ExecutorBytecodeBuilder';
+import { createExecutorEncodingContextFromDexHelper } from '../../../src/executor/encoding-context';
+import { createExecutorBytecodeBuilder } from '../../../src/executor/factory';
 import { Executors } from '../../../src/executor/types';
 import { GenericSwapTransactionBuilder } from '../../../src/generic-swap-transaction-builder';
 import {
@@ -377,8 +379,10 @@ async function expectPublicBuilderParity(
   const builder = new GenericSwapTransactionBuilder(dexAdapterService);
   const executorType =
     builder.executorDetector.getExecutorByPriceRoute(priceRoute);
-  const bytecodeBuilder =
-    builder.executorDetector.getBytecodeBuilder(executorType);
+  const bytecodeBuilder = createTestExecutorBytecodeBuilder(
+    dexHelper,
+    executorType,
+  );
   const expectedInput = buildExpectedInput({
     priceRoute,
     minMaxAmount,
@@ -643,8 +647,10 @@ function buildBoundaryFixture(contractMethod: ContractMethodV6): {
   const builder = new GenericSwapTransactionBuilder(dexAdapterService);
   const executorType =
     builder.executorDetector.getExecutorByPriceRoute(priceRoute);
-  const bytecodeBuilder =
-    builder.executorDetector.getBytecodeBuilder(executorType);
+  const bytecodeBuilder = createTestExecutorBytecodeBuilder(
+    dexHelper,
+    executorType,
+  );
 
   return {
     input: buildExpectedInput({
@@ -675,6 +681,16 @@ function buildPriceRouteFromFixture(
     contractMethod: ContractMethodV6.swapExactAmountIn,
     ...overrides,
   });
+}
+
+function createTestExecutorBytecodeBuilder(
+  dexHelper: ReturnType<typeof buildDexHelper>,
+  executorType: Executors,
+): ExecutorBytecodeBuilder {
+  return createExecutorBytecodeBuilder(
+    executorType,
+    createExecutorEncodingContextFromDexHelper(dexHelper),
+  );
 }
 
 function buildExecutor03BuyPriceRoute(): OptimalRate {

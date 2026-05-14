@@ -132,7 +132,6 @@ builder call sites yet.
      executor address
    - synthesizes `executorsAddresses[Executors.WETH]` from
      `wrappedNativeTokenAddress`
-   - exposes `isWETH(address)` using normalized comparison
    - wires `logger.warn` to
      `dexHelper.getLogger('ExecutorBytecodeBuilder').warn`
 6. Add `getOrderedExecutorLegs(routePlan, resolvedLegs)` as the only helper that
@@ -143,8 +142,8 @@ builder call sites yet.
    - `getOrderedExecutorLegs` preserves `walkRoutePlan()` order and throws on
      missing legs.
    - `createExecutorEncodingContextFromDexHelper` lowercases all addresses,
-     synthesizes the WETH executor entry, and compares `isWETH(address)` with
-     normalized casing.
+     synthesizes the WETH executor entry, and provides a normalized
+     `wrappedNativeTokenAddress` for executor-owned WETH checks.
    - `getApprovalTokenAndTarget` matches the current builder-method behavior
      for `skipApproval`, `needUnwrapNative` with WETH source,
      ETH-source/`needWrapNative`, and `transferSrcTokenBeforeSwap`.
@@ -173,8 +172,8 @@ Completed on 2026-05-14.
     `getOrderedExecutorLegs`.
   - `src/executor/encoding-context.ts` owns the no-op logger and the
     `IDexHelper` adapter. The adapter lowercases executor context addresses,
-    synthesizes `Executors.WETH` from `wrappedNativeTokenAddress`, normalizes
-    `isWETH`, and forwards logger methods from
+    synthesizes `Executors.WETH` from `wrappedNativeTokenAddress`, and forwards
+    logger methods from
     `dexHelper.getLogger('ExecutorBytecodeBuilder')`.
   - `src/executor/approval.ts` owns the pure
     `getApprovalTokenAndTarget()` helper.
@@ -218,7 +217,7 @@ Make Executor01/02/03/WETH bytecode builders depend on
 1. Change `ExecutorBytecodeBuilder` constructor to take
    `ExecutorEncodingContext`.
 2. Replace all `this.dexHelper.config.*` reads with context fields or
-   `context.isWETH(address)`.
+   executor-owned WETH checks against `context.wrappedNativeTokenAddress`.
 3. Replace logger access with required `context.logger.warn`.
 4. Replace `buildByteCode(priceRoute, exchangeParams, sender, wethPlan)` with
    `buildByteCode(input: ExecutorBytecodeBuildInput)`.
@@ -259,6 +258,54 @@ proven intentional.
 The resolved fixture suite is required in Phase 3 specifically to cover
 Executor03 `needWrapNative` reordering and WETH address behavior, because there
 are no dedicated Executor03/WETH snapshot suites today.
+
+### Status
+
+Completed on 2026-05-14.
+
+- Refactored Executor01/02/03/WETH bytecode builders to take
+  `ExecutorEncodingContext` and a single `ExecutorBytecodeBuildInput`
+  argument.
+- Removed executor bytecode-builder dependence on `IDexHelper`; network,
+  Augustus V6, wrapped-native, executor addresses, and logger access now come
+  from the encoding context. WETH checks are derived in executor-owned code from
+  `context.wrappedNativeTokenAddress`, so the context stays data-only.
+- Added `createExecutorBytecodeBuilder(executorType, context)` in
+  `src/executor/factory.ts`. `ExecutorDetector` is now route-only and no
+  longer constructs builders or accepts optional context.
+- Updated the resolved build boundary to pass `ExecutorBytecodeBuildInput`
+  directly into the selected bytecode builder. The synthetic `OptimalRate`
+  adapter in `build-transaction.ts` was removed.
+- Executor builders now derive flat exchange params from
+  `getOrderedExecutorLegs(input.routePlan, input.resolvedLegs)`. Executor03
+  still reorders by `needWrapNative`, while retaining the original
+  `swapExchangeIndex` from ordered route positions.
+- `WETHBytecodeBuilder.getAddress()` now returns
+  `context.executorsAddresses[Executors.WETH]`; bytecode remains `0x`.
+- `GenericSwapTransactionBuilder` creates executor encoding context lazily when
+  a generic executor path needs it, then calls the executor factory directly.
+  This keeps direct-only builds working with minimal dex-helper fixtures that do
+  not include WETH/executor config.
+- Snapshot test helpers now build `ExecutorBytecodeBuildInput` from price-route
+  fixtures and exchange params before calling `buildByteCode(input)`.
+- Follow-up review findings were addressed before Phase 4:
+  - removed legacy `ExecutorRoute as OptimalRate` aliases from executor
+    builders
+  - removed the unused generic from `ExecutorRouteSwapExchange`
+  - documented placeholder resolved-leg fields in snapshot helpers
+  - documented boundary-vs-executor validation ownership
+  - added a focused Executor03 ordering test for original
+    `swapExchangeIndex` retention after `needWrapNative` reordering
+  - moved wrapped-native address comparison into
+    `src/executor/address-utils.ts`
+- Acceptance commands passed:
+  - `yarn jest src/executor/executor01-bytecode-builder-snapshot.test.ts src/executor/executor02-bytecode-builder-snapshot.test.ts --runInBand`
+  - `yarn jest tests/generic-swap-transaction-builder/resolved --runInBand`
+  - `yarn check:tsc`
+  - `yarn check:es`
+- Additional helper test passed:
+  - `yarn jest src/executor/encoding-helpers.test.ts --runInBand`
+- Executor01/02 snapshots did not change.
 
 ## Phase 4: Wire Resolved Boundary And Orchestration
 

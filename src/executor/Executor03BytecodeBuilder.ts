@@ -1,15 +1,16 @@
 import { ethers, BigNumber } from 'ethers';
 import { DexExchangeBuildParam } from '../types';
-import {
-  Address,
-  OptimalRate,
-  OptimalSwap,
-  OptimalSwapExchange,
-} from '@paraswap/core';
+import { Address } from '@paraswap/core';
 import { isETHAddress } from '../utils';
 import { DepositWithdrawReturn } from '../dex/weth/types';
 import { Executors, Flag, SpecialDex } from './types';
 import { BYTES_96_LENGTH } from './constants';
+import type {
+  ExecutorBytecodeBuildInput,
+  ExecutorRoute,
+  ExecutorRouteSwap,
+  ExecutorRouteSwapExchange,
+} from './encoding-types';
 import {
   DexCallDataParams,
   ExecutorBytecodeBuilder,
@@ -26,12 +27,12 @@ function applyIs128(flag: number): number {
 }
 
 export type Executor03SingleSwapCallDataParams = {
-  swap: OptimalSwap;
+  swap: ExecutorRouteSwap;
   swapExchangeIndex: number;
 };
 
 export type Executor03DexCallDataParams = {
-  swapExchange?: OptimalSwapExchange<any>;
+  swapExchange?: ExecutorRouteSwapExchange;
   maybeWethCallData?: DepositWithdrawReturn;
 };
 
@@ -57,7 +58,7 @@ export class Executor03BytecodeBuilder extends ExecutorBytecodeBuilder<
    * case 2: check destToken balance after swap
    */
   protected buildSimpleSwapFlags(
-    priceRoute: OptimalRate,
+    priceRoute: ExecutorRoute,
     exchangeParams: DexExchangeBuildParam[],
     routeIndex: number,
     swapIndex: number,
@@ -92,10 +93,8 @@ export class Executor03BytecodeBuilder extends ExecutorBytecodeBuilder<
     const needUnwrap =
       needWrapNative && isEthDest && maybeWethCallData?.withdraw;
 
-    const isWETHSrc =
-      !!needUnwrapNative && this.dexHelper.config.isWETH(srcToken);
-    const isWETHDest =
-      !!needUnwrapNative && this.dexHelper.config.isWETH(destToken);
+    const isWETHSrc = !!needUnwrapNative && this.isWETH(srcToken);
+    const isWETHDest = !!needUnwrapNative && this.isWETH(destToken);
 
     let dexFlag = forcePreventInsertFromAmount
       ? Flag.DONT_INSERT_FROM_AMOUNT_DONT_CHECK_BALANCE_AFTER_SWAP
@@ -149,7 +148,7 @@ export class Executor03BytecodeBuilder extends ExecutorBytecodeBuilder<
   }
 
   protected buildMultiMegaSwapFlags(
-    priceRoute: OptimalRate,
+    priceRoute: ExecutorRoute,
     exchangeParams: DexExchangeBuildParam[],
     routeIndex: number,
     swapIndex: number,
@@ -196,11 +195,9 @@ export class Executor03BytecodeBuilder extends ExecutorBytecodeBuilder<
     swapCallData = hexConcat([dexCallData]);
 
     const isWETHSrcUnwrap =
-      !!curExchangeParam.needUnwrapNative &&
-      this.dexHelper.config.isWETH(swap.srcToken);
+      !!curExchangeParam.needUnwrapNative && this.isWETH(swap.srcToken);
     const isWETHDestWrap =
-      !!curExchangeParam.needUnwrapNative &&
-      this.dexHelper.config.isWETH(swap.destToken);
+      !!curExchangeParam.needUnwrapNative && this.isWETH(swap.destToken);
 
     if (isWETHSrcUnwrap) {
       // `swap` is the reordered swap from buildByteCode; index in the reorder
@@ -299,7 +296,7 @@ export class Executor03BytecodeBuilder extends ExecutorBytecodeBuilder<
       // ) {
       //   const transferCallData = this.buildTransferCallData(
       //     this.erc20Interface.encodeFunctionData('transfer', [
-      //       this.dexHelper.config.data.augustusV6Address,
+      //       this.context.augustusV6Address,
       //       // insert 0 because it's still gonna be replaced with balance check result
       //       '0',
       //     ]),
@@ -437,31 +434,35 @@ export class Executor03BytecodeBuilder extends ExecutorBytecodeBuilder<
   }
 
   public getAddress(): string {
-    return this.dexHelper.config.data.executorsAddresses![Executors.THREE];
+    return this.context.executorsAddresses[Executors.THREE];
   }
 
-  public buildByteCode(
-    priceRoute: OptimalRate,
-    exchangeParams: DexExchangeBuildParam[],
-    sender: string,
-    maybeWethCallData?: DepositWithdrawReturn,
-  ): string {
+  public buildByteCode(input: ExecutorBytecodeBuildInput): string {
+    const priceRoute = this.buildExecutorRoute(input);
+    // Keep ordered legs here instead of getExchangeParams(input): Executor03
+    // reorders params but must retain each original swapExchangeIndex.
+    const orderedLegs = this.getOrderedLegs(input);
+    const exchangeParams = orderedLegs.map(
+      orderedLeg => orderedLeg.resolvedLeg.exchangeParam,
+    );
+    const sender = input.sender;
+    const maybeWethCallData = input.wethPlan;
     const swap = priceRoute.bestRoute[0].swaps[0];
 
     // as path are executed in parallel, we can sort them in correct order
     // last path should be the one with wrapping to withdraw WETH dust with `1` flag
-    const orderedExchangeParams = exchangeParams
-      .map((e, index) => ({
-        exchangeParam: e,
+    const orderedExchangeParams = orderedLegs
+      .map(orderedLeg => ({
+        exchangeParam: orderedLeg.resolvedLeg.exchangeParam,
         // to keep swapExchange in the same order as exchangeParams
         swapExchange: {
-          swapExchange: swap.swapExchanges[index],
-          swapExchangeIndex: index,
+          swapExchange: orderedLeg.swapExchange,
+          swapExchangeIndex: orderedLeg.swapExchangeIndex,
         },
       }))
       .sort(e => (e.exchangeParam.needWrapNative ? 1 : -1));
 
-    const swapWithOrderedExchanges: OptimalSwap = {
+    const swapWithOrderedExchanges: ExecutorRouteSwap = {
       ...swap,
       swapExchanges: orderedExchangeParams.map(
         e => e.swapExchange.swapExchange,

@@ -1,18 +1,8 @@
-import { IDexHelper } from '../dex-helper';
-import { Address, OptimalRate, SwapSide } from '@paraswap/core';
-import { ExecutorBytecodeBuilder } from './ExecutorBytecodeBuilder';
-import { Executor01BytecodeBuilder } from './Executor01BytecodeBuilder';
-import { Executor02BytecodeBuilder } from './Executor02BytecodeBuilder';
+import { OptimalRate, SwapSide } from '@paraswap/core';
 import { Executors, RouteExecutionType } from './types';
-import { Executor03BytecodeBuilder } from './Executor03BytecodeBuilder';
-import { WETHBytecodeBuilder, isSingleWrapRoute } from './WETHBytecodeBuilder';
+import { isSingleWrapRoute } from './WETHBytecodeBuilder';
 
 export class ExecutorDetector {
-  private executor01BytecodeBuilder: ExecutorBytecodeBuilder;
-  private executor02BytecodeBuilder: ExecutorBytecodeBuilder;
-  private executor03BytecodeBuilder: ExecutorBytecodeBuilder;
-  private wethBytecodeBuilder: ExecutorBytecodeBuilder;
-
   protected routeExecutionTypeToExecutorMap: Record<
     SwapSide,
     Partial<Record<RouteExecutionType, Executors>>
@@ -31,20 +21,6 @@ export class ExecutorDetector {
       [RouteExecutionType.VERTICAL_BRANCH]: Executors.THREE, // simpleBuy via Executor03
     },
   };
-
-  constructor(protected dexHelper: IDexHelper) {
-    this.executor01BytecodeBuilder = new Executor01BytecodeBuilder(
-      this.dexHelper,
-    );
-    this.executor02BytecodeBuilder = new Executor02BytecodeBuilder(
-      this.dexHelper,
-    );
-    this.executor03BytecodeBuilder = new Executor03BytecodeBuilder(
-      this.dexHelper,
-    );
-
-    this.wethBytecodeBuilder = new WETHBytecodeBuilder(this.dexHelper);
-  }
 
   public getRouteExecutionType(priceRoute: OptimalRate): RouteExecutionType {
     if (
@@ -104,28 +80,5 @@ export class ExecutorDetector {
     }
 
     throw new Error(`${executorName} is not implemented`);
-  }
-
-  getAddress(executorName: Executors): Address {
-    if (!Object.values(Executors).includes(executorName)) {
-      throw new Error(`${executorName} is not supported`);
-    }
-
-    return this.dexHelper.config.data.executorsAddresses![executorName];
-  }
-
-  getBytecodeBuilder(executorName: Executors): ExecutorBytecodeBuilder {
-    switch (executorName) {
-      case Executors.ONE:
-        return this.executor01BytecodeBuilder;
-      case Executors.TWO:
-        return this.executor02BytecodeBuilder;
-      case Executors.THREE:
-        return this.executor03BytecodeBuilder;
-      case Executors.WETH:
-        return this.wethBytecodeBuilder;
-      default:
-        throw new Error(`${executorName} is not supported`);
-    }
   }
 }

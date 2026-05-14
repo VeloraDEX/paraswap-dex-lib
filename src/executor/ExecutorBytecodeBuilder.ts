@@ -1,14 +1,8 @@
 import { Interface } from '@ethersproject/abi';
-import { IDexHelper } from '../dex-helper';
 import ERC20ABI from '../abi/erc20.json';
 import Permit2Abi from '../abi/permit2.json';
 import { ethers } from 'ethers';
-import {
-  Address,
-  OptimalRate,
-  OptimalSwap,
-  OptimalSwapExchange,
-} from '@paraswap/core';
+import { Address } from '@paraswap/core';
 import { DepositWithdrawReturn } from '../dex/weth/types';
 import { isETHAddress } from '../utils';
 import {
@@ -29,6 +23,14 @@ import { Executors, Flag, SpecialDex } from './types';
 import { MAX_UINT, Network, PERMIT2_ADDRESS } from '../constants';
 import { DexExchangeBuildParam, DexExchangeParam } from '../types';
 import { BI_MAX_UINT160, BI_MAX_UINT48 } from '../bigint-constants';
+import type {
+  ExecutorBytecodeBuildInput,
+  ExecutorEncodingContext,
+  ExecutorRoute,
+  OrderedExecutorLeg,
+} from './encoding-types';
+import { getOrderedExecutorLegs } from './route-plan';
+import { isWrappedNativeTokenAddress } from './address-utils';
 
 const {
   utils: { hexlify, hexDataLength, hexConcat, hexZeroPad, solidityPack },
@@ -38,7 +40,7 @@ const MAX_UINT48 = BI_MAX_UINT48.toString();
 const MAX_UINT160 = BI_MAX_UINT160.toString();
 
 export type SingleSwapCallDataParams<T> = {
-  priceRoute: OptimalRate;
+  priceRoute: ExecutorRoute;
   exchangeParams: DexExchangeBuildParam[];
   index: number;
   flags: { approves: Flag[]; dexes: Flag[]; wrap: Flag };
@@ -47,7 +49,7 @@ export type SingleSwapCallDataParams<T> = {
 } & T;
 
 export type DexCallDataParams<T> = {
-  priceRoute: OptimalRate;
+  priceRoute: ExecutorRoute;
   routeIndex: number;
   swapIndex: number;
   swapExchangeIndex: number;
@@ -62,13 +64,13 @@ export abstract class ExecutorBytecodeBuilder<S = {}, D = {}> {
   erc20Interface: Interface;
   permit2Interface: Interface;
 
-  constructor(protected dexHelper: IDexHelper) {
+  constructor(protected context: ExecutorEncodingContext) {
     this.erc20Interface = new Interface(ERC20ABI);
     this.permit2Interface = new Interface(Permit2Abi);
   }
 
   protected buildSimpleSwapFlags(
-    priceRoute: OptimalRate,
+    priceRoute: ExecutorRoute,
     exchangeParams: DexExchangeBuildParam[],
     routeIndex: number,
     swapIndex: number,
@@ -87,7 +89,7 @@ export abstract class ExecutorBytecodeBuilder<S = {}, D = {}> {
   }
 
   protected buildMultiMegaSwapFlags(
-    priceRoute: OptimalRate,
+    priceRoute: ExecutorRoute,
     exchangeParams: DexExchangeBuildParam[],
     routeIndex: number,
     swapIndex: number,
@@ -105,12 +107,7 @@ export abstract class ExecutorBytecodeBuilder<S = {}, D = {}> {
     };
   }
 
-  public abstract buildByteCode(
-    priceRoute: OptimalRate,
-    exchangeParams: DexExchangeBuildParam[],
-    sender: string,
-    maybeWethCallData?: DepositWithdrawReturn,
-  ): string;
+  public abstract buildByteCode(input: ExecutorBytecodeBuildInput): string;
 
   public abstract getAddress(): string;
 
@@ -160,7 +157,7 @@ export abstract class ExecutorBytecodeBuilder<S = {}, D = {}> {
     if (
       amount !== '0' &&
       DISABLED_MAX_UNIT_APPROVAL_TOKENS?.[
-        this.dexHelper.config.data.network as Network
+        this.context.network as Network
       ]?.includes(tokenAddr)
     ) {
       approvalCalldata = hexConcat([
@@ -202,7 +199,7 @@ export abstract class ExecutorBytecodeBuilder<S = {}, D = {}> {
     // add additional approval 0 for special cases
     if (
       DISABLED_MAX_UNIT_APPROVAL_TOKENS?.[
-        this.dexHelper.config.data.network as Network
+        this.context.network as Network
       ]?.includes(tokenAddr)
     ) {
       let resetApprove = this.erc20Interface.encodeFunctionData('approve', [
@@ -269,11 +266,9 @@ export abstract class ExecutorBytecodeBuilder<S = {}, D = {}> {
         break;
       }
       if (idx % 2 === 0) {
-        this.dexHelper
-          .getLogger(`ExecutorBytecodeBuilder`)
-          .warn(
-            `findAmountPosInCalldata: amount found at idx=${idx} (byte-aligned) but not on ABI word boundary. rawCalldata=${rawCalldata}, rawAmount=${rawAmount}`,
-          );
+        this.context.logger.warn(
+          `findAmountPosInCalldata: amount found at idx=${idx} (byte-aligned) but not on ABI word boundary. rawCalldata=${rawCalldata}, rawAmount=${rawAmount}`,
+        );
       }
     }
 
@@ -328,7 +323,7 @@ export abstract class ExecutorBytecodeBuilder<S = {}, D = {}> {
 
   protected buildFinalSpecialFlagCalldata(): string {
     return this.buildCallData(
-      this.dexHelper.config.data.augustusV6Address!, // augustus v6 address
+      this.context.augustusV6Address, // augustus v6 address
       ZEROS_4_BYTES,
       0,
       0,
@@ -410,7 +405,7 @@ export abstract class ExecutorBytecodeBuilder<S = {}, D = {}> {
   }
 
   protected buildFlags(
-    priceRoute: OptimalRate,
+    priceRoute: ExecutorRoute,
     exchangeParams: DexExchangeBuildParam[],
     maybeWethCallData?: DepositWithdrawReturn,
   ): { approves: Flag[]; dexes: Flag[]; wrap: Flag } {
@@ -471,7 +466,7 @@ export abstract class ExecutorBytecodeBuilder<S = {}, D = {}> {
   }
 
   getApprovalTokenAndTarget(
-    swap: OptimalSwap,
+    swap: { srcToken: Address },
     exchangeParam: DexExchangeParam,
   ): { target: string; token: Address } | null {
     if (exchangeParam.skipApproval) return null;
@@ -479,10 +474,7 @@ export abstract class ExecutorBytecodeBuilder<S = {}, D = {}> {
     const target = exchangeParam.spender || exchangeParam.targetExchange;
 
     // WETH src gets unwrapped to ETH before the DEX call; nothing to approve.
-    if (
-      exchangeParam.needUnwrapNative &&
-      this.dexHelper.config.isWETH(swap.srcToken)
-    ) {
+    if (exchangeParam.needUnwrapNative && this.isWETH(swap.srcToken)) {
       return null;
     }
 
@@ -508,9 +500,38 @@ export abstract class ExecutorBytecodeBuilder<S = {}, D = {}> {
 
   protected getWETHAddress(exchangeParam: DexExchangeParam): string {
     const { wethAddress } = exchangeParam;
-    return (
-      wethAddress ||
-      this.dexHelper.config.data.wrappedNativeTokenAddress.toLowerCase()
+    return wethAddress || this.context.wrappedNativeTokenAddress;
+  }
+
+  protected isWETH(address: Address): boolean {
+    return isWrappedNativeTokenAddress(
+      address,
+      this.context.wrappedNativeTokenAddress,
+    );
+  }
+
+  protected buildExecutorRoute(
+    input: ExecutorBytecodeBuildInput,
+  ): ExecutorRoute {
+    return {
+      bestRoute: input.routePlan.routes,
+      srcToken: input.srcToken,
+      destToken: input.destToken,
+      destAmount: input.destAmount,
+    };
+  }
+
+  protected getOrderedLegs(
+    input: ExecutorBytecodeBuildInput,
+  ): OrderedExecutorLeg[] {
+    return getOrderedExecutorLegs(input.routePlan, input.resolvedLegs);
+  }
+
+  protected getExchangeParams(
+    input: ExecutorBytecodeBuildInput,
+  ): DexExchangeBuildParam[] {
+    return this.getOrderedLegs(input).map(
+      orderedLeg => orderedLeg.resolvedLeg.exchangeParam,
     );
   }
 }

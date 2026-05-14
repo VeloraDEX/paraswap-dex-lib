@@ -1,6 +1,7 @@
 import type { Address, DexExchangeBuildParam } from '../types';
 import type { ExecutorEncodingContext } from './encoding-types';
 import { isETHAddress } from '../utils';
+import { isWrappedNativeTokenAddress } from './address-utils';
 
 export type ApprovalTokenAndTarget = {
   target: string;
@@ -10,16 +11,19 @@ export type ApprovalTokenAndTarget = {
 export function getApprovalTokenAndTarget(
   swap: { srcToken: Address },
   exchangeParam: DexExchangeBuildParam,
-  context: Pick<
-    ExecutorEncodingContext,
-    'wrappedNativeTokenAddress' | 'isWETH'
-  >,
+  context: Pick<ExecutorEncodingContext, 'wrappedNativeTokenAddress'>,
 ): ApprovalTokenAndTarget | null {
   if (exchangeParam.skipApproval) return null;
 
   const target = exchangeParam.spender || exchangeParam.targetExchange;
 
-  if (exchangeParam.needUnwrapNative && context.isWETH(swap.srcToken)) {
+  if (
+    exchangeParam.needUnwrapNative &&
+    isWrappedNativeTokenAddress(
+      swap.srcToken,
+      context.wrappedNativeTokenAddress,
+    )
+  ) {
     return null;
   }
 

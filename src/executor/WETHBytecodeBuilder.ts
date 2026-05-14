@@ -1,11 +1,10 @@
-import { DexExchangeBuildParam } from '../types';
 import { OptimalRate } from '@paraswap/core';
 import { isETHAddress } from '../utils';
-import { DepositWithdrawReturn } from '../dex/weth/types';
 import { WethConfig } from '../dex/weth/config';
 import { Executors } from './types';
 import { ExecutorBytecodeBuilder } from './ExecutorBytecodeBuilder';
 import { Network } from '../constants';
+import type { ExecutorBytecodeBuildInput } from './encoding-types';
 
 const SUPPORTED_NETWORKS = [
   Network.MAINNET,
@@ -45,15 +44,10 @@ export class WETHBytecodeBuilder extends ExecutorBytecodeBuilder {
   type = Executors.WETH;
 
   public getAddress(): string {
-    return this.dexHelper.config.data.wrappedNativeTokenAddress;
+    return this.context.executorsAddresses[Executors.WETH];
   }
 
-  public buildByteCode(
-    priceRoute: OptimalRate,
-    exchangeParams: DexExchangeBuildParam[],
-    sender: string,
-    maybeWethCallData?: DepositWithdrawReturn,
-  ): string {
+  public buildByteCode(_input: ExecutorBytecodeBuildInput): string {
     return '0x';
   }
 }

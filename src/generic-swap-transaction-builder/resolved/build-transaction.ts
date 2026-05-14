@@ -1,5 +1,5 @@
 import { Interface } from '@ethersproject/abi';
-import { ContractMethodV6, ParaSwapVersion, SwapSide } from '@paraswap/core';
+import { ContractMethodV6, SwapSide } from '@paraswap/core';
 import { BigNumber, ethers } from 'ethers';
 import {
   ETHER_ADDRESS,
@@ -14,15 +14,7 @@ import {
 } from '../../constants';
 import type { ExecutorBytecodeBuilder } from '../../executor/ExecutorBytecodeBuilder';
 import { Executors } from '../../executor/types';
-import type {
-  Address,
-  DexExchangeBuildParam,
-  OptimalRate,
-  OptimalRoute,
-  OptimalSwap,
-  OptimalSwapExchange,
-  TxObject,
-} from '../../types';
+import type { Address, DexExchangeBuildParam, TxObject } from '../../types';
 import { uuidToBytes16 } from '../../utils';
 import {
   assertDecimalAmountString,
@@ -40,8 +32,6 @@ import type {
   ResolvedDirectBuildOutput,
   ResolvedLeg,
   RoutePlan,
-  RoutePlanSwap,
-  RoutePlanSwapExchange,
 } from './types';
 
 const {
@@ -103,25 +93,17 @@ export function buildTransactionFromResolved(
   input: BuildInput,
   deps: ResolvedBuildDeps,
 ): ResolvedBuildOutput {
-  const resolvedLegByKey = validateBuildInput(input, deps);
-  const executorPriceRoute = buildExecutorCompatiblePriceRoute(input);
-  const exchangeParams = walkRoutePlan(input.routePlan).map(routePosition => {
-    const key = routePositionKey(routePosition);
-    const resolvedLeg = resolvedLegByKey.get(key);
+  validateBuildInput(input, deps);
 
-    if (!resolvedLeg) {
-      throw new Error(`missing resolved leg for route position ${key}`);
-    }
-
-    return resolvedLeg.exchangeParam;
+  const bytecode = deps.bytecodeBuilder.buildByteCode({
+    routePlan: input.routePlan,
+    resolvedLegs: input.resolvedLegs,
+    sender: input.userAddress,
+    srcToken: input.srcToken,
+    destToken: input.destToken,
+    destAmount: input.destAmount,
+    wethPlan: input.wethPlan,
   });
-
-  const bytecode = deps.bytecodeBuilder.buildByteCode(
-    executorPriceRoute,
-    exchangeParams,
-    input.userAddress,
-    input.wethPlan,
-  );
 
   const params = buildGenericSwapParams(input, bytecode);
   const txObject = buildTxObject(input, params, deps.augustusV6Interface);
@@ -158,6 +140,8 @@ function validateBuildInput(
   validateRoutePlan(input.routePlan);
   validateWethPlan(input);
 
+  // Boundary validation owns user-facing fixture/input diagnostics. Executor
+  // ordering helpers re-check these invariants before bytecode traversal.
   assertNoDuplicateResolvedLegs(input.resolvedLegs);
   assertRoutePlanLegCount(input.routePlan, input.resolvedLegs);
 
@@ -442,57 +426,6 @@ function validateWethPlan(input: BuildInput): void {
   }
 }
 
-function buildExecutorCompatiblePriceRoute(input: BuildInput): OptimalRate {
-  const bestRoute: OptimalRoute[] = input.routePlan.routes.map(route => ({
-    percent: route.percent,
-    swaps: route.swaps.map(buildExecutorCompatibleSwap),
-  }));
-
-  return {
-    blockNumber: input.blockNumber,
-    network: input.network,
-    srcToken: input.srcToken,
-    srcDecimals: 0,
-    srcAmount: input.srcAmount,
-    srcUSD: null,
-    destToken: input.destToken,
-    destDecimals: 0,
-    destAmount: input.destAmount,
-    destUSD: null,
-    bestRoute,
-    gasCostUSD: '0',
-    gasCost: '0',
-    side: input.side,
-    contractMethod: input.contractMethod,
-    tokenTransferProxy: NULL_ADDRESS,
-    contractAddress: input.augustusV6Address,
-    partnerFee: 0,
-    hmac: '',
-    version: ParaSwapVersion.V6,
-  };
-}
-
-function buildExecutorCompatibleSwap(swap: RoutePlanSwap): OptimalSwap {
-  return {
-    srcToken: swap.srcToken,
-    srcDecimals: 0,
-    destToken: swap.destToken,
-    destDecimals: 0,
-    swapExchanges: swap.swapExchanges.map(buildExecutorCompatibleSwapExchange),
-  };
-}
-
-function buildExecutorCompatibleSwapExchange(
-  swapExchange: RoutePlanSwapExchange,
-): OptimalSwapExchange<never> {
-  return {
-    exchange: swapExchange.exchange,
-    srcAmount: swapExchange.srcAmount,
-    destAmount: swapExchange.destAmount,
-    percent: swapExchange.percent,
-  };
-}
-
 function buildGenericSwapParams(
   input: BuildInput,
   bytecode: string,
@@ -563,10 +496,7 @@ function buildDirectTxObject(
     from: input.userAddress,
     to: input.augustusV6Address,
     value,
-    data: augustusV6Interface.encodeFunctionData(
-      input.contractMethod,
-      params,
-    ),
+    data: augustusV6Interface.encodeFunctionData(input.contractMethod, params),
     gasPrice: input.gas?.gasPrice,
     maxFeePerGas: input.gas?.maxFeePerGas,
     maxPriorityFeePerGas: input.gas?.maxPriorityFeePerGas,

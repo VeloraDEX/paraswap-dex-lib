@@ -1,10 +1,13 @@
 import { ethers } from 'ethers';
 import { DexExchangeBuildParam } from '../types';
-import { OptimalRate } from '@paraswap/core';
 import { isETHAddress } from '../utils';
 import { DepositWithdrawReturn } from '../dex/weth/types';
 import { Executors, Flag, SpecialDex } from './types';
 import { BYTES_64_LENGTH, DEFAULT_RETURN_AMOUNT_POS } from './constants';
+import type {
+  ExecutorBytecodeBuildInput,
+  ExecutorRoute,
+} from './encoding-types';
 import {
   DexCallDataParams,
   ExecutorBytecodeBuilder,
@@ -40,7 +43,7 @@ export class Executor01BytecodeBuilder extends ExecutorBytecodeBuilder<
    * case 2: check destToken balance after swap
    */
   protected buildSimpleSwapFlags(
-    priceRoute: OptimalRate,
+    priceRoute: ExecutorRoute,
     exchangeParams: DexExchangeBuildParam[],
     routeIndex: number,
     swapIndex: number,
@@ -64,10 +67,8 @@ export class Executor01BytecodeBuilder extends ExecutorBytecodeBuilder<
       sendEthButSupportsInsertFromAmount,
     } = exchangeParam;
 
-    const isWETHSrc =
-      !!needUnwrapNative && this.dexHelper.config.isWETH(srcToken);
-    const isWETHDest =
-      !!needUnwrapNative && this.dexHelper.config.isWETH(destToken);
+    const isWETHSrc = !!needUnwrapNative && this.isWETH(srcToken);
+    const isWETHDest = !!needUnwrapNative && this.isWETH(destToken);
 
     const needWrap = needWrapNative && isEthSrc && maybeWethCallData?.deposit;
     const needUnwrap =
@@ -138,7 +139,7 @@ export class Executor01BytecodeBuilder extends ExecutorBytecodeBuilder<
    */
   // Executor01 doesn't support mega swap routes, flags are built for multi swap routes only here
   protected buildMultiMegaSwapFlags(
-    priceRoute: OptimalRate,
+    priceRoute: ExecutorRoute,
     exchangeParams: DexExchangeBuildParam[],
     routeIndex: number,
     swapIndex: number,
@@ -164,10 +165,8 @@ export class Executor01BytecodeBuilder extends ExecutorBytecodeBuilder<
       swapIndex === priceRoute.bestRoute[routeIndex].swaps.length - 1;
     const isEthSrc = isETHAddress(srcToken);
     const isEthDest = isETHAddress(destToken);
-    const isWETHSrc =
-      !!needUnwrapNative && this.dexHelper.config.isWETH(srcToken);
-    const isWETHDest =
-      !!needUnwrapNative && this.dexHelper.config.isWETH(destToken);
+    const isWETHSrc = !!needUnwrapNative && this.isWETH(srcToken);
+    const isWETHDest = !!needUnwrapNative && this.isWETH(destToken);
 
     const isSpecialDex =
       specialDexFlag !== undefined && specialDexFlag !== SpecialDex.DEFAULT;
@@ -263,11 +262,9 @@ export class Executor01BytecodeBuilder extends ExecutorBytecodeBuilder<
     });
 
     const isWETHSrcUnwrap =
-      !!curExchangeParam.needUnwrapNative &&
-      this.dexHelper.config.isWETH(swap.srcToken);
+      !!curExchangeParam.needUnwrapNative && this.isWETH(swap.srcToken);
     const isWETHDestWrap =
-      !!curExchangeParam.needUnwrapNative &&
-      this.dexHelper.config.isWETH(swap.destToken);
+      !!curExchangeParam.needUnwrapNative && this.isWETH(swap.destToken);
 
     if (isWETHSrcUnwrap) {
       const withdrawCallData = this.buildUnwrapEthCallData(
@@ -444,15 +441,14 @@ export class Executor01BytecodeBuilder extends ExecutorBytecodeBuilder<
   }
 
   public getAddress(): string {
-    return this.dexHelper.config.data.executorsAddresses![Executors.ONE];
+    return this.context.executorsAddresses[Executors.ONE];
   }
 
-  public buildByteCode(
-    priceRoute: OptimalRate,
-    exchangeParams: DexExchangeBuildParam[],
-    sender: string,
-    maybeWethCallData?: DepositWithdrawReturn,
-  ): string {
+  public buildByteCode(input: ExecutorBytecodeBuildInput): string {
+    const priceRoute = this.buildExecutorRoute(input);
+    const exchangeParams = this.getExchangeParams(input);
+    const sender = input.sender;
+    const maybeWethCallData = input.wethPlan;
     const flags = this.buildFlags(
       priceRoute,
       exchangeParams,
@@ -481,7 +477,7 @@ export class Executor01BytecodeBuilder extends ExecutorBytecodeBuilder<
     ) {
       const transferCallData = this.buildTransferCallData(
         this.erc20Interface.encodeFunctionData('transfer', [
-          this.dexHelper.config.data.augustusV6Address,
+          this.context.augustusV6Address,
           priceRoute.destAmount,
         ]),
         priceRoute.destToken,

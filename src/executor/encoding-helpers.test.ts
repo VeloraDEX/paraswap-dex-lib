@@ -9,8 +9,14 @@ import {
 } from './encoding-context';
 import type { ResolvedLeg, RoutePlan, RoutePosition } from './encoding-types';
 import { Executor01BytecodeBuilder } from './Executor01BytecodeBuilder';
+import {
+  Executor03BytecodeBuilder,
+  type Executor03SingleSwapCallDataParams,
+} from './Executor03BytecodeBuilder';
+import type { SingleSwapCallDataParams } from './ExecutorBytecodeBuilder';
 import { getOrderedExecutorLegs, routePositionKey } from './route-plan';
 import { Executors } from './types';
+import { isWrappedNativeTokenAddress } from './address-utils';
 
 const TOKEN_A = '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 const TOKEN_B = '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
@@ -197,9 +203,17 @@ describe('executor encoding helpers', () => {
         [Executors.WETH]: MIXED_WRAPPED_NATIVE_TOKEN_ADDRESS.toLowerCase(),
       });
       expect(
-        context.isWETH(MIXED_WRAPPED_NATIVE_TOKEN_ADDRESS.toUpperCase()),
+        isWrappedNativeTokenAddress(
+          MIXED_WRAPPED_NATIVE_TOKEN_ADDRESS.toUpperCase(),
+          context.wrappedNativeTokenAddress,
+        ),
       ).toBe(true);
-      expect(context.isWETH(MIXED_EXECUTOR_ONE_ADDRESS)).toBe(false);
+      expect(
+        isWrappedNativeTokenAddress(
+          MIXED_EXECUTOR_ONE_ADDRESS,
+          context.wrappedNativeTokenAddress,
+        ),
+      ).toBe(false);
 
       context.logger.warn('executor warning');
 
@@ -266,7 +280,7 @@ describe('executor encoding helpers', () => {
     it('matches the current executor builder approval behavior', () => {
       const dexHelper = createMixedCaseDexHelper();
       const context = createExecutorEncodingContextFromDexHelper(dexHelper);
-      const builder = new Executor01BytecodeBuilder(dexHelper);
+      const builder = new Executor01BytecodeBuilder(context);
 
       const cases: ApprovalCase[] = [
         {
@@ -337,6 +351,37 @@ describe('executor encoding helpers', () => {
 
         expect({ name, result }).toEqual({ name, result: expected });
       });
+    });
+  });
+
+  describe('Executor03 ordering', () => {
+    it('retains original swap-exchange indexes after needWrapNative reordering', () => {
+      const context = createExecutorEncodingContextFromDexHelper(
+        createMixedCaseDexHelper(),
+      );
+      const builder = new Executor03OrderingProbe(context);
+      const routePlan = buildExecutor03RoutePlanFixture();
+
+      builder.buildByteCode({
+        routePlan,
+        resolvedLegs: [
+          buildResolvedLegWithExchangeParam(routePositionAt(0, 0, 0), {
+            needWrapNative: true,
+          }),
+          buildResolvedLegWithExchangeParam(routePositionAt(0, 0, 1), {
+            needWrapNative: false,
+          }),
+        ],
+        sender: NULL_ADDRESS,
+        srcToken: routePlan.routes[0].swaps[0].srcToken,
+        destToken: routePlan.routes[0].swaps[0].destToken,
+        destAmount: routePlan.routes[0].swaps[0].destAmount,
+      });
+
+      expect(builder.calls).toEqual([
+        { index: 0, swapExchangeIndex: 1 },
+        { index: 1, swapExchangeIndex: 0 },
+      ]);
     });
   });
 });
@@ -478,16 +523,70 @@ function buildMegaRoutePlanFixture(): RoutePlan {
   };
 }
 
+function buildExecutor03RoutePlanFixture(): RoutePlan {
+  return {
+    routes: [
+      {
+        percent: 100,
+        swaps: [
+          {
+            srcToken: TOKEN_A,
+            destToken: TOKEN_B,
+            srcAmount: '100',
+            destAmount: '90',
+            swapExchanges: [
+              {
+                exchange: 'WrappedDex',
+                percent: 50,
+                srcAmount: '50',
+                destAmount: '45',
+              },
+              {
+                exchange: 'PlainDex',
+                percent: 50,
+                srcAmount: '50',
+                destAmount: '45',
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  };
+}
+
 function buildResolvedLeg(position: RoutePosition): ResolvedLeg {
+  return buildResolvedLegWithExchangeParam(position, {});
+}
+
+function buildResolvedLegWithExchangeParam(
+  position: RoutePosition,
+  exchangeParamOverrides: ExchangeParamOverrides,
+): ResolvedLeg {
   return {
     ...position,
-    exchangeParam: buildExchangeParam({}),
+    exchangeParam: buildExchangeParam(exchangeParamOverrides),
     normalizedSrcToken: TOKEN_A,
     normalizedDestToken: TOKEN_B,
     normalizedSrcAmount: '1',
     normalizedDestAmount: '1',
     recipient: TARGET_EXCHANGE,
   };
+}
+
+class Executor03OrderingProbe extends Executor03BytecodeBuilder {
+  readonly calls: { index: number; swapExchangeIndex: number }[] = [];
+
+  protected buildSingleSwapCallData(
+    params: SingleSwapCallDataParams<Executor03SingleSwapCallDataParams>,
+  ): string {
+    this.calls.push({
+      index: params.index,
+      swapExchangeIndex: params.swapExchangeIndex,
+    });
+
+    return '0x';
+  }
 }
 
 function routePositionAt(

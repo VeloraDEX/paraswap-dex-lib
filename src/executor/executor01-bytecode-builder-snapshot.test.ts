@@ -4,7 +4,8 @@ dotenv.config();
 import { Executor01BytecodeBuilder } from './Executor01BytecodeBuilder';
 import {
   asDexExchangeBuildParams,
-  createExecutorDexHelper,
+  buildExecutorSnapshotInput,
+  createExecutorSnapshotContext,
 } from './__test-utils__/snapshot-test-helpers';
 import { Network, NULL_ADDRESS } from '../constants';
 
@@ -64,19 +65,33 @@ import priceRouteMultiSwapBalancerV1SushiV3WbtcEthSushi from './fixtures/executo
 import exchangeParamsMultiSwapBalancerV1SushiV3WbtcEthSushi from './fixtures/executor01/exchange-params/price-route-multiswap-balancerv1-sushiv3-wbtc-eth-sushi.json';
 import maybeWethCalldataMultiSwapBalancerV1SushiV3WbtcEthSushi from './fixtures/executor01/maybe-weth-calldata/price-route-multiswap-balancerv1-sushiv3-wbtc-eth-sushi.json';
 
+function buildExecutor01ByteCode(
+  builder: Executor01BytecodeBuilder,
+  priceRoute: OptimalRate,
+  exchangeParams: ReturnType<typeof asDexExchangeBuildParams>,
+  sender: string,
+  wethPlan?: DepositWithdrawReturn,
+): string {
+  return builder.buildByteCode(
+    buildExecutorSnapshotInput(priceRoute, exchangeParams, sender, wethPlan),
+  );
+}
+
 describe('Executor01BytecodeBuilder Snapshot tests', () => {
   let executor01BytecodeBuilder: Executor01BytecodeBuilder;
   beforeEach(() => {
     const network = Network.MAINNET;
-    const dexHelper = createExecutorDexHelper(network);
-    executor01BytecodeBuilder = new Executor01BytecodeBuilder(dexHelper);
+    executor01BytecodeBuilder = new Executor01BytecodeBuilder(
+      createExecutorSnapshotContext(network),
+    );
   });
 
   describe('buildByteCode', () => {
     describe('SimpleSwap', () => {
       describe('UniV3 (needs wrap native, dex func has dest token and recipient)', () => {
         it('should produce correct bytecode for simpleSwap ETH -> USDC', () => {
-          const bytecode = executor01BytecodeBuilder.buildByteCode(
+          const bytecode = buildExecutor01ByteCode(
+            executor01BytecodeBuilder,
             priceRouteSimpleSwapUniV3EthUsdc as unknown as OptimalRate,
             asDexExchangeBuildParams(exchangeParamsSimpleSwapUniV3EthUsdc),
             NULL_ADDRESS,
@@ -87,7 +102,8 @@ describe('Executor01BytecodeBuilder Snapshot tests', () => {
         });
 
         it('should produce correct bytecode for simpleSwap USDC -> ETH', () => {
-          const bytecode = executor01BytecodeBuilder.buildByteCode(
+          const bytecode = buildExecutor01ByteCode(
+            executor01BytecodeBuilder,
             priceRouteSimpleSwapUniV3UsdcEth as unknown as OptimalRate,
             asDexExchangeBuildParams(exchangeParamsSimpleSwapUniV3UsdcEth),
             NULL_ADDRESS,
@@ -98,7 +114,8 @@ describe('Executor01BytecodeBuilder Snapshot tests', () => {
         });
 
         it('should produce correct bytecode for simpleSwap USDC -> USDT', () => {
-          const bytecode = executor01BytecodeBuilder.buildByteCode(
+          const bytecode = buildExecutor01ByteCode(
+            executor01BytecodeBuilder,
             priceRouteSimpleSwapUniV3UsdcUsdt as unknown as OptimalRate,
             asDexExchangeBuildParams(exchangeParamsSimpleSwapUniV3UsdcUsdt),
             NULL_ADDRESS,
@@ -111,7 +128,8 @@ describe('Executor01BytecodeBuilder Snapshot tests', () => {
 
       describe('BalancerV1 (needs wrap native dynamically depending on a dex function, no recipient, dex func has a dest token)', () => {
         it('should produce correct bytecode for simpleSwap ETH -> USDC', () => {
-          const bytecode = executor01BytecodeBuilder.buildByteCode(
+          const bytecode = buildExecutor01ByteCode(
+            executor01BytecodeBuilder,
             priceRouteSimpleSwapBalancerV1EthUsdc as unknown as OptimalRate,
             asDexExchangeBuildParams(exchangeParamsSimpleSwapBalancerV1EthUsdc),
             NULL_ADDRESS,
@@ -122,7 +140,8 @@ describe('Executor01BytecodeBuilder Snapshot tests', () => {
         });
 
         it('should produce correct bytecode for simpleSwap USDC -> ETH', () => {
-          const bytecode = executor01BytecodeBuilder.buildByteCode(
+          const bytecode = buildExecutor01ByteCode(
+            executor01BytecodeBuilder,
             priceRouteSimpleSwapBalancerV1UsdcEth as unknown as OptimalRate,
             asDexExchangeBuildParams(exchangeParamsSimpleSwapBalancerV1UsdcEth),
             NULL_ADDRESS,
@@ -133,7 +152,8 @@ describe('Executor01BytecodeBuilder Snapshot tests', () => {
         });
 
         it('should produce correct bytecode for simpleSwap USDC -> WBTC', () => {
-          const bytecode = executor01BytecodeBuilder.buildByteCode(
+          const bytecode = buildExecutor01ByteCode(
+            executor01BytecodeBuilder,
             priceRouteSimpleSwapBalancerV1UsdcWbtc as unknown as OptimalRate,
             asDexExchangeBuildParams(
               exchangeParamsSimpleSwapBalancerV1UsdcWbtc,
@@ -148,7 +168,8 @@ describe('Executor01BytecodeBuilder Snapshot tests', () => {
 
       describe('CurveV1 (doesnt need wrap native, no recipient, no dest token in dex func args)', () => {
         it('should produce correct bytecode for simpleSwap ETH -> STETH', () => {
-          const bytecode = executor01BytecodeBuilder.buildByteCode(
+          const bytecode = buildExecutor01ByteCode(
+            executor01BytecodeBuilder,
             priceRouteSimpleSwapCurveV1EthSteth as unknown as OptimalRate,
             asDexExchangeBuildParams(exchangeParamsSimpleSwapCurveV1EthSteth),
             NULL_ADDRESS,
@@ -159,7 +180,8 @@ describe('Executor01BytecodeBuilder Snapshot tests', () => {
         });
 
         it('should produce correct bytecode for simpleSwap STETH -> ETH', () => {
-          const bytecode = executor01BytecodeBuilder.buildByteCode(
+          const bytecode = buildExecutor01ByteCode(
+            executor01BytecodeBuilder,
             priceRouteSimpleSwapCurveV1StethEth as unknown as OptimalRate,
             asDexExchangeBuildParams(exchangeParamsSimpleSwapCurveV1StethEth),
             NULL_ADDRESS,
@@ -170,7 +192,8 @@ describe('Executor01BytecodeBuilder Snapshot tests', () => {
         });
 
         it('should produce correct bytecode for simpleSwap USDC -> USDT', () => {
-          const bytecode = executor01BytecodeBuilder.buildByteCode(
+          const bytecode = buildExecutor01ByteCode(
+            executor01BytecodeBuilder,
             priceRouteSimpleSwapCurveV1UsdcUsdt as unknown as OptimalRate,
             asDexExchangeBuildParams(exchangeParamsSimpleSwapCurveV1UsdcUsdt),
             NULL_ADDRESS,
@@ -184,7 +207,8 @@ describe('Executor01BytecodeBuilder Snapshot tests', () => {
 
     describe('MultiSwap', () => {
       it('should produce correct bytecode for USDC -> ETH -> WBTC via SushiSwapV3', () => {
-        const bytecode = executor01BytecodeBuilder.buildByteCode(
+        const bytecode = buildExecutor01ByteCode(
+          executor01BytecodeBuilder,
           priceRouteMultiSwapSushiV3DaiUsdcEth as unknown as OptimalRate,
           asDexExchangeBuildParams(exchangeParamsMultiSwapSushiV3DaiUsdcEth),
           NULL_ADDRESS,
@@ -195,7 +219,8 @@ describe('Executor01BytecodeBuilder Snapshot tests', () => {
       });
 
       it('should produce correct bytecode for DAI -> USDC -> ETH  via SushiSwapV3', () => {
-        const bytecode = executor01BytecodeBuilder.buildByteCode(
+        const bytecode = buildExecutor01ByteCode(
+          executor01BytecodeBuilder,
           priceRouteMultiSwapSushiV3DaiUsdcEth as unknown as OptimalRate,
           asDexExchangeBuildParams(exchangeParamsMultiSwapSushiV3DaiUsdcEth),
           NULL_ADDRESS,
@@ -206,7 +231,8 @@ describe('Executor01BytecodeBuilder Snapshot tests', () => {
       });
 
       it('should produce correct bytecode for ETH -> USDC -> DAI  via SushiSwapV3', () => {
-        const bytecode = executor01BytecodeBuilder.buildByteCode(
+        const bytecode = buildExecutor01ByteCode(
+          executor01BytecodeBuilder,
           priceRouteMultiSwapSushiV3EthUsdcDai as unknown as OptimalRate,
           asDexExchangeBuildParams(exchangeParamsMultiSwapSushiV3EthUsdcDai),
           NULL_ADDRESS,
@@ -217,7 +243,8 @@ describe('Executor01BytecodeBuilder Snapshot tests', () => {
       });
 
       it('should produce correct bytecode for USDT -> USDC -> DAI  via SushiSwapV3', () => {
-        const bytecode = executor01BytecodeBuilder.buildByteCode(
+        const bytecode = buildExecutor01ByteCode(
+          executor01BytecodeBuilder,
           priceRouteMultiSwapSushiV3UsdtUsdcDai as unknown as OptimalRate,
           asDexExchangeBuildParams(exchangeParamsMultiSwapSushiV3UsdtUsdcDai),
           NULL_ADDRESS,
@@ -228,7 +255,8 @@ describe('Executor01BytecodeBuilder Snapshot tests', () => {
       });
 
       it('should produce correct bytecode for GUSD -> USDC -> ETH via SushiSwapV3 and CurveV1', () => {
-        const bytecode = executor01BytecodeBuilder.buildByteCode(
+        const bytecode = buildExecutor01ByteCode(
+          executor01BytecodeBuilder,
           priceRouteMultiSwapSushiV3CurveV1GusdUsdcEth as unknown as OptimalRate,
           asDexExchangeBuildParams(
             exchangeParamsMultiSwapSushiV3CurveV1GusdUsdcEth,
@@ -241,7 +269,8 @@ describe('Executor01BytecodeBuilder Snapshot tests', () => {
       });
 
       it('should produce correct bytecode for ETH -> USDC -> GUSD via SushiSwapV3 and CurveV1', () => {
-        const bytecode = executor01BytecodeBuilder.buildByteCode(
+        const bytecode = buildExecutor01ByteCode(
+          executor01BytecodeBuilder,
           priceRouteMultiSwapSushiV3CurveV1EthUsdcGusd as unknown as OptimalRate,
           asDexExchangeBuildParams(
             exchangeParamsMultiSwapSushiV3CurveV1EthUsdcGusd,
@@ -254,7 +283,8 @@ describe('Executor01BytecodeBuilder Snapshot tests', () => {
       });
 
       it('should produce correct bytecode for ETH -> USDC -> GUSD via BalancerV1 and CurveV1', () => {
-        const bytecode = executor01BytecodeBuilder.buildByteCode(
+        const bytecode = buildExecutor01ByteCode(
+          executor01BytecodeBuilder,
           priceRouteMultiSwapBalancerV1CurveV1EthUsdcGusd as unknown as OptimalRate,
           asDexExchangeBuildParams(
             exchangeParamsMultiSwapBalancerV1CurveV1EthUsdcGusd,
@@ -267,7 +297,8 @@ describe('Executor01BytecodeBuilder Snapshot tests', () => {
       });
 
       it('should produce correct bytecode for WBTC -> ETH -> SUSHI via BalancerV1 and SushiSwapV3', () => {
-        const bytecode = executor01BytecodeBuilder.buildByteCode(
+        const bytecode = buildExecutor01ByteCode(
+          executor01BytecodeBuilder,
           priceRouteMultiSwapBalancerV1SushiV3WbtcEthSushi as unknown as OptimalRate,
           asDexExchangeBuildParams(
             exchangeParamsMultiSwapBalancerV1SushiV3WbtcEthSushi,

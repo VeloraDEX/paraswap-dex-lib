@@ -1,7 +1,8 @@
 import { Interface } from '@ethersproject/abi';
 import AugustusV6ABI from '../../../src/abi/augustus-v6/ABI.json';
 import { Executors } from '../../../src/executor/types';
-import { ExecutorDetector } from '../../../src/executor/ExecutorDetector';
+import { createExecutorEncodingContextFromDexHelper } from '../../../src/executor/encoding-context';
+import { createExecutorBytecodeBuilder } from '../../../src/executor/factory';
 import type {
   BuildInput,
   DirectBuildInput,
@@ -37,10 +38,10 @@ export function createResolvedBuildDeps(input: BuildInput): ResolvedBuildDeps {
     },
     getLogger: createNoOpLogger,
   } as any;
-  const detector = new ExecutorDetector(dexHelper);
+  const context = createExecutorEncodingContextFromDexHelper(dexHelper);
 
   return {
-    bytecodeBuilder: detector.getBytecodeBuilder(input.executorType),
+    bytecodeBuilder: createExecutorBytecodeBuilder(input.executorType, context),
     augustusV6Interface: AUGUSTUS_V6_INTERFACE,
   };
 }

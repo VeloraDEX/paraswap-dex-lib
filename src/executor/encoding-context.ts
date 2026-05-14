@@ -1,9 +1,9 @@
 import type { IDexHelper } from '../dex-helper';
-import type { Address } from '../types';
 import type {
   ExecutorEncodingContext,
   ExecutorEncodingLogger,
 } from './encoding-types';
+import type { Address } from '../types';
 import { Executors } from './types';
 
 export function createNoopExecutorEncodingLogger(): ExecutorEncodingLogger {
@@ -51,8 +51,6 @@ export function createExecutorEncodingContextFromDexHelper(
       ),
       [Executors.WETH]: wrappedNativeTokenAddress,
     },
-    isWETH: (address: Address) =>
-      normalizeAddress(address) === wrappedNativeTokenAddress,
     // Keep method bindings: some logger implementations depend on `this`.
     logger: {
       debug: logger.debug.bind(logger),

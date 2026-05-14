@@ -13,3 +13,4 @@ tests/configs.json
 local-scripts
 tests/debug-price-route.json
 .husky/.git-secrets-installed
+/tmp/

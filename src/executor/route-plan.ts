@@ -74,6 +74,8 @@ export function getOrderedExecutorLegs(
   routePlan: RoutePlan,
   resolvedLegs: ResolvedLeg[],
 ): OrderedExecutorLeg[] {
+  // Executor validation is deliberately local to bytecode traversal, even when
+  // callers already validated serialized boundary input.
   const routePositions = walkRoutePlan(routePlan);
   const routePositionKeys = new Set(routePositions.map(routePositionKey));
   const resolvedLegByKey = new Map<string, ResolvedLeg>();
