@@ -13,18 +13,21 @@ unchanged.
 - Add executor-owned encoding primitives:
 
   - `ExecutorEncodingContext`: `network`, `augustusV6Address`,
-    `wrappedNativeTokenAddress`, `executorsAddresses`, `isWETH(address)`, and
-    required `logger.warn`.
-  - `createNoopExecutorEncodingLogger()` returning `{ warn: () => undefined }`
-    for tests and non-logging call sites.
+    `wrappedNativeTokenAddress`, `executorsAddresses`, and required logger
+    methods `debug`, `info`, `warn`, and `error`. WETH checks are derived from
+    `wrappedNativeTokenAddress` in executor-owned code instead of being carried
+    as a callback on the context.
+  - `createNoopExecutorEncodingLogger()` returning no-op `debug`, `info`,
+    `warn`, and `error` methods for tests and non-logging call sites.
   - `ExecutorBytecodeBuildInput`: `routePlan`, `resolvedLegs`, `sender`,
     optional `wethPlan`, and only the top-level route fields currently read by
     executor encoding: `srcToken`, `destToken`, and `destAmount`.
   - `createExecutorEncodingContextFromDexHelper(dexHelper)` adapter for
     orchestration code only. The adapter lowercases all `executorsAddresses`
     entries, synthesizes `executorsAddresses[Executors.WETH]` from
-    `wrappedNativeTokenAddress`, and wires
-    `dexHelper.getLogger('ExecutorBytecodeBuilder').warn`.
+    `wrappedNativeTokenAddress`, rejects a conflicting configured WETH executor
+    address, and binds
+    `dexHelper.getLogger('ExecutorBytecodeBuilder')` logger methods.
   - `createExecutorBytecodeBuilder(type, context)` factory for
     `Executor01BytecodeBuilder`, `Executor02BytecodeBuilder`,
     `Executor03BytecodeBuilder`, and `WETHBytecodeBuilder`.
@@ -66,6 +69,10 @@ unchanged.
     against `encodingContext.executorsAddresses[input.executorType]`.
     `Executors.WETH` must validate against the synthesized WETH address entry,
     which equals `context.wrappedNativeTokenAddress`.
+  - It also validates `input.network`, `input.augustusV6Address`, and
+    `input.wrappedNativeTokenAddress` against `encodingContext`, so direct
+    resolved-boundary callers cannot mix fixture input from one network/context
+    with runtime addresses from another.
   - It creates the bytecode builder with
     `createExecutorBytecodeBuilder(input.executorType, encodingContext)`.
   - Delete `buildExecutorCompatiblePriceRoute()` on purpose and pass
@@ -73,8 +80,9 @@ unchanged.
   - `ExecutorEncodingContext` is runtime-only and never appears in fixture JSON.
 
 - Simplify `GenericSwapTransactionBuilder` orchestration:
-  - Build one `ExecutorEncodingContext` from `dexAdapterService.dexHelper` in
-    the constructor.
+  - Build one `ExecutorEncodingContext` lazily from
+    `dexAdapterService.dexHelper` when a generic executor path first needs it.
+    Direct-only flows do not require executor/WETH config.
   - Split executor selection from builder construction: keep
     `ExecutorDetector.getExecutorByPriceRoute(priceRoute)` as route-only
     executor selection and stop using `ExecutorDetector.getBytecodeBuilder()`

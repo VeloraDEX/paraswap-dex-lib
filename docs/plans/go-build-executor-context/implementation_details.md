@@ -132,8 +132,8 @@ builder call sites yet.
      executor address
    - synthesizes `executorsAddresses[Executors.WETH]` from
      `wrappedNativeTokenAddress`
-   - wires `logger.warn` to
-     `dexHelper.getLogger('ExecutorBytecodeBuilder').warn`
+   - wires logger methods from
+     `dexHelper.getLogger('ExecutorBytecodeBuilder')`
 6. Add `getOrderedExecutorLegs(routePlan, resolvedLegs)` as the only helper that
    flattens route positions to resolved legs for executor encoding.
 7. Add `getApprovalTokenAndTarget(swap, exchangeParam, context)` as a pure helper
@@ -218,7 +218,8 @@ Make Executor01/02/03/WETH bytecode builders depend on
    `ExecutorEncodingContext`.
 2. Replace all `this.dexHelper.config.*` reads with context fields or
    executor-owned WETH checks against `context.wrappedNativeTokenAddress`.
-3. Replace logger access with required `context.logger.warn`.
+3. Replace logger access with required `context.logger` methods; executor
+   builders currently use `context.logger.warn`.
 4. Replace `buildByteCode(priceRoute, exchangeParams, sender, wethPlan)` with
    `buildByteCode(input: ExecutorBytecodeBuildInput)`.
 5. Use `getOrderedExecutorLegs()` to produce the flat traversal used for flags,
@@ -414,6 +415,33 @@ yarn jest src/executor/executor01-bytecode-builder-snapshot.test.ts src/executor
 yarn check:tsc
 yarn check:es
 ```
+
+### Status
+
+Completed on 2026-05-14.
+
+- Reconciled `docs/plans/go-build-executor-context/implementation.md` with the
+  implemented shape:
+  - `ExecutorEncodingContext` is data-only and does not carry an `isWETH`
+    callback.
+  - executor-owned WETH checks derive from
+    `context.wrappedNativeTokenAddress`.
+  - the no-op executor logger exposes `debug`, `info`, `warn`, and `error`.
+  - `GenericSwapTransactionBuilder` creates the encoding context lazily for
+    generic executor paths, leaving direct-only flows independent from
+    executor/WETH config.
+  - `buildTransactionFromResolved()` validates `network`,
+    `augustusV6Address`, `wrappedNativeTokenAddress`, and executor address
+    against `ResolvedBuildDeps.encodingContext`.
+- Final acceptance commands passed:
+  - `yarn fixtures:check`
+  - `yarn jest tests/generic-swap-transaction-builder/resolved --runInBand`
+  - `yarn jest src/executor/executor01-bytecode-builder-snapshot.test.ts src/executor/executor02-bytecode-builder-snapshot.test.ts --runInBand`
+  - `yarn check:tsc`
+  - `yarn check:es`
+- No committed fixture JSON or executor snapshots changed.
+- Deferred work: the Go implementation itself remains outside this refactor and
+  is still covered by the non-goals below.
 
 ## Non-Goals
 
