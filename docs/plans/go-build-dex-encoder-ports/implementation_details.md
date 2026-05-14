@@ -142,6 +142,7 @@ smaller and easier to review.
 
 ```bash
 yarn fixtures:check
+yarn jest tests/generic-swap-transaction-builder/orchestration.test.ts --runInBand
 yarn jest tests/generic-swap-transaction-builder/resolved --runInBand
 yarn check:tsc
 yarn check:es
@@ -155,7 +156,29 @@ Phase 1 is complete only when:
 
 ### Status
 
-Not started.
+Complete.
+
+- Added `src/generic-swap-transaction-builder/orchestration.ts` with pure
+  helpers for quoted amount, beneficiary, permit, generic DEX call params, WETH
+  plan aggregation, approval request/decision application, and WETH/native route
+  wrap-mode inspection.
+- Routed `GenericSwapTransactionBuilder.buildResolvedCalls()` through the pure
+  DEX call param and WETH aggregation helpers while keeping WETH calldata as a
+  local callback; Phase 4 can replace that callback with
+  `WethCallDataProviderPort`.
+- Routed approval side effects through pure request/decision helpers: the class
+  still owns `augustusApprovals.hasApprovals(...)`, and the helper applies the
+  already-known decisions to resolved legs.
+- Exported the resolved-boundary `buildFeesV6()` helper and removed the
+  duplicate direct-path fee packer from `GenericSwapTransactionBuilder`.
+- Added focused helper tests under
+  `tests/generic-swap-transaction-builder/orchestration.test.ts`.
+- Verified with:
+  - `yarn jest tests/generic-swap-transaction-builder/orchestration.test.ts --runInBand`
+  - `yarn fixtures:check`
+  - `yarn jest tests/generic-swap-transaction-builder/resolved --runInBand`
+  - `yarn check:tsc`
+  - `yarn check:es`
 
 ## Phase 2: Define Port DTOs And Interfaces
 

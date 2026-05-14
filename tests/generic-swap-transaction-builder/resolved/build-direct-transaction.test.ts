@@ -10,6 +10,7 @@ import { ETHER_ADDRESS, Network, NULL_ADDRESS } from '../../../src/constants';
 import type { DexAdapterService } from '../../../src/dex';
 import { GenericSwapTransactionBuilder } from '../../../src/generic-swap-transaction-builder';
 import {
+  buildFeesV6,
   buildDirectTransactionFromResolved,
   type DirectBuildInput,
 } from '../../../src/generic-swap-transaction-builder/resolved';
@@ -23,6 +24,7 @@ const TOKEN_B = '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
 const POOL_ADDRESS = '0xcccccccccccccccccccccccccccccccccccccccc';
 const MAKER_ADDRESS = '0xdddddddddddddddddddddddddddddddddddddddd';
 const TAKER_ADDRESS = '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee';
+const PARTNER_ADDRESS = '0x3333333333333333333333333333333333333333';
 const UUID = '11111111-1111-1111-1111-111111111111';
 const METADATA = `0x${'11'.repeat(32)}`;
 const GAS = {
@@ -47,6 +49,18 @@ type DirectCase = {
   minMaxAmount?: string;
   quotedAmount?: string;
 };
+
+type DirectBuildArgOverrides = Partial<{
+  referrerAddress: Address;
+  partnerAddress: Address;
+  partnerFeePercent: string;
+  takeSurplus: boolean;
+  isCapSurplus: boolean;
+  isSurplusToUser: boolean;
+  isDirectFeeTransfer: boolean;
+  permit: string;
+  beneficiary: Address;
+}>;
 
 describe('resolved direct transaction build', () => {
   const directCases: DirectCase[] = [
@@ -87,12 +101,7 @@ describe('resolved direct transaction build', () => {
       side: SwapSide.BUY,
       minMaxAmount: '1200',
       quotedAmount: '1100',
-      params: [
-        ['1200', '1000', '1100', METADATA, '0'],
-        '0',
-        '0x',
-        '0x1234',
-      ],
+      params: [['1200', '1000', '1100', METADATA, '0'], '0', '0x', '0x1234'],
     },
     {
       title: 'CurveV1 SELL',
@@ -185,6 +194,22 @@ describe('resolved direct transaction build', () => {
     expect(result.tx.gasPrice).toBe(GAS.gasPrice);
     expect(result.tx.maxFeePerGas).toBe(GAS.maxFeePerGas);
     expect(result.tx.maxPriorityFeePerGas).toBe(GAS.maxPriorityFeePerGas);
+  });
+
+  it('passes packed nonzero partner fee to direct DEX encoder', async () => {
+    const feeArgs = {
+      partnerAddress: PARTNER_ADDRESS,
+      partnerFeePercent: '25',
+      isCapSurplus: true,
+      isDirectFeeTransfer: true,
+    };
+
+    const result = await expectDirectPublicBuilderParity(
+      directCases[2],
+      feeArgs,
+    );
+
+    expect(result.directDex.getDirectParamV6).toHaveBeenCalledTimes(2);
   });
 
   it('calculates BUY native source value from minMaxAmount', () => {
@@ -298,7 +323,10 @@ describe('resolved direct transaction build', () => {
   );
 });
 
-async function expectDirectPublicBuilderParity(directCase: DirectCase) {
+async function expectDirectPublicBuilderParity(
+  directCase: DirectCase,
+  buildArgOverrides: DirectBuildArgOverrides = {},
+) {
   const priceRoute = buildDirectPriceRoute(directCase);
   const minMaxAmount = directCase.minMaxAmount ?? '990';
   const quotedAmount = directCase.quotedAmount ?? priceRoute.destAmount;
@@ -320,12 +348,25 @@ async function expectDirectPublicBuilderParity(directCase: DirectCase) {
   const boundaryOutput = buildDirectTransactionFromResolved(boundaryInput, {
     augustusV6Interface: AUGUSTUS_V6_INTERFACE,
   });
+  const args = buildArgs(
+    priceRoute,
+    minMaxAmount,
+    quotedAmount,
+    buildArgOverrides,
+  );
+  const expectedPartnerAndFee = buildFeesV6({
+    referrerAddress: args.referrerAddress,
+    partnerAddress: args.partnerAddress,
+    partnerFeePercent: args.partnerFeePercent,
+    takeSurplus: args.takeSurplus,
+    isCapSurplus: args.isCapSurplus,
+    isSurplusToUser: args.isSurplusToUser,
+    isDirectFeeTransfer: args.isDirectFeeTransfer,
+  });
 
-  const tx = (await builder.build(
-    buildArgs(priceRoute, minMaxAmount, quotedAmount),
-  )) as TxObject;
+  const tx = (await builder.build(args)) as TxObject;
   const params = (await builder.build({
-    ...buildArgs(priceRoute, minMaxAmount, quotedAmount),
+    ...args,
     onlyParams: true,
   })) as unknown[];
 
@@ -344,10 +385,10 @@ async function expectDirectPublicBuilderParity(directCase: DirectCase) {
     quotedAmount,
     priceRoute.bestRoute[0].swaps[0].swapExchanges[0].data,
     directCase.side,
-    '0x',
+    args.permit,
     UUID,
-    '0',
-    NULL_ADDRESS,
+    expectedPartnerAndFee,
+    args.beneficiary,
     priceRoute.blockNumber,
     directCase.contractMethod,
   );
@@ -356,6 +397,7 @@ async function expectDirectPublicBuilderParity(directCase: DirectCase) {
     priceRoute,
     boundaryOutput,
     dexResult,
+    directDex,
     tx,
     params,
   };
@@ -488,9 +530,7 @@ function buildDirectDexResult(directCase: DirectCase): DirectDexResult {
   };
 }
 
-function getSideDerivedEncoderMethod(
-  directCase: DirectCase,
-): ContractMethodV6 {
+function getSideDerivedEncoderMethod(directCase: DirectCase): ContractMethodV6 {
   if (
     directCase.contractMethod ===
       ContractMethodV6.swapExactAmountInOnUniswapV2 ||
@@ -574,6 +614,7 @@ function buildArgs(
   priceRoute: OptimalRate,
   minMaxAmount: string,
   quotedAmount: string,
+  overrides: DirectBuildArgOverrides = {},
 ) {
   return {
     priceRoute,
@@ -591,6 +632,7 @@ function buildArgs(
     deadline: '0',
     uuid: UUID,
     beneficiary: NULL_ADDRESS,
+    ...overrides,
   };
 }
 

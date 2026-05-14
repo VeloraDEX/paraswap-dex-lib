@@ -538,7 +538,7 @@ function buildDirectTxObject(
   };
 }
 
-function buildFeesV6(fee: FeeInput): string {
+export function buildFeesV6(fee: FeeInput): string {
   return fee.referrerAddress
     ? packPartnerAndFeeData({
         partner: fee.referrerAddress,

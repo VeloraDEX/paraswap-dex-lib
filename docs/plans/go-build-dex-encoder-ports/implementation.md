@@ -307,6 +307,7 @@ Acceptance:
 - extracted helpers have focused unit tests
 - generic and direct paths use the same V6 fee packer
 - `yarn fixtures:check`
+- `yarn jest tests/generic-swap-transaction-builder/orchestration.test.ts --runInBand`
 - `yarn jest tests/generic-swap-transaction-builder/resolved --runInBand`
 - `yarn check:tsc`
 - `yarn check:es`
