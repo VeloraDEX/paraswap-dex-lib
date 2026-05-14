@@ -193,6 +193,9 @@ describe('resolved build golden fixtures', () => {
     async ({ fixture }) => {
       const output = await replayPublicBuilderForFixture(fixture);
 
+      if (fixture.kind === 'generic') {
+        expect(output.genericBuildInput).toEqual(fixture.input);
+      }
       expect(output.params).toEqual(fixture.expectedParams);
       expectTxObjectToEqual(output.tx, fixture.expectedTx);
     },

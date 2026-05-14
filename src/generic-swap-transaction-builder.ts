@@ -15,7 +15,6 @@ import {
   IWethDepositorWithdrawer,
 } from './dex/weth/types';
 import { DexAdapterService } from './dex';
-import { Weth } from './dex/weth/weth';
 import ERC20ABI from './abi/erc20.json';
 import { ExecutorDetector } from './executor/ExecutorDetector';
 import { createExecutorEncodingContextFromDexHelper } from './executor/encoding-context';
@@ -48,15 +47,16 @@ import {
   resolvePermit,
   resolveQuotedAmount,
 } from './generic-swap-transaction-builder/orchestration';
-
-const DEFAULT_WEXCHANGE_NETWORK_TO_KEY = Weth.dexKeysWithNetwork.reduce<
-  Record<number, string>
->((prev, current) => {
-  for (const network of current.networks) {
-    prev[network] = current.key;
-  }
-  return prev;
-}, {});
+import {
+  createTsDexEncoderRegistry,
+  createWethCallDataProvider,
+  type DexEncoderRegistryPort,
+  type DexEncoderSwapExchangeData,
+  type DexParamInput,
+  type NeedWrapNativeInput,
+  type WethDepositWithdrawResult,
+  type WethCallDataProviderPort,
+} from './generic-swap-transaction-builder/dex-encoder';
 
 export type GenericSwapTransactionBuildParams =
   | ResolvedBuildOutput['params']
@@ -68,9 +68,16 @@ export type ResolvedBuildInputObserver = {
 };
 
 export type GenericSwapTransactionBuilderOptions = {
-  wExchangeNetworkToKey?: Readonly<Record<number, string>>;
+  dexEncoderRegistry?: DexEncoderRegistryPort;
   skipApprovalCheck?: boolean;
   resolvedBuildInputObserver?: ResolvedBuildInputObserver;
+  wethCallDataProvider?: WethCallDataProviderPort;
+  /**
+   * @deprecated Use `wethCallDataProvider`. Kept so existing callers with a
+   * custom WETH DEX-key mapping continue to route through their configured WETH
+   * builder until they migrate to the provider port.
+   */
+  wExchangeNetworkToKey?: Readonly<Record<number, string>>;
 };
 
 export class GenericSwapTransactionBuilder {
@@ -83,20 +90,29 @@ export class GenericSwapTransactionBuilder {
 
   executorDetector: ExecutorDetector;
   executorEncodingContext?: ExecutorEncodingContext;
-  protected readonly wExchangeNetworkToKey: Readonly<Record<number, string>>;
+  protected readonly dexEncoderRegistry: DexEncoderRegistryPort;
   protected skipApprovalCheck: boolean;
   protected resolvedBuildInputObserver?: ResolvedBuildInputObserver;
+  protected wethCallDataProvider?: WethCallDataProviderPort;
 
   constructor(
     protected dexAdapterService: DexAdapterService,
     options: GenericSwapTransactionBuilderOptions = {},
   ) {
-    this.wExchangeNetworkToKey = {
-      ...(options.wExchangeNetworkToKey ?? DEFAULT_WEXCHANGE_NETWORK_TO_KEY),
-    };
     // Used only for testing outdated price routes.
     this.skipApprovalCheck = options.skipApprovalCheck ?? false;
     this.resolvedBuildInputObserver = options.resolvedBuildInputObserver;
+    this.dexEncoderRegistry =
+      options.dexEncoderRegistry ??
+      createTsDexEncoderRegistry(this.dexAdapterService);
+    this.wethCallDataProvider =
+      options.wethCallDataProvider ??
+      (options.wExchangeNetworkToKey
+        ? createLegacyWethCallDataProvider(
+            this.dexAdapterService,
+            options.wExchangeNetworkToKey,
+          )
+        : undefined);
     this.abiCoder = new AbiCoder();
     this.erc20Interface = new Interface(ERC20ABI);
     this.augustusV6Interface = new Interface(AugustusV6ABI);
@@ -115,6 +131,16 @@ export class GenericSwapTransactionBuilder {
     return this.executorEncodingContext;
   }
 
+  private ensureWethCallDataProvider(
+    context: ExecutorEncodingContext,
+  ): WethCallDataProviderPort {
+    if (!this.wethCallDataProvider) {
+      this.wethCallDataProvider = createWethCallDataProvider(context);
+    }
+
+    return this.wethCallDataProvider;
+  }
+
   protected async buildResolvedCalls(
     priceRoute: OptimalRate,
     routePlan: RoutePlan,
@@ -131,12 +157,21 @@ export class GenericSwapTransactionBuilder {
         const { routeIndex, swapIndex, swapExchangeIndex } = routePosition;
         const swap = priceRoute.bestRoute[routeIndex].swaps[swapIndex];
         const se = swap.swapExchanges[swapExchangeIndex];
-        const dex = this.dexAdapterService.getTxBuilderDexByKey(se.exchange);
-
-        const dexNeedWrapNative =
-          typeof dex.needWrapNative === 'function'
-            ? dex.needWrapNative(priceRoute, swap, se)
-            : dex.needWrapNative;
+        const dexEncoder = await this.dexEncoderRegistry.getDexEncoder({
+          network: priceRoute.network,
+          dexKey: se.exchange,
+        });
+        const needWrapNativeInput = this.buildNeedWrapNativeInput({
+          priceRoute,
+          routeIndex,
+          swap,
+          swapIndex,
+          swapExchange: se,
+          swapExchangeIndex,
+        });
+        const dexNeedWrapNative = await dexEncoder.needWrapNative(
+          needWrapNativeInput,
+        );
 
         const {
           srcToken,
@@ -161,30 +196,21 @@ export class GenericSwapTransactionBuilder {
           augustusV6Address: this.augustusV6Address,
         });
 
-        const dexParams: DexExchangeParam = await dex.getDexParam!(
-          srcToken,
-          destToken,
-          side === SwapSide.BUY ? se.srcAmount : srcAmount, // in other case we would not be able to make insert from amount on Ex3
-          destAmount,
-          recipient,
-          se.data,
+        const dexParamInput: DexParamInput = {
+          ...needWrapNativeInput,
+          dexKey: se.exchange,
+          srcToken: this.normalizeAddress(srcToken),
+          destToken: this.normalizeAddress(destToken),
+          srcAmount: side === SwapSide.BUY ? se.srcAmount : srcAmount, // in other case we would not be able to make insert from amount on Ex3
           side,
-          executorAddress,
+          destAmount,
+          recipient: this.normalizeAddress(recipient),
+          executorAddress: this.normalizeAddress(executorAddress),
+          data: se.data as DexEncoderSwapExchangeData,
+        };
+        const dexParams: DexExchangeParam = await dexEncoder.getDexParam(
+          dexParamInput,
         );
-
-        if (typeof dexParams.needWrapNative === 'function') {
-          dexParams.needWrapNative = dexParams.needWrapNative(
-            priceRoute,
-            swap,
-            se,
-          );
-        }
-
-        if (typeof dexParams.needWrapNative !== 'boolean') {
-          throw new Error(
-            `Invalid DEX: needWrapNative must resolve to boolean for ${se.exchange}`,
-          );
-        }
 
         return {
           resolvedLeg: {
@@ -206,6 +232,9 @@ export class GenericSwapTransactionBuilder {
       }),
     );
 
+    const wethCallDataProvider = this.ensureWethCallDataProvider(
+      executorEncodingContext,
+    );
     const { resolvedLegs, wethPlan } = await buildResolvedWethPlan({
       resolvedLegsWithWeth: rawResolvedLegs,
       side,
@@ -213,16 +242,11 @@ export class GenericSwapTransactionBuilder {
       wrappedNativeTokenAddress:
         executorEncodingContext.wrappedNativeTokenAddress,
       getWethCallData: (srcAmountWeth, destAmountWeth, wethSide) =>
-        (
-          this.dexAdapterService.getTxBuilderDexByKey(
-            this.wExchangeNetworkToKey[this.dexAdapterService.network],
-          ) as unknown as IWethDepositorWithdrawer
-        ).getDepositWithdrawParam(
+        wethCallDataProvider.getDepositWithdrawCallData({
           srcAmountWeth,
           destAmountWeth,
-          wethSide,
-          ParaSwapVersion.V6,
-        ),
+          side: wethSide,
+        }),
     });
 
     const maybeWethCallData = this.normalizeWethPlan(wethPlan);
@@ -238,6 +262,53 @@ export class GenericSwapTransactionBuilder {
     return {
       resolvedLegs: resolvedLegsWithApprovals,
       maybeWethCallData,
+    };
+  }
+
+  private buildNeedWrapNativeInput({
+    priceRoute,
+    routeIndex,
+    swap,
+    swapIndex,
+    swapExchange,
+    swapExchangeIndex,
+  }: {
+    priceRoute: OptimalRate;
+    routeIndex: number;
+    swap: OptimalSwap;
+    swapIndex: number;
+    swapExchange: OptimalSwapExchange<unknown>;
+    swapExchangeIndex: number;
+  }): NeedWrapNativeInput {
+    const route = priceRoute.bestRoute[routeIndex];
+
+    return {
+      route: {
+        network: priceRoute.network,
+        side: priceRoute.side,
+        routeIndex,
+        routePercent: route.percent,
+        blockNumber: priceRoute.blockNumber,
+        srcToken: this.normalizeAddress(priceRoute.srcToken),
+        destToken: this.normalizeAddress(priceRoute.destToken),
+        srcAmount: priceRoute.srcAmount,
+        destAmount: priceRoute.destAmount,
+      },
+      swap: {
+        swapIndex,
+        srcToken: this.normalizeAddress(swap.srcToken),
+        destToken: this.normalizeAddress(swap.destToken),
+        srcAmount: sumSwapExchangeAmounts(swap.swapExchanges, 'srcAmount'),
+        destAmount: sumSwapExchangeAmounts(swap.swapExchanges, 'destAmount'),
+      },
+      swapExchange: {
+        swapExchangeIndex,
+        exchange: swapExchange.exchange,
+        srcAmount: swapExchange.srcAmount,
+        destAmount: swapExchange.destAmount,
+        percent: swapExchange.percent,
+        data: swapExchange.data as DexEncoderSwapExchangeData,
+      },
     };
   }
 
@@ -651,4 +722,65 @@ export class GenericSwapTransactionBuilder {
   private normalizeAddress(address: Address): Address {
     return address.toLowerCase();
   }
+}
+
+function sumSwapExchangeAmounts(
+  swapExchanges: OptimalSwapExchange<unknown>[],
+  field: 'srcAmount' | 'destAmount',
+): string {
+  return swapExchanges
+    .reduce((total, swapExchange) => total + BigInt(swapExchange[field]), 0n)
+    .toString();
+}
+
+function createLegacyWethCallDataProvider(
+  dexAdapterService: DexAdapterService,
+  wExchangeNetworkToKey: Readonly<Record<number, string>>,
+): WethCallDataProviderPort {
+  return {
+    getDepositWithdrawCallData({ srcAmountWeth, destAmountWeth, side }) {
+      const dexKey = wExchangeNetworkToKey[dexAdapterService.network];
+      if (!dexKey) {
+        throw new Error(
+          `Missing WETH exchange mapping for network ${dexAdapterService.network}`,
+        );
+      }
+
+      return normalizeLegacyWethResult(
+        (
+          dexAdapterService.getTxBuilderDexByKey(
+            dexKey,
+          ) as unknown as IWethDepositorWithdrawer
+        ).getDepositWithdrawParam(
+          srcAmountWeth,
+          destAmountWeth,
+          side,
+          ParaSwapVersion.V6,
+        ),
+      );
+    },
+  };
+}
+
+function normalizeLegacyWethResult(
+  result?: DepositWithdrawReturn,
+): WethDepositWithdrawResult | undefined {
+  if (!result) return undefined;
+
+  return {
+    deposit:
+      result.deposit === undefined
+        ? undefined
+        : {
+            ...result.deposit,
+            calldata: result.deposit.calldata as `0x${string}`,
+          },
+    withdraw:
+      result.withdraw === undefined
+        ? undefined
+        : {
+            ...result.withdraw,
+            calldata: result.withdraw.calldata as `0x${string}`,
+          },
+  };
 }

@@ -242,19 +242,7 @@
       "tokenTransferProxy": "0x216b4b4ba9f3e719726886d34a177484278bfcae",
       "version": "6.2"
     },
-    "quotedAmount": "24391",
-    "wethPlan": {
-      "deposit": {
-        "calldata": "0xd0e30db0",
-        "callee": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
-        "value": "4671554607223468"
-      },
-      "withdraw": {
-        "calldata": "0x2e1a7d4d000000000000000000000000000000000000000000000000001098c110e992ac",
-        "callee": "0xDEF171Fe48CF0115B1d80b88dc8eAB59176FEe57",
-        "value": "0"
-      }
-    }
+    "quotedAmount": "24391"
   },
   "schemaVersion": 1
 }

@@ -333,6 +333,10 @@ Complete.
   - `yarn jest tests/generic-swap-transaction-builder/resolved --runInBand`
   - `yarn check:tsc`
   - `yarn check:es`
+- `yarn fixtures:check` was run; before this phase is committed it exits at
+  `git diff --exit-code` because the regenerated resolved-build fixture diffs
+  above are intentional uncommitted changes. Re-run it after committing this
+  phase to exercise the clean determinism gate.
   - `yarn fixtures:check`
   - `git diff --check`
 
@@ -475,7 +479,47 @@ Phase 5 is complete only when:
 
 ### Status
 
-Not started.
+Complete.
+
+- Routed `GenericSwapTransactionBuilder.buildResolvedCalls()` through
+  `DexEncoderRegistryPort` for both `needWrapNative` and `getDexParam(...)`.
+- Added builder-side conversion from route positions into the serializable
+  `NeedWrapNativeInput` and `DexParamInput` DTOs while keeping WETH planning,
+  approval enrichment, and final resolved-boundary assembly outside the port.
+- Replaced generic WETH calldata lookup through
+  `getTxBuilderDexByKey(...).getDepositWithdrawParam(...)` with
+  `WethCallDataProviderPort`; the default TS provider now supplies the V6 WETH
+  calldata used by generic orchestration.
+- Kept the deprecated `wExchangeNetworkToKey` option as a compatibility path;
+  callers that still pass it are routed through a legacy WETH provider backed by
+  their configured DEX key until they migrate to `wethCallDataProvider`.
+- Kept the resolved `BuildInput` schema unchanged and strengthened public
+  builder replay tests to assert the captured port-routed generic
+  `BuildInput` exactly matches the committed resolved-build fixture baseline.
+- Regenerated the resolved-build generic fixtures affected by the port-routed
+  WETH provider. The fixture deltas are limited to WETH plan callee (now
+  `NULL_ADDRESS`), the withdraw calldata amount where the legacy fake snapshot
+  had drifted from `swapExchange.destAmount`, and the downstream calldata
+  produced from those inputs.
+- Added `dex-encoder-audit.test.ts`, a deterministic TypeScript AST scanner
+  that verifies every function-shaped `needWrapNative` class member under
+  `src/dex/**/*.ts` is listed in
+  `AUDITED_FUNCTION_NEED_WRAP_NATIVE_DEXES`.
+- Extended the same audit suite with a `SpecialDex` enum-vs-
+  `KNOWN_SPECIAL_DEX_FLAGS` parity assertion.
+- Sanitized historical executor fixture residue (`dexFuncHasDestToken`) at the
+  test/fake DEX boundary so the port-routed path receives current runtime
+  `DexExchangeParam` output shape.
+- Tightened generic fixture DEX fakes to match `getDexParam(...)` calls by
+  normalized token, amount, recipient, and `data` fields rather than by
+  `dexKey + data` alone.
+- Verified with:
+  - `yarn fixtures:generate`
+  - `yarn fixtures:dex-encoder:generate`
+  - `yarn jest tests/generic-swap-transaction-builder/dex-encoder --runInBand`
+  - `yarn jest tests/generic-swap-transaction-builder/resolved --runInBand`
+  - `yarn check:tsc`
+  - `yarn check:es`
 
 ## Phase 6: Refactor Direct Orchestration To Use Ports
 

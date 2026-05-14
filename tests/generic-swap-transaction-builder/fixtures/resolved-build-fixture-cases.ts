@@ -12,8 +12,10 @@ import type { DepositWithdrawReturn } from '../../../src/dex/weth/types';
 import { getApprovalTokenAndTarget } from '../../../src/executor/approval';
 import { createExecutorEncodingContextFromDexHelper } from '../../../src/executor/encoding-context';
 import type { ExecutorEncodingContext } from '../../../src/executor/encoding-types';
+import { ExecutorDetector } from '../../../src/executor/ExecutorDetector';
 import { Executors } from '../../../src/executor/types';
 import { GenericSwapTransactionBuilder } from '../../../src/generic-swap-transaction-builder';
+import { buildGenericDexCallParams } from '../../../src/generic-swap-transaction-builder/orchestration';
 import {
   buildDirectTransactionFromResolved,
   buildRoutePlan,
@@ -123,6 +125,13 @@ type ExpectedInputResult = {
 
 type RouteDexFixture = {
   exchange: string;
+  callParams: {
+    srcToken: Address;
+    destToken: Address;
+    srcAmount: string;
+    destAmount: string;
+    recipient: Address;
+  };
   swap: OptimalSwap;
   swapExchange: OptimalSwapExchange<any>;
   exchangeParam: DexExchangeBuildParam;
@@ -745,13 +754,14 @@ async function buildGenericSuccessFixture(
     return decisions;
   };
   const dexHelper = buildDexHelper();
-  const exchangeParams = clone(genericCase.exchangeParams);
-  const maybeWethCallData = cloneWethPlan(genericCase.maybeWethCallData);
+  const exchangeParams = clone(genericCase.exchangeParams).map(
+    stripFixtureOnlyDexFields,
+  );
   const dexAdapterService = buildGenericDexAdapterService({
     priceRoute,
+    minMaxAmount,
     dexHelper,
     exchangeParams,
-    maybeWethCallData,
     approvalDecision,
   });
   const capturedBuildInputs: BuildInput[] = [];
@@ -804,7 +814,7 @@ async function buildGenericSuccessFixture(
     orchestration: {
       priceRoute,
       exchangeParams,
-      wethPlan: maybeWethCallData,
+      wethPlan: actualInput.wethPlan,
       approvalDecisions: capturedApprovalDecisions ?? [],
       minMaxAmount,
       quotedAmount,
@@ -894,7 +904,11 @@ async function buildDirectSuccessFixture(
 
 export async function replayPublicBuilderForFixture(
   fixture: ResolvedBuildSuccessFixture,
-): Promise<{ tx: TxObject; params: unknown[] }> {
+): Promise<{
+  tx: TxObject;
+  params: unknown[];
+  genericBuildInput?: BuildInput;
+}> {
   if (!fixture.orchestration) {
     throw new Error(`${fixture.name}: missing orchestration metadata`);
   }
@@ -906,7 +920,7 @@ export async function replayPublicBuilderForFixture(
 
 async function replayGenericPublicBuilder(
   fixture: ResolvedBuildSuccessFixture,
-): Promise<{ tx: TxObject; params: unknown[] }> {
+): Promise<{ tx: TxObject; params: unknown[]; genericBuildInput: BuildInput }> {
   const input = fixture.input as BuildInput;
   const orchestration = fixture.orchestration!;
 
@@ -919,9 +933,9 @@ async function replayGenericPublicBuilder(
   const dexHelper = buildDexHelper();
   const dexAdapterService = buildGenericDexAdapterService({
     priceRoute,
+    minMaxAmount: orchestration.minMaxAmount ?? input.minMaxAmount,
     dexHelper,
     exchangeParams: clone(orchestration.exchangeParams),
-    maybeWethCallData: cloneWethPlan(orchestration.wethPlan),
     approvalDecision: pairs => {
       if (approvalDecisions.length !== pairs.length) {
         throw new Error(
@@ -931,12 +945,28 @@ async function replayGenericPublicBuilder(
       return approvalDecisions;
     },
   });
-  const builder = new GenericSwapTransactionBuilder(dexAdapterService);
+  const capturedBuildInputs: BuildInput[] = [];
+  const builder = new GenericSwapTransactionBuilder(dexAdapterService, {
+    resolvedBuildInputObserver: {
+      onGenericBuildInput: buildInput =>
+        capturedBuildInputs.push(clone(buildInput)),
+    },
+  });
   const args = buildArgsFromGenericInput(input, priceRoute);
+  const tx = (await builder.build(args)) as TxObject;
+  const params = (await builder.build({
+    ...args,
+    onlyParams: true,
+  })) as unknown[];
+  const genericBuildInput = getCapturedBoundaryInput(
+    capturedBuildInputs,
+    `${fixture.name}: port-routed generic BuildInput parity failed`,
+  );
 
   return {
-    tx: (await builder.build(args)) as TxObject,
-    params: (await builder.build({ ...args, onlyParams: true })) as unknown[],
+    tx,
+    params,
+    genericBuildInput,
   };
 }
 
@@ -1657,18 +1687,23 @@ function buildArgsFromDirectInput(
 
 function buildGenericDexAdapterService({
   priceRoute,
+  minMaxAmount,
   dexHelper,
   exchangeParams,
-  maybeWethCallData,
   approvalDecision,
 }: {
   priceRoute: OptimalRate;
+  minMaxAmount: string;
   dexHelper: ReturnType<typeof buildDexHelper>;
   exchangeParams: DexExchangeBuildParam[];
-  maybeWethCallData?: DepositWithdrawReturn;
   approvalDecision: ApprovalDecision;
 }): DexAdapterService {
   const routePlan = buildRoutePlan(priceRoute);
+  const encodingContext = createExecutorEncodingContextFromDexHelper(dexHelper);
+  const executorType = new ExecutorDetector().getExecutorByPriceRoute(
+    priceRoute,
+  );
+  const executorAddress = encodingContext.executorsAddresses[executorType];
   const routeDexFixtures = walkRoutePlan(routePlan).map(
     (routePosition, index): RouteDexFixture => {
       const swap =
@@ -1676,12 +1711,24 @@ function buildGenericDexAdapterService({
           routePosition.swapIndex
         ];
       const swapExchange = swap.swapExchanges[routePosition.swapExchangeIndex];
+      const exchangeParam = stripFixtureOnlyDexFields(exchangeParams[index]);
 
       return {
         exchange: swapExchange.exchange,
+        callParams: buildRouteDexCallParams({
+          priceRoute,
+          routeIndex: routePosition.routeIndex,
+          swap,
+          swapIndex: routePosition.swapIndex,
+          swapExchange,
+          minMaxAmount,
+          dexNeedWrapNative: exchangeParam.needWrapNative,
+          executorAddress,
+          dexHelper,
+        }),
         swap,
         swapExchange,
-        exchangeParam: clone(exchangeParams[index]),
+        exchangeParam,
       };
     },
   );
@@ -1700,26 +1747,35 @@ function buildGenericDexAdapterService({
         return {
           needWrapNative: (
             _priceRoute: OptimalRate,
-            swap: OptimalSwap,
+            _swap: OptimalSwap,
             swapExchange: OptimalSwapExchange<any>,
           ) =>
-            findRouteDexFixtureByRoute(
+            findRouteDexFixtureBySwapExchange(
               routeDexFixtures,
               dexKey,
-              swap,
               swapExchange,
             ).exchangeParam.needWrapNative,
           getDexParam: async (
-            _srcToken: Address,
-            _destToken: Address,
-            _srcAmount: string,
-            _destAmount: string,
-            _recipient: Address,
+            srcToken: Address,
+            destToken: Address,
+            srcAmount: string,
+            destAmount: string,
+            recipient: Address,
             data: unknown,
           ) =>
-            clone(
-              findRouteDexFixtureByData(routeDexFixtures, dexKey, data)
-                .exchangeParam,
+            stripFixtureOnlyDexFields(
+              findRouteDexFixtureByCall(
+                routeDexFixtures,
+                dexKey,
+                {
+                  srcToken,
+                  destToken,
+                  srcAmount,
+                  destAmount,
+                  recipient,
+                },
+                data,
+              ).exchangeParam,
             ),
         };
       }
@@ -1728,7 +1784,6 @@ function buildGenericDexAdapterService({
         return {
           needWrapNative: false,
           getDexParam: async () => buildWethOnlyExchangeParam(),
-          getDepositWithdrawParam: () => cloneWethPlan(maybeWethCallData),
         };
       }
 
@@ -1759,26 +1814,6 @@ function buildDirectDexAdapterService(
   } as unknown as DexAdapterService;
 }
 
-function findRouteDexFixtureByRoute(
-  routeDexFixtures: RouteDexFixture[],
-  dexKey: string,
-  swap: OptimalSwap,
-  swapExchange: OptimalSwapExchange<any>,
-): RouteDexFixture {
-  const fixture = routeDexFixtures.find(
-    candidate =>
-      candidate.exchange === dexKey &&
-      candidate.swap === swap &&
-      candidate.swapExchange === swapExchange,
-  );
-
-  if (!fixture) {
-    throw new Error(`unexpected route-position DEX lookup: ${dexKey}`);
-  }
-
-  return fixture;
-}
-
 function findRouteDexFixtureByData(
   routeDexFixtures: RouteDexFixture[],
   dexKey: string,
@@ -1786,7 +1821,8 @@ function findRouteDexFixtureByData(
 ): RouteDexFixture {
   const fixture = routeDexFixtures.find(
     candidate =>
-      candidate.exchange === dexKey && candidate.swapExchange.data === data,
+      candidate.exchange === dexKey &&
+      isSameJsonData(candidate.swapExchange.data, data),
   );
 
   if (!fixture) {
@@ -1794,6 +1830,105 @@ function findRouteDexFixtureByData(
   }
 
   return fixture;
+}
+
+function findRouteDexFixtureBySwapExchange(
+  routeDexFixtures: RouteDexFixture[],
+  dexKey: string,
+  swapExchange: OptimalSwapExchange<any>,
+): RouteDexFixture {
+  const fixture = routeDexFixtures.find(
+    candidate =>
+      candidate.exchange === dexKey &&
+      candidate.swapExchange.srcAmount === swapExchange.srcAmount &&
+      candidate.swapExchange.destAmount === swapExchange.destAmount &&
+      candidate.swapExchange.percent === swapExchange.percent &&
+      isSameJsonData(candidate.swapExchange.data, swapExchange.data),
+  );
+
+  if (!fixture) {
+    throw new Error(`unexpected needWrapNative call: ${dexKey}`);
+  }
+
+  return fixture;
+}
+
+function findRouteDexFixtureByCall(
+  routeDexFixtures: RouteDexFixture[],
+  dexKey: string,
+  callParams: RouteDexFixture['callParams'],
+  data: unknown,
+): RouteDexFixture {
+  const fixture = routeDexFixtures.find(
+    candidate =>
+      candidate.exchange === dexKey &&
+      isSameAddress(candidate.callParams.srcToken, callParams.srcToken) &&
+      isSameAddress(candidate.callParams.destToken, callParams.destToken) &&
+      candidate.callParams.srcAmount === callParams.srcAmount &&
+      candidate.callParams.destAmount === callParams.destAmount &&
+      isSameAddress(candidate.callParams.recipient, callParams.recipient) &&
+      isSameJsonData(candidate.swapExchange.data, data),
+  );
+
+  if (!fixture) {
+    throw new Error(`unexpected getDexParam call: ${dexKey}`);
+  }
+
+  return fixture;
+}
+
+function buildRouteDexCallParams({
+  priceRoute,
+  routeIndex,
+  swap,
+  swapIndex,
+  swapExchange,
+  minMaxAmount,
+  dexNeedWrapNative,
+  executorAddress,
+  dexHelper,
+}: {
+  priceRoute: OptimalRate;
+  routeIndex: number;
+  swap: OptimalSwap;
+  swapIndex: number;
+  swapExchange: OptimalSwapExchange<any>;
+  minMaxAmount: string;
+  dexNeedWrapNative: boolean;
+  executorAddress: Address;
+  dexHelper: ReturnType<typeof buildDexHelper>;
+}): RouteDexFixture['callParams'] {
+  const callParams = buildGenericDexCallParams({
+    priceRoute,
+    routeIndex,
+    swap,
+    swapIndex,
+    swapExchange,
+    minMaxAmount,
+    dexNeedWrapNative,
+    executionContractAddress: executorAddress,
+    wrappedNativeTokenAddress: dexHelper.config.data.wrappedNativeTokenAddress,
+    augustusV6Address: dexHelper.config.data.augustusV6Address!,
+  });
+
+  return {
+    srcToken: normalizeAddress(callParams.srcToken),
+    destToken: normalizeAddress(callParams.destToken),
+    srcAmount:
+      priceRoute.side === SwapSide.BUY
+        ? swapExchange.srcAmount
+        : callParams.srcAmount,
+    destAmount: callParams.destAmount,
+    recipient: normalizeAddress(callParams.recipient),
+  };
+}
+
+function isSameAddress(left: Address, right: Address): boolean {
+  return left.toLowerCase() === right.toLowerCase();
+}
+
+function isSameJsonData(left: unknown, right: unknown): boolean {
+  return JSON.stringify(left) === JSON.stringify(right);
 }
 
 function buildDexHelper() {
@@ -1994,6 +2129,17 @@ function normalizeDexExchangeBuildParam(
             target: normalizeAddress(exchangeParam.approveData.target),
           },
   };
+}
+
+function stripFixtureOnlyDexFields(
+  exchangeParam: DexExchangeBuildParam,
+): DexExchangeBuildParam {
+  const normalized = clone(exchangeParam) as DexExchangeBuildParam &
+    Record<string, unknown>;
+
+  delete normalized.dexFuncHasDestToken;
+
+  return normalized;
 }
 
 function normalizeWethPlan(
