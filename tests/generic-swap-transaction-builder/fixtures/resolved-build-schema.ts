@@ -9,6 +9,9 @@ import type {
   DexExchangeBuildParam,
   TxObject,
 } from '../../../src/types';
+import { stableStringify } from '../canonical-json';
+
+export { stableStringify };
 
 export const RESOLVED_BUILD_SCHEMA_VERSION = 1;
 // Schema bumps must include a fixture migration that rewrites every committed
@@ -204,32 +207,6 @@ export function getGoContractFixtureFields(
   };
 
   return contractFields;
-}
-
-export function stableStringify(value: unknown): string {
-  return `${JSON.stringify(sortObjectKeys(value), undefined, 2)}\n`;
-}
-
-function sortObjectKeys(value: unknown): unknown {
-  if (Array.isArray(value)) {
-    return value.map(sortObjectKeys);
-  }
-
-  if (!isRecord(value)) {
-    return value;
-  }
-
-  return Object.keys(value)
-    .sort()
-    .reduce<Record<string, unknown>>((acc, key) => {
-      const child = value[key];
-
-      if (child !== undefined) {
-        acc[key] = sortObjectKeys(child);
-      }
-
-      return acc;
-    }, {});
 }
 
 function isRecord(value: unknown): value is Record<string, any> {

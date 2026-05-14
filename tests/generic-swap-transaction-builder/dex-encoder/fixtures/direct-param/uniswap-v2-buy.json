@@ -1,0 +1,59 @@
+{
+  "contractMethod": "swapExactAmountOutOnUniswapV2",
+  "description": "uniswap-v2-buy getDirectParamV6 baseline.",
+  "dexKey": "UniswapV2",
+  "expected": {
+    "params": [
+      [
+        "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "1200",
+        "1000",
+        "1100",
+        "0x1111111111111111111111111111111100000000000000000000000000000001",
+        "0x0000000000000000000000000000000000000000",
+        "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaabbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb000000000000000000000000000000000000000000000001"
+      ],
+      "0",
+      "0x"
+    ]
+  },
+  "input": {
+    "beneficiary": "0x0000000000000000000000000000000000000000",
+    "blockNumber": 1,
+    "contractMethod": "swapExactAmountOutOnUniswapV2",
+    "data": {
+      "factory": "0x4444444444444444444444444444444444444444",
+      "feeFactor": 10000,
+      "initCode": "0x1234",
+      "path": [
+        "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      ],
+      "pools": [
+        {
+          "address": "0x4444444444444444444444444444444444444444",
+          "direction": true,
+          "fee": 30
+        }
+      ],
+      "router": "0x4444444444444444444444444444444444444444",
+      "wethAddress": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+    },
+    "destAmount": "1000",
+    "destToken": "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "dexKey": "UniswapV2",
+    "network": 1,
+    "partnerAndFee": "0",
+    "permit": "0x",
+    "quotedAmount": "1100",
+    "side": "BUY",
+    "srcAmount": "1200",
+    "srcToken": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "uuid": "11111111-1111-1111-1111-111111111111"
+  },
+  "kind": "direct-param",
+  "name": "uniswap-v2-buy",
+  "network": 1,
+  "schemaVersion": 1
+}

@@ -1,0 +1,71 @@
+{
+  "description": "executor01-multiswap-sell route 0:0:0 getDexParam baseline.",
+  "dexKey": "SushiSwapV3",
+  "expected": {
+    "dexFuncHasRecipient": true,
+    "exchangeData": "0xc04b8d59000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000a00000000000000000000000008edf3289c84e5ba9c73350805a7d4c1f43b41e080000000000000000000000000000000000000000000000000000000065897b7b00000000000000000000000000000000000000000000000000000000009896800000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000002ba0b86991c6218b36c1d19d4a2e9eb0ce3606eb480001f4c02aaa39b223fe8d0a0e5c4f27ead9083c756cc2000000000000000000000000000000000000000000",
+    "needWrapNative": true,
+    "targetExchange": "0x00f23572b16c5e9e58e7b965def51ff8ff546e34"
+  },
+  "input": {
+    "data": {
+      "gasUSD": "11.370348",
+      "path": [
+        {
+          "currentFee": "500",
+          "fee": "500",
+          "tokenIn": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+          "tokenOut": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+        }
+      ]
+    },
+    "destAmount": "1",
+    "destToken": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+    "dexKey": "SushiSwapV3",
+    "executorAddress": "0x000010036c0190e009a000d0fc3541100a07380a",
+    "recipient": "0x000010036c0190e009a000d0fc3541100a07380a",
+    "route": {
+      "blockNumber": 18813003,
+      "destAmount": "24391",
+      "destToken": "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599",
+      "network": 1,
+      "routeIndex": 0,
+      "routePercent": 100,
+      "side": "SELL",
+      "srcAmount": "10000000",
+      "srcToken": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
+    },
+    "side": "SELL",
+    "srcAmount": "10000000",
+    "srcToken": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+    "swap": {
+      "destAmount": "4671554607223468",
+      "destToken": "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "srcAmount": "10000000",
+      "srcToken": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+      "swapIndex": 0
+    },
+    "swapExchange": {
+      "data": {
+        "gasUSD": "11.370348",
+        "path": [
+          {
+            "currentFee": "500",
+            "fee": "500",
+            "tokenIn": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+            "tokenOut": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+          }
+        ]
+      },
+      "destAmount": "4671554607223468",
+      "exchange": "SushiSwapV3",
+      "percent": 100,
+      "srcAmount": "10000000",
+      "swapExchangeIndex": 0
+    }
+  },
+  "kind": "dex-param",
+  "name": "executor01-multiswap-sell-r0-s0-e0-sushi-swap-v3",
+  "network": 1,
+  "schemaVersion": 1
+}

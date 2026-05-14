@@ -1,0 +1,107 @@
+{
+  "description": "executor02-vertical-branch-sell route 0:0:2 getDexParam baseline.",
+  "dexKey": "BalancerV1",
+  "expected": {
+    "dexFuncHasRecipient": false,
+    "exchangeData": "0x4e7ffa040000000000000000000000000000000000000000000000000000000000000060000000000000000000000000a0b86991c6218b36c1d19d4a2e9eb0ce3606eb480000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000000400000000000000000000000069d460e01070a7ba1bc363885bc8f4f0daa19bf500000000000000000000000000000000000000000000000029a2241af62c00000000000000000000000000000000000000000000000000000000000000000000ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff0000000000000000000000001373e57f764a7944bdd7a4bd5ca3007d496934da000000000000000000000000000000000000000000000000058d15e1762800000000000000000000000000000000000000000000000000000000000000000000ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff0000000000000000000000002257aaac34bcb27900291f7b84ee2565a6cbac570000000000000000000000000000000000000000000000000853a0d2313c00000000000000000000000000000000000000000000000000000000000000000000ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff0000000000000000000000008a649274e4d777ffc6851f13d23a86bbfa2f2fbf0000000000000000000000000000000000000000000000000853a0d2313c00000000000000000000000000000000000000000000000000000000000000000000ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "needWrapNative": false,
+    "targetExchange": "0x6317c5e82a06e1d8bf200d21f4510ac2c038ac81"
+  },
+  "input": {
+    "data": {
+      "gasUSD": "138.567792",
+      "swaps": [
+        {
+          "maxPrice": "115792089237316195423570985008687907853269984665640564039457584007913129639935",
+          "pool": "0x69d460e01070a7ba1bc363885bc8f4f0daa19bf5",
+          "tokenInParam": "3000000000000000000",
+          "tokenOutParam": "0"
+        },
+        {
+          "maxPrice": "115792089237316195423570985008687907853269984665640564039457584007913129639935",
+          "pool": "0x1373e57f764a7944bdd7a4bd5ca3007d496934da",
+          "tokenInParam": "400000000000000000",
+          "tokenOutParam": "0"
+        },
+        {
+          "maxPrice": "115792089237316195423570985008687907853269984665640564039457584007913129639935",
+          "pool": "0x2257aaac34bcb27900291f7b84ee2565a6cbac57",
+          "tokenInParam": "600000000000000000",
+          "tokenOutParam": "0"
+        },
+        {
+          "maxPrice": "115792089237316195423570985008687907853269984665640564039457584007913129639935",
+          "pool": "0x8a649274e4d777ffc6851f13d23a86bbfa2f2fbf",
+          "tokenInParam": "600000000000000000",
+          "tokenOutParam": "0"
+        }
+      ]
+    },
+    "destAmount": "1",
+    "destToken": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+    "dexKey": "BalancerV1",
+    "executorAddress": "0x00c600b30fb0400701010f4b080409018b9006e0",
+    "recipient": "0x6a000f20005980200259b80c5102003040001068",
+    "route": {
+      "blockNumber": 18813344,
+      "destAmount": "20291711255",
+      "destToken": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+      "network": 1,
+      "routeIndex": 0,
+      "routePercent": 100,
+      "side": "SELL",
+      "srcAmount": "10000000000000000000",
+      "srcToken": "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+    },
+    "side": "SELL",
+    "srcAmount": "4600000000000000000",
+    "srcToken": "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "swap": {
+      "destAmount": "20291711255",
+      "destToken": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+      "srcAmount": "10000000000000000000",
+      "srcToken": "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "swapIndex": 0
+    },
+    "swapExchange": {
+      "data": {
+        "gasUSD": "138.567792",
+        "swaps": [
+          {
+            "maxPrice": "115792089237316195423570985008687907853269984665640564039457584007913129639935",
+            "pool": "0x69d460e01070a7ba1bc363885bc8f4f0daa19bf5",
+            "tokenInParam": "3000000000000000000",
+            "tokenOutParam": "0"
+          },
+          {
+            "maxPrice": "115792089237316195423570985008687907853269984665640564039457584007913129639935",
+            "pool": "0x1373e57f764a7944bdd7a4bd5ca3007d496934da",
+            "tokenInParam": "400000000000000000",
+            "tokenOutParam": "0"
+          },
+          {
+            "maxPrice": "115792089237316195423570985008687907853269984665640564039457584007913129639935",
+            "pool": "0x2257aaac34bcb27900291f7b84ee2565a6cbac57",
+            "tokenInParam": "600000000000000000",
+            "tokenOutParam": "0"
+          },
+          {
+            "maxPrice": "115792089237316195423570985008687907853269984665640564039457584007913129639935",
+            "pool": "0x8a649274e4d777ffc6851f13d23a86bbfa2f2fbf",
+            "tokenInParam": "600000000000000000",
+            "tokenOutParam": "0"
+          }
+        ]
+      },
+      "destAmount": "9351238251",
+      "exchange": "BalancerV1",
+      "percent": 46,
+      "srcAmount": "4600000000000000000",
+      "swapExchangeIndex": 2
+    }
+  },
+  "kind": "dex-param",
+  "name": "executor02-vertical-branch-sell-r0-s0-e2-balancer-v1",
+  "network": 1,
+  "schemaVersion": 1
+}

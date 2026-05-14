@@ -1,0 +1,47 @@
+{
+  "description": "permit2-approval route 0:0:0 needWrapNative baseline.",
+  "dexKey": "UniswapV3",
+  "expected": true,
+  "input": {
+    "route": {
+      "blockNumber": 18812722,
+      "destAmount": "1000967",
+      "destToken": "0xdac17f958d2ee523a2206206994597c13d831ec7",
+      "network": 1,
+      "routeIndex": 0,
+      "routePercent": 100,
+      "side": "SELL",
+      "srcAmount": "1000000",
+      "srcToken": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
+    },
+    "swap": {
+      "destAmount": "1000967",
+      "destToken": "0xdac17f958d2ee523a2206206994597c13d831ec7",
+      "srcAmount": "1000000",
+      "srcToken": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+      "swapIndex": 0
+    },
+    "swapExchange": {
+      "data": {
+        "gasUSD": "7.214402",
+        "path": [
+          {
+            "currentFee": "100",
+            "fee": "100",
+            "tokenIn": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+            "tokenOut": "0xdac17f958d2ee523a2206206994597c13d831ec7"
+          }
+        ]
+      },
+      "destAmount": "1000967",
+      "exchange": "UniswapV3",
+      "percent": 100,
+      "srcAmount": "1000000",
+      "swapExchangeIndex": 0
+    }
+  },
+  "kind": "need-wrap-native",
+  "name": "permit2-approval-r0-s0-e0-uniswap-v3",
+  "network": 1,
+  "schemaVersion": 1
+}

@@ -1,0 +1,47 @@
+{
+  "description": "executor02-vertical-branch-sell route 0:0:1 needWrapNative baseline.",
+  "dexKey": "SushiSwapV3",
+  "expected": true,
+  "input": {
+    "route": {
+      "blockNumber": 18813344,
+      "destAmount": "20291711255",
+      "destToken": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+      "network": 1,
+      "routeIndex": 0,
+      "routePercent": 100,
+      "side": "SELL",
+      "srcAmount": "10000000000000000000",
+      "srcToken": "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+    },
+    "swap": {
+      "destAmount": "20291711255",
+      "destToken": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+      "srcAmount": "10000000000000000000",
+      "srcToken": "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "swapIndex": 0
+    },
+    "swapExchange": {
+      "data": {
+        "gasUSD": "38.394826",
+        "path": [
+          {
+            "currentFee": "500",
+            "fee": "500",
+            "tokenIn": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+            "tokenOut": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
+          }
+        ]
+      },
+      "destAmount": "4461472292",
+      "exchange": "SushiSwapV3",
+      "percent": 22,
+      "srcAmount": "2200000000000000000",
+      "swapExchangeIndex": 1
+    }
+  },
+  "kind": "need-wrap-native",
+  "name": "executor02-vertical-branch-sell-r0-s0-e1-sushi-swap-v3",
+  "network": 1,
+  "schemaVersion": 1
+}

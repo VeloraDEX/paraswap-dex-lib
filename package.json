@@ -49,7 +49,8 @@
     "check:tsc": "tsc",
     "check:es": "eslint \"src/**/*.ts\" --ignore-pattern=\"*.test.ts\"",
     "fixtures:generate": "ts-node tests/generic-swap-transaction-builder/fixtures/generate-resolved-build-fixtures.ts",
-    "fixtures:check": "yarn fixtures:generate && git diff --exit-code -- tests/generic-swap-transaction-builder/fixtures/resolved-build && test -z \"$(git ls-files --others --exclude-standard -- tests/generic-swap-transaction-builder/fixtures/resolved-build)\"",
+    "fixtures:dex-encoder:generate": "ts-node tests/generic-swap-transaction-builder/dex-encoder/generate-dex-encoder-fixtures.ts",
+    "fixtures:check": "yarn fixtures:generate && yarn fixtures:dex-encoder:generate && git diff --exit-code -- tests/generic-swap-transaction-builder/fixtures/resolved-build tests/generic-swap-transaction-builder/dex-encoder/fixtures && test -z \"$(git ls-files --others --exclude-standard -- tests/generic-swap-transaction-builder/fixtures/resolved-build tests/generic-swap-transaction-builder/dex-encoder/fixtures)\"",
     "checks": "yarn check:pq && yarn check:tsc && yarn check:es && yarn fixtures:check"
   },
   "dependencies": {

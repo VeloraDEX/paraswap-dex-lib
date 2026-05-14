@@ -1496,7 +1496,22 @@ function buildTestPriceRoute(partial: Partial<OptimalRate>): OptimalRate {
 }
 
 function buildExchangeParams(fixturePath: string): DexExchangeBuildParam[] {
-  return clone(loadFixtureJson(fixturePath)) as DexExchangeBuildParam[];
+  return (clone(loadFixtureJson(fixturePath)) as DexExchangeBuildParam[]).map(
+    stripFixtureOnlyExchangeParamFields,
+  );
+}
+
+function stripFixtureOnlyExchangeParamFields(
+  exchangeParam: DexExchangeBuildParam,
+): DexExchangeBuildParam {
+  const normalized = clone(exchangeParam) as DexExchangeBuildParam &
+    Record<string, unknown>;
+
+  // Historical executor snapshots still contain this removed runtime field.
+  // Keep resolved-boundary fixtures aligned with current DexExchangeParam.
+  delete normalized.dexFuncHasDestToken;
+
+  return normalized;
 }
 
 function buildWethPlan(fixturePath: string): DepositWithdrawReturn {

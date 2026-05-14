@@ -1,0 +1,52 @@
+{
+  "contractMethod": "swapExactAmountOutOnUniswapV3",
+  "description": "uniswap-v3-buy getDirectParamV6 baseline.",
+  "dexKey": "UniswapV3",
+  "expected": {
+    "params": [
+      [
+        "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "1200",
+        "1000",
+        "1100",
+        "0x1111111111111111111111111111111100000000000000000000000000000001",
+        "0x0000000000000000000000000000000000000000",
+        "0x800000000000000000000000aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa000000000000000000000000bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb00000000000000000000000000000000000000000000000000000000000001f4"
+      ],
+      "0",
+      "0x"
+    ]
+  },
+  "input": {
+    "beneficiary": "0x0000000000000000000000000000000000000000",
+    "blockNumber": 1,
+    "contractMethod": "swapExactAmountOutOnUniswapV3",
+    "data": {
+      "isApproved": true,
+      "path": [
+        {
+          "currentFee": "500",
+          "fee": "500",
+          "tokenIn": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "tokenOut": "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        }
+      ]
+    },
+    "destAmount": "1000",
+    "destToken": "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "dexKey": "UniswapV3",
+    "network": 1,
+    "partnerAndFee": "0",
+    "permit": "0x",
+    "quotedAmount": "1100",
+    "side": "BUY",
+    "srcAmount": "1200",
+    "srcToken": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "uuid": "11111111-1111-1111-1111-111111111111"
+  },
+  "kind": "direct-param",
+  "name": "uniswap-v3-buy",
+  "network": 1,
+  "schemaVersion": 1
+}

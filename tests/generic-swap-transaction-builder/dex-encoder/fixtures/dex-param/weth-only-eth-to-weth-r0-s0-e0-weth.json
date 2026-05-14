@@ -1,0 +1,51 @@
+{
+  "description": "weth-only-eth-to-weth route 0:0:0 getDexParam baseline.",
+  "dexKey": "Weth",
+  "expected": {
+    "dexFuncHasRecipient": false,
+    "exchangeData": "0xd0e30db0",
+    "needWrapNative": false,
+    "targetExchange": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+  },
+  "input": {
+    "data": null,
+    "destAmount": "1",
+    "destToken": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+    "dexKey": "Weth",
+    "executorAddress": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+    "recipient": "0x6a000f20005980200259b80c5102003040001068",
+    "route": {
+      "blockNumber": 1,
+      "destAmount": "1000000000000000000",
+      "destToken": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+      "network": 1,
+      "routeIndex": 0,
+      "routePercent": 100,
+      "side": "SELL",
+      "srcAmount": "1000000000000000000",
+      "srcToken": "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+    },
+    "side": "SELL",
+    "srcAmount": "1000000000000000000",
+    "srcToken": "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "swap": {
+      "destAmount": "1000000000000000000",
+      "destToken": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+      "srcAmount": "1000000000000000000",
+      "srcToken": "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "swapIndex": 0
+    },
+    "swapExchange": {
+      "data": null,
+      "destAmount": "1000000000000000000",
+      "exchange": "Weth",
+      "percent": 100,
+      "srcAmount": "1000000000000000000",
+      "swapExchangeIndex": 0
+    }
+  },
+  "kind": "dex-param",
+  "name": "weth-only-eth-to-weth-r0-s0-e0-weth",
+  "network": 1,
+  "schemaVersion": 1
+}

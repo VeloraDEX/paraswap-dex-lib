@@ -1,0 +1,71 @@
+{
+  "description": "executor02-multiswap-sell route 0:1:2 getDexParam baseline.",
+  "dexKey": "UniswapV3",
+  "expected": {
+    "dexFuncHasRecipient": true,
+    "exchangeData": "0xc04b8d59000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000a0000000000000000000000000eba12c7801a2998a334c289239fd7d780900e0050000000000000000000000000000000000000000000000000000000065b3904e0000000000000000000000000000000000000000000050f09fa997a8019a46110000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000002b6b175474e89094c44da98b954eedeac495271d0f000bb8c02aaa39b223fe8d0a0e5c4f27ead9083c756cc2000000000000000000000000000000000000000000",
+    "needWrapNative": true,
+    "targetExchange": "0xe592427a0aece92de3edee1f18e0157c05861564"
+  },
+  "input": {
+    "data": {
+      "gasUSD": "6.643808",
+      "path": [
+        {
+          "currentFee": "3000",
+          "fee": "3000",
+          "tokenIn": "0x6b175474e89094c44da98b954eedeac495271d0f",
+          "tokenOut": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+        }
+      ]
+    },
+    "destAmount": "1",
+    "destToken": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+    "dexKey": "UniswapV3",
+    "executorAddress": "0x00c600b30fb0400701010f4b080409018b9006e0",
+    "recipient": "0x00c600b30fb0400701010f4b080409018b9006e0",
+    "route": {
+      "blockNumber": 19040457,
+      "destAmount": "373532720317771981846",
+      "destToken": "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "network": 1,
+      "routeIndex": 0,
+      "routePercent": 100,
+      "side": "SELL",
+      "srcAmount": "1000000000000",
+      "srcToken": "0xdac17f958d2ee523a2206206994597c13d831ec7"
+    },
+    "side": "SELL",
+    "srcAmount": "382228042100732841313809",
+    "srcToken": "0x6b175474e89094c44da98b954eedeac495271d0f",
+    "swap": {
+      "destAmount": "373532720317771981846",
+      "destToken": "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "srcAmount": "935686761568501447524624",
+      "srcToken": "0x6b175474e89094c44da98b954eedeac495271d0f",
+      "swapIndex": 1
+    },
+    "swapExchange": {
+      "data": {
+        "gasUSD": "6.643808",
+        "path": [
+          {
+            "currentFee": "3000",
+            "fee": "3000",
+            "tokenIn": "0x6b175474e89094c44da98b954eedeac495271d0f",
+            "tokenOut": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+          }
+        ]
+      },
+      "destAmount": "152610946755753173697",
+      "exchange": "UniswapV3",
+      "percent": 40.85,
+      "srcAmount": "382228042100732841313809",
+      "swapExchangeIndex": 2
+    }
+  },
+  "kind": "dex-param",
+  "name": "executor02-multiswap-sell-r0-s1-e2-uniswap-v3",
+  "network": 1,
+  "schemaVersion": 1
+}

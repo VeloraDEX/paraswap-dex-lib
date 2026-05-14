@@ -1,0 +1,47 @@
+{
+  "description": "executor01-multiswap-sell route 0:0:0 needWrapNative baseline.",
+  "dexKey": "SushiSwapV3",
+  "expected": true,
+  "input": {
+    "route": {
+      "blockNumber": 18813003,
+      "destAmount": "24391",
+      "destToken": "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599",
+      "network": 1,
+      "routeIndex": 0,
+      "routePercent": 100,
+      "side": "SELL",
+      "srcAmount": "10000000",
+      "srcToken": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
+    },
+    "swap": {
+      "destAmount": "4671554607223468",
+      "destToken": "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "srcAmount": "10000000",
+      "srcToken": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+      "swapIndex": 0
+    },
+    "swapExchange": {
+      "data": {
+        "gasUSD": "11.370348",
+        "path": [
+          {
+            "currentFee": "500",
+            "fee": "500",
+            "tokenIn": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+            "tokenOut": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+          }
+        ]
+      },
+      "destAmount": "4671554607223468",
+      "exchange": "SushiSwapV3",
+      "percent": 100,
+      "srcAmount": "10000000",
+      "swapExchangeIndex": 0
+    }
+  },
+  "kind": "need-wrap-native",
+  "name": "executor01-multiswap-sell-r0-s0-e0-sushi-swap-v3",
+  "network": 1,
+  "schemaVersion": 1
+}

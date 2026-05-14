@@ -295,7 +295,45 @@ covered by current direct fixture tests.
 
 ### Status
 
-Not started.
+Complete.
+
+- Added DEX encoder conformance fixture schema, loader, generator, and tests
+  under `tests/generic-swap-transaction-builder/dex-encoder/`.
+- Captured 82 JSON fixtures from the resolved-build fixture orchestration
+  metadata:
+  - 36 `need-wrap-native` fixtures.
+  - 36 `dex-param` fixtures.
+  - 10 `direct-param` fixtures.
+- `direct-param` fixtures invoke the current TS `getDirectParamV6()`
+  implementations through deterministic in-memory contexts, so their expected
+  params are method-derived baselines rather than authored resolved-boundary
+  literals.
+- The fixture schema validates both input and expected output sides, rejects
+  unknown fields, rejects unsupported schema versions and fixture kinds, and
+  enforces lower-case addresses, decimal-string amounts, 0x-prefixed hex, finite
+  number fields, and boolean fields.
+- The loader cross-validates duplicated `dex-param` metadata and enforces
+  DEX-specific `data` shapes for the covered fixture DEXes, including
+  `UniswapV3`/`SushiSwapV3` path fields, `BalancerV1` swap entries, `Weth`
+  `null` data, and the covered direct DEX data contracts.
+- Coverage is checked against the resolved-build fixture suite: generic fixtures
+  cover `BalancerV1`, `SushiSwapV3`, `UniswapV3`, and `Weth`; direct fixtures
+  cover `BalancerV2`, `CurveV1`, `CurveV2`, `GenericRFQ`, `LitePsm`,
+  `UniswapV2`, and `UniswapV3`.
+- The generator strips the stale fixture-only `dexFuncHasDestToken` residue
+  from historical executor exchange-param snapshots so the new DTO contract
+  tracks current runtime `DexExchangeParam` output.
+- Hoisted canonical JSON formatting to a shared test utility and added
+  `fixtures:dex-encoder:generate`; `fixtures:check` now regenerates and checks
+  both resolved-build and dex-encoder fixture trees.
+- Verified with:
+  - `yarn fixtures:generate`
+  - `yarn fixtures:dex-encoder:generate`
+  - `yarn jest tests/generic-swap-transaction-builder/dex-encoder --runInBand`
+  - `yarn jest tests/generic-swap-transaction-builder/resolved --runInBand`
+  - `yarn check:tsc`
+  - `yarn check:es`
+  - `git diff --check`
 
 ## Phase 4: Add TS Adapter Over Existing DEX Builders
 
@@ -421,6 +459,10 @@ V6 behavior.
    `DirectBuildInput` baselines via `ResolvedBuildInputObserver`.
 9. Add orchestration parity tests showing the port-routed direct path creates
    the same `DirectBuildInput` as the captured direct orchestration baselines.
+10. Include at least one SELL direct orchestration case with explicit
+    `quotedAmount` different from `priceRoute.destAmount`, so the
+    `resolveQuotedAmount()` override branch is covered outside the default
+    dex-encoder fixture path.
 
 Phase 6 is independent from Phase 5 after Phase 4 lands and may run in parallel
 with the generic orchestration refactor if write scopes stay disjoint.
