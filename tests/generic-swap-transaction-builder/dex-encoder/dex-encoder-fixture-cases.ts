@@ -1,16 +1,19 @@
 import { Interface } from '@ethersproject/abi';
 import { SwapSide } from '@paraswap/core';
 import BalancerVaultABI from '../../../src/abi/balancer-v2/vault.json';
-import { ETHER_ADDRESS, NULL_ADDRESS } from '../../../src/constants';
+import { ETHER_ADDRESS, Network, NULL_ADDRESS } from '../../../src/constants';
+import { BalancerV1 } from '../../../src/dex/balancer-v1/balancer-v1';
 import { BalancerV2 } from '../../../src/dex/balancer-v2/balancer-v2';
 import { BalancerPoolTypes } from '../../../src/dex/balancer-v2/types';
 import { CurveV1 } from '../../../src/dex/curve-v1/curve-v1';
 import { CurveV2 } from '../../../src/dex/curve-v2/curve-v2';
 import { CurveV2SwapType } from '../../../src/dex/curve-v2/types';
 import { GenericRFQ } from '../../../src/dex/generic-rfq/generic-rfq';
+import type { IDexTxBuilder, NeedWrapNativeFunc } from '../../../src/dex/idex';
 import { LitePsm } from '../../../src/dex/lite-psm/lite-psm';
 import { UniswapV2 } from '../../../src/dex/uniswap-v2/uniswap-v2';
 import { UniswapV3 } from '../../../src/dex/uniswap-v3/uniswap-v3';
+import { Weth } from '../../../src/dex/weth/weth';
 import { buildGenericDexCallParams } from '../../../src/generic-swap-transaction-builder/orchestration';
 import {
   buildFeesV6,
@@ -29,7 +32,7 @@ import type {
 import type { DirectContractMethodV6 } from '../../../src/generic-swap-transaction-builder/dex-encoder/direct-methods';
 import type {
   Address,
-  DexExchangeBuildParam,
+  DexExchangeParam as LegacyDexExchangeParam,
   OptimalRate,
   OptimalSwap,
   OptimalSwapExchange,
@@ -107,7 +110,6 @@ function buildGenericDexEncoderFixtures(
 ): DexEncoderFixture[] {
   const input = fixture.input as BuildInput;
   const priceRoute = getGenericPriceRoute(fixture);
-  const exchangeParams = getGenericExchangeParams(fixture);
   const resolvedLegByKey = new Map(
     input.resolvedLegs.map(resolvedLeg => [
       routePositionKey(resolvedLeg),
@@ -115,25 +117,16 @@ function buildGenericDexEncoderFixtures(
     ]),
   );
 
-  return walkRoutePlan(input.routePlan).flatMap((routePosition, index) => {
+  return walkRoutePlan(input.routePlan).flatMap(routePosition => {
     const { routeIndex, swapIndex, swapExchangeIndex } = routePosition;
     const route = priceRoute.bestRoute[routeIndex];
     const swap = route.swaps[swapIndex];
     const swapExchange = swap.swapExchanges[swapExchangeIndex];
     const key = routePositionKey(routePosition);
     const resolvedLeg = resolvedLegByKey.get(key);
-    const exchangeParam = exchangeParams[index];
 
     if (!resolvedLeg) {
       throw new Error(`${fixture.name}: missing resolved leg for ${key}`);
-    }
-
-    if (!exchangeParam) {
-      throw new Error(`${fixture.name}: missing exchange param for ${key}`);
-    }
-
-    if (typeof exchangeParam.needWrapNative !== 'boolean') {
-      throw new Error(`${fixture.name}: needWrapNative must be boolean`);
     }
 
     const name = `${fixture.name}-${formatRoutePosition(
@@ -149,6 +142,14 @@ function buildGenericDexEncoderFixtures(
       swapExchange,
       swapExchangeIndex,
     });
+    const dex = getCurrentTsDexBuilder(swapExchange.exchange);
+    const dexNeedWrapNative = resolveNeedWrapNative(
+      dex.needWrapNative,
+      priceRoute,
+      swap,
+      swapExchange,
+      swapExchange.exchange,
+    );
     const dexCallParams = buildGenericDexCallParams({
       priceRoute,
       routeIndex,
@@ -156,7 +157,7 @@ function buildGenericDexEncoderFixtures(
       swapIndex,
       swapExchange,
       minMaxAmount: input.minMaxAmount,
-      dexNeedWrapNative: exchangeParam.needWrapNative,
+      dexNeedWrapNative,
       executionContractAddress: input.executorAddress,
       wrappedNativeTokenAddress: input.wrappedNativeTokenAddress,
       augustusV6Address: input.augustusV6Address,
@@ -176,6 +177,13 @@ function buildGenericDexEncoderFixtures(
       side: input.side,
       data: normalizeJsonData(swapExchange.data),
     };
+    const dexParam = invokeCurrentTsGetDexParam(
+      dex,
+      dexParamInput,
+      priceRoute,
+      swap,
+      swapExchange,
+    );
     const needWrapFixture: NeedWrapNativeFixture = {
       schemaVersion: DEX_ENCODER_FIXTURE_SCHEMA_VERSION,
       name,
@@ -184,7 +192,7 @@ function buildGenericDexEncoderFixtures(
       network: input.network,
       dexKey: swapExchange.exchange,
       input: needWrapNativeInput,
-      expected: exchangeParam.needWrapNative,
+      expected: dexNeedWrapNative,
     };
     const dexParamFixture: DexParamFixture = {
       schemaVersion: DEX_ENCODER_FIXTURE_SCHEMA_VERSION,
@@ -194,11 +202,75 @@ function buildGenericDexEncoderFixtures(
       network: input.network,
       dexKey: swapExchange.exchange,
       input: dexParamInput,
-      expected: normalizeDexExchangeParam(exchangeParam),
+      expected: normalizeDexExchangeParam(dexParam),
     };
 
     return [needWrapFixture, dexParamFixture];
   });
+}
+
+function invokeCurrentTsGetDexParam(
+  dex: IDexTxBuilder<unknown, unknown>,
+  input: DexParamInput,
+  priceRoute: OptimalRate,
+  swap: OptimalSwap,
+  swapExchange: OptimalSwapExchange<unknown>,
+): LegacyDexExchangeParam {
+  if (!dex.getDexParam) {
+    throw new Error(`unsupported generic DEX fixture ${input.dexKey}`);
+  }
+
+  const result = withFixedDate(() =>
+    dex.getDexParam!(
+      input.srcToken,
+      input.destToken,
+      input.srcAmount,
+      input.destAmount,
+      input.recipient,
+      clone(input.data),
+      input.side,
+      input.executorAddress,
+    ),
+  );
+
+  if (
+    typeof (result as PromiseLike<LegacyDexExchangeParam>).then === 'function'
+  ) {
+    throw new Error(
+      `${input.dexKey}: async getDexParam fixtures are unsupported`,
+    );
+  }
+  const dexParam = result as LegacyDexExchangeParam;
+
+  return {
+    ...dexParam,
+    needWrapNative: resolveNeedWrapNative(
+      dexParam.needWrapNative,
+      priceRoute,
+      swap,
+      swapExchange,
+      input.dexKey,
+    ),
+  };
+}
+
+function resolveNeedWrapNative(
+  needWrapNative: LegacyDexExchangeParam['needWrapNative'],
+  priceRoute: OptimalRate,
+  swap: OptimalSwap,
+  swapExchange: OptimalSwapExchange<unknown>,
+  dexKey: string,
+): boolean {
+  const resolved =
+    typeof needWrapNative === 'function'
+      ? (needWrapNative as NeedWrapNativeFunc)(priceRoute, swap, swapExchange)
+      : needWrapNative;
+
+  if (typeof resolved !== 'boolean') {
+    throw new Error(`${dexKey}: needWrapNative must resolve to boolean`);
+  }
+
+  return resolved;
 }
 
 function buildDirectDexEncoderFixture(
@@ -519,12 +591,49 @@ function buildBalancerPool(srcToken: Address, destToken: Address) {
   };
 }
 
-function buildDirectDexHelper() {
+let currentTsDexBuilders:
+  | Record<string, IDexTxBuilder<unknown, unknown>>
+  | undefined;
+
+function getCurrentTsDexBuilder(
+  dexKey: string,
+): IDexTxBuilder<unknown, unknown> {
+  if (!currentTsDexBuilders) {
+    const dexHelper = buildDirectDexHelper();
+
+    currentTsDexBuilders = {
+      BalancerV1: new BalancerV1(Network.MAINNET, 'BalancerV1', dexHelper),
+      SushiSwapV3: new UniswapV3(Network.MAINNET, 'SushiSwapV3', dexHelper),
+      UniswapV3: new UniswapV3(Network.MAINNET, 'UniswapV3', dexHelper),
+      Weth: new Weth(Network.MAINNET, 'Weth', dexHelper),
+    };
+  }
+
+  const dex = currentTsDexBuilders[dexKey];
+  if (!dex) throw new Error(`unsupported generic DEX fixture ${dexKey}`);
+
+  return dex;
+}
+
+function buildDirectDexHelper(): any {
+  class DummyContract {}
+
   return {
     config: {
+      isSlave: true,
       data: {
+        network: Network.MAINNET,
+        augustusAddress: AUGUSTUS_V6_ADDRESS,
         augustusV6Address: AUGUSTUS_V6_ADDRESS,
+        augustusRFQAddress: NULL_ADDRESS,
         wrappedNativeTokenAddress: WRAPPED_NATIVE_TOKEN_ADDRESS,
+        uniswapV2ExchangeRouterAddress: POOL_ADDRESS,
+        tokenTransferProxyAddress: NULL_ADDRESS,
+        multicallV2Address: NULL_ADDRESS,
+        adapterAddresses: {},
+        executorsAddresses: {},
+        rfqConfigs: {},
+        apiKeyTheGraph: '',
       },
       wrapETH: <T extends { address: Address }>(token: T): T => ({
         ...token,
@@ -535,6 +644,23 @@ function buildDirectDexHelper() {
       }),
       isWETH: (address: Address): boolean =>
         address.toLowerCase() === WRAPPED_NATIVE_TOKEN_ADDRESS,
+    },
+    web3Provider: {
+      eth: {
+        Contract: DummyContract,
+        handleRevert: false,
+      },
+    },
+    provider: {},
+    httpRequest: {
+      request: async () => undefined,
+      querySubgraph: async () => ({ data: {} }),
+    },
+    cache: {
+      get: async () => null,
+      setex: async () => undefined,
+      rawget: async () => null,
+      rawset: async () => 'OK',
     },
     getLogger: createNoopLogger,
   };
@@ -597,7 +723,7 @@ function buildNeedWrapNativeInput({
 }
 
 function normalizeDexExchangeParam(
-  exchangeParam: DexExchangeBuildParam,
+  exchangeParam: LegacyDexExchangeParam,
 ): DexExchangeParam {
   const normalized = clone(exchangeParam) as DexExchangeParam &
     Record<string, unknown> & {
@@ -635,18 +761,6 @@ function getGenericPriceRoute(
   }
 
   return priceRoute;
-}
-
-function getGenericExchangeParams(
-  fixture: ResolvedBuildSuccessFixture,
-): DexExchangeBuildParam[] {
-  const exchangeParams = fixture.orchestration?.exchangeParams;
-
-  if (!exchangeParams || fixture.kind !== 'generic') {
-    throw new Error(`${fixture.name}: missing generic exchangeParams`);
-  }
-
-  return exchangeParams;
 }
 
 function getDirectPriceRoute(

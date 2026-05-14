@@ -206,7 +206,7 @@ export class GenericSwapTransactionBuilder {
       }),
     );
 
-    const { resolvedLegs, wethPlan } = buildResolvedWethPlan({
+    const { resolvedLegs, wethPlan } = await buildResolvedWethPlan({
       resolvedLegsWithWeth: rawResolvedLegs,
       side,
       routePlan,

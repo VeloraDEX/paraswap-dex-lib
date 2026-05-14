@@ -333,6 +333,7 @@ Complete.
   - `yarn jest tests/generic-swap-transaction-builder/resolved --runInBand`
   - `yarn check:tsc`
   - `yarn check:es`
+  - `yarn fixtures:check`
   - `git diff --check`
 
 ## Phase 4: Add TS Adapter Over Existing DEX Builders
@@ -359,8 +360,9 @@ prove the adapters match the Phase 3 conformance fixtures.
    DEX/method pairs.
 8. Ensure direct adapter output does not expose an `encoder` callback and does
    not carry `contractMethod`.
-9. Add `WethCallDataProviderPort` implementation that wraps current WETH
-   `getDepositWithdrawParam(...)` behavior.
+9. Add `WethCallDataProviderPort` implementation that directly encodes stable
+   V6 WETH deposit/withdraw calldata and emits `NULL_ADDRESS` as the serialized
+   withdraw callee.
 10. Promote `buildResolvedWethPlan` and its call path to await the port's
     `MaybePromise` WETH calldata return.
 
@@ -377,13 +379,52 @@ Phase 4 is complete only when:
 - all Phase 3 conformance fixtures pass through the TS adapter
 - adapter tests cover static/function-typed `needWrapNative`, sync/async
   `getDexParam`, missing DEX methods, direct method rejection, and WETH
-  calldata provider parity
+  calldata provider output including the `NULL_ADDRESS` withdraw callee
 - this phase proves the TS adapter preserves current TS behavior; future Go DEX
   encoder conformance is a separate gate
 
 ### Status
 
-Not started.
+Complete.
+
+- Added `createTsDexEncoderRegistry(...)` and adapter implementations for
+  generic DEX encoders, direct DEX encoders, and V6 WETH deposit/withdraw
+  calldata.
+- Generic adapters normalize sync and async `getDexParam(...)` results,
+  resolve static and function-typed `needWrapNative` values to booleans, reject
+  unsupported output fields, and validate required address/hex/boolean/number
+  fields.
+- Direct adapters perform method-aware DEX/method rejection, call existing
+  `getDirectParamV6(...)`, and expose only serializable `params`, without the
+  legacy `encoder` callback or method metadata. Direct params are recursively
+  validated as JSON values so non-transportable outputs fail with DEX-specific
+  errors.
+- Promoted `buildResolvedWethPlan(...)` to await `MaybePromise` WETH calldata
+  providers while preserving current `GenericSwapTransactionBuilder` behavior.
+- Simplified V6 WETH withdraw output to use `NULL_ADDRESS` as the serialized
+  callee instead of carrying the legacy Augustus address through
+  `ExecutorEncodingContext`; V6 executor encoding consumes the withdraw
+  calldata, not the legacy callee.
+- Regenerated generic dex-param conformance fixtures from current TS
+  `getDexParam(...)` implementations instead of historical resolved-build
+  snapshots, so Phase 3 baselines now reflect current encoder output.
+- Added adapter tests that replay all Phase 3 conformance fixtures through real
+  TS DEX builders and keep a separate fixture-shaped adapter surface test for
+  async/sync edge cases, missing methods, direct method rejection, and output
+  stripping.
+- Verified the V6 WETH calldata provider emits stable deposit/withdraw calldata
+  and a `NULL_ADDRESS` withdraw callee.
+- Re-ran dex-encoder fixture generation and confirmed it is deterministic; the
+  remaining dex-param fixture diff is intentional because baselines now come
+  from current TS DEX encoders. Run `yarn fixtures:check` again after these
+  intentional fixture diffs are committed.
+- Verified with:
+  - `yarn jest tests/generic-swap-transaction-builder/dex-encoder --runInBand`
+  - `yarn jest tests/generic-swap-transaction-builder/orchestration.test.ts --runInBand`
+  - `yarn jest tests/generic-swap-transaction-builder/resolved --runInBand`
+  - `yarn check:tsc`
+  - `yarn check:es`
+  - `git diff --check`
 
 ## Phase 5: Refactor Generic Orchestration To Use Ports
 

@@ -71,8 +71,9 @@ type WethCallDataProviderPort interface {
 TypeScript should mirror this shape first with adapters over the current DEX
 classes. Future Go orchestration can use equivalent interfaces backed by Go DEX
 packages. `WethCallDataProviderPort` is constructed from per-network encoding
-context, including `network`, `wrappedNativeTokenAddress`, and
-`augustusV6Address`.
+context and uses `wrappedNativeTokenAddress` for deposits. V6 withdraw output
+uses `NULL_ADDRESS` as the serialized callee because the executor consumes the
+withdraw calldata, not a legacy WETH DEX callee.
 
 Direct-method classification remains a port-independent helper based on the
 current V6 direct method list. The direct registry is responsible for rejecting
@@ -210,12 +211,11 @@ Carries the values currently passed to `Weth.getDepositWithdrawParam(...)`:
 - swap side
 
 The result is the existing `DepositWithdrawReturn` shape. The provider is
-constructed with per-network encoding context, including `network`,
-`wrappedNativeTokenAddress`, and `augustusV6Address`, so those addresses do not
-need to be repeated on every call. The TS provider can wrap the current WETH DEX
-implementation during migration. The future Go provider should encode WETH
-deposit/withdraw calldata directly; this is stable ABI logic and is not a
-DEX-specific port. This provider is V6-only by definition; do not carry a
+constructed with per-network encoding context so addresses do not need to be
+repeated on every call. The TS provider should encode WETH deposit/withdraw
+calldata directly and use `NULL_ADDRESS` as the V6 withdraw callee; this is
+stable ABI logic and is not a DEX-specific port. This provider is V6-only by
+definition; do not carry a
 ParaSwap version field unless a future plan scopes multi-version support.
 
 ## Port Semantics
@@ -406,10 +406,10 @@ Implement a registry adapter around current TS infrastructure:
 This adapter is the compatibility layer. Existing DEX implementations should not
 be changed in this phase except for small type fixes needed by the adapter.
 
-Also add a TS `WethCallDataProviderPort` implementation that wraps the current
-WETH DEX `getDepositWithdrawParam(...)` behavior. This requires promoting
-`buildResolvedWethPlan` and its call path to await the port's `MaybePromise`
-WETH calldata return.
+Also add a TS `WethCallDataProviderPort` implementation that directly encodes
+V6 WETH deposit/withdraw calldata and emits `NULL_ADDRESS` as the withdraw
+callee. This requires promoting `buildResolvedWethPlan` and its call path to
+await the port's `MaybePromise` WETH calldata return.
 
 Acceptance:
 
@@ -505,7 +505,7 @@ yarn jest tests/generic-swap-transaction-builder/resolved --runInBand
   - missing `getDirectParamV6`
   - unsupported direct method for a DEX
   - direct params without encoder callback leakage
-  - WETH calldata provider parity with current WETH DEX behavior
+  - WETH calldata provider output, including `NULL_ADDRESS` withdraw callee
 
 - Add orchestration parity tests proving `GenericSwapTransactionBuilder.build()`
   output is unchanged for non-`newDexs` callers after routing through the ports:
@@ -582,7 +582,7 @@ Resolved during plan validation:
 - Every phase has an explicit acceptance gate.
 - `WethDepositWithdrawInput` is V6-only and does not carry a ParaSwap version
   field.
-- `WethCallDataProviderPort` is constructed from per-network encoding context,
-  including `wrappedNativeTokenAddress` and `augustusV6Address`.
+- `WethCallDataProviderPort` is constructed from per-network encoding context
+  and uses `wrappedNativeTokenAddress` plus a `NULL_ADDRESS` withdraw callee.
 - DEX encoder conformance fixtures include top-level `network` and `dexKey`;
   direct fixtures also include top-level `contractMethod`.

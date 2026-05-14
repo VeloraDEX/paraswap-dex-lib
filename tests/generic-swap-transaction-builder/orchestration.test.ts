@@ -199,7 +199,7 @@ describe('GenericSwapTransactionBuilder orchestration helpers', () => {
   });
 
   describe('buildResolvedWethPlan', () => {
-    it('sums WETH amounts and delegates calldata creation', () => {
+    it('sums WETH amounts and delegates calldata creation', async () => {
       const routePlan = buildRoutePlanFixture();
       const getWethCallData = jest.fn(() => ({
         deposit: {
@@ -209,7 +209,7 @@ describe('GenericSwapTransactionBuilder orchestration helpers', () => {
         },
       }));
 
-      const result = buildResolvedWethPlan({
+      const result = await buildResolvedWethPlan({
         resolvedLegsWithWeth: [
           {
             resolvedLeg: buildResolvedLeg({ needWrapNative: true }),
@@ -236,10 +236,10 @@ describe('GenericSwapTransactionBuilder orchestration helpers', () => {
       expect(result.resolvedLegs).toHaveLength(2);
     });
 
-    it('skips WETH calldata when equal deposit and withdraw have uniform wrap mode', () => {
+    it('skips WETH calldata when equal deposit and withdraw have uniform wrap mode', async () => {
       const getWethCallData = jest.fn();
 
-      const result = buildResolvedWethPlan({
+      const result = await buildResolvedWethPlan({
         resolvedLegsWithWeth: [
           {
             resolvedLeg: buildResolvedLeg({ needWrapNative: true }),
@@ -257,7 +257,7 @@ describe('GenericSwapTransactionBuilder orchestration helpers', () => {
       expect(result.wethPlan).toBeUndefined();
     });
 
-    it('keeps WETH calldata when equal amounts have mixed wrap modes', () => {
+    it('keeps WETH calldata when equal amounts have mixed wrap modes', async () => {
       const getWethCallData = jest.fn(() => ({
         withdraw: {
           callee: AUGUSTUS_V6_ADDRESS,
@@ -266,7 +266,7 @@ describe('GenericSwapTransactionBuilder orchestration helpers', () => {
         },
       }));
 
-      const result = buildResolvedWethPlan({
+      const result = await buildResolvedWethPlan({
         resolvedLegsWithWeth: [
           {
             resolvedLeg: buildResolvedLeg({ needWrapNative: true }),
@@ -298,7 +298,7 @@ describe('GenericSwapTransactionBuilder orchestration helpers', () => {
     it.each([
       { label: 'deposit-only', wethDeposit: 10n, wethWithdraw: 0n },
       { label: 'withdraw-only', wethDeposit: 0n, wethWithdraw: 10n },
-    ])('delegates asymmetric $label WETH plans', testCase => {
+    ])('delegates asymmetric $label WETH plans', async testCase => {
       const getWethCallData = jest.fn(() => ({
         deposit: {
           callee: WRAPPED_NATIVE_TOKEN_ADDRESS,
@@ -307,7 +307,7 @@ describe('GenericSwapTransactionBuilder orchestration helpers', () => {
         },
       }));
 
-      buildResolvedWethPlan({
+      await buildResolvedWethPlan({
         resolvedLegsWithWeth: [
           {
             resolvedLeg: buildResolvedLeg({ needWrapNative: true }),

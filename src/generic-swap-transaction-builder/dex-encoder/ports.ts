@@ -45,8 +45,7 @@ export type WethCallDataProviderPort = {
   ): MaybePromise<WethDepositWithdrawResult | undefined>;
 };
 
-// Phase 4 introduces the createWethCallDataProvider(...) value implementing
-// this factory signature.
+// Implemented by createWethCallDataProvider(...) in the TS adapter.
 export type CreateWethCallDataProviderPort = (
   context: ExecutorEncodingContext,
 ) => WethCallDataProviderPort;

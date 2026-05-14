@@ -28,7 +28,10 @@ export type WethCallDataProvider = (
   srcAmountWeth: string,
   destAmountWeth: string,
   side: SwapSide,
-) => DepositWithdrawReturn | undefined;
+) =>
+  | DepositWithdrawReturn
+  | undefined
+  | Promise<DepositWithdrawReturn | undefined>;
 
 export type ResolvedLegWithWeth = {
   resolvedLeg: ResolvedLeg;
@@ -148,7 +151,7 @@ export function buildGenericDexCallParams({
   };
 }
 
-export function buildResolvedWethPlan({
+export async function buildResolvedWethPlan({
   resolvedLegsWithWeth,
   side,
   routePlan,
@@ -160,10 +163,10 @@ export function buildResolvedWethPlan({
   routePlan: RoutePlan;
   getWethCallData: WethCallDataProvider;
   wrappedNativeTokenAddress: Address;
-}): {
+}): Promise<{
   resolvedLegs: ResolvedLeg[];
   wethPlan?: DepositWithdrawReturn;
-} {
+}> {
   const { resolvedLegs, srcAmountWethToDeposit, destAmountWethToWithdraw } =
     resolvedLegsWithWeth.reduce<{
       resolvedLegs: ResolvedLeg[];
@@ -202,7 +205,7 @@ export function buildResolvedWethPlan({
 
   return {
     resolvedLegs,
-    wethPlan: getWethCallData(
+    wethPlan: await getWethCallData(
       srcAmountWethToDeposit.toString(),
       destAmountWethToWithdraw.toString(),
       side,
