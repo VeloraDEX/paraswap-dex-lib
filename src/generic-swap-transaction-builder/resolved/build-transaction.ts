@@ -18,6 +18,11 @@ import { Executors } from '../../executor/types';
 import type { Address, DexExchangeBuildParam, TxObject } from '../../types';
 import { uuidToBytes16 } from '../../utils';
 import {
+  getDirectContractMethodSideV6,
+  isDirectContractMethodV6,
+  type DirectContractMethodV6,
+} from '../dex-encoder/direct-methods';
+import {
   assertDecimalAmountString,
   assertHexBytes,
   assertLowercaseAddress,
@@ -44,30 +49,6 @@ const GENERIC_CONTRACT_METHODS = new Set<string>([
   ContractMethodV6.swapExactAmountOut,
   ContractMethodV6.swapExactAmountInPro,
   ContractMethodV6.swapExactAmountOutPro,
-]);
-
-const DIRECT_CONTRACT_METHODS = new Set<string>([
-  ContractMethodV6.swapExactAmountInOnUniswapV2,
-  ContractMethodV6.swapExactAmountOutOnUniswapV2,
-  ContractMethodV6.swapExactAmountInOnUniswapV3,
-  ContractMethodV6.swapExactAmountOutOnUniswapV3,
-  ContractMethodV6.swapExactAmountInOnBalancerV2,
-  ContractMethodV6.swapExactAmountOutOnBalancerV2,
-  ContractMethodV6.swapExactAmountInOnCurveV1,
-  ContractMethodV6.swapExactAmountInOnCurveV2,
-  ContractMethodV6.swapOnAugustusRFQTryBatchFill,
-  ContractMethodV6.swapExactAmountInOutOnMakerPSM,
-]);
-
-const DIRECT_CONTRACT_METHOD_SIDES = new Map<string, SwapSide>([
-  [ContractMethodV6.swapExactAmountInOnUniswapV2, SwapSide.SELL],
-  [ContractMethodV6.swapExactAmountOutOnUniswapV2, SwapSide.BUY],
-  [ContractMethodV6.swapExactAmountInOnUniswapV3, SwapSide.SELL],
-  [ContractMethodV6.swapExactAmountOutOnUniswapV3, SwapSide.BUY],
-  [ContractMethodV6.swapExactAmountInOnBalancerV2, SwapSide.SELL],
-  [ContractMethodV6.swapExactAmountOutOnBalancerV2, SwapSide.BUY],
-  [ContractMethodV6.swapExactAmountInOnCurveV1, SwapSide.SELL],
-  [ContractMethodV6.swapExactAmountInOnCurveV2, SwapSide.SELL],
 ]);
 
 export type ResolvedBuildDeps = {
@@ -197,8 +178,8 @@ function validateSupportedContractMethod(
 
 function validateSupportedDirectContractMethod(
   contractMethod: ContractMethodV6,
-): void {
-  if (!DIRECT_CONTRACT_METHODS.has(contractMethod)) {
+): asserts contractMethod is DirectContractMethodV6 {
+  if (!isDirectContractMethodV6(contractMethod)) {
     throw new Error(
       `unsupported direct contract method for resolved build: ${contractMethod}`,
     );
@@ -212,10 +193,10 @@ function validateDirectSide(side: SwapSide): void {
 }
 
 function validateDirectSideContractMethod(
-  contractMethod: ContractMethodV6,
+  contractMethod: DirectContractMethodV6,
   side: SwapSide,
 ): void {
-  const expectedSide = DIRECT_CONTRACT_METHOD_SIDES.get(contractMethod);
+  const expectedSide = getDirectContractMethodSideV6(contractMethod);
 
   if (expectedSide !== undefined && side !== expectedSide) {
     throw new Error(

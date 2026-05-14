@@ -227,7 +227,30 @@ behavior changes.
 
 ### Status
 
-Not started.
+Complete.
+
+- Added `DexEncoderPort`, `DirectDexEncoderPort`,
+  `DexEncoderRegistryPort`, `WethCallDataProviderPort`, and lookup/factory
+  types under `src/generic-swap-transaction-builder/dex-encoder/ports.ts`.
+- Added port-independent V6 direct method helpers under
+  `src/generic-swap-transaction-builder/dex-encoder/direct-methods.ts`,
+  including the direct method list, direct method type guard, and fixed-side
+  lookup.
+- Routed resolved direct-boundary validation through the shared direct-method
+  helper so there is one direct-method source of truth.
+- Tightened `DirectParamInput.contractMethod` to the V6 direct-method union.
+- Added serializable WETH calldata output DTOs and field contracts for the WETH
+  provider port, including address/amount/calldata/number/boolean field
+  categories.
+- Reserved the WETH provider factory type and documented that Phase 4 introduces
+  the `createWethCallDataProvider(...)` value implementation.
+- Documented the dependency direction in the port module: dex-encoder may
+  import executor context types for construction signatures, but executor
+  modules must not import dex-encoder code.
+- Verified with:
+  - `yarn check:tsc`
+  - `yarn check:es`
+  - `yarn jest tests/generic-swap-transaction-builder/resolved --runInBand`
 
 ## Phase 3: Capture DEX Encoder Conformance Fixtures
 
@@ -300,6 +323,8 @@ prove the adapters match the Phase 3 conformance fixtures.
    not carry `contractMethod`.
 9. Add `WethCallDataProviderPort` implementation that wraps current WETH
    `getDepositWithdrawParam(...)` behavior.
+10. Promote `buildResolvedWethPlan` and its call path to await the port's
+    `MaybePromise` WETH calldata return.
 
 ### Acceptance
 

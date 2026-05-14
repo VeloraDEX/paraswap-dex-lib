@@ -334,6 +334,10 @@ Define:
 - `WethCallDataProviderPort`
 - port-independent V6 direct method helper
 
+The V6 direct method helper should be the canonical direct-method source of
+truth. Resolved direct-boundary validation should use it instead of maintaining
+a parallel direct-method list or side map.
+
 Keep these types serializable where practical. Any non-serializable field must
 be justified and kept out of future Go-facing contracts. If a separate
 `DexExchangeParamContract` name is introduced, reserve it for the versioned
@@ -403,7 +407,9 @@ This adapter is the compatibility layer. Existing DEX implementations should not
 be changed in this phase except for small type fixes needed by the adapter.
 
 Also add a TS `WethCallDataProviderPort` implementation that wraps the current
-WETH DEX `getDepositWithdrawParam(...)` behavior.
+WETH DEX `getDepositWithdrawParam(...)` behavior. This requires promoting
+`buildResolvedWethPlan` and its call path to await the port's `MaybePromise`
+WETH calldata return.
 
 Acceptance:
 

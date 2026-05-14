@@ -1,6 +1,7 @@
-import { ContractMethodV6, SwapSide } from '@paraswap/core';
+import type { SwapSide } from '@paraswap/core';
 import type { Address } from '../../types';
 import { SpecialDex } from '../../executor/types';
+import type { DirectContractMethodV6 } from './direct-methods';
 
 export type DecimalString = string;
 export type HexString = `0x${string}`;
@@ -53,8 +54,10 @@ export const DEX_ENCODER_DTO_NORMALIZATION_POLICY: DexEncoderDtoNormalizationPol
 export type DexEncoderDtoFieldContract = {
   addressFields: readonly string[];
   amountFields: readonly string[];
+  booleanFields: readonly string[];
   calldataFields: readonly string[];
   nullableInputFields: readonly string[];
+  numberFields: readonly string[];
   passThroughFields: readonly string[];
   strictOutputFields: readonly string[];
 };
@@ -133,8 +136,18 @@ export const NEED_WRAP_NATIVE_INPUT_FIELD_CONTRACT = {
     'swapExchange.srcAmount',
     'swapExchange.destAmount',
   ],
+  booleanFields: [],
   calldataFields: [],
   nullableInputFields: ['swapExchange.data'],
+  numberFields: [
+    'route.network',
+    'route.routeIndex',
+    'route.routePercent',
+    'route.blockNumber',
+    'swap.swapIndex',
+    'swapExchange.swapExchangeIndex',
+    'swapExchange.percent',
+  ],
   passThroughFields: ['swapExchange.data'],
   strictOutputFields: [],
 } as const satisfies DexEncoderDtoFieldContract;
@@ -167,11 +180,13 @@ export const DEX_PARAM_INPUT_FIELD_CONTRACT = {
     'srcAmount',
     'destAmount',
   ],
+  booleanFields: NEED_WRAP_NATIVE_INPUT_FIELD_CONTRACT.booleanFields,
   calldataFields: [],
   nullableInputFields: [
     ...NEED_WRAP_NATIVE_INPUT_FIELD_CONTRACT.nullableInputFields,
     'data',
   ],
+  numberFields: NEED_WRAP_NATIVE_INPUT_FIELD_CONTRACT.numberFields,
   passThroughFields: [
     ...NEED_WRAP_NATIVE_INPUT_FIELD_CONTRACT.passThroughFields,
     'data',
@@ -207,6 +222,17 @@ export const DEX_EXCHANGE_PARAM_FIELD_CONTRACT = {
     'spender',
   ],
   amountFields: [],
+  booleanFields: [
+    'needWrapNative',
+    'needUnwrapNative',
+    'skipApproval',
+    'dexFuncHasRecipient',
+    'sendEthButSupportsInsertFromAmount',
+    'specialDexSupportsInsertFromAmount',
+    'swappedAmountNotPresentInExchangeData',
+    'amountsPacked128',
+    'permit2Approval',
+  ],
   calldataFields: ['exchangeData'],
   nullableInputFields: [
     'needUnwrapNative',
@@ -223,6 +249,7 @@ export const DEX_EXCHANGE_PARAM_FIELD_CONTRACT = {
     'amountsPacked128',
     'permit2Approval',
   ],
+  numberFields: ['specialDexFlag', 'returnAmountPos', 'insertFromAmountPos'],
   passThroughFields: [],
   strictOutputFields: [
     'needWrapNative',
@@ -248,7 +275,7 @@ export const DEX_EXCHANGE_PARAM_FIELD_CONTRACT = {
 export type DirectParamInput = {
   dexKey: string;
   network: number;
-  contractMethod: ContractMethodV6;
+  contractMethod: DirectContractMethodV6;
   srcToken: Address;
   destToken: Address;
   srcAmount: DecimalString;
@@ -266,8 +293,10 @@ export type DirectParamInput = {
 export const DIRECT_PARAM_INPUT_FIELD_CONTRACT = {
   addressFields: ['srcToken', 'destToken', 'beneficiary'],
   amountFields: ['srcAmount', 'destAmount', 'quotedAmount', 'partnerAndFee'],
+  booleanFields: [],
   calldataFields: ['permit'],
   nullableInputFields: ['data'],
+  numberFields: ['network', 'blockNumber'],
   passThroughFields: ['data'],
   strictOutputFields: [],
 } as const satisfies DexEncoderDtoFieldContract;
@@ -279,8 +308,10 @@ export type DirectParamResult = {
 export const DIRECT_PARAM_RESULT_FIELD_CONTRACT = {
   addressFields: [],
   amountFields: [],
+  booleanFields: [],
   calldataFields: [],
   nullableInputFields: [],
+  numberFields: [],
   passThroughFields: ['params'],
   strictOutputFields: ['params'],
 } as const satisfies DexEncoderDtoFieldContract;
@@ -291,11 +322,37 @@ export type WethDepositWithdrawInput = {
   side: SwapSide;
 };
 
+// Port-side mirror of legacy DepositWithdrawData from src/dex/weth/types.ts.
+// Phase 4 TS adapter translates between the legacy shape and this DTO.
+export type WethCallData = {
+  callee: Address;
+  calldata: HexString;
+  value: DecimalString;
+};
+
+export type WethDepositWithdrawResult = {
+  deposit?: WethCallData;
+  withdraw?: WethCallData;
+};
+
 export const WETH_DEPOSIT_WITHDRAW_INPUT_FIELD_CONTRACT = {
   addressFields: [],
   amountFields: ['srcAmountWeth', 'destAmountWeth'],
+  booleanFields: [],
   calldataFields: [],
   nullableInputFields: [],
+  numberFields: [],
   passThroughFields: [],
   strictOutputFields: [],
+} as const satisfies DexEncoderDtoFieldContract;
+
+export const WETH_DEPOSIT_WITHDRAW_RESULT_FIELD_CONTRACT = {
+  addressFields: ['deposit.callee', 'withdraw.callee'],
+  amountFields: ['deposit.value', 'withdraw.value'],
+  booleanFields: [],
+  calldataFields: ['deposit.calldata', 'withdraw.calldata'],
+  nullableInputFields: ['deposit', 'withdraw'],
+  numberFields: [],
+  passThroughFields: [],
+  strictOutputFields: ['deposit', 'withdraw'],
 } as const satisfies DexEncoderDtoFieldContract;
