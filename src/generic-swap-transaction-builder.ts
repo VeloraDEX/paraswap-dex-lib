@@ -30,6 +30,7 @@ import {
   buildFeesV6,
   buildRoutePlan,
   buildTransactionFromResolved,
+  assertHexBytes,
   type BuildInput,
   type DirectBuildInput,
   type ResolvedBuildOutput,
@@ -53,6 +54,8 @@ import {
   type DexEncoderRegistryPort,
   type DexEncoderSwapExchangeData,
   type DexParamInput,
+  type DirectParamInput,
+  isDirectContractMethodV6,
   type NeedWrapNativeInput,
   type WethDepositWithdrawResult,
   type WethCallDataProviderPort,
@@ -428,13 +431,11 @@ export class GenericSwapTransactionBuilder {
     const dexName = priceRoute.bestRoute[0].swaps[0].swapExchanges[0].exchange;
     if (!dexName) throw new Error(`Invalid dex name`);
 
-    const dex = this.dexAdapterService.getTxBuilderDexByKey(dexName);
-    if (!dex) throw new Error(`Failed to find dex : ${dexName}`);
-
-    if (!dex.getDirectParamV6)
+    if (!isDirectContractMethodV6(priceRoute.contractMethod)) {
       throw new Error(
-        `Invalid DEX: dex should have getDirectParamV6: ${dexName}`,
+        `Unsupported V6 direct method ${priceRoute.contractMethod}`,
       );
+    }
 
     const swapExchange = priceRoute.bestRoute[0].swaps[0].swapExchanges[0];
 
@@ -454,26 +455,37 @@ export class GenericSwapTransactionBuilder {
       isSurplusToUser,
       isDirectFeeTransfer,
     });
+    assertHexBytes(permit, 'permit');
 
-    const directTxInfo = dex.getDirectParamV6!(
-      priceRoute.srcToken,
-      priceRoute.destToken,
+    const directParamInput: DirectParamInput = {
+      dexKey: dexName,
+      network: this.dexAdapterService.network,
+      contractMethod: priceRoute.contractMethod,
+      srcToken: this.normalizeAddress(priceRoute.srcToken),
+      destToken: this.normalizeAddress(priceRoute.destToken),
       srcAmount,
       destAmount,
       quotedAmount,
-      swapExchange.data,
-      priceRoute.side,
+      data: swapExchange.data as DexEncoderSwapExchangeData,
+      side: priceRoute.side,
       permit,
       uuid,
       partnerAndFee,
-      beneficiary,
-      priceRoute.blockNumber,
-      priceRoute.contractMethod,
+      beneficiary: this.normalizeAddress(beneficiary),
+      blockNumber: priceRoute.blockNumber,
+    };
+    const directDexEncoder = await this.dexEncoderRegistry.getDirectDexEncoder({
+      network: directParamInput.network,
+      dexKey: directParamInput.dexKey,
+      contractMethod: directParamInput.contractMethod,
+    });
+    const directParamResult = await directDexEncoder.getDirectParam(
+      directParamInput,
     );
 
     return {
-      contractMethod: priceRoute.contractMethod as ContractMethodV6,
-      params: directTxInfo.params,
+      contractMethod: directParamInput.contractMethod,
+      params: directParamResult.params,
     };
   }
 

@@ -213,6 +213,18 @@ interface IGetDirectFunctionName {
   getDirectFunctionNameV6?(): string[];
 }
 
+export function getRegisteredDirectFunctionNamesV6(): string[] {
+  return [...LegacyDexes, ...Dexes, GenericRFQ]
+    .flatMap(dexAdapter => {
+      const _dexAdapter = dexAdapter as IGetDirectFunctionName;
+      return _dexAdapter.getDirectFunctionNameV6
+        ? _dexAdapter.getDirectFunctionNameV6()
+        : [];
+    })
+    .filter(x => !!x)
+    .map(v => v.toLowerCase());
+}
+
 export class DexAdapterService {
   dexToKeyMap: {
     [key: string]: LegacyDexConstructor | DexConstructor<any, any, any>;
@@ -332,15 +344,7 @@ export class DexAdapterService {
       .map(v => v.toLowerCase());
 
     // include GenericRFQ, because it has direct method for v6
-    this.directFunctionsNamesV6 = [...LegacyDexes, ...Dexes, GenericRFQ]
-      .flatMap(dexAdapter => {
-        const _dexAdapter = dexAdapter as IGetDirectFunctionName;
-        return _dexAdapter.getDirectFunctionNameV6
-          ? _dexAdapter.getDirectFunctionNameV6()
-          : [];
-      })
-      .filter(x => !!x)
-      .map(v => v.toLowerCase());
+    this.directFunctionsNamesV6 = getRegisteredDirectFunctionNamesV6();
 
     this.uniswapV2Alias =
       this.network in UniswapV2Alias

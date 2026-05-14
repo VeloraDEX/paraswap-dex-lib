@@ -212,6 +212,35 @@ describe('resolved direct transaction build', () => {
     expect(result.directDex.getDirectParamV6).toHaveBeenCalledTimes(2);
   });
 
+  it('passes explicit SELL quotedAmount overrides to direct DEX encoder', async () => {
+    await expectDirectPublicBuilderParity({
+      ...directCases[2],
+      title: 'UniswapV3 SELL with quotedAmount override',
+      quotedAmount: '875',
+      params: buildUniParams(TOKEN_A, TOKEN_B, '1000', '990', '875'),
+    });
+  });
+
+  it('rejects malformed direct permit before calling the direct DEX encoder', async () => {
+    const directCase = directCases[2];
+    const priceRoute = buildDirectPriceRoute(directCase);
+    const dexResult = buildDirectDexResult(directCase);
+    const { dexAdapterService, directDex } = buildDexAdapterService(
+      directCase,
+      dexResult,
+    );
+    const builder = new GenericSwapTransactionBuilder(dexAdapterService);
+
+    await expect(
+      builder.build(
+        buildArgs(priceRoute, directCase.minMaxAmount ?? '990', '995', {
+          permit: 'not-hex',
+        }),
+      ),
+    ).rejects.toThrow('permit must be 0x-prefixed hex bytes');
+    expect(directDex.getDirectParamV6).not.toHaveBeenCalled();
+  });
+
   it('calculates BUY native source value from minMaxAmount', () => {
     const input = buildDirectInput({
       contractMethod: ContractMethodV6.swapExactAmountOutOnUniswapV2,
@@ -335,7 +364,12 @@ async function expectDirectPublicBuilderParity(
     directCase,
     dexResult,
   );
-  const builder = new GenericSwapTransactionBuilder(dexAdapterService);
+  const capturedDirectBuildInputs: DirectBuildInput[] = [];
+  const builder = new GenericSwapTransactionBuilder(dexAdapterService, {
+    resolvedBuildInputObserver: {
+      onDirectBuildInput: input => capturedDirectBuildInputs.push(clone(input)),
+    },
+  });
   const boundaryInput = buildDirectInput({
     contractMethod: directCase.contractMethod,
     params: dexResult.params,
@@ -373,6 +407,7 @@ async function expectDirectPublicBuilderParity(
   expect(tx).toEqual(boundaryOutput.txObject);
   expect(params).toEqual(boundaryOutput.params);
   expect(params).toEqual(dexResult.params);
+  expect(capturedDirectBuildInputs).toEqual([boundaryInput, boundaryInput]);
   expect(directDex.getDirectParamV6).toHaveBeenCalledWith(
     priceRoute.srcToken,
     priceRoute.destToken,
@@ -476,12 +511,16 @@ function buildDexAdapterService(
   directDex: {
     needWrapNative: boolean;
     getDirectParamV6: jest.Mock;
+    getDirectFunctionNameV6: jest.Mock;
   };
 } {
   const dexHelper = buildDexHelper();
   const directDex = {
     needWrapNative: false,
     getDirectParamV6: mockFn().mockReturnValue(dexResult),
+    getDirectFunctionNameV6: mockFn().mockReturnValue([
+      directCase.contractMethod,
+    ]),
   };
 
   return {
@@ -516,6 +555,10 @@ function buildDexHelper() {
       error: mockFn(),
     }),
   } as any;
+}
+
+function clone<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T;
 }
 
 function buildDirectDexResult(directCase: DirectCase): DirectDexResult {

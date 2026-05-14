@@ -532,7 +532,7 @@ V6 behavior.
 
 1. Keep direct-route shape validation unchanged.
 2. Build `DirectParamInput` for the selected DEX and V6 direct method.
-3. Call `directDexEncoder.getDirectParamV6(input)`.
+3. Call `directDexEncoder.getDirectParam(input)`.
 4. Build `DirectBuildInput` from the returned direct params.
 5. Carry `contractMethod` from the input route into `DirectBuildInput`; the
    port result does not include `contractMethod`.
@@ -569,7 +569,34 @@ intentionally change dex-encoder adapter behavior.
 
 ### Status
 
-Not started.
+Complete.
+
+- Routed `_buildDirect()` through `DexEncoderRegistryPort.getDirectDexEncoder`
+  and `DirectDexEncoderPort.getDirectParam(...)`; the only remaining direct
+  DEX-builder call happens inside the TS adapter.
+- Kept direct-route shape validation in the orchestrator, then converted the
+  selected route into a serializable `DirectParamInput` carrying method, side,
+  amounts, data, permit, uuid, packed fee, beneficiary, and block number.
+- Kept `contractMethod` sourced from the input route when creating the
+  `DirectBuildInput`; the port result contributes only the direct `params`.
+- Strengthened direct public-builder tests to assert the observed
+  `DirectBuildInput` equals the resolved-boundary baseline for both tx and
+  `onlyParams` builds.
+- Added direct fixture replay parity for captured `DirectBuildInput`, mirroring
+  the generic BuildInput replay check from Phase 5.
+- Added a SELL direct orchestration case with explicit `quotedAmount` override
+  so the direct DEX encoder receives a non-default quoted amount.
+- Added an audit guard that keeps the static V6 direct-method port contract in
+  lockstep with DEX-advertised direct methods.
+- Added direct permit hex validation before building `DirectParamInput`, so the
+  DTO boundary rejects malformed permit bytes before calling the DEX encoder.
+- Verified with:
+  - `yarn fixtures:check`
+  - `yarn jest tests/generic-swap-transaction-builder/resolved --runInBand`
+  - `yarn jest tests/generic-swap-transaction-builder/dex-encoder --runInBand`
+  - `yarn check:tsc`
+  - `yarn check:es`
+  - `git diff --check`
 
 ## Non-Goals
 

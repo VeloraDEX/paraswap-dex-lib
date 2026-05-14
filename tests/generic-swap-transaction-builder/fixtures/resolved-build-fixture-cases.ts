@@ -908,6 +908,7 @@ export async function replayPublicBuilderForFixture(
   tx: TxObject;
   params: unknown[];
   genericBuildInput?: BuildInput;
+  directBuildInput?: DirectBuildInput;
 }> {
   if (!fixture.orchestration) {
     throw new Error(`${fixture.name}: missing orchestration metadata`);
@@ -972,7 +973,11 @@ async function replayGenericPublicBuilder(
 
 async function replayDirectPublicBuilder(
   fixture: ResolvedBuildSuccessFixture,
-): Promise<{ tx: TxObject; params: unknown[] }> {
+): Promise<{
+  tx: TxObject;
+  params: unknown[];
+  directBuildInput: DirectBuildInput;
+}> {
   const input = fixture.input as DirectBuildInput;
   const orchestration = fixture.orchestration!;
 
@@ -996,8 +1001,15 @@ async function replayDirectPublicBuilder(
     gas: input.gas,
   };
   const dexResult = buildDirectDexResult(directCase);
+  const capturedBuildInputs: DirectBuildInput[] = [];
   const builder = new GenericSwapTransactionBuilder(
     buildDirectDexAdapterService(directCase, dexResult),
+    {
+      resolvedBuildInputObserver: {
+        onDirectBuildInput: directInput =>
+          capturedBuildInputs.push(clone(directInput)),
+      },
+    },
   );
   const priceRoute = clone(orchestration.priceRoute);
   const args = buildArgsFromDirectInput(
@@ -1006,10 +1018,17 @@ async function replayDirectPublicBuilder(
     orchestration.quotedAmount,
   );
 
-  return {
-    tx: (await builder.build(args)) as TxObject,
-    params: (await builder.build({ ...args, onlyParams: true })) as unknown[],
-  };
+  const tx = (await builder.build(args)) as TxObject;
+  const params = (await builder.build({
+    ...args,
+    onlyParams: true,
+  })) as unknown[];
+  const directBuildInput = getCapturedBoundaryInput(
+    capturedBuildInputs,
+    `${fixture.name}: port-routed direct DirectBuildInput parity failed`,
+  );
+
+  return { tx, params, directBuildInput };
 }
 
 function buildNegativeFixtures(
@@ -1800,6 +1819,7 @@ function buildDirectDexAdapterService(
   const directDex = {
     needWrapNative: false,
     getDirectParamV6: () => dexResult,
+    getDirectFunctionNameV6: () => [directCase.contractMethod],
   };
 
   return {

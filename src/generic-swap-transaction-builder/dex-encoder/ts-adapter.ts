@@ -103,6 +103,7 @@ export class TsDexEncoderRegistryAdapter implements DexEncoderRegistryPort {
     }
 
     const dex = this.dexAdapterService.getTxBuilderDexByKey(dexKey);
+    if (!dex) throw new Error(`Failed to find dex : ${dexKey}`);
 
     if (!dex.getDirectParamV6) {
       throw new Error(

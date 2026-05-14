@@ -34,14 +34,14 @@ export function assertLowercaseAddress(
   }
 }
 
-export function isHexBytes(value: unknown): value is string {
+export function isHexBytes(value: unknown): value is `0x${string}` {
   return typeof value === 'string' && HEX_BYTES_PATTERN.test(value);
 }
 
 export function assertHexBytes(
   value: unknown,
   fieldName = 'bytes',
-): asserts value is string {
+): asserts value is `0x${string}` {
   if (!isHexBytes(value)) {
     throw new Error(`${fieldName} must be 0x-prefixed hex bytes`);
   }

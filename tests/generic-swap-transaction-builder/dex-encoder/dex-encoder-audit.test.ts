@@ -4,6 +4,7 @@ import ts from 'typescript';
 import { SpecialDex } from '../../../src/executor/types';
 import {
   AUDITED_FUNCTION_NEED_WRAP_NATIVE_DEXES,
+  DIRECT_CONTRACT_METHODS_V6,
   KNOWN_SPECIAL_DEX_FLAGS,
 } from '../../../src/generic-swap-transaction-builder/dex-encoder';
 
@@ -30,6 +31,25 @@ describe('DEX encoder audit contracts', () => {
     const knownValues = [...KNOWN_SPECIAL_DEX_FLAGS].sort((a, b) => a - b);
 
     expect(knownValues).toEqual(enumValues);
+  });
+
+  it('keeps V6 direct methods in lockstep with DEX-advertised methods', () => {
+    const consoleLog = jest
+      .spyOn(console, 'log')
+      .mockImplementation(() => undefined);
+
+    try {
+      jest.isolateModules(() => {
+        const { getRegisteredDirectFunctionNamesV6 } =
+          require('../../../src/dex') as typeof import('../../../src/dex');
+
+        expect(sortUnique(getRegisteredDirectFunctionNamesV6())).toEqual(
+          sortUnique(DIRECT_CONTRACT_METHODS_V6),
+        );
+      });
+    } finally {
+      consoleLog.mockRestore();
+    }
   });
 });
 
@@ -177,6 +197,10 @@ function findDuplicateDexKeys(matches: NeedWrapNativeMatch[]): string[] {
   });
 
   return [...duplicates].sort();
+}
+
+function sortUnique(values: readonly string[]): string[] {
+  return [...new Set(values.map(value => value.toLowerCase()))].sort();
 }
 
 function listTypeScriptSourceFiles(root: string): string[] {

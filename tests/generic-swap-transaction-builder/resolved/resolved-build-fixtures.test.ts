@@ -195,6 +195,8 @@ describe('resolved build golden fixtures', () => {
 
       if (fixture.kind === 'generic') {
         expect(output.genericBuildInput).toEqual(fixture.input);
+      } else {
+        expect(output.directBuildInput).toEqual(fixture.input);
       }
       expect(output.params).toEqual(fixture.expectedParams);
       expectTxObjectToEqual(output.tx, fixture.expectedTx);

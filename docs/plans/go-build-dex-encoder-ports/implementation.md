@@ -465,7 +465,7 @@ Update `_buildDirect()` so it depends on `DirectDexEncoderPort`:
 
 - validate direct-route shape as today
 - build `DirectParamInput`
-- call `directDexEncoder.getDirectParamV6(input)`
+- call `directDexEncoder.getDirectParam(input)`
 - build `DirectBuildInput` from the returned direct params
 - keep `contractMethod` from the input route, not from the port result
 - keep final tx assembly in `buildDirectTransactionFromResolved()`
