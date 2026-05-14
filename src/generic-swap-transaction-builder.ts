@@ -20,9 +20,7 @@ import {
   NULL_ADDRESS,
 } from './constants';
 import { AbiCoder, Interface } from '@ethersproject/abi';
-import joi from 'joi';
 import AugustusV6ABI from './abi/augustus-v6/ABI.json';
-import { validateAndCast } from './lib/validators';
 import { isETHAddress } from './utils';
 import {
   DepositWithdrawReturn,
@@ -35,7 +33,6 @@ import { ExecutorDetector } from './executor/ExecutorDetector';
 import { getApprovalTokenAndTarget } from './executor/approval';
 import { createExecutorEncodingContextFromDexHelper } from './executor/encoding-context';
 import type { ExecutorEncodingContext } from './executor/encoding-types';
-import { IDexTxBuilder } from './dex/idex';
 import {
   ContractMethod,
   ContractMethodV6,
@@ -56,7 +53,14 @@ import {
   type RoutePlan,
 } from './generic-swap-transaction-builder/resolved';
 
-const REMOTE_DEX_PARAM_TIMEOUT_MS = 10_000;
+const DEFAULT_WEXCHANGE_NETWORK_TO_KEY = Weth.dexKeysWithNetwork.reduce<
+  Record<number, string>
+>((prev, current) => {
+  for (const network of current.networks) {
+    prev[network] = current.key;
+  }
+  return prev;
+}, {});
 
 export type GenericSwapTransactionBuildParams =
   | ResolvedBuildOutput['params']
@@ -67,46 +71,11 @@ export type ResolvedBuildInputObserver = {
   onDirectBuildInput?: (input: DirectBuildInput) => void;
 };
 
-// `.empty(null)` makes joi treat a JSON `null` as missing (i.e. undefined),
-// which is what downstream `value !== undefined` checks expect — see
-// docs/specs/get-dex-param.md §3.1 and DEX-PARAM-API.md:123 (returnAmountPos
-// may be omitted *or* null on BUY).
-const remoteDexExchangeParamSchema = joi
-  .object({
-    needWrapNative: joi.boolean().required(),
-    exchangeData: joi.string().required(),
-    targetExchange: joi.string().required(),
-    dexFuncHasRecipient: joi.boolean().required(),
-
-    needUnwrapNative: joi.boolean().empty(null),
-    skipApproval: joi.boolean().empty(null),
-    wethAddress: joi.string().empty(null),
-    specialDexFlag: joi.number().integer().min(0).max(255).empty(null),
-    transferSrcTokenBeforeSwap: joi.string().empty(null),
-    spender: joi.string().empty(null),
-    sendEthButSupportsInsertFromAmount: joi.boolean().empty(null),
-    specialDexSupportsInsertFromAmount: joi.boolean().empty(null),
-    swappedAmountNotPresentInExchangeData: joi.boolean().empty(null),
-    returnAmountPos: joi.number().integer().min(0).max(255).empty(null),
-    insertFromAmountPos: joi.number().integer().min(0).max(65535).empty(null),
-    amountsPacked128: joi.boolean().empty(null),
-    permit2Approval: joi.boolean().empty(null),
-  })
-  .unknown(true);
-
-export function normaliseRemoteDexExchangeParam(
-  raw: unknown,
-): DexExchangeParam {
-  return validateAndCast<DexExchangeParam>(
-    raw,
-    remoteDexExchangeParamSchema,
-    'DexExchangeParam',
-  );
-}
-
-export type NewDexConfig = { needWrapNative: boolean };
-export type NewDexsConfig = { [dexKey: string]: NewDexConfig };
-type NewDexEntry = NewDexConfig & { key: string };
+export type GenericSwapTransactionBuilderOptions = {
+  wExchangeNetworkToKey?: Readonly<Record<number, string>>;
+  skipApprovalCheck?: boolean;
+  resolvedBuildInputObserver?: ResolvedBuildInputObserver;
+};
 
 interface FeeParams {
   partner: string;
@@ -129,24 +98,20 @@ export class GenericSwapTransactionBuilder {
 
   executorDetector: ExecutorDetector;
   executorEncodingContext?: ExecutorEncodingContext;
+  protected readonly wExchangeNetworkToKey: Readonly<Record<number, string>>;
+  protected skipApprovalCheck: boolean;
+  protected resolvedBuildInputObserver?: ResolvedBuildInputObserver;
 
   constructor(
     protected dexAdapterService: DexAdapterService,
-    protected wExchangeNetworkToKey = Weth.dexKeysWithNetwork.reduce<
-      Record<number, string>
-    >((prev, current) => {
-      for (const network of current.networks) {
-        prev[network] = current.key;
-      }
-      return prev;
-    }, {}),
-    protected newDexsApiUrl?: string,
-    // Held by reference, not snapshotted: callers can mutate this map between
-    // `buildCalls` invocations and the next call will see the new state.
-    protected newDexs?: NewDexsConfig,
-    protected skipApprovalCheck = false, // used only for testing outdated price routes
-    protected resolvedBuildInputObserver?: ResolvedBuildInputObserver,
+    options: GenericSwapTransactionBuilderOptions = {},
   ) {
+    this.wExchangeNetworkToKey = {
+      ...(options.wExchangeNetworkToKey ?? DEFAULT_WEXCHANGE_NETWORK_TO_KEY),
+    };
+    // Used only for testing outdated price routes.
+    this.skipApprovalCheck = options.skipApprovalCheck ?? false;
+    this.resolvedBuildInputObserver = options.resolvedBuildInputObserver;
     this.abiCoder = new AbiCoder();
     this.erc20Interface = new Interface(ERC20ABI);
     this.augustusV6Interface = new Interface(AugustusV6ABI);
@@ -195,19 +160,6 @@ export class GenericSwapTransactionBuilder {
     );
   }
 
-  protected findNewDex(exchange: string): NewDexEntry | undefined {
-    if (!this.newDexs) return undefined;
-
-    const exchangeKey = exchange.toLowerCase();
-    const newDexKey = Object.keys(this.newDexs).find(
-      dexKey => dexKey.toLowerCase() === exchangeKey,
-    );
-
-    return newDexKey === undefined
-      ? undefined
-      : { key: newDexKey, ...this.newDexs[newDexKey] };
-  }
-
   protected async buildResolvedCalls(
     priceRoute: OptimalRate,
     routePlan: RoutePlan,
@@ -224,19 +176,12 @@ export class GenericSwapTransactionBuilder {
         const { routeIndex, swapIndex, swapExchangeIndex } = routePosition;
         const swap = priceRoute.bestRoute[routeIndex].swaps[swapIndex];
         const se = swap.swapExchanges[swapExchangeIndex];
-        const newDex = this.findNewDex(se.exchange);
+        const dex = this.dexAdapterService.getTxBuilderDexByKey(se.exchange);
 
-        let dexNeedWrapNative: boolean;
-        let dex: IDexTxBuilder<any, any> | undefined;
-        if (newDex) {
-          dexNeedWrapNative = newDex.needWrapNative;
-        } else {
-          dex = this.dexAdapterService.getTxBuilderDexByKey(se.exchange);
-          dexNeedWrapNative =
-            typeof dex.needWrapNative === 'function'
-              ? dex.needWrapNative(priceRoute, swap, se)
-              : dex.needWrapNative;
-        }
+        const dexNeedWrapNative =
+          typeof dex.needWrapNative === 'function'
+            ? dex.needWrapNative(priceRoute, swap, se)
+            : dex.needWrapNative;
 
         const {
           srcToken,
@@ -257,38 +202,16 @@ export class GenericSwapTransactionBuilder {
           executorAddress,
         );
 
-        let dexParams: DexExchangeParam;
-        if (newDex) {
-          dexParams = await this.fetchRemoteDexParam({
-            dexKey: newDex.key,
-            srcToken,
-            destToken,
-            srcAmount: side === SwapSide.BUY ? se.srcAmount : srcAmount,
-            destAmount,
-            recipient,
-            data: se.data,
-            side,
-            executorAddress,
-          });
-
-          // The local `newDexs[*].needWrapNative` is the single source of
-          // truth: it already drove `getDexCallsParams` (and therefore
-          // `wethDeposit`/`wethWithdraw`). Keep the executor builder in
-          // lockstep so the wrap accounting and the bytecode wiring
-          // can't diverge.
-          dexParams.needWrapNative = newDex.needWrapNative;
-        } else {
-          dexParams = await dex!.getDexParam!(
-            srcToken,
-            destToken,
-            side === SwapSide.BUY ? se.srcAmount : srcAmount, // in other case we would not be able to make insert from amount on Ex3
-            destAmount,
-            recipient,
-            se.data,
-            side,
-            executorAddress,
-          );
-        }
+        const dexParams: DexExchangeParam = await dex.getDexParam!(
+          srcToken,
+          destToken,
+          side === SwapSide.BUY ? se.srcAmount : srcAmount, // in other case we would not be able to make insert from amount on Ex3
+          destAmount,
+          recipient,
+          se.data,
+          side,
+          executorAddress,
+        );
 
         if (typeof dexParams.needWrapNative === 'function') {
           dexParams.needWrapNative = dexParams.needWrapNative(
@@ -365,50 +288,6 @@ export class GenericSwapTransactionBuilder {
       resolvedLegs: resolvedLegsWithApprovals,
       maybeWethCallData,
     };
-  }
-
-  protected async fetchRemoteDexParam(args: {
-    dexKey: string;
-    srcToken: Address;
-    destToken: Address;
-    srcAmount: string;
-    destAmount: string;
-    recipient: Address;
-    data: any;
-    side: SwapSide;
-    executorAddress: Address;
-  }): Promise<DexExchangeParam> {
-    if (!this.newDexsApiUrl) {
-      throw new Error(
-        `[GenericSwapTransactionBuilder] new-dex API URL not configured; cannot encode swap for ${args.dexKey}`,
-      );
-    }
-
-    const chainId = this.dexAdapterService.network;
-    const base = this.newDexsApiUrl.replace(/\/+$/, '');
-    const url = `${base}/api/v1/dexs/${chainId}/${encodeURIComponent(
-      args.dexKey,
-    )}/dex-param`;
-
-    const body = {
-      srcToken: args.srcToken,
-      destToken: args.destToken,
-      srcAmount: args.srcAmount,
-      destAmount: args.destAmount,
-      recipient: args.recipient,
-      executorAddress: args.executorAddress,
-      side: args.side,
-      data: args.data,
-    };
-
-    const raw =
-      await this.dexAdapterService.dexHelper.httpRequest.post<unknown>(
-        url,
-        body,
-        REMOTE_DEX_PARAM_TIMEOUT_MS,
-      );
-
-    return normaliseRemoteDexExchangeParam(raw);
   }
 
   protected async _build(

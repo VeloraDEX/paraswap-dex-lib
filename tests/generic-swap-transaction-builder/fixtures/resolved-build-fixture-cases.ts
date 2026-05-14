@@ -755,16 +755,11 @@ async function buildGenericSuccessFixture(
     approvalDecision,
   });
   const capturedBuildInputs: BuildInput[] = [];
-  const builder = new GenericSwapTransactionBuilder(
-    dexAdapterService,
-    undefined,
-    undefined,
-    undefined,
-    false,
-    {
+  const builder = new GenericSwapTransactionBuilder(dexAdapterService, {
+    resolvedBuildInputObserver: {
       onGenericBuildInput: input => capturedBuildInputs.push(clone(input)),
     },
-  );
+  });
   const args = buildArgsFromGenericCase({
     priceRoute,
     minMaxAmount,
@@ -835,17 +830,12 @@ async function buildDirectSuccessFixture(
   const dexResult = buildDirectDexResult(directCase);
   const dexAdapterService = buildDirectDexAdapterService(directCase, dexResult);
   const capturedBuildInputs: DirectBuildInput[] = [];
-  const builder = new GenericSwapTransactionBuilder(
-    dexAdapterService,
-    undefined,
-    undefined,
-    undefined,
-    false,
-    {
+  const builder = new GenericSwapTransactionBuilder(dexAdapterService, {
+    resolvedBuildInputObserver: {
       onDirectBuildInput: directInput =>
         capturedBuildInputs.push(clone(directInput)),
     },
-  );
+  });
   const args = buildArgsFromDirectInput(input, priceRoute, quotedAmount);
   const tx = (await builder.build(args)) as TxObject;
   const params = (await builder.build({

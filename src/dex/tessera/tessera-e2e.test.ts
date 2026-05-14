@@ -1,85 +1,7 @@
 import { testPriceRoute } from '../../../tests/utils-e2e';
 import { OptimalRate } from '@paraswap/core';
-import { ETHER_ADDRESS, Network, SwapSide } from '../../constants';
+import { ETHER_ADDRESS, Network } from '../../constants';
 import { Tokens } from '../../../tests/constants-e2e';
-import { DummyDexHelper } from '../../dex-helper/index';
-import { DexAdapterService } from '..';
-import {
-  GenericSwapTransactionBuilder,
-  normaliseRemoteDexExchangeParam,
-} from '../../generic-swap-transaction-builder';
-import { Tessera } from './tessera';
-
-const TESSERA_REMOTE_BASE_URL = 'http://api.example.paraswap.io';
-const TESSERA_REMOTE_DEX_KEY = 'tessera';
-const PARITY_HTTP_TIMEOUT_MS = 10_000;
-
-async function expectTesseraEncodingMatches(route: OptimalRate) {
-  const dexHelper = new DummyDexHelper(route.network);
-  const dexAdapterService = new DexAdapterService(dexHelper, route.network);
-  const tessera = new Tessera(dexHelper);
-  const builder = new GenericSwapTransactionBuilder(dexAdapterService);
-
-  const executorAddress = builder.getExecutionContractAddress(route);
-  const swap = route.bestRoute[0].swaps[0];
-  const se = swap.swapExchanges[0];
-
-  // minMaxAmount value doesn't matter for encoding parity as long as both
-  // calls see the same one — pick the value `_build()` would choose at the
-  // upper-bound slippage edge.
-  const minMaxAmount = route.side === SwapSide.SELL ? '1' : route.srcAmount;
-
-  const callParams = builder.getDexCallsParams(
-    route,
-    0,
-    swap,
-    0,
-    se,
-    minMaxAmount,
-    tessera.needWrapNative,
-    executorAddress,
-  );
-
-  // Mirror `buildCalls`: BUY uses the per-leg `se.srcAmount`, SELL uses the
-  // (possibly slippage-adjusted) normalized srcAmount.
-  const srcAmountForCall =
-    route.side === SwapSide.BUY ? se.srcAmount : callParams.srcAmount;
-
-  const localParam = tessera.getDexParam(
-    callParams.srcToken,
-    callParams.destToken,
-    srcAmountForCall,
-    callParams.destAmount,
-    callParams.recipient,
-    null,
-    route.side,
-  );
-
-  const url = `${TESSERA_REMOTE_BASE_URL}/api/v1/dexs/${route.network}/${TESSERA_REMOTE_DEX_KEY}/dex-param`;
-  const remoteRaw = await dexHelper.httpRequest.post<unknown>(
-    url,
-    {
-      srcToken: callParams.srcToken,
-      destToken: callParams.destToken,
-      srcAmount: srcAmountForCall,
-      destAmount: callParams.destAmount,
-      recipient: callParams.recipient,
-      executorAddress,
-      side: route.side,
-      data: null,
-    },
-    PARITY_HTTP_TIMEOUT_MS,
-  );
-  const remoteParam = normaliseRemoteDexExchangeParam(remoteRaw);
-
-  // Resolve any function-typed `needWrapNative` on the local side. Tessera
-  // uses a plain bool today, but the interface allows a function.
-  if (typeof localParam.needWrapNative === 'function') {
-    localParam.needWrapNative = localParam.needWrapNative(route, swap, se);
-  }
-
-  expect(remoteParam).toEqual(localParam);
-}
 
 function buildTesseraRoute(params: {
   network: number;
@@ -164,7 +86,6 @@ describe('Tessera E2E', () => {
         destToken: baseWeth.address,
       });
       await testPriceRoute(route);
-      await expectTesseraEncodingMatches(route);
     });
 
     it('USDC → ETH (unwraps WETH)', async () => {
@@ -173,7 +94,6 @@ describe('Tessera E2E', () => {
         destToken: ETHER_ADDRESS,
       });
       await testPriceRoute(route);
-      await expectTesseraEncodingMatches(route);
     });
 
     const baseWethShared = {
@@ -192,7 +112,6 @@ describe('Tessera E2E', () => {
         srcToken: baseWeth.address,
       });
       await testPriceRoute(route);
-      await expectTesseraEncodingMatches(route);
     });
 
     it('ETH → USDC (wraps to WETH)', async () => {
@@ -201,7 +120,6 @@ describe('Tessera E2E', () => {
         srcToken: ETHER_ADDRESS,
       });
       await testPriceRoute(route);
-      await expectTesseraEncodingMatches(route);
     });
 
     it('USDC → WETH (BUY)', async () => {
@@ -211,7 +129,6 @@ describe('Tessera E2E', () => {
         side: 'BUY',
       });
       await testPriceRoute(route);
-      await expectTesseraEncodingMatches(route);
     });
 
     it('USDC → ETH (BUY, unwraps WETH)', async () => {
@@ -221,7 +138,6 @@ describe('Tessera E2E', () => {
         side: 'BUY',
       });
       await testPriceRoute(route);
-      await expectTesseraEncodingMatches(route);
     });
   });
 
@@ -245,7 +161,6 @@ describe('Tessera E2E', () => {
         srcToken: bscWbnb.address,
       });
       await testPriceRoute(route);
-      await expectTesseraEncodingMatches(route);
     });
 
     it('BNB → USDT (wraps to WBNB)', async () => {
@@ -254,7 +169,6 @@ describe('Tessera E2E', () => {
         srcToken: ETHER_ADDRESS,
       });
       await testPriceRoute(route);
-      await expectTesseraEncodingMatches(route);
     });
 
     const bscUsdtShared = {
@@ -273,7 +187,6 @@ describe('Tessera E2E', () => {
         destToken: bscWbnb.address,
       });
       await testPriceRoute(route);
-      await expectTesseraEncodingMatches(route);
     });
 
     it('USDT → BNB (unwraps WBNB)', async () => {
@@ -282,7 +195,6 @@ describe('Tessera E2E', () => {
         destToken: ETHER_ADDRESS,
       });
       await testPriceRoute(route);
-      await expectTesseraEncodingMatches(route);
     });
 
     it('WBNB → USDT (BUY)', async () => {
@@ -292,7 +204,6 @@ describe('Tessera E2E', () => {
         side: 'BUY',
       });
       await testPriceRoute(route);
-      await expectTesseraEncodingMatches(route);
     });
 
     it('BNB → USDT (BUY, wraps to WBNB)', async () => {
@@ -302,7 +213,6 @@ describe('Tessera E2E', () => {
         side: 'BUY',
       });
       await testPriceRoute(route);
-      await expectTesseraEncodingMatches(route);
     });
   });
 });

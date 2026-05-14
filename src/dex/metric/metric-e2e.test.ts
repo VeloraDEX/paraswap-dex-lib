@@ -1,83 +1,6 @@
 import { testPriceRoute } from '../../../tests/utils-e2e';
 import { OptimalRate } from '@paraswap/core';
-import { ETHER_ADDRESS, SwapSide } from '../../constants';
-import { DummyDexHelper } from '../../dex-helper/index';
-import { DexAdapterService } from '..';
-import {
-  GenericSwapTransactionBuilder,
-  normaliseRemoteDexExchangeParam,
-} from '../../generic-swap-transaction-builder';
-import { Metric } from './metric';
-
-const METRIC_REMOTE_BASE_URL = 'http://api.example.paraswap.io';
-const METRIC_REMOTE_DEX_KEY = 'metric';
-const PARITY_HTTP_TIMEOUT_MS = 10_000;
-
-async function expectMetricEncodingMatches(route: OptimalRate) {
-  const dexHelper = new DummyDexHelper(route.network);
-  const dexAdapterService = new DexAdapterService(dexHelper, route.network);
-  const metric = new Metric(dexHelper);
-  const builder = new GenericSwapTransactionBuilder(dexAdapterService);
-
-  const executorAddress = builder.getExecutionContractAddress(route);
-  const swap = route.bestRoute[0].swaps[0];
-  const se = swap.swapExchanges[0];
-
-  // minMaxAmount value doesn't matter for encoding parity as long as both
-  // calls see the same one.
-  const minMaxAmount = route.side === SwapSide.SELL ? '1' : route.srcAmount;
-
-  const callParams = builder.getDexCallsParams(
-    route,
-    0,
-    swap,
-    0,
-    se,
-    minMaxAmount,
-    metric.needWrapNative,
-    executorAddress,
-  );
-
-  // Mirror `buildCalls`: BUY uses the per-leg `se.srcAmount`, SELL uses the
-  // (possibly slippage-adjusted) normalized srcAmount.
-  const srcAmountForCall =
-    route.side === SwapSide.BUY ? se.srcAmount : callParams.srcAmount;
-
-  const localParam = metric.getDexParam(
-    callParams.srcToken,
-    callParams.destToken,
-    srcAmountForCall,
-    callParams.destAmount,
-    callParams.recipient,
-    se.data,
-    route.side,
-  );
-
-  const url = `${METRIC_REMOTE_BASE_URL}/api/v1/dexs/${route.network}/${METRIC_REMOTE_DEX_KEY}/dex-param`;
-  const remoteRaw = await dexHelper.httpRequest.post<unknown>(
-    url,
-    {
-      srcToken: callParams.srcToken,
-      destToken: callParams.destToken,
-      srcAmount: srcAmountForCall,
-      destAmount: callParams.destAmount,
-      recipient: callParams.recipient,
-      executorAddress,
-      side: route.side,
-      data: se.data,
-    },
-    PARITY_HTTP_TIMEOUT_MS,
-  );
-  const remoteParam = normaliseRemoteDexExchangeParam(remoteRaw);
-
-  // Resolve any function-typed `needWrapNative` on the local side. Metric
-  // uses a plain bool today, but the interface allows a function.
-  if (typeof localParam.needWrapNative === 'function') {
-    localParam.needWrapNative = localParam.needWrapNative(route, swap, se);
-  }
-
-  expect(remoteParam).toEqual(localParam);
-}
+import { ETHER_ADDRESS } from '../../constants';
 
 function buildMetricRoute(params: {
   network: number;
@@ -172,7 +95,6 @@ describe('Metric E2E', () => {
         srcToken: BASE_WETH,
       });
       await testPriceRoute(route);
-      await expectMetricEncodingMatches(route);
     });
 
     it('ETH → cbBTC (wraps to WETH)', async () => {
@@ -181,7 +103,6 @@ describe('Metric E2E', () => {
         srcToken: ETHER_ADDRESS,
       });
       await testPriceRoute(route);
-      await expectMetricEncodingMatches(route);
     });
 
     // Base tx 0xc49fd6804e1d0b38324a4146edfcdd2cca0be71c328952e2a7a6aeff4cf969ac
@@ -204,7 +125,6 @@ describe('Metric E2E', () => {
         srcToken: BASE_WETH,
       });
       await testPriceRoute(route);
-      await expectMetricEncodingMatches(route);
     });
 
     it('ETH → USDC (wraps to WETH)', async () => {
@@ -213,7 +133,6 @@ describe('Metric E2E', () => {
         srcToken: ETHER_ADDRESS,
       });
       await testPriceRoute(route);
-      await expectMetricEncodingMatches(route);
     });
 
     // ~5.006 USDC → ~0.00223 WETH (zeroForOne=false)
@@ -235,7 +154,6 @@ describe('Metric E2E', () => {
         destToken: BASE_WETH,
       });
       await testPriceRoute(route);
-      await expectMetricEncodingMatches(route);
     });
 
     it('USDC → ETH (unwraps WETH)', async () => {
@@ -244,7 +162,6 @@ describe('Metric E2E', () => {
         destToken: ETHER_ADDRESS,
       });
       await testPriceRoute(route);
-      await expectMetricEncodingMatches(route);
     });
 
     it('USDC → WETH (BUY)', async () => {
@@ -254,7 +171,6 @@ describe('Metric E2E', () => {
         side: 'BUY',
       });
       await testPriceRoute(route);
-      await expectMetricEncodingMatches(route);
     });
 
     it('USDC → ETH (BUY, unwraps WETH)', async () => {
@@ -264,7 +180,6 @@ describe('Metric E2E', () => {
         side: 'BUY',
       });
       await testPriceRoute(route);
-      await expectMetricEncodingMatches(route);
     });
   });
 });
