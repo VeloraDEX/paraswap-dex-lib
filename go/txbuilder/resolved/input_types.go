@@ -96,6 +96,10 @@ func (b *RawBool) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+func (b RawBool) MarshalJSON() ([]byte, error) {
+	return json.Marshal(b.Value)
+}
+
 type WethPlan struct {
 	Deposit  *WethSubPlan `json:"deposit,omitempty"`
 	Withdraw *WethSubPlan `json:"withdraw,omitempty"`

@@ -89,9 +89,10 @@ type DexEncoder interface {
 }
 
 type ApprovalRequest struct {
-	Token   resolved.Address `json:"token"`
-	Target  resolved.Address `json:"target"`
-	Permit2 bool             `json:"permit2"`
+	RoutePositionKey string           `json:"routePositionKey,omitempty"`
+	Token            resolved.Address `json:"token"`
+	Target           resolved.Address `json:"target"`
+	Permit2          bool             `json:"permit2"`
 }
 
 type ApprovalChecker interface {

@@ -311,11 +311,19 @@ before resolved encoding.
 
 ```go
 type ApprovalRequest struct {
-	Token   resolved.Address
-	Target  resolved.Address
-	Permit2 bool
+	RoutePositionKey string
+	Token            resolved.Address
+	Target           resolved.Address
+	Permit2          bool
 }
 ```
+
+`RoutePositionKey` is intentionally part of the checker port. Production
+checkers may ignore it, but it gives adapters and tests a stable route-walk
+identifier for logging, debugging, and validating that approval decisions are
+applied to the intended leg. `Check` returns one boolean per request in the
+same order: `true` means the approval already exists, and `false` means the
+builder inserts `approveData` for that route leg.
 
 #### WETH Provider Rules
 

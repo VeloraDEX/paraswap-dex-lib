@@ -1,4 +1,9 @@
 import type { BuildInput } from '../../../src/generic-swap-transaction-builder/resolved';
+import type {
+  DexExchangeParam,
+  DexParamInput,
+  NeedWrapNativeInput,
+} from '../../../src/generic-swap-transaction-builder/dex-encoder';
 import type { Address, TxObject } from '../../../src/types';
 import { stableStringify } from '../canonical-json';
 
@@ -72,14 +77,34 @@ export type GoPublicBuilderFixture = {
       skipApprovalCheck: boolean;
     };
   };
+  expectedDexCalls: ExpectedDexCallJson[];
+  expectedApprovalRequests: ExpectedApprovalRequestJson[];
+  approvalDecisions: boolean[];
   expectedResolvedInput: BuildInput;
   expectedParams: unknown[];
   expectedTx: TxObject;
 };
 
+export type ExpectedDexCallJson = {
+  routePositionKey: string;
+  dexKey: string;
+  needWrapNativeInput: NeedWrapNativeInput;
+  needWrapNative: boolean;
+  dexParamInput: DexParamInput;
+  dexParam: DexExchangeParam;
+};
+
+export type ExpectedApprovalRequestJson = {
+  routePositionKey: string;
+  token: Address;
+  target: Address;
+  permit2: boolean;
+};
+
 const ADDRESS_RE = /^0x[a-f0-9]{40}$/;
 const DECIMAL_AMOUNT_RE = /^(0|[1-9][0-9]*)$/;
 const HEX_RE = /^0x(?:[0-9a-f]{2})*$/;
+const ROUTE_POSITION_KEY_RE = /^[0-9]+:[0-9]+:[0-9]+$/;
 
 export function validateGoPublicBuilderFixture(
   fixture: unknown,
@@ -118,6 +143,37 @@ export function validateGoPublicBuilderFixture(
   }
   validateBuildRequest(fixture.input.request, `${source}.input.request`);
 
+  if (!Array.isArray(fixture.expectedDexCalls)) {
+    throw new Error(`${source}.expectedDexCalls must be an array`);
+  }
+  fixture.expectedDexCalls.forEach((call, index) =>
+    validateExpectedDexCall(call, `${source}.expectedDexCalls[${index}]`),
+  );
+
+  if (!Array.isArray(fixture.expectedApprovalRequests)) {
+    throw new Error(`${source}.expectedApprovalRequests must be an array`);
+  }
+  fixture.expectedApprovalRequests.forEach((request, index) =>
+    validateExpectedApprovalRequest(
+      request,
+      `${source}.expectedApprovalRequests[${index}]`,
+    ),
+  );
+
+  if (!Array.isArray(fixture.approvalDecisions)) {
+    throw new Error(`${source}.approvalDecisions must be an array`);
+  }
+  fixture.approvalDecisions.forEach((decision, index) =>
+    assertBoolean(decision, `${source}.approvalDecisions[${index}]`),
+  );
+  if (
+    fixture.approvalDecisions.length !== fixture.expectedApprovalRequests.length
+  ) {
+    throw new Error(
+      `${source}.approvalDecisions length must match expectedApprovalRequests length`,
+    );
+  }
+
   validateExpectedResolvedInput(
     fixture.expectedResolvedInput,
     `${source}.expectedResolvedInput`,
@@ -128,12 +184,92 @@ export function validateGoPublicBuilderFixture(
   validateExpectedTx(fixture.expectedTx, `${source}.expectedTx`);
 }
 
+function validateExpectedDexCall(value: unknown, source: string): void {
+  assertRecord(value, source);
+  assertRoutePositionKey(value.routePositionKey, `${source}.routePositionKey`);
+  assertNonEmptyString(value.dexKey, `${source}.dexKey`);
+  validateNeedWrapNativeInput(
+    value.needWrapNativeInput,
+    `${source}.needWrapNativeInput`,
+  );
+  assertBoolean(value.needWrapNative, `${source}.needWrapNative`);
+  validateDexParamInput(value.dexParamInput, `${source}.dexParamInput`);
+  validateExchangeParam(value.dexParam, `${source}.dexParam`);
+  assertRecord(value.dexParam, `${source}.dexParam`);
+  if (value.dexParam.needWrapNative !== value.needWrapNative) {
+    throw new Error(
+      `${source}.dexParam.needWrapNative must match ${source}.needWrapNative`,
+    );
+  }
+}
+
+function validateExpectedApprovalRequest(value: unknown, source: string): void {
+  assertRecord(value, source);
+  assertRoutePositionKey(value.routePositionKey, `${source}.routePositionKey`);
+  assertAddress(value.token, `${source}.token`);
+  assertAddress(value.target, `${source}.target`);
+  assertBoolean(value.permit2, `${source}.permit2`);
+}
+
+function validateNeedWrapNativeInput(value: unknown, source: string): void {
+  assertRecord(value, source);
+  assertRecord(value.route, `${source}.route`);
+  assertInteger(value.route.network, `${source}.route.network`);
+  assertSwapSide(value.route.side, `${source}.route.side`);
+  assertInteger(value.route.routeIndex, `${source}.route.routeIndex`);
+  assertNumber(value.route.routePercent, `${source}.route.routePercent`);
+  assertInteger(value.route.blockNumber, `${source}.route.blockNumber`);
+  assertAddress(value.route.srcToken, `${source}.route.srcToken`);
+  assertAddress(value.route.destToken, `${source}.route.destToken`);
+  assertDecimalAmount(value.route.srcAmount, `${source}.route.srcAmount`);
+  assertDecimalAmount(value.route.destAmount, `${source}.route.destAmount`);
+
+  assertRecord(value.swap, `${source}.swap`);
+  assertInteger(value.swap.swapIndex, `${source}.swap.swapIndex`);
+  assertAddress(value.swap.srcToken, `${source}.swap.srcToken`);
+  assertAddress(value.swap.destToken, `${source}.swap.destToken`);
+  assertDecimalAmount(value.swap.srcAmount, `${source}.swap.srcAmount`);
+  assertDecimalAmount(value.swap.destAmount, `${source}.swap.destAmount`);
+
+  assertRecord(value.swapExchange, `${source}.swapExchange`);
+  assertInteger(
+    value.swapExchange.swapExchangeIndex,
+    `${source}.swapExchange.swapExchangeIndex`,
+  );
+  assertNonEmptyString(
+    value.swapExchange.exchange,
+    `${source}.swapExchange.exchange`,
+  );
+  assertNumber(value.swapExchange.percent, `${source}.swapExchange.percent`);
+  assertDecimalAmount(
+    value.swapExchange.srcAmount,
+    `${source}.swapExchange.srcAmount`,
+  );
+  assertDecimalAmount(
+    value.swapExchange.destAmount,
+    `${source}.swapExchange.destAmount`,
+  );
+}
+
+function validateDexParamInput(value: unknown, source: string): void {
+  validateNeedWrapNativeInput(value, source);
+  const record = value as Record<string, any>;
+  assertNonEmptyString(record.dexKey, `${source}.dexKey`);
+  assertAddress(record.srcToken, `${source}.srcToken`);
+  assertAddress(record.destToken, `${source}.destToken`);
+  assertDecimalAmount(record.srcAmount, `${source}.srcAmount`);
+  assertDecimalAmount(record.destAmount, `${source}.destAmount`);
+  assertAddress(record.recipient, `${source}.recipient`);
+  assertAddress(record.executorAddress, `${source}.executorAddress`);
+  assertSwapSide(record.side, `${source}.side`);
+}
+
 function validateBuildRequest(value: unknown, source: string): void {
   assertRecord(value, source);
   validatePriceRoute(value.priceRoute, `${source}.priceRoute`);
   assertDecimalAmount(value.minMaxAmount, `${source}.minMaxAmount`);
   if (value.quotedAmount !== undefined) {
-    assertDecimalAmount(value.quotedAmount, `${source}.quotedAmount`);
+    assertDecimalAmountOrEmpty(value.quotedAmount, `${source}.quotedAmount`);
   }
   assertAddress(value.userAddress, `${source}.userAddress`);
   if (value.referrerAddress !== undefined) {
@@ -447,9 +583,24 @@ function assertDecimalAmount(value: unknown, source: string): void {
   }
 }
 
+function assertDecimalAmountOrEmpty(value: unknown, source: string): void {
+  if (
+    typeof value !== 'string' ||
+    (value !== '' && !DECIMAL_AMOUNT_RE.test(value))
+  ) {
+    throw new Error(`${source} must be an empty or decimal string`);
+  }
+}
+
 function assertHex(value: unknown, source: string): void {
   if (typeof value !== 'string' || !HEX_RE.test(value)) {
     throw new Error(`${source} must be 0x-prefixed hex bytes`);
+  }
+}
+
+function assertRoutePositionKey(value: unknown, source: string): void {
+  if (typeof value !== 'string' || !ROUTE_POSITION_KEY_RE.test(value)) {
+    throw new Error(`${source} must be a route-position key`);
   }
 }
 

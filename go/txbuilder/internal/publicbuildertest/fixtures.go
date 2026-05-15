@@ -1,13 +1,18 @@
 package publicbuildertest
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 
+	"github.com/paraswap/paraswap-dex-lib/go/txbuilder/builder"
 	"github.com/paraswap/paraswap-dex-lib/go/txbuilder/internal/reporoot"
+	"github.com/paraswap/paraswap-dex-lib/go/txbuilder/resolved"
 )
 
 const FixtureSchemaVersion = 1
@@ -25,15 +30,18 @@ type Collection struct {
 type Fixture struct {
 	Path string
 	// Raw keeps the canonical JSON bytes available for fixture diagnostics.
-	Raw                   []byte
-	SchemaVersion         int
-	Name                  string
-	Kind                  FixtureKind
-	DexKeys               []string
-	Input                 FixtureInput
-	ExpectedResolvedInput json.RawMessage
-	ExpectedParams        json.RawMessage
-	ExpectedTx            json.RawMessage
+	Raw                      []byte
+	SchemaVersion            int
+	Name                     string
+	Kind                     FixtureKind
+	DexKeys                  []string
+	Input                    FixtureInput
+	ExpectedDexCalls         json.RawMessage
+	ExpectedApprovalRequests json.RawMessage
+	ApprovalDecisions        json.RawMessage
+	ExpectedResolvedInput    json.RawMessage
+	ExpectedParams           json.RawMessage
+	ExpectedTx               json.RawMessage
 }
 
 type FixtureInput struct {
@@ -141,14 +149,17 @@ func loadFixtureFiles(fixtureRoot string) ([]Fixture, error) {
 
 func parseFixture(raw []byte, relPath string) (Fixture, error) {
 	var parsed struct {
-		SchemaVersion         *int             `json:"schemaVersion"`
-		Name                  string           `json:"name"`
-		Kind                  FixtureKind      `json:"kind"`
-		DexKeys               []string         `json:"dexKeys"`
-		Input                 *rawFixtureInput `json:"input"`
-		ExpectedResolvedInput *json.RawMessage `json:"expectedResolvedInput"`
-		ExpectedParams        *json.RawMessage `json:"expectedParams"`
-		ExpectedTx            *json.RawMessage `json:"expectedTx"`
+		SchemaVersion            *int             `json:"schemaVersion"`
+		Name                     string           `json:"name"`
+		Kind                     FixtureKind      `json:"kind"`
+		DexKeys                  []string         `json:"dexKeys"`
+		Input                    *rawFixtureInput `json:"input"`
+		ExpectedDexCalls         *json.RawMessage `json:"expectedDexCalls"`
+		ExpectedApprovalRequests *json.RawMessage `json:"expectedApprovalRequests"`
+		ApprovalDecisions        *json.RawMessage `json:"approvalDecisions"`
+		ExpectedResolvedInput    *json.RawMessage `json:"expectedResolvedInput"`
+		ExpectedParams           *json.RawMessage `json:"expectedParams"`
+		ExpectedTx               *json.RawMessage `json:"expectedTx"`
 	}
 	if err := json.Unmarshal(raw, &parsed); err != nil {
 		return Fixture{}, fmt.Errorf("%s: %w", relPath, err)
@@ -188,6 +199,15 @@ func parseFixture(raw []byte, relPath string) (Fixture, error) {
 	if parsed.Input.Options.SkipApprovalCheck == nil {
 		return Fixture{}, fmt.Errorf("%s: input.options.skipApprovalCheck is required", relPath)
 	}
+	if parsed.ExpectedDexCalls == nil {
+		return Fixture{}, fmt.Errorf("%s: expectedDexCalls is required", relPath)
+	}
+	if parsed.ExpectedApprovalRequests == nil {
+		return Fixture{}, fmt.Errorf("%s: expectedApprovalRequests is required", relPath)
+	}
+	if parsed.ApprovalDecisions == nil {
+		return Fixture{}, fmt.Errorf("%s: approvalDecisions is required", relPath)
+	}
 	if parsed.ExpectedResolvedInput == nil {
 		return Fixture{}, fmt.Errorf("%s: expectedResolvedInput is required", relPath)
 	}
@@ -211,8 +231,213 @@ func parseFixture(raw []byte, relPath string) (Fixture, error) {
 				SkipApprovalCheck: *parsed.Input.Options.SkipApprovalCheck,
 			},
 		},
-		ExpectedResolvedInput: *parsed.ExpectedResolvedInput,
-		ExpectedParams:        *parsed.ExpectedParams,
-		ExpectedTx:            *parsed.ExpectedTx,
+		ExpectedDexCalls:         *parsed.ExpectedDexCalls,
+		ExpectedApprovalRequests: *parsed.ExpectedApprovalRequests,
+		ApprovalDecisions:        *parsed.ApprovalDecisions,
+		ExpectedResolvedInput:    *parsed.ExpectedResolvedInput,
+		ExpectedParams:           *parsed.ExpectedParams,
+		ExpectedTx:               *parsed.ExpectedTx,
 	}, nil
+}
+
+type ExpectedDexCall struct {
+	RoutePositionKey    string                      `json:"routePositionKey"`
+	DexKey              string                      `json:"dexKey"`
+	NeedWrapNativeInput builder.NeedWrapNativeInput `json:"needWrapNativeInput"`
+	NeedWrapNative      bool                        `json:"needWrapNative"`
+	DexParamInput       builder.DexParamInput       `json:"dexParamInput"`
+	DexParam            builder.DexExchangeParam    `json:"dexParam"`
+}
+
+type ExpectedApprovalRequest struct {
+	RoutePositionKey string           `json:"routePositionKey"`
+	Token            resolved.Address `json:"token"`
+	Target           resolved.Address `json:"target"`
+	Permit2          bool             `json:"permit2"`
+}
+
+func DecodeBuildRequest(fixture Fixture) (builder.BuildRequest, error) {
+	var req builder.BuildRequest
+	if err := json.Unmarshal(fixture.Input.Request, &req); err != nil {
+		return builder.BuildRequest{}, err
+	}
+	return req, nil
+}
+
+func DecodeExpectedResolvedInput(fixture Fixture) (resolved.BuildInput, error) {
+	var input resolved.BuildInput
+	if err := json.Unmarshal(fixture.ExpectedResolvedInput, &input); err != nil {
+		return resolved.BuildInput{}, err
+	}
+	return input, nil
+}
+
+func DecodeExpectedDexCalls(fixture Fixture) ([]ExpectedDexCall, error) {
+	var calls []ExpectedDexCall
+	if err := json.Unmarshal(fixture.ExpectedDexCalls, &calls); err != nil {
+		return nil, err
+	}
+	return calls, nil
+}
+
+func DecodeExpectedApprovalRequests(fixture Fixture) ([]ExpectedApprovalRequest, error) {
+	var requests []ExpectedApprovalRequest
+	if err := json.Unmarshal(fixture.ExpectedApprovalRequests, &requests); err != nil {
+		return nil, err
+	}
+	return requests, nil
+}
+
+func DecodeApprovalDecisions(fixture Fixture) ([]bool, error) {
+	var decisions []bool
+	if err := json.Unmarshal(fixture.ApprovalDecisions, &decisions); err != nil {
+		return nil, err
+	}
+	return decisions, nil
+}
+
+func DecodeExpectedParams(fixture Fixture) ([]any, error) {
+	var params []any
+	decoder := json.NewDecoder(bytes.NewReader(fixture.ExpectedParams))
+	decoder.UseNumber()
+	if err := decoder.Decode(&params); err != nil {
+		return nil, err
+	}
+	return params, nil
+}
+
+func DecodeExpectedTx(fixture Fixture) (resolved.TxObject, error) {
+	var tx resolved.TxObject
+	if err := json.Unmarshal(fixture.ExpectedTx, &tx); err != nil {
+		return resolved.TxObject{}, err
+	}
+	return tx, nil
+}
+
+type FixtureDexRegistry struct {
+	Expected []ExpectedDexCall
+	next     int
+}
+
+func NewFixtureDexRegistry(expected []ExpectedDexCall) *FixtureDexRegistry {
+	return &FixtureDexRegistry{Expected: expected}
+}
+
+func (r *FixtureDexRegistry) GetDexEncoder(_ context.Context, network int, dexKey string) (builder.DexEncoder, error) {
+	if r.next >= len(r.Expected) {
+		return nil, fmt.Errorf("unexpected DEX lookup for %s", dexKey)
+	}
+	expected := r.Expected[r.next]
+	if expected.NeedWrapNativeInput.Route.Network != network {
+		return nil, fmt.Errorf(
+			"%s: network mismatch: got %d want %d",
+			expected.RoutePositionKey,
+			network,
+			expected.NeedWrapNativeInput.Route.Network,
+		)
+	}
+	if expected.DexKey != dexKey {
+		return nil, fmt.Errorf(
+			"%s: dexKey mismatch: got %s want %s",
+			expected.RoutePositionKey,
+			dexKey,
+			expected.DexKey,
+		)
+	}
+	r.next++
+	return &fixtureDexEncoder{expected: expected}, nil
+}
+
+func (r *FixtureDexRegistry) AssertConsumed() error {
+	if r.next != len(r.Expected) {
+		return fmt.Errorf("consumed %d DEX calls; expected %d", r.next, len(r.Expected))
+	}
+	return nil
+}
+
+type fixtureDexEncoder struct {
+	expected ExpectedDexCall
+}
+
+func (e *fixtureDexEncoder) NeedWrapNative(_ context.Context, input builder.NeedWrapNativeInput) (bool, error) {
+	if !jsonEquivalent(input, e.expected.NeedWrapNativeInput) {
+		return false, fmt.Errorf(
+			"%s: needWrapNative input mismatch\n got: %s\nwant: %s",
+			e.expected.RoutePositionKey,
+			mustJSON(input),
+			mustJSON(e.expected.NeedWrapNativeInput),
+		)
+	}
+	return e.expected.NeedWrapNative, nil
+}
+
+func (e *fixtureDexEncoder) GetDexParam(_ context.Context, input builder.DexParamInput) (builder.DexExchangeParam, error) {
+	if !jsonEquivalent(input, e.expected.DexParamInput) {
+		return builder.DexExchangeParam{}, fmt.Errorf(
+			"%s: dex param input mismatch\n got: %s\nwant: %s",
+			e.expected.RoutePositionKey,
+			mustJSON(input),
+			mustJSON(e.expected.DexParamInput),
+		)
+	}
+	return e.expected.DexParam, nil
+}
+
+type FixtureApprovalChecker struct {
+	Expected        []ExpectedApprovalRequest
+	Decisions       []bool
+	ExpectedSpender resolved.Address
+	Called          bool
+}
+
+func (c *FixtureApprovalChecker) Check(_ context.Context, spender resolved.Address, requests []builder.ApprovalRequest) ([]bool, error) {
+	c.Called = true
+	if spender != c.ExpectedSpender {
+		return nil, fmt.Errorf("approval spender mismatch: got %s want %s", spender, c.ExpectedSpender)
+	}
+	if len(requests) != len(c.Expected) {
+		return nil, fmt.Errorf("approval request count mismatch: got %d want %d", len(requests), len(c.Expected))
+	}
+	for index, request := range requests {
+		expected := c.Expected[index]
+		if request.RoutePositionKey != expected.RoutePositionKey ||
+			request.Token != expected.Token ||
+			request.Target != expected.Target ||
+			request.Permit2 != expected.Permit2 {
+			return nil, fmt.Errorf("approval request %d mismatch", index)
+		}
+	}
+	return append([]bool(nil), c.Decisions...), nil
+}
+
+func mustJSON(value any) string {
+	raw, err := json.Marshal(value)
+	if err != nil {
+		return fmt.Sprintf("<json error: %v>", err)
+	}
+	return string(raw)
+}
+
+func jsonEquivalent(a, b any) bool {
+	aRaw, err := json.Marshal(a)
+	if err != nil {
+		return false
+	}
+	bRaw, err := json.Marshal(b)
+	if err != nil {
+		return false
+	}
+	var aValue any
+	aDecoder := json.NewDecoder(bytes.NewReader(aRaw))
+	aDecoder.UseNumber()
+	if err := aDecoder.Decode(&aValue); err != nil {
+		return false
+	}
+	var bValue any
+	bDecoder := json.NewDecoder(bytes.NewReader(bRaw))
+	bDecoder.UseNumber()
+	if err := bDecoder.Decode(&bValue); err != nil {
+		return false
+	}
+	return reflect.DeepEqual(aValue, bValue)
 }

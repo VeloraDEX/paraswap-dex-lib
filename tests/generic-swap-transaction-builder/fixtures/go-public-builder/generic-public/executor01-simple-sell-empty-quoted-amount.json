@@ -2,7 +2,7 @@
   "approvalDecisions": [
     true
   ],
-  "description": "Public generic builder contract fixture recorded from executor01-simple-sell-approved.",
+  "description": "Public generic builder contract fixture with empty quotedAmount defaulting to priceRoute.destAmount.",
   "dexKeys": [
     "UniswapV3"
   ],
@@ -274,13 +274,13 @@
         "srcAmount": "1000000",
         "srcToken": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
       },
-      "quotedAmount": "1000967",
+      "quotedAmount": "",
       "takeSurplus": false,
       "userAddress": "0x1111111111111111111111111111111111111111",
       "uuid": "11111111-1111-1111-1111-111111111111"
     }
   },
   "kind": "generic-public",
-  "name": "executor01-simple-sell-approved",
+  "name": "executor01-simple-sell-empty-quoted-amount",
   "schemaVersion": 1
 }

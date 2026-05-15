@@ -37,6 +37,18 @@ func TestLoadPublicBuilderFixtures(t *testing.T) {
 	if len(fixture.Input.Request) == 0 {
 		t.Fatal("expected request JSON")
 	}
+	if !json.Valid(fixture.Raw) {
+		t.Fatal("expected canonical raw fixture bytes to be valid JSON")
+	}
+	if len(fixture.ExpectedDexCalls) == 0 {
+		t.Fatal("expected DEX call JSON")
+	}
+	if len(fixture.ExpectedApprovalRequests) == 0 {
+		t.Fatal("expected approval request JSON")
+	}
+	if len(fixture.ApprovalDecisions) == 0 {
+		t.Fatal("expected approval decision JSON")
+	}
 	if len(fixture.ExpectedResolvedInput) == 0 {
 		t.Fatal("expected resolved input JSON")
 	}
@@ -201,6 +213,9 @@ func writeFixture(t *testing.T, root, relPath, name string) {
 		"kind": "generic-public",
 		"dexKeys": ["ExampleDex"],
 		"input": {"request": {}, "options": {"skipApprovalCheck": false}},
+		"expectedDexCalls": [],
+		"expectedApprovalRequests": [],
+		"approvalDecisions": [],
 		"expectedResolvedInput": {
 			"routePlan": {"routes": []},
 			"resolvedLegs": [],

@@ -2,7 +2,7 @@
   "approvalDecisions": [
     true
   ],
-  "description": "Public generic builder contract fixture recorded from executor01-simple-sell-approved.",
+  "description": "Public generic builder contract fixture with swap-level amounts omitted.",
   "dexKeys": [
     "UniswapV3"
   ],
@@ -281,6 +281,6 @@
     }
   },
   "kind": "generic-public",
-  "name": "executor01-simple-sell-approved",
+  "name": "executor01-simple-sell-no-swap-amounts",
   "schemaVersion": 1
 }

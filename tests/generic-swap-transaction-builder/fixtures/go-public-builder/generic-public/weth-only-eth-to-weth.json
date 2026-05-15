@@ -1,0 +1,237 @@
+{
+  "approvalDecisions": [],
+  "description": "Public generic builder contract fixture recorded from weth-only-eth-to-weth.",
+  "dexKeys": [
+    "Weth"
+  ],
+  "expectedApprovalRequests": [],
+  "expectedDexCalls": [
+    {
+      "dexKey": "Weth",
+      "dexParam": {
+        "dexFuncHasRecipient": false,
+        "exchangeData": "0xd0e30db0",
+        "needWrapNative": false,
+        "targetExchange": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+      },
+      "dexParamInput": {
+        "data": null,
+        "destAmount": "1",
+        "destToken": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+        "dexKey": "Weth",
+        "executorAddress": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+        "recipient": "0x6a000f20005980200259b80c5102003040001068",
+        "route": {
+          "blockNumber": 1,
+          "destAmount": "1000000000000000000",
+          "destToken": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+          "network": 1,
+          "routeIndex": 0,
+          "routePercent": 100,
+          "side": "SELL",
+          "srcAmount": "1000000000000000000",
+          "srcToken": "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+        },
+        "side": "SELL",
+        "srcAmount": "1000000000000000000",
+        "srcToken": "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "swap": {
+          "destAmount": "1000000000000000000",
+          "destToken": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+          "srcAmount": "1000000000000000000",
+          "srcToken": "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+          "swapIndex": 0
+        },
+        "swapExchange": {
+          "data": null,
+          "destAmount": "1000000000000000000",
+          "exchange": "Weth",
+          "percent": 100,
+          "srcAmount": "1000000000000000000",
+          "swapExchangeIndex": 0
+        }
+      },
+      "needWrapNative": false,
+      "needWrapNativeInput": {
+        "route": {
+          "blockNumber": 1,
+          "destAmount": "1000000000000000000",
+          "destToken": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+          "network": 1,
+          "routeIndex": 0,
+          "routePercent": 100,
+          "side": "SELL",
+          "srcAmount": "1000000000000000000",
+          "srcToken": "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+        },
+        "swap": {
+          "destAmount": "1000000000000000000",
+          "destToken": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+          "srcAmount": "1000000000000000000",
+          "srcToken": "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+          "swapIndex": 0
+        },
+        "swapExchange": {
+          "data": null,
+          "destAmount": "1000000000000000000",
+          "exchange": "Weth",
+          "percent": 100,
+          "srcAmount": "1000000000000000000",
+          "swapExchangeIndex": 0
+        }
+      },
+      "routePositionKey": "0:0:0"
+    }
+  ],
+  "expectedParams": [
+    "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+    [
+      "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+      "1000000000000000000",
+      "990000",
+      "1000000000000000000",
+      "0x1111111111111111111111111111111100000000000000000000000000000001",
+      "0x0000000000000000000000000000000000000000"
+    ],
+    "4951760157141521099596496896",
+    "0x",
+    "0x"
+  ],
+  "expectedResolvedInput": {
+    "augustusV6Address": "0x6a000f20005980200259b80c5102003040001068",
+    "beneficiary": "0x0000000000000000000000000000000000000000",
+    "blockNumber": 1,
+    "contractMethod": "swapExactAmountIn",
+    "destAmount": "1000000000000000000",
+    "destToken": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+    "executorAddress": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+    "executorType": "WETH",
+    "fee": {
+      "isCapSurplus": true,
+      "isDirectFeeTransfer": false,
+      "isSurplusToUser": false,
+      "partnerAddress": "0x0000000000000000000000000000000000000000",
+      "partnerFeePercent": "0",
+      "takeSurplus": false
+    },
+    "gas": {
+      "gasPrice": "1",
+      "maxFeePerGas": "2",
+      "maxPriorityFeePerGas": "3"
+    },
+    "minMaxAmount": "990000",
+    "network": 1,
+    "permit": "0x",
+    "quotedAmount": "1000000000000000000",
+    "resolvedLegs": [
+      {
+        "exchangeParam": {
+          "dexFuncHasRecipient": false,
+          "exchangeData": "0xd0e30db0",
+          "needWrapNative": false,
+          "targetExchange": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+        },
+        "normalizedDestAmount": "1",
+        "normalizedDestToken": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+        "normalizedSrcAmount": "1000000000000000000",
+        "normalizedSrcToken": "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "recipient": "0x6a000f20005980200259b80c5102003040001068",
+        "routeIndex": 0,
+        "swapExchangeIndex": 0,
+        "swapIndex": 0
+      }
+    ],
+    "routePlan": {
+      "routes": [
+        {
+          "percent": 100,
+          "swaps": [
+            {
+              "destAmount": "1000000000000000000",
+              "destToken": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+              "srcAmount": "1000000000000000000",
+              "srcToken": "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+              "swapExchanges": [
+                {
+                  "destAmount": "1000000000000000000",
+                  "exchange": "Weth",
+                  "percent": 100,
+                  "srcAmount": "1000000000000000000"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "side": "SELL",
+    "srcAmount": "1000000000000000000",
+    "srcToken": "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "userAddress": "0x1111111111111111111111111111111111111111",
+    "uuid": "11111111-1111-1111-1111-111111111111",
+    "wrappedNativeTokenAddress": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+  },
+  "expectedTx": {
+    "data": "0xe3ead59e000000000000000000000000c02aaa39b223fe8d0a0e5c4f27ead9083c756cc2000000000000000000000000eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee000000000000000000000000c02aaa39b223fe8d0a0e5c4f27ead9083c756cc20000000000000000000000000000000000000000000000000de0b6b3a764000000000000000000000000000000000000000000000000000000000000000f1b300000000000000000000000000000000000000000000000000de0b6b3a76400001111111111111111111111111111111100000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000000000000000000000000000160000000000000000000000000000000000000000000000000000000000000018000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "from": "0x1111111111111111111111111111111111111111",
+    "gasPrice": "1",
+    "maxFeePerGas": "2",
+    "maxPriorityFeePerGas": "3",
+    "to": "0x6a000f20005980200259b80c5102003040001068",
+    "value": "1000000000000000000"
+  },
+  "input": {
+    "options": {
+      "skipApprovalCheck": false
+    },
+    "request": {
+      "deadline": "0",
+      "gasPrice": "1",
+      "isDirectFeeTransfer": false,
+      "isSurplusToUser": false,
+      "maxFeePerGas": "2",
+      "maxPriorityFeePerGas": "3",
+      "minMaxAmount": "990000",
+      "partnerAddress": "0x0000000000000000000000000000000000000000",
+      "partnerFeePercent": "0",
+      "priceRoute": {
+        "bestRoute": [
+          {
+            "percent": 100,
+            "swaps": [
+              {
+                "destToken": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+                "srcToken": "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+                "swapExchanges": [
+                  {
+                    "data": null,
+                    "destAmount": "1000000000000000000",
+                    "exchange": "Weth",
+                    "percent": 100,
+                    "srcAmount": "1000000000000000000"
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "blockNumber": 1,
+        "contractMethod": "swapExactAmountIn",
+        "destAmount": "1000000000000000000",
+        "destToken": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+        "network": 1,
+        "side": "SELL",
+        "srcAmount": "1000000000000000000",
+        "srcToken": "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+      },
+      "quotedAmount": "1000000000000000000",
+      "takeSurplus": false,
+      "userAddress": "0x1111111111111111111111111111111111111111",
+      "uuid": "11111111-1111-1111-1111-111111111111"
+    }
+  },
+  "kind": "generic-public",
+  "name": "weth-only-eth-to-weth",
+  "schemaVersion": 1
+}
