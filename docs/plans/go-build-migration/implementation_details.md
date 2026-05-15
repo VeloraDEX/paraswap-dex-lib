@@ -4,8 +4,8 @@ Last updated: 2026-05-15
 
 This document tracks implementation details for
 `docs/plans/go-build-migration/implementation.md`. It is organized by
-implementation phase. Only Phase 1 is defined now; later sections should be
-added after Phase 1 lands.
+implementation phase. Phase 1 and Phase 2 are complete; later sections should
+be added when the next phase is planned.
 
 ## Phase 1: Go Module And Fixture Foundation
 
@@ -434,3 +434,411 @@ Recorded after Phase 1 implementation:
 
 Phase 2a can start after the Phase 1 verification commands remain passing on
 the target branch.
+
+## Phase 2: Encoding Foundation
+
+Phase 2 implements the reusable encoding primitives and dependency validation
+that later `BuildTransactionFromResolved` work depends on. It intentionally
+does not add `BuildTransactionFromResolved`, executor bytecode encoding, or
+fixture-level `expectedTx` parity yet.
+
+### Current Status
+
+- Phase 1 added Go DTOs, `BuildDeps`, `EncodingContext`, embedded Augustus V6
+  ABI loading, fixture loading, and the test-only deps helper.
+- Phase 2 added generic Augustus V6 params, fee packing, UUID/block metadata
+  packing, tx value derivation, selector checks, and dependency consistency
+  validation.
+- `BuildInput.RoutePlan`, `BuildInput.ResolvedLegs`, `BuildInput.WethPlan`,
+  and direct `Params` still defer semantic parsing with raw JSON fields.
+  `BuildInput.Fee` remains raw at the DTO boundary and is parsed by
+  `ParseFeeInput`.
+- Go still has not implemented `BuildTransactionFromResolved`, executor
+  bytecode encoding, direct builder behavior, or fixture-level `expectedTx`
+  calldata parity.
+- The canonical TypeScript source for Phase 2 behavior is
+  `src/generic-swap-transaction-builder/resolved/build-transaction.ts`.
+
+### Goal
+
+Land the smallest Go encoding foundation that Phase 2a can call directly:
+
+- typed generic fee and gas DTOs
+- dependency/context validation helpers
+- Augustus V6 method selectors
+- UUID/block metadata packing
+- partner-and-fee packing
+- generic swap tuple construction without executor bytecode generation
+- tx value derivation from source token, side, and amount fields
+
+### In Scope
+
+- Add typed Go DTOs needed by shared encoding primitives:
+  - `FeeInput`
+  - generic swap tuple metadata shape
+  - helper output shape for generic params without bytecode
+- Parse `BuildInput.Fee` into `FeeInput`.
+- Add dependency validation helpers that compare fixture input with
+  `BuildDeps.EncodingContext`:
+  - network
+  - Augustus V6 address
+  - wrapped native token address
+  - executor type
+  - executor address
+- Add ABI selector helpers using the embedded Augustus V6 ABI.
+- Add UUID/block metadata packing equivalent to TypeScript:
+  `hexZeroPad(uuidToBytes16(uuid), 16) + hexZeroPad(blockNumber, 16)`.
+- Add `BuildFeesV6(fee FeeInput) (*big.Int, error)` using `math/big` for the
+  256-bit partner-and-fee value. Tests compare `result.String()` to fixture
+  decimal strings.
+- Add generic swap param construction that accepts an already-built executor
+  bytecode string and returns params for:
+  - `swapExactAmountIn`
+  - `swapExactAmountOut`
+  - `swapExactAmountInPro`
+  - `swapExactAmountOutPro`
+- Add transaction value derivation:
+  - SELL with native source uses `srcAmount`
+  - BUY with native source uses `minMaxAmount`
+  - non-native source uses `0`
+- Add focused unit tests against TypeScript fixture values and committed
+  fixtures.
+
+### Out Of Scope
+
+- Do not add `BuildTransactionFromResolved`.
+- Do not port Executor01, Executor02, Executor03, or WETH bytecode builders.
+- Do not compare full `expectedTx.data` against fixtures.
+- Do not run negative fixtures through Go validation yet; exact
+  `expectedError` parity starts in Phase 2a.
+- Do not implement direct builder behavior.
+- Do not change TypeScript runtime behavior or add a bridge.
+
+### File Layout
+
+| Path                                       | Purpose                                                              |
+| ------------------------------------------ | -------------------------------------------------------------------- |
+| `go/txbuilder/resolved/validation.go`      | Dependency/context validation helpers shared by Phase 2a.            |
+| `go/txbuilder/resolved/fees.go`            | `BuildFeesV6` and 256-bit fee flag packing.                          |
+| `go/txbuilder/resolved/metadata.go`        | UUID/block metadata packing helpers.                                 |
+| `go/txbuilder/resolved/generic_params.go`  | Generic params construction around caller-supplied executor bytes.   |
+| `go/txbuilder/resolved/tx_value.go`        | Transaction value derivation helper.                                 |
+| `go/txbuilder/resolved/encoding_test.go`   | ABI selectors, tuple construction, metadata packing, tx value tests. |
+| `go/txbuilder/resolved/fees_test.go`       | Partner-and-fee parity tests.                                        |
+| `go/txbuilder/resolved/validation_test.go` | Dependency/context mismatch tests.                                   |
+| `go/txbuilder/internal/resolvedtest/*.go`  | Shared fixture helpers for Phase 2 tests if needed.                  |
+
+Keep helper files small and behavior-oriented. If a helper becomes executor
+specific, it belongs in a later executor phase rather than Phase 2.
+
+### DTO And Parsing Rules
+
+- Add `FeeInput` to `go/txbuilder/resolved/types.go` with fields matching the
+  TypeScript fixture JSON:
+  - `PartnerAddress Address`
+  - `PartnerFeePercent DecimalString`
+  - `ReferrerAddress *Address`
+  - `TakeSurplus bool`
+  - `IsCapSurplus bool`
+  - `IsSurplusToUser bool`
+  - `IsDirectFeeTransfer bool`
+  - `IsSkipBlacklist bool`
+- Keep `BuildInput.Fee` as `json.RawMessage` only if Phase 2 adds a helper such
+  as `ParseFeeInput(input BuildInput) (FeeInput, error)`. Do not silently
+  ignore malformed fee JSON.
+- `ParseFeeInput` errors are not parity errors in Phase 2 because negative
+  fixture parity starts in Phase 2a. Use clear Go-idiomatic messages and revise
+  only if Phase 2a needs a specific TypeScript string.
+- Preserve string-backed amount/address types. Do not add custom JSON
+  marshalers in Phase 2.
+- Add `NativeTokenAddress` constant for
+  `0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee`, matching TypeScript
+  `ETHER_ADDRESS`.
+
+### Dependency Validation
+
+Add a helper with a narrow API, for example:
+
+```go
+func ValidateBuildDeps(input BuildInput, deps BuildDeps) error
+```
+
+Rules:
+
+- Match TypeScript error strings for dependency-context mismatches:
+  - `executor address mismatch: input ..., builder ...`
+  - `unsupported executor type: ...`
+  - `network mismatch: input ..., context ...`
+  - `augustusV6Address mismatch: input ..., context ...`
+  - `wrappedNativeTokenAddress mismatch: input ..., context ...`
+- `executor address mismatch` is represented in committed negative fixtures.
+  Network, Augustus V6, and wrapped-native mismatches are currently covered by
+  TypeScript unit tests, so Phase 2 Go tests should use focused fixture-input
+  mutation tests that match those TypeScript unit-test messages exactly.
+- Validate supported executor types against the Go `ExecutorType` constants.
+- Validate WETH executor address is synthesized from the fixture input by the
+  deps helper.
+- Normalize nothing implicitly in this helper. Phase 2 assumes fixture strings
+  are already lowercase and leaves address-format validation to Phase 2a.
+
+### ABI Selector Tests
+
+Use the embedded ABI from `LoadAugustusV6ABI()` and assert selectors for:
+
+- `swapExactAmountIn`
+- `swapExactAmountOut`
+- `swapExactAmountInPro`
+- `swapExactAmountOutPro`
+
+Expected selectors can be derived from committed fixture `expectedTx.data`
+prefixes or from a small TypeScript helper. Commit the expected selector strings
+in Go tests so selector drift is explicit.
+
+### Metadata Packing
+
+Implement:
+
+```go
+func PackUUIDAndBlock(uuid string, blockNumber int64) (string, error)
+```
+
+Rules:
+
+- Parse UUID as exactly 16 bytes.
+- Encode block number as unsigned 16-byte big-endian.
+- Return a lowercase `0x` hex string of 32 bytes total.
+- Reject malformed UUIDs and negative block numbers.
+- Add a fixture-backed test using `executor01-simple-sell-approved`, whose
+  expected metadata field is:
+  `0x11111111111111111111111111111111000000000000000000000000011f0f32`.
+
+### Fee Packing
+
+Implement fee packing with `math/big`. Do not use fixed-width integers. Keep
+the same two-layer structure as TypeScript so the public `FeeInput` mapping is
+separate from bit packing.
+
+Layer 1, `BuildFeesV6`, maps public fixture input to internal packer fields:
+
+- If `fee.ReferrerAddress != nil`:
+  - `partner = *fee.ReferrerAddress`
+  - `feePercent = "0"`
+  - `isReferral = true`
+- Otherwise:
+  - `partner = fee.PartnerAddress`
+  - `feePercent = fee.PartnerFeePercent`
+  - `isReferral = false`
+- All other booleans pass through unchanged.
+
+Layer 2, `packPartnerAndFeeData`, packs those internal fields:
+
+Parity rules:
+
+- `partner = (feePercent == "0" && !isTakeSurplus && !isReferral) ? 0 : partner`
+- high 160 bits are `partner << 96`
+- if `feePercent != "0"`, set `feePercent & 0x3FFF`
+- else if `isTakeSurplus`, set `IS_TAKE_SURPLUS_MASK = 1 << 95`
+- else if `isReferral`, set `IS_REFERRAL_MASK = 1 << 94`
+- if `isSkipBlacklist`, set `IS_SKIP_BLACKLIST_MASK = 1 << 93`
+- if `isCapSurplus`, set `IS_CAP_SURPLUS_MASK = 1 << 92`
+- if `isDirectFeeTransfer`, set `IS_DIRECT_TRANSFER_MASK = 1 << 91`
+- if `isSurplusToUser`, set `IS_USER_SURPLUS_MASK = 1 << 90`
+- Return the decimal string representation used in `expectedParams[2]`.
+
+Acceptance tests:
+
+- Use representative committed generic fixtures:
+  - zero-fee fixture: `executor01-simple-sell-approved`
+  - nonzero partner fee: `fee-nonzero-partner`
+  - referrer: `fee-referrer`
+  - take surplus: `fee-take-surplus`
+  - surplus to user: `fee-surplus-to-user`
+  - direct transfer: `fee-direct-transfer`
+- Each test compares the Go decimal string to fixture `expectedParams[2]`.
+- Add one synthetic Go unit vector for `isSkipBlacklist` until a committed
+  fixture covers it. The expected value must be computed from the documented
+  TypeScript masks, including `IS_SKIP_BLACKLIST_MASK = 1 << 93`, so a broken
+  skip-blacklist bit cannot pass Phase 2.
+
+### Generic Params Helper
+
+Add a helper shaped for later executor phases, for example:
+
+```go
+func BuildGenericSwapParams(input BuildInput, fee FeeInput, bytecode string) ([]any, error)
+```
+
+Rules:
+
+- Validate `input.ContractMethod` is one of the four generic methods. Reject
+  unsupported methods with `unsupported generic contract method for resolved build: ...`.
+- The helper returns the same five-element params tuple for all four generic
+  methods. The selector is chosen by the caller during final ABI encoding.
+- The helper must not build executor bytecode.
+- Tests may pass fixture `expectedParams[4]` as the `bytecode` argument to prove
+  tuple and fee/metadata fields are assembled correctly.
+- Return `expectedParams` as a 5-tuple:
+  - `[0] executor` from `input.ExecutorAddress`
+  - `[1] swapData` as the GenericData 7-tuple below
+  - `[2] partnerAndFee` from `BuildFeesV6(fee)`
+  - `[3] permit` from `input.Permit`
+  - `[4] executorData` from the caller-supplied bytecode
+- GenericData inside `expectedParams[1]` is:
+  - `[0] srcToken` from `input.SrcToken`
+  - `[1] destToken` from `input.DestToken`
+  - `[2] fromAmount` using SELL `srcAmount`, BUY `minMaxAmount`
+  - `[3] toAmount` using SELL `minMaxAmount`, BUY `destAmount`
+  - `[4] quotedAmount` from `input.QuotedAmount`
+  - `[5] metadata` from `PackUUIDAndBlock(input.UUID, input.BlockNumber)`
+  - `[6] beneficiary` from `input.Beneficiary`
+- SELL params use:
+  - from amount: `srcAmount`
+  - to amount: `minMaxAmount`
+- BUY params use:
+  - from amount: `minMaxAmount`
+  - to amount: `destAmount`
+- Metadata field uses `PackUUIDAndBlock`.
+- Beneficiary, permit, executor address, source token, destination token, and
+  quoted amount must pass through exactly from input.
+- Pro methods share the same params shape as their regular In/Out method.
+
+Acceptance tests:
+
+- Compare against `expectedParams` for at least:
+  - `executor01-simple-sell-approved`
+  - `executor03-buy`
+- Add explicit table tests that call the params helper with
+  `swapExactAmountInPro` using a representative regular exact-in input and
+  `swapExactAmountOutPro` using a representative regular exact-out input. Pro
+  methods share the same params shape as regular In/Out; these tests should
+  prove params-helper method handling rather than only selector handling.
+
+### Transaction Value Helper
+
+Add:
+
+```go
+func BuildTxValue(input BuildInput) (string, error)
+```
+
+Rules:
+
+- Native source token is exactly
+  `0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee`.
+- SELL native source returns `srcAmount`.
+- BUY native source returns `minMaxAmount`.
+- Non-native source returns `"0"`.
+- Reject unsupported `Side` values.
+
+Acceptance tests:
+
+- Native SELL from `executor01-eth-weth-deposit`.
+- Non-native SELL from `executor01-simple-sell-approved`.
+- BUY behavior from a small table test built from fixture-style input.
+
+### Implementation Order
+
+1. Add constants and typed DTOs: `FeeInput`, native token address, and any
+   internal flag masks.
+2. Add validation helpers for deps/context consistency with focused tests.
+3. Add selector and metadata helpers with fixture-backed tests.
+4. Add fee packing with fixture-backed tests.
+5. Add generic params and tx value helpers with fixture-backed tests.
+6. Run the Phase 2 verification commands.
+
+### Implementation Tasks
+
+| Status | Task                              | Notes                                                                                                 |
+| ------ | --------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| Done   | Add Phase 2 DTOs and constants    | Added `FeeInput`, native/null address constants, and generic method constants.                        |
+| Done   | Add dependency validation helpers | Added `ValidateBuildDeps` with TypeScript-compatible context/executor mismatch strings.               |
+| Done   | Add selector tests                | Asserted four generic Augustus V6 selectors from the embedded ABI.                                    |
+| Done   | Add metadata packing              | Added UUID/block 32-byte packing with fixture-backed, malformed UUID, and negative block tests.       |
+| Done   | Add fee packing                   | Added `math/big` fee packing and representative fixture `expectedParams[2]` tests.                    |
+| Done   | Add generic params helper         | Added caller-supplied bytecode params helper and compared full fixture `expectedParams` tuples.       |
+| Done   | Add tx value helper               | Covered native SELL, native BUY, non-native, and unsupported side.                                    |
+| Done   | Run Phase 2 gates                 | Passed `go test ./go/...`, `go vet ./go/...`, `yarn fixtures:check`, and resolved Jest on 2026-05-15. |
+
+### Acceptance Criteria
+
+Phase 2 is complete when:
+
+- Go selector tests pass for all four generic methods.
+- Go metadata packing matches committed fixture metadata exactly.
+- Go fee packing matches representative committed fixture `expectedParams[2]`
+  values exactly.
+- Go generic params helper can reproduce fixture `expectedParams` when given
+  fixture bytecode as input.
+- Go tx value helper matches fixture `expectedTx.value` for covered native and
+  non-native cases.
+- Dependency validation helpers reject mismatched executor, network, Augustus
+  V6, and wrapped native token values with TypeScript-compatible messages.
+- `go vet ./go/...` passes.
+- `gofmt -s -l go/` produces no output.
+- `BuildTransactionFromResolved` remains unimplemented until Phase 2a.
+- Phase 2a remaining work is limited to orchestration through
+  `BuildTransactionFromResolved`, full input-field validation matching
+  TypeScript `validateTopLevelFields`, executor bytecode wiring from later
+  executor phases, final ABI encoding of the five-element params tuple, and
+  `TxObject` assembly.
+
+### Verification Commands
+
+```bash
+go test ./go/...
+go vet ./go/...
+yarn fixtures:check
+yarn jest tests/generic-swap-transaction-builder/resolved --runInBand
+```
+
+### Exit Notes For Phase 2a
+
+Phase 2a should call these Phase 2 helpers:
+
+- `resolved.ValidateBuildDeps(input, deps)`
+- `resolved.ParseFeeInput(input)`
+- `resolved.BuildFeesV6(fee)`
+- `resolved.PackUUIDAndBlock(input.UUID, input.BlockNumber)`
+- `resolved.BuildGenericSwapParams(input, fee, bytecode)`
+- `resolved.BuildTxValue(input)`
+- `resolved.AugustusV6MethodSelector(abi, method)` when selector checks are
+  useful during debugging
+
+Selector values pinned by Phase 2 tests:
+
+- `swapExactAmountIn`: `0xe3ead59e`
+- `swapExactAmountOut`: `0x7f457675`
+- `swapExactAmountInPro`: `0x0d893d62`
+- `swapExactAmountOutPro`: `0x44224add`
+
+Fee packing fixture parity uses:
+
+- `executor01-simple-sell-approved`
+- `fee-nonzero-partner`
+- `fee-referrer`
+- `fee-take-surplus`
+- `fee-surplus-to-user`
+- `fee-direct-transfer`
+
+Generic params fixture parity uses:
+
+- `executor01-simple-sell-approved`
+- `executor03-buy`
+
+Dependency validator messages reproduced by Phase 2:
+
+- `executor address mismatch: input 0x2222222222222222222222222222222222222222, builder 0x000010036c0190e009a000d0fc3541100a07380a`
+- `unsupported executor type: Executor99`
+- `network mismatch: input 1, context 2`
+- `augustusV6Address mismatch: input 0x6a000f20005980200259b80c5102003040001068, context 0x9999999999999999999999999999999999999999`
+- `wrappedNativeTokenAddress mismatch: input 0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2, context 0x8888888888888888888888888888888888888888`
+
+Remaining `json.RawMessage` DTO fields for Phase 2a:
+
+- `resolved.BuildInput.RoutePlan`
+- `resolved.BuildInput.ResolvedLegs`
+- `resolved.BuildInput.WethPlan`
+- fixture-loader `Input`, `ExpectedParams`, and `ExpectedTx`
+
+`resolved.BuildInput.Fee` remains raw at the DTO boundary, but Phase 2 provides
+`ParseFeeInput` for Phase 2a orchestration.

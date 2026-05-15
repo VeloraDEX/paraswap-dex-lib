@@ -24,6 +24,18 @@ const (
 	SideBuy  Side = "BUY"
 )
 
+const (
+	ContractMethodSwapExactAmountIn     = "swapExactAmountIn"
+	ContractMethodSwapExactAmountOut    = "swapExactAmountOut"
+	ContractMethodSwapExactAmountInPro  = "swapExactAmountInPro"
+	ContractMethodSwapExactAmountOutPro = "swapExactAmountOutPro"
+)
+
+const (
+	NativeTokenAddress Address = "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+	NullAddress        Address = "0x0000000000000000000000000000000000000000"
+)
+
 type EncodingContext struct {
 	Network                   int
 	AugustusV6Address         Address
@@ -78,6 +90,17 @@ type GasInput struct {
 	GasPrice             DecimalString `json:"gasPrice,omitempty"`
 	MaxFeePerGas         DecimalString `json:"maxFeePerGas,omitempty"`
 	MaxPriorityFeePerGas DecimalString `json:"maxPriorityFeePerGas,omitempty"`
+}
+
+type FeeInput struct {
+	PartnerAddress      Address       `json:"partnerAddress"`
+	PartnerFeePercent   DecimalString `json:"partnerFeePercent"`
+	ReferrerAddress     *Address      `json:"referrerAddress,omitempty"`
+	TakeSurplus         bool          `json:"takeSurplus"`
+	IsCapSurplus        bool          `json:"isCapSurplus"`
+	IsSurplusToUser     bool          `json:"isSurplusToUser"`
+	IsDirectFeeTransfer bool          `json:"isDirectFeeTransfer"`
+	IsSkipBlacklist     bool          `json:"isSkipBlacklist"`
 }
 
 type TxObject struct {
