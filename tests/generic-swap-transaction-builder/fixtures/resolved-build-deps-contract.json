@@ -1,0 +1,8 @@
+{
+  "executorsAddresses": {
+    "Executor01": "0x000010036c0190e009a000d0fc3541100a07380a",
+    "Executor02": "0x00c600b30fb0400701010f4b080409018b9006e0",
+    "Executor03": "0xa000b020c290d000020aac04026b5306d60050f0"
+  },
+  "schemaVersion": 1
+}

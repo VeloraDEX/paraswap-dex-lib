@@ -1,0 +1,283 @@
+{
+  "buckets": {
+    "phase2GenericNegative": [
+      {
+        "kind": "negative",
+        "name": "duplicate-resolved-leg",
+        "path": "negative/duplicate-resolved-leg.json",
+        "sha256": "951ce2729f9015aad919f64793c6d85b3864707cd437ac7db469c25f9b5c62e0"
+      },
+      {
+        "kind": "negative",
+        "name": "executor-address-mismatch",
+        "path": "negative/executor-address-mismatch.json",
+        "sha256": "cc284bdffde62bf7aac1a9b8968c866e571a657182c5db5aaf081ff54778004d"
+      },
+      {
+        "kind": "negative",
+        "name": "malformed-address",
+        "path": "negative/malformed-address.json",
+        "sha256": "749b2ad125ddbfbfac7d99fe46c89907f68cd2808336fd0c835fa970ec26973e"
+      },
+      {
+        "kind": "negative",
+        "name": "malformed-amount",
+        "path": "negative/malformed-amount.json",
+        "sha256": "3c2d5215105f94146eb73c67f1606575a13ac2489a66300f38fe0db43f0d67b5"
+      },
+      {
+        "kind": "negative",
+        "name": "malformed-hex-bytes",
+        "path": "negative/malformed-hex-bytes.json",
+        "sha256": "22d466787aabe32aad01d5e7eef330c173f1e455b028bd5d1797635c01dc7757"
+      },
+      {
+        "kind": "negative",
+        "name": "malformed-weth-plan",
+        "path": "negative/malformed-weth-plan.json",
+        "sha256": "fe61a0aa73eeffec572c6ab00950d49689e86b45659696259f6bcc8e286ce69f"
+      },
+      {
+        "kind": "negative",
+        "name": "missing-resolved-leg",
+        "path": "negative/missing-resolved-leg.json",
+        "sha256": "94b6fac31fca4fdcf185023aa14d0c9d475caa0576c67460d9e48db428330671"
+      },
+      {
+        "kind": "negative",
+        "name": "non-boolean-need-wrap-native",
+        "path": "negative/non-boolean-need-wrap-native.json",
+        "sha256": "87605c493d7c31468dc0b85d310e5244148d086ca6db3a9ae00bbb621565267c"
+      },
+      {
+        "kind": "negative",
+        "name": "out-of-route-resolved-leg",
+        "path": "negative/out-of-route-resolved-leg.json",
+        "sha256": "098dd4bedce5e8417943eaa65e719b057c610ae1f2afa393059b9ba94f579129"
+      },
+      {
+        "kind": "negative",
+        "name": "unsupported-generic-method",
+        "path": "negative/unsupported-generic-method.json",
+        "sha256": "386727f08e2c9c787a01cc7b4dc2d7bef74297406bc6e2867158f316d70c47a7"
+      }
+    ],
+    "phase2GenericSuccess": [
+      {
+        "kind": "generic",
+        "name": "edge-nonempty-permit",
+        "path": "generic/edge-nonempty-permit.json",
+        "sha256": "8bb3f3524b39224d580a71be1ea75064941999aabdf7d8e90a1b917284c5a90a"
+      },
+      {
+        "kind": "generic",
+        "name": "edge-zero-quoted-amount",
+        "path": "generic/edge-zero-quoted-amount.json",
+        "sha256": "797addd871e8e4815f180065c3ffdc431939d01f8c8214dc23ee0b119dd14323"
+      },
+      {
+        "kind": "generic",
+        "name": "executor01-eth-weth-deposit",
+        "path": "generic/executor01-eth-weth-deposit.json",
+        "sha256": "440f6fc712735634300105a1d2282c2777533b7778f064705b9de218a53bf1e1"
+      },
+      {
+        "kind": "generic",
+        "name": "executor01-multiswap-sell",
+        "path": "generic/executor01-multiswap-sell.json",
+        "sha256": "1bf90c0a4fe7434ce7db1827483f97e6badfa6a0536c83d1be72799d969c2a14"
+      },
+      {
+        "kind": "generic",
+        "name": "executor01-simple-sell-approval-missing",
+        "path": "generic/executor01-simple-sell-approval-missing.json",
+        "sha256": "52476408427fad89d33c6fd765eade9b419da0fc31c501aebddd7d34389ae940"
+      },
+      {
+        "kind": "generic",
+        "name": "executor01-simple-sell-approved",
+        "path": "generic/executor01-simple-sell-approved.json",
+        "sha256": "6d8beb58a8a52702a3c3b0b532daae58266f0c0ffdd499ed7ef969c0e97f0bc1"
+      },
+      {
+        "kind": "generic",
+        "name": "executor01-simple-sell-beneficiary",
+        "path": "generic/executor01-simple-sell-beneficiary.json",
+        "sha256": "577db2ee2fe63f9e00f64369bba519b35a306c62d979af2cae785928765b3d63"
+      },
+      {
+        "kind": "generic",
+        "name": "executor01-weth-eth-withdraw",
+        "path": "generic/executor01-weth-eth-withdraw.json",
+        "sha256": "cbbb233f5a5b3a6721a99d19038765b84144fe4b03c6bcf4b5b70ce64c3c4a78"
+      },
+      {
+        "kind": "generic",
+        "name": "executor02-megaswap-sell",
+        "path": "generic/executor02-megaswap-sell.json",
+        "sha256": "56b544ca12d16248621b90c0dd309a2031aa937d74201897b64b654fbca373d4"
+      },
+      {
+        "kind": "generic",
+        "name": "executor02-multiswap-sell",
+        "path": "generic/executor02-multiswap-sell.json",
+        "sha256": "3f8c5e94bc7da17e71a4e09dd1a026a5c358007ef0fd493609acd71750824010"
+      },
+      {
+        "kind": "generic",
+        "name": "executor02-vertical-branch-sell",
+        "path": "generic/executor02-vertical-branch-sell.json",
+        "sha256": "b4ccae2916c576922b340506794dce83ef6c1dfc6cbb6577d6e2cdbc4e8c0894"
+      },
+      {
+        "kind": "generic",
+        "name": "executor03-buy",
+        "path": "generic/executor03-buy.json",
+        "sha256": "96d877894ac151cec4f3794564bf69b87e294a3eb13dea14937a4cdb5b8ab2fc"
+      },
+      {
+        "kind": "generic",
+        "name": "fee-direct-transfer",
+        "path": "generic/fee-direct-transfer.json",
+        "sha256": "3e7a8d062c0d841f2bb2f9dd35d3644095eeed5f530b78c53034e7ecbbb804a2"
+      },
+      {
+        "kind": "generic",
+        "name": "fee-nonzero-partner",
+        "path": "generic/fee-nonzero-partner.json",
+        "sha256": "c427e7e32fa76094c45b8085306895d399e252a1610cfd15b4ccfe0a80bf07f9"
+      },
+      {
+        "kind": "generic",
+        "name": "fee-referrer",
+        "path": "generic/fee-referrer.json",
+        "sha256": "85681c8a49d860af3b31578def9acc82d2865c9db9d10736ef3593a2d35e7ef1"
+      },
+      {
+        "kind": "generic",
+        "name": "fee-surplus-to-user",
+        "path": "generic/fee-surplus-to-user.json",
+        "sha256": "7ca2bcc455acce2644df916c80e1a55db1e001712b5bb92fe3fd2d815784d65f"
+      },
+      {
+        "kind": "generic",
+        "name": "fee-take-surplus",
+        "path": "generic/fee-take-surplus.json",
+        "sha256": "7166b63a19eb826644739d31ad58d53b3252fdce5f2a1eff0f59a73406d3c014"
+      },
+      {
+        "kind": "generic",
+        "name": "need-unwrap-native",
+        "path": "generic/need-unwrap-native.json",
+        "sha256": "24046c43b36723b06cd8016ae1e9c8ec2c767d883040bd7f1497058322ee812f"
+      },
+      {
+        "kind": "generic",
+        "name": "permit2-approval",
+        "path": "generic/permit2-approval.json",
+        "sha256": "c9410c943a3ac5cb117428499424922275678f41315fe925a43e59e7cd4f1d74"
+      },
+      {
+        "kind": "generic",
+        "name": "same-token-internal-split",
+        "path": "generic/same-token-internal-split.json",
+        "sha256": "6a94f721f68d9db82f83d75dc00e97398bc96d92b802042d458b85599aab46d9"
+      },
+      {
+        "kind": "generic",
+        "name": "transfer-src-token-before-swap",
+        "path": "generic/transfer-src-token-before-swap.json",
+        "sha256": "081e9a6c72ba779b07ce5c1f1f8c1570db0109b344c9395af2ba6735b4d384b7"
+      },
+      {
+        "kind": "generic",
+        "name": "weth-only-eth-to-weth",
+        "path": "generic/weth-only-eth-to-weth.json",
+        "sha256": "be2e8c937fce3e99b67a22727f65b2c268c6b8867188d055c6132fd3684b5563"
+      }
+    ],
+    "phase3DirectNegative": [
+      {
+        "kind": "negative",
+        "name": "direct-side-method-mismatch",
+        "path": "negative/direct-side-method-mismatch.json",
+        "sha256": "da90210407b755496596be161e6961bfdfde8a01a9408b20ed85fef4ed759119"
+      },
+      {
+        "kind": "negative",
+        "name": "invalid-direct-side",
+        "path": "negative/invalid-direct-side.json",
+        "sha256": "dc97c3af1666d0206cc77c884892aee6f6d6a9a68850174d86912ffdab1c748d"
+      },
+      {
+        "kind": "negative",
+        "name": "unsupported-direct-method",
+        "path": "negative/unsupported-direct-method.json",
+        "sha256": "6f7b1a7e17196c394d3969f517dfa38823dd97cf808739854c1387acef7090c7"
+      }
+    ],
+    "phase3DirectSuccess": [
+      {
+        "kind": "direct",
+        "name": "augustus-rfq-try-batch-fill",
+        "path": "direct/augustus-rfq-try-batch-fill.json",
+        "sha256": "679253e91520f501845b9e88de25afaf466cd4492c8628d186bd4534c0630677"
+      },
+      {
+        "kind": "direct",
+        "name": "balancer-v2-buy",
+        "path": "direct/balancer-v2-buy.json",
+        "sha256": "d51909238daae074f1da9a8877ecfd91270c99a5fac370ef59abed07bc660512"
+      },
+      {
+        "kind": "direct",
+        "name": "balancer-v2-sell",
+        "path": "direct/balancer-v2-sell.json",
+        "sha256": "2c04683946dce760e8c91a4c0ebf2f160a2a4cea43b578123b8dc8f3f46083e1"
+      },
+      {
+        "kind": "direct",
+        "name": "curve-v1-sell",
+        "path": "direct/curve-v1-sell.json",
+        "sha256": "116f420cf532231dd3f79c3b155dacb8748a377131e79bd646114363521d0b2e"
+      },
+      {
+        "kind": "direct",
+        "name": "curve-v2-sell",
+        "path": "direct/curve-v2-sell.json",
+        "sha256": "1e400da47b974b4c21bdace4122117cc21ca933f11ffeabc0262194f0627a1e9"
+      },
+      {
+        "kind": "direct",
+        "name": "lite-psm",
+        "path": "direct/lite-psm.json",
+        "sha256": "8cf96191375053bb4d6a5ef6b639f7caa91dc5993963fb9ec7d571a05e536041"
+      },
+      {
+        "kind": "direct",
+        "name": "uniswap-v2-buy",
+        "path": "direct/uniswap-v2-buy.json",
+        "sha256": "f660db2fb1e2e75e825ea147aa1c6669fd856e99a6dd9ffcf4eeab9c74b73130"
+      },
+      {
+        "kind": "direct",
+        "name": "uniswap-v2-sell",
+        "path": "direct/uniswap-v2-sell.json",
+        "sha256": "8b952580256a8c3e0d615d94dc8dec689373bbb7074979cec4c3ed23ed9d9303"
+      },
+      {
+        "kind": "direct",
+        "name": "uniswap-v3-buy",
+        "path": "direct/uniswap-v3-buy.json",
+        "sha256": "ba365b6b039ae819b200cff04f83da735107148a4bdf49ebef75169eeef6a1f9"
+      },
+      {
+        "kind": "direct",
+        "name": "uniswap-v3-sell",
+        "path": "direct/uniswap-v3-sell.json",
+        "sha256": "1efedda07b81cfe886cbabc71e7902be2e9f114b69e07953370f92b306d00e72"
+      }
+    ]
+  },
+  "schemaVersion": 1
+}

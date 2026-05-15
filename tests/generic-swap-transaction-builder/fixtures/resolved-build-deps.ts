@@ -11,6 +11,7 @@ import type {
 import type { Address } from '../../../src/types';
 
 export const AUGUSTUS_V6_INTERFACE = new Interface(AugustusV6ABI);
+export const RESOLVED_BUILD_DEPS_SCHEMA_VERSION = 1;
 
 const DEFAULT_EXECUTOR_ADDRESSES: Record<Executors, Address> = {
   [Executors.ONE]: '0x000010036c0190e009a000d0fc3541100a07380a',
@@ -18,6 +19,17 @@ const DEFAULT_EXECUTOR_ADDRESSES: Record<Executors, Address> = {
   [Executors.THREE]: '0xa000b020c290d000020aac04026b5306d60050f0',
   [Executors.WETH]: '0x0000000000000000000000000000000000000000',
 };
+
+export function getDefaultExecutorAddressesForGoContract(): Record<
+  Executors.ONE | Executors.TWO | Executors.THREE,
+  Address
+> {
+  return {
+    [Executors.ONE]: DEFAULT_EXECUTOR_ADDRESSES[Executors.ONE],
+    [Executors.TWO]: DEFAULT_EXECUTOR_ADDRESSES[Executors.TWO],
+    [Executors.THREE]: DEFAULT_EXECUTOR_ADDRESSES[Executors.THREE],
+  };
+}
 
 export function createResolvedBuildDeps(input: BuildInput): ResolvedBuildDeps {
   const executorsAddresses = {
