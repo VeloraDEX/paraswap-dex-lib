@@ -3,10 +3,13 @@ package resolved_test
 import (
 	"encoding/json"
 	"reflect"
+	"strings"
 	"testing"
 
+	ethabi "github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/paraswap/paraswap-dex-lib/go/txbuilder/executor"
 	"github.com/paraswap/paraswap-dex-lib/go/txbuilder/internal/executortest"
+	"github.com/paraswap/paraswap-dex-lib/go/txbuilder/internal/resolvedtest"
 	"github.com/paraswap/paraswap-dex-lib/go/txbuilder/internal/testfixtures"
 	"github.com/paraswap/paraswap-dex-lib/go/txbuilder/resolved"
 )
@@ -49,9 +52,7 @@ func TestBuildTransactionFromResolvedMatchesGenericSuccessFixtures(t *testing.T)
 			if !reflect.DeepEqual(got.Params, expectedParams) {
 				t.Fatalf("params mismatch:\n got: %#v\nwant: %#v", got.Params, expectedParams)
 			}
-			if !reflect.DeepEqual(got.TxObject, expectedTx) {
-				t.Fatalf("txObject mismatch:\n got: %#v\nwant: %#v", got.TxObject, expectedTx)
-			}
+			assertTxObjectMatches(t, deps.AugustusV6ABI, input.ContractMethod, fixture.Name, got.TxObject, expectedTx)
 			if factory.createCalls != 1 {
 				t.Fatalf("factory calls mismatch: got %d want 1", factory.createCalls)
 			}
@@ -117,8 +118,70 @@ func TestBuildTransactionFromResolvedMatchesRealBuilderFixtures(t *testing.T) {
 			if !reflect.DeepEqual(got.Params, expectedParams) {
 				t.Fatalf("params mismatch:\n got: %#v\nwant: %#v", got.Params, expectedParams)
 			}
-			if !reflect.DeepEqual(got.TxObject, expectedTx) {
-				t.Fatalf("txObject mismatch:\n got: %#v\nwant: %#v", got.TxObject, expectedTx)
+			assertTxObjectMatches(t, deps.AugustusV6ABI, input.ContractMethod, fixture.Name, got.TxObject, expectedTx)
+		})
+	}
+}
+
+func TestBuildTransactionFromResolvedProMethodsUseRegularBodyWithProSelector(t *testing.T) {
+	for _, testCase := range []struct {
+		name           string
+		fixtureName    string
+		contractMethod string
+	}{
+		{
+			name:           "exact in pro",
+			fixtureName:    "executor01-simple-sell-approved",
+			contractMethod: resolved.ContractMethodSwapExactAmountInPro,
+		},
+		{
+			name:           "exact out pro",
+			fixtureName:    "executor03-buy",
+			contractMethod: resolved.ContractMethodSwapExactAmountOutPro,
+		},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			fixture, input := loadBuildInput(t, testCase.fixtureName)
+			input.ContractMethod = testCase.contractMethod
+			var expectedParams []any
+			if err := json.Unmarshal(fixture.ExpectedParams, &expectedParams); err != nil {
+				t.Fatal(err)
+			}
+			var sourceTx resolved.TxObject
+			if err := json.Unmarshal(fixture.ExpectedTx, &sourceTx); err != nil {
+				t.Fatal(err)
+			}
+
+			deps := buildDepsForInput(t, input)
+			deps.ExecutorBytecodeBuilderFactory = executor.NewFactory()
+
+			got, err := resolved.BuildTransactionFromResolved(input, deps)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if !reflect.DeepEqual(got.Params, expectedParams) {
+				t.Fatalf("Pro params mismatch:\n got: %#v\nwant: %#v", got.Params, expectedParams)
+			}
+
+			expectedProData := calldataWithMethodSelector(t, deps.AugustusV6ABI, sourceTx.Data, testCase.contractMethod)
+			wantTx := sourceTx
+			wantTx.Data = expectedProData
+			assertTxObjectMatches(t, deps.AugustusV6ABI, testCase.contractMethod, fixture.Name, got.TxObject, wantTx)
+
+			if calldataBody(got.TxObject.Data) != calldataBody(sourceTx.Data) {
+				t.Fatalf(
+					"Pro calldata body mismatch:\n got: %s\nwant: %s",
+					calldataBody(got.TxObject.Data),
+					calldataBody(sourceTx.Data),
+				)
+			}
+			proSelector, err := resolved.AugustusV6MethodSelector(deps.AugustusV6ABI, testCase.contractMethod)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if calldataSelector(got.TxObject.Data) != proSelector {
+				t.Fatalf("Pro selector mismatch: got %s want %s", calldataSelector(got.TxObject.Data), proSelector)
 			}
 		})
 	}
@@ -238,4 +301,67 @@ func (b *fixtureBytecodeBuilder) BuildBytecode(
 	b.buildCalls++
 	b.input = input
 	return b.bytecode, nil
+}
+
+func assertTxObjectMatches(
+	t *testing.T,
+	augustusV6ABI *ethabi.ABI,
+	contractMethod string,
+	fixtureName string,
+	got resolved.TxObject,
+	expected resolved.TxObject,
+) {
+	t.Helper()
+
+	gotWithoutData := got
+	expectedWithoutData := expected
+	gotWithoutData.Data = ""
+	expectedWithoutData.Data = ""
+	if !reflect.DeepEqual(gotWithoutData, expectedWithoutData) {
+		t.Fatalf("txObject non-data mismatch:\n got: %#v\nwant: %#v", gotWithoutData, expectedWithoutData)
+	}
+	if diff := resolvedtest.GenericCalldataDiff(
+		augustusV6ABI,
+		contractMethod,
+		fixtureName,
+		got.Data,
+		expected.Data,
+	); diff != "" {
+		t.Fatal(diff)
+	}
+}
+
+func calldataWithMethodSelector(
+	t *testing.T,
+	augustusV6ABI *ethabi.ABI,
+	data resolved.HexBytes,
+	contractMethod string,
+) resolved.HexBytes {
+	t.Helper()
+
+	selector, err := resolved.AugustusV6MethodSelector(augustusV6ABI, contractMethod)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw := string(data)
+	if !strings.HasPrefix(raw, "0x") || len(raw) < 10 {
+		t.Fatalf("invalid calldata: %s", data)
+	}
+	return resolved.HexBytes(selector + raw[10:])
+}
+
+func calldataSelector(data resolved.HexBytes) string {
+	raw := string(data)
+	if !strings.HasPrefix(raw, "0x") || len(raw) < 10 {
+		return ""
+	}
+	return strings.ToLower(raw[:10])
+}
+
+func calldataBody(data resolved.HexBytes) string {
+	raw := string(data)
+	if !strings.HasPrefix(raw, "0x") || len(raw) < 10 {
+		return ""
+	}
+	return strings.ToLower(raw[10:])
 }

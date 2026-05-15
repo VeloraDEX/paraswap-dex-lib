@@ -4,8 +4,8 @@ Last updated: 2026-05-15
 
 This document tracks implementation details for
 `docs/plans/go-build-migration/implementation.md`. It is organized by
-implementation phase. Phases 1, 2, 2a, 2b, 2c, 2d, and 2e are complete;
-Phase 2f is the next planned implementation slice.
+implementation phase. Phases 1, 2, 2a, 2b, 2c, 2d, 2e, and 2f are complete;
+Phase 3 direct-builder work is the next planned implementation slice.
 
 ## Phase 1: Go Module And Fixture Foundation
 
@@ -2607,3 +2607,289 @@ yarn jest tests/generic-swap-transaction-builder/resolved --runInBand
 - No new shared fixtures were needed for Phase 2e.
 - Phase 2f can reuse the existing byte-positioning helpers and the full
   real-builder generic fixture gate for calldata diff output.
+
+## Phase 2f: Augustus V6 Calldata Parity And Diagnostics
+
+This section plans the final generic `BuildTransactionFromResolved` hardening
+slice before moving to direct builder work. Phase 2f should make calldata
+assertions easier to debug, prove selector-level Pro-method behavior, and make
+the exact-out coverage claim honest against the committed fixture matrix.
+
+### Current Status
+
+- Phase 2f is complete as of 2026-05-15.
+- Phase 2e real-builder parity covers all 22 fixtures in
+  `BucketPhase2GenericSuccess` through `executor.NewFactory()`.
+- Existing fixture calldata equality is byte-for-byte checked through
+  `expectedTx.data` in resolved tests, with decoded diagnostics on mismatch.
+- Current committed generic method fixture coverage is:
+  - `swapExactAmountIn`: 21 success fixtures
+  - `swapExactAmountOut`: 1 success fixture, `executor03-buy`
+  - `swapExactAmountInPro`: selector/unit coverage only, no committed fixture
+  - `swapExactAmountOutPro`: selector/unit coverage only, no committed fixture
+- Pro methods share the same params and ABI argument body as their regular
+  In/Out method; only the Augustus selector changes.
+- Go decoded-diff helpers live in `go/txbuilder/internal/resolvedtest` and are
+  used by both resolved fixture test paths.
+
+### Phase Boundary
+
+Phase 2f is not an executor-feature phase. Do not remove executor branch guards,
+do not add Go-only calldata golden vectors, and do not broaden Executor01,
+Executor02, or Executor03 route-shape support without a committed shared
+fixture added in the same change.
+
+Phase 2f may add shared TypeScript fixtures only to strengthen committed
+coverage. If additional exact-out fixture generation is blocked, Phase 2f may
+still land diagnostics and Pro selector-body parity, but it must not claim
+robust exact-out coverage beyond the single existing `executor03-buy` fixture.
+
+### Goals
+
+- Preserve byte-for-byte calldata parity for the full generic success bucket.
+- Add decoded failure output for Augustus V6 generic calldata comparisons.
+- Prove Pro-method selector and ABI method selection parity without introducing
+  a parallel Go-only golden-vector format.
+- Define the exact-out fixture coverage gap clearly and gate any broader
+  exact-out claim on shared committed fixtures.
+
+### In Scope
+
+- Add a Go test helper for generic calldata comparison:
+  - Accepts Augustus V6 ABI, contract method, got calldata, expected calldata,
+    and fixture name.
+  - First compares raw lowercase `0x` bytes exactly.
+  - On mismatch, decodes both calldata values using the Augustus V6 ABI method
+    selected by the method name.
+  - If `got` and `expected` have different selectors, report the selector
+    mismatch with method names looked up from the embedded ABI and do not
+    attempt to decode `got` against `methodName`'s schema. Decoded-field diffs
+    run only when selectors agree.
+  - Emits a compact decoded diff alongside the raw selector/data mismatch.
+- Decode only the generic Augustus V6 methods in Phase 2f:
+  - `swapExactAmountIn`
+  - `swapExactAmountOut`
+  - `swapExactAmountInPro`
+  - `swapExactAmountOutPro`
+- Normalize decoded values for stable test diagnostics:
+  - addresses as lowercase `0x` strings
+  - `uint256` values as decimal strings
+  - `partnerAndFee` as a uint256 decimal string; bit-field decoding into
+    partner/fee/flags is deferred
+  - `bytes` values as lowercase even-length `0x` strings
+  - permit bytes as lowercase `0x` hex, with empty permit rendered as
+    `0x (empty)` in diagnostics
+  - metadata bytes as lowercase `0x` bytes32
+  - `GenericData` tuple fields in the same order as `expectedParams[1]`
+- Wire the helper into both resolved fixture test paths:
+  - the injected-bytecode boundary test that isolates
+    `BuildTransactionFromResolved` orchestration from executor bytecode
+  - the real-builder test that runs `executor.NewFactory()`
+    This keeps every resolved `expectedTx.data` comparison on the same decoded
+    diagnostic path.
+- Resolved calldata failure diagnostics should identify:
+  - fixture name
+  - method name
+  - selector mismatch, if any
+  - first raw byte offset mismatch, if any, measured in decoded bytes rather
+    than hex-character position
+  - decoded `executor`, `swapData`, `partnerAndFee`, `permit`, and
+    `executorData` differences
+- Diagnostic output should be decoded-first with raw-byte context as a trailing
+  block. Example shape:
+
+```text
+calldata mismatch (executor03-buy, swapExactAmountOut)
+  selector: 0x7f457675 (swapExactAmountOut) ok
+  swapData.toAmount: got=950 want=948
+  partnerAndFee: got=12345 want=12345 ok
+  permit: got=0x (empty) want=0x (empty) ok
+  executorData: lengths match (240); first diff at byte 64, got=0xabcd want=0xcdab
+  raw: first byte diff at 196
+```
+
+- Add focused tests for the helper itself:
+  - byte-equal calldata returns no diagnostic output and does not invoke ABI
+    decoding on the success path
+  - corrupted selector produces a selector-focused error
+  - corrupted `partnerAndFee` or amount produces a decoded-field error
+  - corrupted `executorData` reports length/hash or raw-byte mismatch without
+    dumping huge bytecode blobs
+- Add Pro-method selector-body parity tests using existing committed fixtures:
+  - Exact-in Pro test starts from a representative SELL fixture such as
+    `executor01-simple-sell-approved`, mutates `input.contractMethod` to
+    `swapExactAmountInPro`, runs the real factory, and expects calldata equal
+    to the committed regular exact-in calldata body with only the selector
+    replaced by the Pro selector from the embedded Augustus V6 ABI.
+  - Exact-out Pro test starts from `executor03-buy`, mutates
+    `input.contractMethod` to `swapExactAmountOutPro`, runs the real factory,
+    and expects calldata equal to the committed regular exact-out calldata body
+    with only the selector replaced by the Pro selector.
+  - Pro tests must also assert `expectedParams` and non-`data` `TxObject` fields
+    remain identical to the source fixture. The only permitted transaction
+    difference is the first 4 calldata bytes.
+  - Compute Pro selectors at test time with
+    `resolved.AugustusV6MethodSelector(abi, methodName)`. Do not hardcode the
+    4-byte Pro selector constants in Phase 2f tests.
+  - Starting fixtures must remain compatible with the resolved boundary fences
+    after the contract method mutation. Use `executor01-simple-sell-approved`
+    for In Pro and `executor03-buy` for Out Pro because Executor01+In* and
+    Executor03+Out* are the fence-allowed combinations in Phase 2e.
+  - These tests do not introduce Go-only golden vectors; the expected calldata
+    body is derived from committed shared fixture data plus the canonical ABI
+    selector.
+- If feasible, add at least one additional shared committed
+  `swapExactAmountOut` fixture for the already-supported Executor03
+  single-route/single-swap shape, distinct from the current `executor03-buy`
+  fixture by calldata, amounts, fee metadata, token path, or WETH behavior that
+  is already inside the current Executor03 guard boundary. Do not use this
+  fixture to introduce a new Executor03 route shape or relax guarded branches.
+  The fixture must be generated by the existing TypeScript fixture generator and
+  included in the manifest.
+
+### Out Of Scope
+
+- No direct-builder implementation.
+- No TypeScript-to-Go runtime bridge.
+- No Go-only Pro fixture or Go-only calldata golden vectors.
+- No direct DEX encoder implementation.
+- No new Executor01 or Executor02 BUY behavior.
+- No broad Executor03 route-shape expansion unless a shared committed fixture
+  and matching guard updates are included deliberately.
+- No fixture schema change for error codes or normalized expected calldata.
+
+### Exact-Out Coverage Policy
+
+The current matrix has one exact-out success fixture. Phase 2f should keep
+`executor03-buy` as a mandatory gate, but should not describe exact-out coverage
+as robust unless another shared committed Executor03 BUY fixture lands.
+
+Accepted outcomes:
+
+- Preferred: add a second shared `swapExactAmountOut` fixture for a supported
+  Executor03 single-route/single-swap shape that stays inside the current
+  Executor03 guard boundary, prove parity, and document both exact-out fixture
+  names in Phase 2f exit notes.
+- Acceptable partial: if fixture generation is blocked, land decoded-diff and
+  Pro selector-body parity, then mark exact-out coverage as limited to
+  `executor03-buy` in exit notes.
+
+Rejected outcome:
+
+- Do not add Go-only exact-out golden vectors or claim method-exhaustive
+  exact-out behavior from the single current fixture.
+
+### Byte-Level Rules And Hazards
+
+- The Pro-method expected data body is the regular method calldata with the
+  first 4 bytes replaced. The dynamic offsets, tuple encoding, fee packing,
+  permit bytes, and executorData bytes must remain identical.
+- Selector replacement must operate on decoded bytes or fixed hex slices:
+  remove the `0x` prefix, replace exactly 8 hex characters, and preserve the
+  remaining body exactly.
+- Do not use `common.Address.Hex()` in diagnostic output; it returns checksum
+  casing. Diagnostics should use lowercase addresses to match fixture JSON.
+- Large `executorData` diffs should show length, first differing byte offset,
+  and a short prefix/suffix around the mismatch instead of dumping the full
+  bytecode twice.
+- `go-ethereum/accounts/abi` unpacks tuple values into Go-native shapes that
+  may not be directly JSON-comparable. Convert them into a small normalized
+  diagnostic struct before diffing. Expected shapes include `bytes32` as a
+  byte array, addresses as `common.Address`, uint256 values as `*big.Int`, and
+  tuples as ABI-generated anonymous structs or interface slices depending on
+  the unpack path.
+- Permit byte diagnostics should distinguish empty values, length mismatches,
+  and content mismatches. For content mismatch, report the first differing byte
+  plus a short lowercase hex window.
+- Calldata assertion helpers must not replace byte equality with decoded
+  equality. Decoding is only a failure diagnostic; raw bytes remain the source
+  of truth.
+
+### Implementation Order
+
+1. Add a normalized decoded-calldata helper under an internal test package,
+   preferably `go/txbuilder/internal/resolvedtest`, so multiple resolved tests
+   can use it without expanding the public `resolved` API.
+2. Add unit tests for the decoded helper using committed fixture calldata.
+3. Replace raw `expectedTx.data` comparisons in both injected-bytecode and
+   real-builder resolved tests with a helper that performs raw equality first
+   and emits decoded diagnostics only on failure.
+4. Add Pro selector-body parity tests for one exact-in fixture and
+   `executor03-buy` exact-out.
+5. Decide the exact-out fixture path:
+   - add a shared TypeScript-generated Executor03 BUY fixture if available, or
+   - explicitly record that exact-out remains covered only by `executor03-buy`.
+6. Re-run the full Phase 2f verification gate.
+
+### Implementation Tasks
+
+| Status | Task                          | Notes                                                                                         |
+| ------ | ----------------------------- | --------------------------------------------------------------------------------------------- |
+| Done   | Add decoded calldata helper   | Normalizes generic ABI args for readable failure output; raw byte equality remains mandatory. |
+| Done   | Add helper unit tests         | Selector mismatch, decoded-field mismatch, equal-byte short-circuit, and `executorData` diff. |
+| Done   | Wire resolved tests           | Decoded diagnostics are used by injected-bytecode and real-builder `expectedTx.data` checks.  |
+| Done   | Add Pro selector-body tests   | Expected Pro calldata is selector replacement from committed regular In/Out fixtures.         |
+| Done   | Resolve exact-out fixture gap | No new fixture was added; coverage remains explicitly limited to `executor03-buy`.            |
+| Done   | Preserve executor guards      | No executor branch guard was relaxed in Phase 2f.                                             |
+| Done   | Run Phase 2f gates            | Go tests/vet/format plus fixture and resolved Jest checks passed on 2026-05-15.               |
+
+### Acceptance Criteria
+
+Phase 2f is complete when:
+
+- Every fixture in `BucketPhase2GenericSuccess` still matches `expectedParams`
+  and `expectedTx` exactly through `executor.NewFactory()`.
+- Calldata mismatches in resolved tests include decoded generic argument
+  diagnostics in addition to raw hex context.
+- `swapExactAmountInPro` selector-body parity passes using a committed exact-in
+  fixture body with the Pro selector, while `expectedParams` and non-`data`
+  `TxObject` fields remain identical to the source fixture.
+- `swapExactAmountOutPro` selector-body parity passes using the committed
+  `executor03-buy` body with the Pro selector, while `expectedParams` and
+  non-`data` `TxObject` fields remain identical to the source fixture.
+- The Phase 2f exit notes state whether a second shared exact-out fixture was
+  added. If not, they explicitly say exact-out fixture coverage remains limited
+  to `executor03-buy`.
+- Existing boundary fences remain active for Executor02 BUY /
+  `swapExactAmountOut*` and Executor03 non-BUY / non-`swapExactAmountOut*`.
+- No Go-only golden vectors are introduced.
+- The Phase 1 embedded Augustus V6 ABI drift test continues to pass; Phase 2f
+  selector checks rely on that synced ABI copy.
+- `go test ./go/...` passes.
+- `go vet ./go/...` passes.
+- `gofmt -s -l go/` produces no output.
+- `yarn fixtures:check` passes.
+- `yarn jest tests/generic-swap-transaction-builder/resolved --runInBand`
+  passes.
+
+### Verification Commands
+
+```bash
+go test ./go/...
+go vet ./go/...
+gofmt -s -l go/
+yarn fixtures:check
+yarn jest tests/generic-swap-transaction-builder/resolved --runInBand
+```
+
+### Exit Notes For Phase 3
+
+- Final generic success fixture count remains 22. Method distribution remains:
+  21 `swapExactAmountIn`, 1 `swapExactAmountOut`, 0 committed Pro fixtures.
+- No additional exact-out fixture was added in Phase 2f. Exact-out fixture
+  coverage remains limited to `executor03-buy`.
+- The reusable decoded diagnostic helper is
+  `resolvedtest.GenericCalldataDiff(abi, contractMethod, fixtureName, got,
+expected)` from `go/txbuilder/internal/resolvedtest`.
+- `go-ethereum/accounts/abi` unpacks the generic swap tuple into Go-native
+  generated struct values; the helper normalizes tuple fields through
+  reflection before diffing.
+- Pro methods remain selector-only relative to regular In/Out inputs. Phase 2f
+  Pro tests mutate the fixture contract method and derive expected calldata by
+  replacing only the first 4 calldata bytes with the selector from the embedded
+  Augustus V6 ABI.
+- Phase 3 direct-builder tests can reuse
+  `go/txbuilder/internal/resolvedtest.GenericCalldataDiff` for calldata diffs
+  when they assemble or compare Augustus V6 direct calldata.
+- Remaining generic executor guards should not be relaxed during direct-builder
+  work; direct builder parity must not widen generic executor behavior.
