@@ -202,6 +202,71 @@ func addTokenAddressToCallData(
 	return concatHex(string(callData), zeroBytes(12), string(tokenAddress))
 }
 
+func buildWrapEthCallData(
+	wethAddress resolved.Address,
+	depositCallData resolved.HexBytes,
+	dexFlag flag,
+	destTokenPos int,
+) (resolved.HexBytes, error) {
+	return buildExecutor0102CallData(
+		wethAddress,
+		depositCallData,
+		wrapUnwrapFromAmountPos,
+		destTokenPos,
+		specialDexDefault,
+		dexFlag,
+		defaultReturnAmountPos,
+	)
+}
+
+func buildUnwrapEthCallData(
+	wethAddress resolved.Address,
+	withdrawCallData resolved.HexBytes,
+) (resolved.HexBytes, error) {
+	if _, err := hexDataLength(string(withdrawCallData)); err != nil {
+		return "", err
+	}
+	return buildExecutor0102CallData(
+		wethAddress,
+		withdrawCallData,
+		wrapUnwrapFromAmountPos,
+		0,
+		specialDexDefault,
+		insertFromAmountCheckEthBalanceAfterSwap,
+		defaultReturnAmountPos,
+	)
+}
+
+func buildTransferCallData(
+	transferCallData resolved.HexBytes,
+	tokenAddress resolved.Address,
+) (resolved.HexBytes, error) {
+	if _, err := hexDataLength(string(transferCallData)); err != nil {
+		return "", err
+	}
+	return buildExecutor0102CallData(
+		tokenAddress,
+		transferCallData,
+		erc20TransferAmountPos,
+		0,
+		specialDexDefault,
+		insertFromAmountDontCheckBalanceAfterSwap,
+		defaultReturnAmountPos,
+	)
+}
+
+func buildFinalSpecialFlagCalldata(context resolved.EncodingContext) (resolved.HexBytes, error) {
+	return buildExecutor0102CallData(
+		context.AugustusV6Address,
+		resolved.HexBytes(zeroBytes(4)),
+		0,
+		0,
+		specialDexSendNative,
+		sendEthEqualToFromAmountDontCheckBalanceAfterSwap,
+		defaultReturnAmountPos,
+	)
+}
+
 func isETHAddress(address resolved.Address) bool {
 	return strings.EqualFold(string(address), string(resolved.NativeTokenAddress))
 }

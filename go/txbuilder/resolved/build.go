@@ -11,6 +11,12 @@ func BuildTransactionFromResolved(input BuildInput, deps BuildDeps) (BuildOutput
 	if deps.ExecutorBytecodeBuilderFactory == nil {
 		return BuildOutput{}, fmt.Errorf("executor bytecode builder factory is required")
 	}
+	if input.ExecutorType == Executor02 &&
+		(input.Side == SideBuy ||
+			input.ContractMethod == ContractMethodSwapExactAmountOut ||
+			input.ContractMethod == ContractMethodSwapExactAmountOutPro) {
+		return BuildOutput{}, fmt.Errorf("Executor02 BUY routes are not implemented in Phase 2c")
+	}
 
 	bytecodeBuilder, err := deps.ExecutorBytecodeBuilderFactory.CreateExecutorBytecodeBuilder(
 		input.ExecutorType,

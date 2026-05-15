@@ -6,7 +6,15 @@ const (
 	bytes28Length = 28
 	bytes64Length = 64
 
-	defaultReturnAmountPos = 255
+	defaultReturnAmountPos  = 255
+	wrapUnwrapFromAmountPos = 4
+	erc20TransferAmountPos  = 36
+)
+
+const (
+	swapExchange100Percentage          = 100
+	notExistingExchangeParamIndex      = -1
+	ethSrcTokenPosForMultiswapMetadata = "0xeeeeeeeeeeeeeeee"
 )
 
 type flag int

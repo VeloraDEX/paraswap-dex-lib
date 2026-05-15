@@ -1,14 +1,12 @@
 package executor
 
 import (
-	"bytes"
-	"encoding/json"
 	"reflect"
 	"strings"
 	"testing"
 
+	"github.com/paraswap/paraswap-dex-lib/go/txbuilder/internal/executortest"
 	"github.com/paraswap/paraswap-dex-lib/go/txbuilder/internal/resolvedtest"
-	"github.com/paraswap/paraswap-dex-lib/go/txbuilder/internal/testfixtures"
 	"github.com/paraswap/paraswap-dex-lib/go/txbuilder/resolved"
 )
 
@@ -97,11 +95,8 @@ func TestExecutor01BuildBytecodeMatchesPhase2bFixtures(t *testing.T) {
 		"executor01-multiswap-sell",
 	} {
 		t.Run(fixtureName, func(t *testing.T) {
-			input, expectedParams := loadBuildInputWithExpectedParams(t, fixtureName)
-			expectedBytecode, ok := expectedParams[4].(string)
-			if !ok {
-				t.Fatalf("expectedParams[4] is not bytecode string: %#v", expectedParams[4])
-			}
+			input, expectedParams := executortest.LoadBuildInputWithExpectedParams(t, fixtureName)
+			expectedBytecode := executortest.ExpectedBytecode(t, expectedParams)
 
 			deps, err := resolvedtest.BuildDepsFromFixtureInput(input)
 			if err != nil {
@@ -109,11 +104,11 @@ func TestExecutor01BuildBytecodeMatchesPhase2bFixtures(t *testing.T) {
 			}
 			builder := NewExecutor01Builder(deps.EncodingContext)
 
-			got, err := builder.BuildBytecode(parseExpectedBytecodeBuildInput(t, input, deps.EncodingContext))
+			got, err := builder.BuildBytecode(executortest.ParseExpectedBytecodeBuildInput(t, input, deps.EncodingContext))
 			if err != nil {
 				t.Fatal(err)
 			}
-			if got != resolved.HexBytes(expectedBytecode) {
+			if got != expectedBytecode {
 				t.Fatalf("bytecode mismatch:\n got: %s\nwant: %s", got, expectedBytecode)
 			}
 		})
@@ -121,8 +116,8 @@ func TestExecutor01BuildBytecodeMatchesPhase2bFixtures(t *testing.T) {
 }
 
 func TestExecutor01DestTokenPositionUsesNormalizedAddress(t *testing.T) {
-	input, expectedParams := loadBuildInputWithExpectedParams(t, "executor01-multiswap-sell")
-	expectedBytecode := expectedParams[4].(string)
+	input, expectedParams := executortest.LoadBuildInputWithExpectedParams(t, "executor01-multiswap-sell")
+	expectedBytecode := executortest.ExpectedBytecode(t, expectedParams)
 	deps, err := resolvedtest.BuildDepsFromFixtureInput(input)
 	if err != nil {
 		t.Fatal(err)
@@ -130,17 +125,17 @@ func TestExecutor01DestTokenPositionUsesNormalizedAddress(t *testing.T) {
 	deps.EncodingContext.WrappedNativeTokenAddress = "0xC02aaa39B223FE8D0A0e5C4F27eAD9083C756Cc2"
 	builder := NewExecutor01Builder(deps.EncodingContext)
 
-	got, err := builder.BuildBytecode(parseExpectedBytecodeBuildInput(t, input, deps.EncodingContext))
+	got, err := builder.BuildBytecode(executortest.ParseExpectedBytecodeBuildInput(t, input, deps.EncodingContext))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got != resolved.HexBytes(expectedBytecode) {
+	if got != expectedBytecode {
 		t.Fatalf("bytecode mismatch:\n got: %s\nwant: %s", got, expectedBytecode)
 	}
 }
 
 func TestExecutor01RejectsPhase2bOutOfScopeBranches(t *testing.T) {
-	input, _ := loadBuildInputWithExpectedParams(t, "executor01-simple-sell-approved")
+	input, _ := executortest.LoadBuildInputWithExpectedParams(t, "executor01-simple-sell-approved")
 	deps, err := resolvedtest.BuildDepsFromFixtureInput(input)
 	if err != nil {
 		t.Fatal(err)
@@ -215,7 +210,7 @@ func TestExecutor01RejectsPhase2bOutOfScopeBranches(t *testing.T) {
 		},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
-			buildInput := parseExpectedBytecodeBuildInput(t, input, deps.EncodingContext)
+			buildInput := executortest.ParseExpectedBytecodeBuildInput(t, input, deps.EncodingContext)
 			testCase.mutate(&buildInput)
 
 			_, err := builder.BuildBytecode(buildInput)
@@ -226,8 +221,8 @@ func TestExecutor01RejectsPhase2bOutOfScopeBranches(t *testing.T) {
 	}
 }
 
-func TestFactoryCreatesExecutor01Only(t *testing.T) {
-	input, _ := loadBuildInputWithExpectedParams(t, "executor01-simple-sell-approved")
+func TestFactoryCreatesRegisteredExecutors(t *testing.T) {
+	input, _ := executortest.LoadBuildInputWithExpectedParams(t, "executor01-simple-sell-approved")
 	deps, err := resolvedtest.BuildDepsFromFixtureInput(input)
 	if err != nil {
 		t.Fatal(err)
@@ -242,15 +237,23 @@ func TestFactoryCreatesExecutor01Only(t *testing.T) {
 		t.Fatal("expected Executor01 builder")
 	}
 
-	_, err = factory.CreateExecutorBytecodeBuilder(resolved.Executor02, deps.EncodingContext)
-	if err == nil || err.Error() != "executor type not supported by Go bytecode factory: Executor02" {
+	builder, err = factory.CreateExecutorBytecodeBuilder(resolved.Executor02, deps.EncodingContext)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if builder == nil {
+		t.Fatal("expected Executor02 builder")
+	}
+
+	_, err = factory.CreateExecutorBytecodeBuilder(resolved.Executor03, deps.EncodingContext)
+	if err == nil || err.Error() != "executor type not supported by Go bytecode factory: Executor03" {
 		t.Fatalf("unexpected unsupported executor error: %v", err)
 	}
 }
 
 func TestGetExchangeParamsWalksRoutePlanOrder(t *testing.T) {
-	input, _ := loadBuildInputWithExpectedParams(t, "executor01-multiswap-sell")
-	buildInput := parseExpectedBytecodeBuildInput(t, input, resolved.EncodingContext{})
+	input, _ := executortest.LoadBuildInputWithExpectedParams(t, "executor01-multiswap-sell")
+	buildInput := executortest.ParseExpectedBytecodeBuildInput(t, input, resolved.EncodingContext{})
 	reversed := append([]resolved.ResolvedLeg(nil), buildInput.ResolvedLegs...)
 	reversed[0], reversed[1] = reversed[1], reversed[0]
 	buildInput.ResolvedLegs = reversed
@@ -267,77 +270,5 @@ func TestGetExchangeParamsWalksRoutePlanOrder(t *testing.T) {
 	}
 	if !reflect.DeepEqual(got[1], buildInput.ResolvedLegs[0].ExchangeParam) {
 		t.Fatal("second exchange param did not follow route-plan order")
-	}
-}
-
-func loadFixture(t *testing.T, name string) testfixtures.Fixture {
-	t.Helper()
-
-	collection, err := testfixtures.LoadResolvedBuildFixtures()
-	if err != nil {
-		t.Fatal(err)
-	}
-	fixture, ok := collection.FixtureByName(name)
-	if !ok {
-		t.Fatalf("expected %s fixture", name)
-	}
-	return fixture
-}
-
-func loadBuildInputWithExpectedParams(t *testing.T, name string) (resolved.BuildInput, []any) {
-	t.Helper()
-
-	fixture := loadFixture(t, name)
-	var input resolved.BuildInput
-	if err := json.Unmarshal(fixture.Input, &input); err != nil {
-		t.Fatal(err)
-	}
-	var expectedParams []any
-	if err := json.Unmarshal(fixture.ExpectedParams, &expectedParams); err != nil {
-		t.Fatal(err)
-	}
-	return input, expectedParams
-}
-
-func parseExpectedBytecodeBuildInput(
-	t *testing.T,
-	input resolved.BuildInput,
-	context resolved.EncodingContext,
-) resolved.ExecutorBytecodeBuildInput {
-	t.Helper()
-
-	var routePlan resolved.RoutePlan
-	if err := json.Unmarshal(input.RoutePlan, &routePlan); err != nil {
-		t.Fatal(err)
-	}
-
-	resolvedLegs := make([]resolved.ResolvedLeg, 0, len(input.ResolvedLegs))
-	for index, raw := range input.ResolvedLegs {
-		var resolvedLeg resolved.ResolvedLeg
-		if err := json.Unmarshal(raw, &resolvedLeg); err != nil {
-			t.Fatalf("parse resolvedLegs[%d]: %v", index, err)
-		}
-		resolvedLegs = append(resolvedLegs, resolvedLeg)
-	}
-
-	var wethPlan *resolved.WethPlan
-	if input.WethPlan != nil && !bytes.Equal(bytes.TrimSpace(*input.WethPlan), []byte("null")) {
-		var parsedWethPlan resolved.WethPlan
-		if err := json.Unmarshal(*input.WethPlan, &parsedWethPlan); err != nil {
-			t.Fatal(err)
-		}
-		wethPlan = &parsedWethPlan
-	}
-
-	return resolved.ExecutorBytecodeBuildInput{
-		ExecutorType: input.ExecutorType,
-		Context:      context,
-		RoutePlan:    routePlan,
-		ResolvedLegs: resolvedLegs,
-		Sender:       input.UserAddress,
-		SrcToken:     input.SrcToken,
-		DestToken:    input.DestToken,
-		DestAmount:   input.DestAmount,
-		WethPlan:     wethPlan,
 	}
 }

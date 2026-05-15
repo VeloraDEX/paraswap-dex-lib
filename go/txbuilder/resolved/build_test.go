@@ -1,12 +1,12 @@
 package resolved_test
 
 import (
-	"bytes"
 	"encoding/json"
 	"reflect"
 	"testing"
 
 	"github.com/paraswap/paraswap-dex-lib/go/txbuilder/executor"
+	"github.com/paraswap/paraswap-dex-lib/go/txbuilder/internal/executortest"
 	"github.com/paraswap/paraswap-dex-lib/go/txbuilder/internal/testfixtures"
 	"github.com/paraswap/paraswap-dex-lib/go/txbuilder/resolved"
 )
@@ -64,7 +64,7 @@ func TestBuildTransactionFromResolvedMatchesGenericSuccessFixtures(t *testing.T)
 			if !reflect.DeepEqual(factory.context, deps.EncodingContext) {
 				t.Fatalf("factory context mismatch:\n got: %#v\nwant: %#v", factory.context, deps.EncodingContext)
 			}
-			wantBuilderInput := parseExpectedBytecodeBuildInput(t, input, deps.EncodingContext)
+			wantBuilderInput := executortest.ParseExpectedBytecodeBuildInput(t, input, deps.EncodingContext)
 			if !reflect.DeepEqual(factory.builder.input, wantBuilderInput) {
 				t.Fatalf(
 					"bytecode builder input mismatch:\n got: %#v\nwant: %#v",
@@ -76,10 +76,13 @@ func TestBuildTransactionFromResolvedMatchesGenericSuccessFixtures(t *testing.T)
 	}
 }
 
-func TestBuildTransactionFromResolvedMatchesExecutor01RealBuilderFixtures(t *testing.T) {
+func TestBuildTransactionFromResolvedMatchesRealBuilderFixtures(t *testing.T) {
 	for _, fixtureName := range []string{
 		"executor01-simple-sell-approved",
 		"executor01-multiswap-sell",
+		"executor02-vertical-branch-sell",
+		"executor02-multiswap-sell",
+		"executor02-megaswap-sell",
 	} {
 		t.Run(fixtureName, func(t *testing.T) {
 			fixture, input := loadBuildInput(t, fixtureName)
@@ -129,6 +132,39 @@ func TestBuildTransactionFromResolvedRejectsMissingBytecodeFactory(t *testing.T)
 	}
 }
 
+func TestBuildTransactionFromResolvedRejectsExecutor02BuyBeforeFactory(t *testing.T) {
+	_, input := loadBuildInput(t, "executor02-vertical-branch-sell")
+	input.Side = resolved.SideBuy
+	input.ContractMethod = resolved.ContractMethodSwapExactAmountOut
+	deps := buildDepsForInput(t, input)
+	factory := &fixtureBytecodeFactory{bytecode: "0x"}
+	deps.ExecutorBytecodeBuilderFactory = factory
+
+	_, err := resolved.BuildTransactionFromResolved(input, deps)
+	if err == nil || err.Error() != "Executor02 BUY routes are not implemented in Phase 2c" {
+		t.Fatalf("unexpected error:\n got: %v\nwant: %s", err, "Executor02 BUY routes are not implemented in Phase 2c")
+	}
+	if factory.createCalls != 0 {
+		t.Fatalf("factory should not be called for Executor02 BUY, got %d calls", factory.createCalls)
+	}
+}
+
+func TestBuildTransactionFromResolvedRejectsExecutor02OutMethodBeforeFactory(t *testing.T) {
+	_, input := loadBuildInput(t, "executor02-vertical-branch-sell")
+	input.ContractMethod = resolved.ContractMethodSwapExactAmountOutPro
+	deps := buildDepsForInput(t, input)
+	factory := &fixtureBytecodeFactory{bytecode: "0x"}
+	deps.ExecutorBytecodeBuilderFactory = factory
+
+	_, err := resolved.BuildTransactionFromResolved(input, deps)
+	if err == nil || err.Error() != "Executor02 BUY routes are not implemented in Phase 2c" {
+		t.Fatalf("unexpected error:\n got: %v\nwant: %s", err, "Executor02 BUY routes are not implemented in Phase 2c")
+	}
+	if factory.createCalls != 0 {
+		t.Fatalf("factory should not be called for Executor02 Out method, got %d calls", factory.createCalls)
+	}
+}
+
 type fixtureBytecodeFactory struct {
 	bytecode     resolved.HexBytes
 	createCalls  int
@@ -160,66 +196,4 @@ func (b *fixtureBytecodeBuilder) BuildBytecode(
 	b.buildCalls++
 	b.input = input
 	return b.bytecode, nil
-}
-
-func parseExpectedBytecodeBuildInput(
-	t *testing.T,
-	input resolved.BuildInput,
-	context resolved.EncodingContext,
-) resolved.ExecutorBytecodeBuildInput {
-	t.Helper()
-
-	routePlan := parseRoutePlanForTest(t, input)
-	resolvedLegs := parseResolvedLegsForTest(t, input)
-	wethPlan := parseWethPlanForTest(t, input)
-
-	return resolved.ExecutorBytecodeBuildInput{
-		ExecutorType: input.ExecutorType,
-		Context:      context,
-		RoutePlan:    routePlan,
-		ResolvedLegs: resolvedLegs,
-		Sender:       input.UserAddress,
-		SrcToken:     input.SrcToken,
-		DestToken:    input.DestToken,
-		DestAmount:   input.DestAmount,
-		WethPlan:     wethPlan,
-	}
-}
-
-func parseRoutePlanForTest(t *testing.T, input resolved.BuildInput) resolved.RoutePlan {
-	t.Helper()
-
-	var routePlan resolved.RoutePlan
-	if err := json.Unmarshal(input.RoutePlan, &routePlan); err != nil {
-		t.Fatal(err)
-	}
-	return routePlan
-}
-
-func parseResolvedLegsForTest(t *testing.T, input resolved.BuildInput) []resolved.ResolvedLeg {
-	t.Helper()
-
-	resolvedLegs := make([]resolved.ResolvedLeg, 0, len(input.ResolvedLegs))
-	for index, raw := range input.ResolvedLegs {
-		var resolvedLeg resolved.ResolvedLeg
-		if err := json.Unmarshal(raw, &resolvedLeg); err != nil {
-			t.Fatalf("parse resolvedLegs[%d]: %v", index, err)
-		}
-		resolvedLegs = append(resolvedLegs, resolvedLeg)
-	}
-	return resolvedLegs
-}
-
-func parseWethPlanForTest(t *testing.T, input resolved.BuildInput) *resolved.WethPlan {
-	t.Helper()
-
-	if input.WethPlan == nil || bytes.Equal(bytes.TrimSpace(*input.WethPlan), []byte("null")) {
-		return nil
-	}
-
-	var wethPlan resolved.WethPlan
-	if err := json.Unmarshal(*input.WethPlan, &wethPlan); err != nil {
-		t.Fatal(err)
-	}
-	return &wethPlan
 }
