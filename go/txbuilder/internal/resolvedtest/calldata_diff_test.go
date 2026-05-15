@@ -3,6 +3,7 @@ package resolvedtest
 import (
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -19,12 +20,16 @@ func TestGenericCalldataDiffReturnsEmptyForEqualBytesWithoutABI(t *testing.T) {
 	}
 }
 
-func TestGenericCalldataDiffTreatsHexCaseAsEqualWithoutABI(t *testing.T) {
+func TestGenericCalldataDiffTreatsHexCaseAsMismatch(t *testing.T) {
 	got := resolved.HexBytes("0xABCDEF12")
 	expected := resolved.HexBytes("0xabcdef12")
 
-	if diff := GenericCalldataDiff(nil, resolved.ContractMethodSwapExactAmountIn, "case", got, expected); diff != "" {
-		t.Fatalf("expected empty diff, got %s", diff)
+	diff := GenericCalldataDiff(nil, resolved.ContractMethodSwapExactAmountIn, "case", got, expected)
+	if diff == "" {
+		t.Fatal("expected case mismatch diff")
+	}
+	if !strings.Contains(diff, "raw: decoded bytes match") {
+		t.Fatalf("expected decoded-byte match context for case-only mismatch, got:\n%s", diff)
 	}
 }
 
@@ -124,6 +129,35 @@ func TestGenericCalldataDiffReportsExecutorDataLengthMismatchWithOffset(t *testi
 
 	if !strings.Contains(diff, "executorData: lengths differ at byte") {
 		t.Fatalf("expected executorData length diff with offset, got:\n%s", diff)
+	}
+	if !strings.Contains(diff, "raw: first byte diff at") {
+		t.Fatalf("expected raw byte context, got:\n%s", diff)
+	}
+}
+
+func TestRawCalldataDiffReportsLengthsForSameLengthMismatch(t *testing.T) {
+	augustusABI, err := resolved.LoadAugustusV6ABI()
+	if err != nil {
+		t.Fatal(err)
+	}
+	expected := loadFixtureCalldata(t, "uniswap-v2-sell")
+	got := replaceLastByte(t, expected)
+	expectedBytes, err := decodeCalldataBytes(expected)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	diff := RawCalldataDiff(
+		augustusABI,
+		resolved.ContractMethodSwapExactAmountInOnUniswapV2,
+		"uniswap-v2-sell",
+		got,
+		expected,
+	)
+
+	wantLengthLine := fmt.Sprintf("length: got=%d want=%d", len(expectedBytes), len(expectedBytes))
+	if !strings.Contains(diff, wantLengthLine) {
+		t.Fatalf("expected length line %q, got:\n%s", wantLengthLine, diff)
 	}
 	if !strings.Contains(diff, "raw: first byte diff at") {
 		t.Fatalf("expected raw byte context, got:\n%s", diff)

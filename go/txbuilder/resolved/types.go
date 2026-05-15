@@ -32,6 +32,19 @@ const (
 )
 
 const (
+	ContractMethodSwapExactAmountInOnUniswapV2   = "swapExactAmountInOnUniswapV2"
+	ContractMethodSwapExactAmountOutOnUniswapV2  = "swapExactAmountOutOnUniswapV2"
+	ContractMethodSwapExactAmountInOnUniswapV3   = "swapExactAmountInOnUniswapV3"
+	ContractMethodSwapExactAmountOutOnUniswapV3  = "swapExactAmountOutOnUniswapV3"
+	ContractMethodSwapExactAmountInOnBalancerV2  = "swapExactAmountInOnBalancerV2"
+	ContractMethodSwapExactAmountOutOnBalancerV2 = "swapExactAmountOutOnBalancerV2"
+	ContractMethodSwapExactAmountInOnCurveV1     = "swapExactAmountInOnCurveV1"
+	ContractMethodSwapExactAmountInOnCurveV2     = "swapExactAmountInOnCurveV2"
+	ContractMethodSwapOnAugustusRFQTryBatchFill  = "swapOnAugustusRFQTryBatchFill"
+	ContractMethodSwapExactAmountInOutOnMakerPSM = "swapExactAmountInOutOnMakerPSM"
+)
+
+const (
 	NativeTokenAddress Address = "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
 	NullAddress        Address = "0x0000000000000000000000000000000000000000"
 )
@@ -76,15 +89,15 @@ type BuildInput struct {
 }
 
 type DirectBuildInput struct {
-	ContractMethod    string            `json:"contractMethod"`
-	Params            []json.RawMessage `json:"params"`
-	UserAddress       Address           `json:"userAddress"`
-	AugustusV6Address Address           `json:"augustusV6Address"`
-	SrcToken          Address           `json:"srcToken"`
-	SrcAmount         DecimalString     `json:"srcAmount"`
-	MinMaxAmount      DecimalString     `json:"minMaxAmount"`
-	Side              Side              `json:"side"`
-	Gas               *GasInput         `json:"gas,omitempty"`
+	ContractMethod    string          `json:"contractMethod"`
+	Params            json.RawMessage `json:"params"`
+	UserAddress       Address         `json:"userAddress"`
+	AugustusV6Address Address         `json:"augustusV6Address"`
+	SrcToken          Address         `json:"srcToken"`
+	SrcAmount         DecimalString   `json:"srcAmount"`
+	MinMaxAmount      DecimalString   `json:"minMaxAmount"`
+	Side              Side            `json:"side"`
+	Gas               *GasInput       `json:"gas,omitempty"`
 }
 
 type GasInput struct {
@@ -117,4 +130,14 @@ type TxObject struct {
 type BuildOutput struct {
 	Params   []any    `json:"params"`
 	TxObject TxObject `json:"txObject"`
+}
+
+type DirectBuildDeps struct {
+	AugustusV6ABI *ethabi.ABI
+}
+
+type DirectBuildOutput struct {
+	ContractMethod string   `json:"contractMethod"`
+	Params         []any    `json:"params"`
+	TxObject       TxObject `json:"txObject"`
 }

@@ -41,7 +41,7 @@ func GenericCalldataDiff(
 	got resolved.HexBytes,
 	expected resolved.HexBytes,
 ) string {
-	if strings.EqualFold(string(got), string(expected)) {
+	if string(got) == string(expected) {
 		return ""
 	}
 
@@ -108,6 +108,49 @@ func GenericCalldataDiff(
 	lines = append(lines, decodedGenericDiffLines(gotDecoded, expectedDecoded)...)
 	lines = append(lines, "  "+rawByteDiffLine(gotBytes, expectedBytes))
 	return strings.Join(lines, "\n")
+}
+
+func RawCalldataDiff(
+	augustusV6ABI *ethabi.ABI,
+	contractMethod string,
+	fixtureName string,
+	got resolved.HexBytes,
+	expected resolved.HexBytes,
+) string {
+	if string(got) == string(expected) {
+		return ""
+	}
+
+	header := fmt.Sprintf("calldata mismatch (%s, %s)", fixtureName, contractMethod)
+	gotBytes, gotErr := decodeCalldataBytes(got)
+	expectedBytes, expectedErr := decodeCalldataBytes(expected)
+	if gotErr != nil || expectedErr != nil {
+		return strings.Join([]string{
+			header,
+			fmt.Sprintf("  decode calldata bytes: got=%v want=%v", gotErr, expectedErr),
+			rawByteDiffLine(gotBytes, expectedBytes),
+		}, "\n")
+	}
+
+	gotSelector := selectorHex(gotBytes)
+	expectedSelector := selectorHex(expectedBytes)
+	selectorLine := fmt.Sprintf(
+		"  selector: got=%s (%s) want=%s (%s)",
+		gotSelector,
+		methodNameForSelector(augustusV6ABI, gotSelector),
+		expectedSelector,
+		methodNameForSelector(augustusV6ABI, expectedSelector),
+	)
+	if gotSelector == expectedSelector {
+		selectorLine = fmt.Sprintf("  selector: %s (%s) ok", gotSelector, methodNameForSelector(augustusV6ABI, gotSelector))
+	}
+
+	return strings.Join([]string{
+		header,
+		selectorLine,
+		fmt.Sprintf("  length: got=%d want=%d", len(gotBytes), len(expectedBytes)),
+		"  " + rawByteDiffLine(gotBytes, expectedBytes),
+	}, "\n")
 }
 
 func decodeCalldataBytes(calldata resolved.HexBytes) ([]byte, error) {

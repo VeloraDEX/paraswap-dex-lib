@@ -59,6 +59,16 @@ func BuildDepsFromFixtureInput(input resolved.BuildInput) (resolved.BuildDeps, e
 	}, nil
 }
 
+func BuildDirectDepsFromFixtureInput(_ resolved.DirectBuildInput) (resolved.DirectBuildDeps, error) {
+	augustusABI, err := loadAugustusV6ABICached()
+	if err != nil {
+		return resolved.DirectBuildDeps{}, err
+	}
+	return resolved.DirectBuildDeps{
+		AugustusV6ABI: augustusABI,
+	}, nil
+}
+
 func loadAugustusV6ABICached() (*ethabi.ABI, error) {
 	augustusV6ABIOnce.Do(func() {
 		augustusV6ABI, augustusV6ABIErr = resolved.LoadAugustusV6ABI()
