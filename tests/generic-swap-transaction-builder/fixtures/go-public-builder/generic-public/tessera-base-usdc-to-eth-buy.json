@@ -1,0 +1,254 @@
+{
+  "approvalDecisions": [
+    true
+  ],
+  "description": "Public generic builder contract fixture recorded from a real TypeScript Tessera public builder run for tessera-base-usdc-to-eth-buy.",
+  "dexKeys": [
+    "Tessera"
+  ],
+  "expectedApprovalRequests": [
+    {
+      "permit2": false,
+      "routePositionKey": "0:0:0",
+      "target": "0x55555522005bcae1c2424d474bfd5ed477749e3e",
+      "token": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
+    }
+  ],
+  "expectedDexCalls": [
+    {
+      "dexKey": "Tessera",
+      "dexParam": {
+        "dexFuncHasRecipient": true,
+        "exchangeData": "0x3ae8b298000000000000000000000000833589fcd6edb6e08f4c7c32d4f71b54bda029130000000000000000000000004200000000000000000000000000000000000006fffffffffffffffffffffffffffffffffffffffffffffffffffe818877929e9a00000000000000000000000000000000000000000000000000000000000f4240000000000000000000000000a000b020c290d000020aac04026b5306d60050f000000000000000000000000000000000000000000000000000000000000000c00000000000000000000000000000000000000000000000000000000000000000",
+        "needWrapNative": true,
+        "targetExchange": "0x55555522005bcae1c2424d474bfd5ed477749e3e"
+      },
+      "dexParamInput": {
+        "data": null,
+        "destAmount": "420526831788390",
+        "destToken": "0x4200000000000000000000000000000000000006",
+        "dexKey": "Tessera",
+        "executorAddress": "0xa000b020c290d000020aac04026b5306d60050f0",
+        "recipient": "0xa000b020c290d000020aac04026b5306d60050f0",
+        "route": {
+          "blockNumber": 45600823,
+          "destAmount": "420526831788390",
+          "destToken": "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+          "network": 8453,
+          "routeIndex": 0,
+          "routePercent": 100,
+          "side": "BUY",
+          "srcAmount": "1000000",
+          "srcToken": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
+        },
+        "side": "BUY",
+        "srcAmount": "1000000",
+        "srcToken": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+        "swap": {
+          "destAmount": "420526831788390",
+          "destToken": "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+          "srcAmount": "1000000",
+          "srcToken": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+          "swapIndex": 0
+        },
+        "swapExchange": {
+          "data": null,
+          "destAmount": "420526831788390",
+          "exchange": "Tessera",
+          "percent": 100,
+          "srcAmount": "1000000",
+          "swapExchangeIndex": 0
+        }
+      },
+      "needWrapNative": true,
+      "needWrapNativeInput": {
+        "route": {
+          "blockNumber": 45600823,
+          "destAmount": "420526831788390",
+          "destToken": "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+          "network": 8453,
+          "routeIndex": 0,
+          "routePercent": 100,
+          "side": "BUY",
+          "srcAmount": "1000000",
+          "srcToken": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
+        },
+        "swap": {
+          "destAmount": "420526831788390",
+          "destToken": "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+          "srcAmount": "1000000",
+          "srcToken": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+          "swapIndex": 0
+        },
+        "swapExchange": {
+          "data": null,
+          "destAmount": "420526831788390",
+          "exchange": "Tessera",
+          "percent": 100,
+          "srcAmount": "1000000",
+          "swapExchangeIndex": 0
+        }
+      },
+      "routePositionKey": "0:0:0"
+    }
+  ],
+  "expectedParams": [
+    "0xa000b020c290d000020aac04026b5306d60050f0",
+    [
+      "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+      "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "1000000",
+      "420526831788390",
+      "1000000",
+      "0x1111111111111111111111111111111100000000000000000000000002b7d037",
+      "0x0000000000000000000000000000000000000000"
+    ],
+    "4951760157141521099596496896",
+    "0x",
+    "0x00000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000220000001a000000000000000000000012c000000000000004c000000000000271055555522005bcae1c2424d474bfd5ed477749e3e01200044006400240000000b000000000000000000000000000000000000000000000000000000003ae8b298000000000000000000000000833589fcd6edb6e08f4c7c32d4f71b54bda029130000000000000000000000004200000000000000000000000000000000000006fffffffffffffffffffffffffffffffffffffffffffffffffffe818877929e9a00000000000000000000000000000000000000000000000000000000000f4240000000000000000000000000a000b020c290d000020aac04026b5306d60050f000000000000000000000000000000000000000000000000000000000000000c00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee4200000000000000000000000000000000000006004000240004000000000007000000000000000000000000000000000000000000000000000000002e1a7d4d00000000000000000000000000000000000000000000000000017e77886d6166"
+  ],
+  "expectedResolvedInput": {
+    "augustusV6Address": "0x6a000f20005980200259b80c5102003040001068",
+    "beneficiary": "0x0000000000000000000000000000000000000000",
+    "blockNumber": 45600823,
+    "contractMethod": "swapExactAmountOut",
+    "destAmount": "420526831788390",
+    "destToken": "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "executorAddress": "0xa000b020c290d000020aac04026b5306d60050f0",
+    "executorType": "Executor03",
+    "fee": {
+      "isCapSurplus": true,
+      "isDirectFeeTransfer": false,
+      "isSurplusToUser": false,
+      "partnerAddress": "0x0000000000000000000000000000000000000000",
+      "partnerFeePercent": "0",
+      "takeSurplus": false
+    },
+    "gas": {
+      "gasPrice": "1",
+      "maxFeePerGas": "2",
+      "maxPriorityFeePerGas": "3"
+    },
+    "minMaxAmount": "1000000",
+    "network": 8453,
+    "permit": "0x",
+    "quotedAmount": "1000000",
+    "resolvedLegs": [
+      {
+        "exchangeParam": {
+          "dexFuncHasRecipient": true,
+          "exchangeData": "0x3ae8b298000000000000000000000000833589fcd6edb6e08f4c7c32d4f71b54bda029130000000000000000000000004200000000000000000000000000000000000006fffffffffffffffffffffffffffffffffffffffffffffffffffe818877929e9a00000000000000000000000000000000000000000000000000000000000f4240000000000000000000000000a000b020c290d000020aac04026b5306d60050f000000000000000000000000000000000000000000000000000000000000000c00000000000000000000000000000000000000000000000000000000000000000",
+          "needWrapNative": true,
+          "targetExchange": "0x55555522005bcae1c2424d474bfd5ed477749e3e"
+        },
+        "normalizedDestAmount": "420526831788390",
+        "normalizedDestToken": "0x4200000000000000000000000000000000000006",
+        "normalizedSrcAmount": "1000000",
+        "normalizedSrcToken": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+        "recipient": "0xa000b020c290d000020aac04026b5306d60050f0",
+        "routeIndex": 0,
+        "swapExchangeIndex": 0,
+        "swapIndex": 0
+      }
+    ],
+    "routePlan": {
+      "routes": [
+        {
+          "percent": 100,
+          "swaps": [
+            {
+              "destAmount": "420526831788390",
+              "destToken": "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+              "srcAmount": "1000000",
+              "srcToken": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+              "swapExchanges": [
+                {
+                  "destAmount": "420526831788390",
+                  "exchange": "Tessera",
+                  "percent": 100,
+                  "srcAmount": "1000000"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "side": "BUY",
+    "srcAmount": "1000000",
+    "srcToken": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+    "userAddress": "0x1111111111111111111111111111111111111111",
+    "uuid": "11111111-1111-1111-1111-111111111111",
+    "wethPlan": {
+      "withdraw": {
+        "calldata": "0x2e1a7d4d00000000000000000000000000000000000000000000000000017e77886d6166",
+        "callee": "0x0000000000000000000000000000000000000000",
+        "value": "0"
+      }
+    },
+    "wrappedNativeTokenAddress": "0x4200000000000000000000000000000000000006"
+  },
+  "expectedTx": {
+    "data": "0x7f457675000000000000000000000000a000b020c290d000020aac04026b5306d60050f0000000000000000000000000833589fcd6edb6e08f4c7c32d4f71b54bda02913000000000000000000000000eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee00000000000000000000000000000000000000000000000000000000000f424000000000000000000000000000000000000000000000000000017e77886d616600000000000000000000000000000000000000000000000000000000000f42401111111111111111111111111111111100000000000000000000000002b7d03700000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000000000000000000000000016000000000000000000000000000000000000000000000000000000000000001800000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000220000001a000000000000000000000012c000000000000004c000000000000271055555522005bcae1c2424d474bfd5ed477749e3e01200044006400240000000b000000000000000000000000000000000000000000000000000000003ae8b298000000000000000000000000833589fcd6edb6e08f4c7c32d4f71b54bda029130000000000000000000000004200000000000000000000000000000000000006fffffffffffffffffffffffffffffffffffffffffffffffffffe818877929e9a00000000000000000000000000000000000000000000000000000000000f4240000000000000000000000000a000b020c290d000020aac04026b5306d60050f000000000000000000000000000000000000000000000000000000000000000c00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee4200000000000000000000000000000000000006004000240004000000000007000000000000000000000000000000000000000000000000000000002e1a7d4d00000000000000000000000000000000000000000000000000017e77886d6166",
+    "from": "0x1111111111111111111111111111111111111111",
+    "gasPrice": "1",
+    "maxFeePerGas": "2",
+    "maxPriorityFeePerGas": "3",
+    "to": "0x6a000f20005980200259b80c5102003040001068",
+    "value": "0"
+  },
+  "input": {
+    "options": {
+      "skipApprovalCheck": false
+    },
+    "request": {
+      "deadline": "0",
+      "gasPrice": "1",
+      "isDirectFeeTransfer": false,
+      "isSurplusToUser": false,
+      "maxFeePerGas": "2",
+      "maxPriorityFeePerGas": "3",
+      "minMaxAmount": "1000000",
+      "partnerAddress": "0x0000000000000000000000000000000000000000",
+      "partnerFeePercent": "0",
+      "priceRoute": {
+        "bestRoute": [
+          {
+            "percent": 100,
+            "swaps": [
+              {
+                "destAmount": "420526831788390",
+                "destToken": "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+                "srcAmount": "1000000",
+                "srcToken": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+                "swapExchanges": [
+                  {
+                    "data": null,
+                    "destAmount": "420526831788390",
+                    "exchange": "Tessera",
+                    "percent": 100,
+                    "srcAmount": "1000000"
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "blockNumber": 45600823,
+        "contractMethod": "swapExactAmountOut",
+        "destAmount": "420526831788390",
+        "destToken": "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "network": 8453,
+        "side": "BUY",
+        "srcAmount": "1000000",
+        "srcToken": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
+      },
+      "takeSurplus": false,
+      "userAddress": "0x1111111111111111111111111111111111111111",
+      "uuid": "11111111-1111-1111-1111-111111111111"
+    }
+  },
+  "kind": "generic-public",
+  "name": "tessera-base-usdc-to-eth-buy",
+  "schemaVersion": 1
+}

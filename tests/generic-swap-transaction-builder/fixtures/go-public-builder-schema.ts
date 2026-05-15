@@ -142,6 +142,11 @@ export function validateGoPublicBuilderFixture(
     );
   }
   validateBuildRequest(fixture.input.request, `${source}.input.request`);
+  assertDexKeysMatchPriceRoute(
+    fixture.dexKeys,
+    fixture.input.request.priceRoute,
+    source,
+  );
 
   if (!Array.isArray(fixture.expectedDexCalls)) {
     throw new Error(`${source}.expectedDexCalls must be an array`);
@@ -182,6 +187,29 @@ export function validateGoPublicBuilderFixture(
     throw new Error(`${source}.expectedParams must be an array`);
   }
   validateExpectedTx(fixture.expectedTx, `${source}.expectedTx`);
+}
+
+function assertDexKeysMatchPriceRoute(
+  dexKeys: string[],
+  priceRoute: PriceRouteJson,
+  source: string,
+): void {
+  const routeDexKeys = [
+    ...new Set(
+      priceRoute.bestRoute.flatMap(route =>
+        route.swaps.flatMap(swap =>
+          swap.swapExchanges.map(swapExchange => swapExchange.exchange),
+        ),
+      ),
+    ),
+  ].sort();
+  const fixtureDexKeys = [...dexKeys].sort();
+
+  if (stableStringify(fixtureDexKeys) !== stableStringify(routeDexKeys)) {
+    throw new Error(
+      `${source}.dexKeys must match unique priceRoute swap exchange labels`,
+    );
+  }
 }
 
 function validateExpectedDexCall(value: unknown, source: string): void {

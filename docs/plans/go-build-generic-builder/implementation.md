@@ -12,7 +12,7 @@ This plan is generic-route only. Direct public preprocessing remains a later
 plan. The core design must be portable to the future Go API service, where DEX
 param encoding is satisfied by in-process Go DEX encoders.
 
-The current DEX param HTTP endpoint described in `tmp/DEX-PARAM-API.md` is an
+The current DEX param HTTP endpoint used by the transition service is an
 adapter option, not the builder's core architecture. The builder depends on Go
 interfaces for DEX encoding. One implementation can call the HTTP endpoint
 during transition; another implementation can call in-process Go encoders in
@@ -61,24 +61,24 @@ scaffolding without implementing public build orchestration.
 
   ```go
   type BuildRequest struct {
-  	PriceRoute           PriceRoute
-  	MinMaxAmount         resolved.DecimalString
-  	QuotedAmount         *resolved.DecimalString
-  	UserAddress          resolved.Address
-  	ReferrerAddress      *resolved.Address
-  	PartnerAddress       resolved.Address
-  	PartnerFeePercent    resolved.DecimalString
-  	TakeSurplus          bool
-  	IsCapSurplus         *bool
-  	IsSurplusToUser      bool
-  	IsDirectFeeTransfer  bool
-  	GasPrice             *resolved.DecimalString
-  	MaxFeePerGas         *resolved.DecimalString
-  	MaxPriorityFeePerGas *resolved.DecimalString
-  	Permit               *resolved.HexBytes
-  	Deadline             resolved.DecimalString
-  	UUID                 string
-  	Beneficiary          *resolved.Address
+    PriceRoute           PriceRoute
+    MinMaxAmount         resolved.DecimalString
+    QuotedAmount         *resolved.DecimalString
+    UserAddress          resolved.Address
+    ReferrerAddress      *resolved.Address
+    PartnerAddress       resolved.Address
+    PartnerFeePercent    resolved.DecimalString
+    TakeSurplus          bool
+    IsCapSurplus         *bool
+    IsSurplusToUser      bool
+    IsDirectFeeTransfer  bool
+    GasPrice             *resolved.DecimalString
+    MaxFeePerGas         *resolved.DecimalString
+    MaxPriorityFeePerGas *resolved.DecimalString
+    Permit               *resolved.HexBytes
+    Deadline             resolved.DecimalString
+    UUID                 string
+    Beneficiary          *resolved.Address
   }
   ```
 
@@ -87,36 +87,36 @@ scaffolding without implementing public build orchestration.
 
   ```go
   type PriceRoute struct {
-  	Network        int
-  	BlockNumber    int64
-  	ContractMethod string
-  	Side           resolved.Side
-  	SrcToken       resolved.Address
-  	DestToken      resolved.Address
-  	SrcAmount      resolved.DecimalString
-  	DestAmount     resolved.DecimalString
-  	BestRoute      []PriceRouteRoute
+    Network        int
+    BlockNumber    int64
+    ContractMethod string
+    Side           resolved.Side
+    SrcToken       resolved.Address
+    DestToken      resolved.Address
+    SrcAmount      resolved.DecimalString
+    DestAmount     resolved.DecimalString
+    BestRoute      []PriceRouteRoute
   }
 
   type PriceRouteRoute struct {
-  	Percent float64
-  	Swaps   []PriceRouteSwap
+    Percent float64
+    Swaps   []PriceRouteSwap
   }
 
   type PriceRouteSwap struct {
-  	SrcToken      resolved.Address
-  	DestToken     resolved.Address
-  	SrcAmount     *resolved.DecimalString
-  	DestAmount    *resolved.DecimalString
-  	SwapExchanges []PriceRouteSwapExchange
+    SrcToken      resolved.Address
+    DestToken     resolved.Address
+    SrcAmount     *resolved.DecimalString
+    DestAmount    *resolved.DecimalString
+    SwapExchanges []PriceRouteSwapExchange
   }
 
   type PriceRouteSwapExchange struct {
-  	Exchange   string
-  	Percent    float64
-  	SrcAmount  resolved.DecimalString
-  	DestAmount resolved.DecimalString
-  	Data       json.RawMessage
+    Exchange   string
+    Percent    float64
+    SrcAmount  resolved.DecimalString
+    DestAmount resolved.DecimalString
+    Data       json.RawMessage
   }
   ```
 
@@ -129,17 +129,17 @@ scaffolding without implementing public build orchestration.
 
   ```go
   type Deps struct {
-  	EncodingContext resolved.EncodingContext
-  	AugustusV6ABI   *ethabi.ABI
-  	ExecutorFactory resolved.ExecutorBytecodeBuilderFactory
-  	DexRegistry     DexRegistry
-  	ApprovalChecker ApprovalChecker
-  	WethProvider    WethCallDataProvider
-  	Options         Options
+    EncodingContext resolved.EncodingContext
+    AugustusV6ABI   *ethabi.ABI
+    ExecutorFactory resolved.ExecutorBytecodeBuilderFactory
+    DexRegistry     DexRegistry
+    ApprovalChecker ApprovalChecker
+    WethProvider    WethCallDataProvider
+    Options         Options
   }
 
   type Options struct {
-  	SkipApprovalCheck bool
+    SkipApprovalCheck bool
   }
   ```
 
@@ -282,23 +282,23 @@ context:
 
 ```go
 type DexExchangeParam struct {
-	NeedWrapNative                        bool
-	NeedUnwrapNative                      *bool
-	SkipApproval                          *bool
-	WethAddress                           *resolved.Address
-	ExchangeData                          resolved.HexBytes
-	TargetExchange                        resolved.Address
-	DexFuncHasRecipient                   bool
-	SpecialDexFlag                        *int
-	TransferSrcTokenBeforeSwap            *resolved.Address
-	Spender                               *resolved.Address
-	SendEthButSupportsInsertFromAmount    *bool
-	SpecialDexSupportsInsertFromAmount    *bool
-	SwappedAmountNotPresentInExchangeData *bool
-	ReturnAmountPos                       *int
-	InsertFromAmountPos                   *int
-	AmountsPacked128                      *bool
-	Permit2Approval                       *bool
+  NeedWrapNative                        bool
+  NeedUnwrapNative                      *bool
+  SkipApproval                          *bool
+  WethAddress                           *resolved.Address
+  ExchangeData                          resolved.HexBytes
+  TargetExchange                        resolved.Address
+  DexFuncHasRecipient                   bool
+  SpecialDexFlag                        *int
+  TransferSrcTokenBeforeSwap            *resolved.Address
+  Spender                               *resolved.Address
+  SendEthButSupportsInsertFromAmount    *bool
+  SpecialDexSupportsInsertFromAmount    *bool
+  SwappedAmountNotPresentInExchangeData *bool
+  ReturnAmountPos                       *int
+  InsertFromAmountPos                   *int
+  AmountsPacked128                      *bool
+  Permit2Approval                       *bool
 }
 ```
 
@@ -311,10 +311,10 @@ before resolved encoding.
 
 ```go
 type ApprovalRequest struct {
-	RoutePositionKey string
-	Token            resolved.Address
-	Target           resolved.Address
-	Permit2          bool
+  RoutePositionKey string
+  Token            resolved.Address
+  Target           resolved.Address
+  Permit2          bool
 }
 ```
 
@@ -499,8 +499,8 @@ Phase 5 is a planning handoff, not required for Tessera parity.
 - Document final public builder API and port types.
 - Document how the future Go API service should satisfy `DexRegistry` with
   in-process Go DEX encoders.
-- Document how a temporary HTTP adapter would map `DexParamInput` to
-  `tmp/DEX-PARAM-API.md`.
+- Document how a temporary HTTP adapter would map `DexParamInput` to the
+  existing single-leg DEX-param HTTP request/response contract.
 - Decide whether the HTTP adapter belongs in this repo or only in the service
   repo.
 

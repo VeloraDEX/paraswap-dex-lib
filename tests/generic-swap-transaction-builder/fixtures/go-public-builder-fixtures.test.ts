@@ -18,6 +18,18 @@ const REQUIRED_FIXTURE_NAMES = [
   'executor02-multiswap-sell',
   'executor02-vertical-branch-sell',
   'executor03-buy',
+  'tessera-base-eth-to-usdc-sell',
+  'tessera-base-usdc-to-eth-buy',
+  'tessera-base-usdc-to-eth-sell',
+  'tessera-base-usdc-to-weth-buy',
+  'tessera-base-usdc-to-weth-sell',
+  'tessera-base-weth-to-usdc-sell',
+  'tessera-bsc-bnb-to-usdt-buy',
+  'tessera-bsc-bnb-to-usdt-sell',
+  'tessera-bsc-usdt-to-bnb-sell',
+  'tessera-bsc-usdt-to-wbnb-sell',
+  'tessera-bsc-wbnb-to-usdt-buy',
+  'tessera-bsc-wbnb-to-usdt-sell',
   'weth-only-eth-to-weth',
 ];
 
@@ -103,6 +115,14 @@ describe('go public builder fixtures', () => {
         dexKeys: [],
       }),
       'dexKeys must be a non-empty array',
+    ],
+    [
+      'dexKeys do not match route exchanges',
+      (fixture: any) => ({
+        ...fixture,
+        dexKeys: ['WrongDex'],
+      }),
+      'dexKeys must match unique priceRoute swap exchange labels',
     ],
     [
       'malformed request address',

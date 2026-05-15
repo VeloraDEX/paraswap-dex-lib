@@ -40,6 +40,62 @@ func TestBuildExecutor03CallDataLayout(t *testing.T) {
 	}
 }
 
+func TestExecutor03WethWrapperCallData(t *testing.T) {
+	weth := resolved.Address("0x1111111111111111111111111111111111111111")
+
+	t.Run("wrap deposit", func(t *testing.T) {
+		got, err := buildExecutor03WrapEthCallData(
+			weth,
+			"0xd0e30db0",
+			sendEthEqualToFromAmountDontCheckBalanceAfterSwap,
+			0,
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := resolved.HexBytes(
+			"0x1111111111111111111111111111111111111111" +
+				"0020" +
+				"0000" +
+				"0004" +
+				"0000" +
+				"0000" +
+				"0009" +
+				"00000000000000000000000000000000000000000000000000000000" +
+				"d0e30db0",
+		)
+		if got != want {
+			t.Fatalf("wrap calldata mismatch:\n got: %s\nwant: %s", got, want)
+		}
+	})
+
+	t.Run("unwrap withdraw", func(t *testing.T) {
+		withdrawCalldata := resolved.HexBytes(
+			"0x2e1a7d4d" +
+				"0000000000000000000000000000000000000000000000000000000000000005",
+		)
+		got, err := buildExecutor03UnwrapEthCallData(weth, withdrawCalldata)
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := resolved.HexBytes(
+			"0x1111111111111111111111111111111111111111" +
+				"0040" +
+				"0024" +
+				"0004" +
+				"0000" +
+				"0000" +
+				"0007" +
+				"00000000000000000000000000000000000000000000000000000000" +
+				"2e1a7d4d" +
+				"0000000000000000000000000000000000000000000000000000000000000005",
+		)
+		if got != want {
+			t.Fatalf("unwrap calldata mismatch:\n got: %s\nwant: %s", got, want)
+		}
+	})
+}
+
 func TestExecutor03OrdersNeedWrapNativeLastAndKeepsOriginalIndex(t *testing.T) {
 	builder := NewExecutor03Builder(resolved.EncodingContext{})
 	ordered := builder.orderExchanges([]orderedExecutorLeg{
@@ -159,19 +215,6 @@ func TestExecutor03RejectsPhase2dOutOfScopeBranches(t *testing.T) {
 		mutate func(*resolved.ExecutorBytecodeBuildInput)
 		want   string
 	}{
-		{
-			name: "weth plan",
-			mutate: func(input *resolved.ExecutorBytecodeBuildInput) {
-				input.WethPlan = &resolved.WethPlan{
-					Deposit: &resolved.WethSubPlan{
-						Callee:   deps.EncodingContext.WrappedNativeTokenAddress,
-						Calldata: "0xd0e30db0",
-						Value:    "0",
-					},
-				}
-			},
-			want: "Executor03 WETH plan calldata is not implemented in Phase 2d",
-		},
 		{
 			name: "no recipient dex",
 			mutate: func(input *resolved.ExecutorBytecodeBuildInput) {

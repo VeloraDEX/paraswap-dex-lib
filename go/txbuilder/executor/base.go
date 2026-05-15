@@ -305,6 +305,46 @@ func buildUnwrapEthCallData(
 	)
 }
 
+func buildExecutor03WrapEthCallData(
+	wethAddress resolved.Address,
+	depositCallData resolved.HexBytes,
+	dexFlag flag,
+	destTokenPos int,
+) (resolved.HexBytes, error) {
+	// Executor03 deposit splices use a send-ETH flag because the executor
+	// forwards native value into WETH.deposit before the DEX call.
+	return buildExecutor03CallData(
+		wethAddress,
+		depositCallData,
+		wrapUnwrapFromAmountPos,
+		destTokenPos,
+		specialDexDefault,
+		dexFlag,
+		0,
+	)
+}
+
+func buildExecutor03UnwrapEthCallData(
+	wethAddress resolved.Address,
+	withdrawCallData resolved.HexBytes,
+) (resolved.HexBytes, error) {
+	withdrawLength, err := hexDataLength(string(withdrawCallData))
+	if err != nil {
+		return "", err
+	}
+	// Executor03 withdraw splices use the ETH-balance-check flag and the
+	// withdraw calldata length as toAmountPos, matching the TS builder.
+	return buildExecutor03CallData(
+		wethAddress,
+		withdrawCallData,
+		wrapUnwrapFromAmountPos,
+		0,
+		specialDexDefault,
+		insertFromAmountCheckEthBalanceAfterSwap,
+		withdrawLength,
+	)
+}
+
 func buildTransferCallData(
 	transferCallData resolved.HexBytes,
 	tokenAddress resolved.Address,

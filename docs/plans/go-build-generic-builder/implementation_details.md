@@ -27,8 +27,8 @@ port boundaries.
   `tests/generic-swap-transaction-builder/fixtures/resolved-build/`.
 - Existing DEX-encoder fixtures live under
   `tests/generic-swap-transaction-builder/dex-encoder/fixtures/`.
-- `tmp/DEX-PARAM-API.md` documents the current HTTP single-leg DEX param
-  contract, but Phase 1 should keep the Go builder core interface-driven.
+- The current transition service has a single-leg DEX-param HTTP contract, but
+  Phase 1 should keep the Go builder core interface-driven.
 
 ### Execution Rule
 
@@ -990,14 +990,14 @@ TypeScript bridge.
 
 Use these implementations as the source material:
 
-| Source                                | Purpose                                                                                              |
-| ------------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| `src/dex/tessera/tessera.ts`          | TypeScript parity source for `needWrapNative = true` and `getDexParam`.                              |
-| `src/dex/tessera/config.ts`           | TypeScript router-address config for Base and BSC.                                                   |
-| `src/config.ts`                       | TypeScript wrapped-native address source for Base and BSC network config entries.                    |
-| `src/abi/tessera/TesseraSwap.json`    | Canonical ABI for `tesseraSwapWithAllowances`.                                                       |
-| `src/dex/tessera/tessera-e2e.test.ts` | Route matrix that Phase 4 public fixtures will mirror; Phase 3 should mirror the DEX-param portions. |
-| `tmp/DEX-PARAM-API.md`                | Current HTTP adapter contract; useful for field semantics, not the core builder architecture.        |
+| Source                                      | Purpose                                                                                              |
+| ------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `src/dex/tessera/tessera.ts`                | TypeScript parity source for `needWrapNative = true` and `getDexParam`.                              |
+| `src/dex/tessera/config.ts`                 | TypeScript router-address config for Base and BSC.                                                   |
+| `src/config.ts`                             | TypeScript wrapped-native address source for Base and BSC network config entries.                    |
+| `src/abi/tessera/TesseraSwap.json`          | Canonical ABI for `tesseraSwapWithAllowances`.                                                       |
+| `src/dex/tessera/tessera-e2e.test.ts`       | Route matrix that Phase 4 public fixtures will mirror; Phase 3 should mirror the DEX-param portions. |
+| Existing single-leg DEX-param HTTP contract | Adapter semantics only; useful for field semantics, not the core builder architecture.               |
 
 The existing Go Tessera implementation from `go-dex-lib` was used during
 planning, but developer-local filesystem paths must not be committed as source
@@ -1389,4 +1389,369 @@ Phase 4 should:
 - run `BuildGeneric` end-to-end with the real Tessera encoder and compare
   resolved input, params, and tx object.
 - only then decide whether to add a temporary HTTP adapter that maps
-  `builder.DexParamInput` to `tmp/DEX-PARAM-API.md`.
+  `builder.DexParamInput` to the existing single-leg DEX-param HTTP contract.
+
+## Phase 4: Tessera Public Builder End-To-End Parity
+
+### Goal
+
+Wire the real Go Tessera encoder into the public Go generic builder and prove
+that public Tessera routes produce the same resolved input, generic params, and
+transaction object as the TypeScript public `GenericSwapTransactionBuilder`.
+
+Phase 4 is the first end-to-end proof that the Go builder can accept a public
+`priceRoute`, call a real in-process Go DEX encoder, plan approvals and WETH
+calls, build executor bytecode, and emit the same Augustus V6 transaction as
+TypeScript.
+
+### Current State
+
+- Phase 2 `BuildGeneric` is implemented and fixture-tested with a
+  fixture-backed DEX registry.
+- Phase 3 `go/txbuilder/dex/tessera` implements `builder.DexEncoder` and
+  matches TypeScript Tessera `NeedWrapNative` and `GetDexParam` fixtures.
+- The public-builder fixture generator already records TypeScript public
+  builder runs with `resolvedBuildInputObserver`, DEX-call observations, and
+  approval observations.
+- Existing public-builder fixtures do not contain Tessera routes.
+- `BuildGeneric` currently passes `swapExchange.Exchange` through unchanged to
+  `DexRegistry.GetDexEncoder` and into `DexParamInput.DexKey`.
+
+### Execution Rule
+
+Implement only Tessera public-route parity. Do not add a production registry for
+every DEX, an HTTP DEX-param adapter, RPC/Redis approval lookup, direct public
+builder support, or Tenderly/e2e simulation from Go.
+
+Do not add Tessera-specific casing logic to `go/txbuilder/builder`. The builder
+must remain DEX-agnostic. Route-label alias handling belongs in a concrete
+registry implementation or test registry.
+
+### Source References
+
+Use these sources:
+
+| Source                                                                                   | Purpose                                                                                      |
+| ---------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `src/dex/tessera/tessera-e2e.test.ts`                                                    | Public Tessera route matrix and route-label casing currently used by TypeScript tests.       |
+| `src/dex/tessera/tessera.ts`                                                             | Tessera DEX key and `getDexParam` semantics.                                                 |
+| `tests/generic-swap-transaction-builder/fixtures/generate-go-public-builder-fixtures.ts` | Existing public-builder fixture recorder to extend with real Tessera public runs.            |
+| `go/txbuilder/builder/build.go`                                                          | Public Go builder route-walk, DEX registry, approval, WETH-plan, and resolved-call boundary. |
+| `go/txbuilder/dex/tessera`                                                               | Real Go Tessera encoder from Phase 3.                                                        |
+| Existing single-leg DEX-param HTTP contract                                              | Adapter reference only; Phase 4 should not couple the core builder to HTTP.                  |
+
+No developer-local filesystem paths should be added as references.
+
+### File Layout
+
+Add or update these paths:
+
+| Path                                                                                     | Purpose                                                                                      |
+| ---------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `go/txbuilder/dex/registry/registry.go`                                                  | Small reusable alias-aware static `builder.DexRegistry`.                                     |
+| `go/txbuilder/dex/registry/registry_test.go`                                             | Alias lookup, unknown DEX, nil encoder, and network pass-through tests.                      |
+| `go/txbuilder/builder/tessera_public_test.go`                                            | Public `BuildGeneric` tests using the real Tessera encoder and recorded TypeScript fixtures. |
+| `go/txbuilder/internal/publicbuildertest/real_registry.go`                               | Test-only recorder that wraps a real registry and compares observed DEX calls.               |
+| `tests/generic-swap-transaction-builder/fixtures/generate-go-public-builder-fixtures.ts` | Add Tessera public fixture generation from real TypeScript public builder runs.              |
+| `tests/generic-swap-transaction-builder/fixtures/go-public-builder-schema.ts`            | Require `dexKeys` to equal the unique route exchange labels in `input.request.priceRoute`.   |
+| `tests/generic-swap-transaction-builder/fixtures/go-public-builder-fixtures.test.ts`     | Require Tessera public fixture names and verify generator/schema coverage.                   |
+| `tests/generic-swap-transaction-builder/fixtures/go-public-builder/generic-public/`      | Add committed Tessera public-builder fixtures.                                               |
+
+If the registry is useful only for tests after implementation, keep it under
+`go/txbuilder/internal/...`. Prefer `go/txbuilder/dex/registry` if it is a
+small generic alias registry the future Go API service can reuse.
+
+### Registry Design
+
+Add an alias-aware static registry with no Tessera imports in the builder
+package.
+
+Suggested public shape:
+
+```go
+type Entry struct {
+	Keys    []string
+	Encoder builder.DexEncoder
+}
+
+func New(entries ...Entry) (builder.DexRegistry, error)
+func MustNew(entries ...Entry) builder.DexRegistry
+```
+
+Rules:
+
+- Lookup is exact by key after explicit alias registration. Do not lowercase
+  all unknown keys globally; route-label casing is part of the public input
+  contract.
+- Phase 4 registers both `tessera` and `Tessera` to the same
+  `tessera.Encoder`.
+- `New` rejects an entry with an empty `Keys` slice, any empty-string key, any
+  nil encoder, and any duplicate key across entries. Duplicate-key errors
+  should be explicit, for example `duplicate dex registry key %q`.
+- `MustNew` is only a convenience for tests and static setup; it panics on
+  invalid construction input. Production/service code should use `New` and
+  handle the error.
+- Unknown DEX fails clearly, for example:
+  `dex encoder not found for %s on network %d`.
+- The registry must pass the requested network to errors and any wrapper
+  diagnostics, but Tessera network support remains enforced inside the Tessera
+  encoder.
+- The registry does not mutate the DEX key. `BuildGeneric` continues to pass
+  the original route label into `DexParamInput.DexKey`, matching TypeScript's
+  public-builder observation surface.
+
+This preserves portability: the future Go API service can replace this static
+registry with its own service registry without changing `BuildGeneric`.
+
+Registry unit tests must cover:
+
+- lookup `Tessera` returns the registered encoder.
+- lookup `tessera` returns the same registered encoder.
+- lookup `TESSERA` fails, proving there is no global lowercasing fallback.
+- duplicate key, empty key, empty key list, and nil encoder fail clearly.
+
+### Tessera Public Fixture Matrix
+
+Mirror `src/dex/tessera/tessera-e2e.test.ts` exactly for route economics and
+route shape. Public routes should use `exchange: "Tessera"` because that is the
+route label used by the existing TypeScript Tessera e2e route builder.
+
+Required fixture names:
+
+| Fixture name                     | Network | Side | Route theme           |
+| -------------------------------- | ------- | ---- | --------------------- |
+| `tessera-base-usdc-to-weth-sell` | Base    | SELL | ERC-20 -> wrapped     |
+| `tessera-base-usdc-to-eth-sell`  | Base    | SELL | ERC-20 -> native      |
+| `tessera-base-weth-to-usdc-sell` | Base    | SELL | wrapped -> ERC-20     |
+| `tessera-base-eth-to-usdc-sell`  | Base    | SELL | native -> ERC-20      |
+| `tessera-base-usdc-to-weth-buy`  | Base    | BUY  | ERC-20 -> wrapped BUY |
+| `tessera-base-usdc-to-eth-buy`   | Base    | BUY  | ERC-20 -> native BUY  |
+| `tessera-bsc-wbnb-to-usdt-sell`  | BSC     | SELL | wrapped -> ERC-20     |
+| `tessera-bsc-bnb-to-usdt-sell`   | BSC     | SELL | native -> ERC-20      |
+| `tessera-bsc-usdt-to-wbnb-sell`  | BSC     | SELL | ERC-20 -> wrapped     |
+| `tessera-bsc-usdt-to-bnb-sell`   | BSC     | SELL | ERC-20 -> native      |
+| `tessera-bsc-wbnb-to-usdt-buy`   | BSC     | BUY  | wrapped -> ERC-20 BUY |
+| `tessera-bsc-bnb-to-usdt-buy`    | BSC     | BUY  | native -> ERC-20 BUY  |
+
+Use the same block numbers and token amounts as the e2e source. Use fixed
+public build fields so output is deterministic:
+
+- `minMaxAmount`: SELL uses the route `destAmount`; BUY uses the route
+  `srcAmount`.
+- `quotedAmount`: omit unless a fixture intentionally tests pass-through.
+  Defaulting is already covered in Phase 2.
+- `partnerAddress`, `partnerFeePercent`, surplus flags, gas, permit, UUID,
+  user address, and beneficiary should be fixed across the matrix unless a
+  specific route requires otherwise.
+- `input.options.skipApprovalCheck = false`.
+- Approval decisions should default to all `true` to isolate Tessera
+  DEX/WETH/executor parity from approval insertion. Phase 2 already covers
+  missing-approval and skip-approval behavior.
+
+The matrix is expected to route 8 SELL fixtures through Executor01 and 4 BUY
+fixtures through Executor03. It should not exercise Executor02 fences or the
+ExecutorWETH single-wrap optimization because Tessera is not a WETH-only
+exchange and every fixture is single-route / 100 percent / single-swap /
+single-exchange.
+
+Native-source SELL routes still generate approval requests for the
+wrapped-native token against the Tessera router. With all-true approval
+decisions, those resolved legs should not contain `approveData`; this is
+intentional because Phase 2 already covers approval insertion and
+`SkipApprovalCheck` behavior.
+
+Tessera DEX-param encoding is deterministic and does not require a live fork.
+The e2e source's block numbers and amounts can be reused directly by the
+fixture generator.
+
+### TypeScript Fixture Generation
+
+Extend the public-builder fixture generator with a real Tessera path instead
+of deriving Tessera fixtures from resolved-build fixtures.
+
+Generator rules:
+
+- The generator becomes dual-mode: existing non-Tessera fixtures continue to
+  derive from `loadResolvedBuildFixtures()`, while Phase 4 Tessera fixtures are
+  produced by a fresh public-builder run because no committed Tessera
+  resolved-build fixtures exist.
+- Build each Tessera `PriceRoute` from the same data as
+  `src/dex/tessera/tessera-e2e.test.ts`.
+- Reuse the network-aware DexHelper variant from Phase 3 to instantiate the
+  real TypeScript `Tessera` class across Base and BSC. The minimal helper must
+  include the fields Tessera reads: `web3Provider.eth.Contract`,
+  `config.data.network`, `config.data.augustusV6Address`,
+  `config.data.wrappedNativeTokenAddress`, and `config.wrapETH`.
+- Run the real TypeScript `GenericSwapTransactionBuilder.build(...)` twice:
+  once with `onlyParams: false` and once with `onlyParams: true`.
+- Use `resolvedBuildInputObserver.onGenericBuildInput` to capture the actual
+  TypeScript resolved input.
+- Use a recording real DEX registry:
+  - wrap the existing `DexAdapterService` lookup or
+    `createTsDexEncoderRegistry` behavior so recorded alias handling matches
+    the production TypeScript adapter.
+  - Phase 4 may directly construct the TypeScript `Tessera` class behind
+    `createTsDexEncoderRegistry` because Tessera's encoder is class-stateless
+    for this path. For future DEX encoders with adapter-mediated state, the
+    recorder should wrap a real `DexAdapterService` instance instead.
+  - forward aliases that the production TypeScript adapter accepts; do not
+    invent alias semantics that are absent from the production path.
+  - record `NeedWrapNativeInput`, `needWrapNative`, `DexParamInput`, and
+    returned `DexExchangeParam`.
+  - do not hand-assemble Tessera `DexExchangeParam` from Go expectations.
+- Use a recording approval service that records approval pairs and returns a
+  deterministic all-true decision list for the number of requests it receives.
+  Store both `expectedApprovalRequests` and `approvalDecisions` in the fixture.
+- Assert the tx run and params run produce identical captured resolved input,
+  DEX observations, and approval observations.
+- Fixture `dexKeys` should contain the public route label observed in the
+  route (`Tessera`), not a silently lowercased key. The real Go registry proves
+  alias handling.
+- The fixture schema/test contract must assert `dexKeys` equals the sorted
+  unique set of `input.request.priceRoute.bestRoute[*].swaps[*].swapExchanges[*].exchange`
+  labels. This prevents alias proof from being weakened by drift between
+  fixture metadata and the actual public route.
+- `expectedDexCalls[*].dexKey` and nested `DexParamInput.dexKey` should also
+  remain `Tessera` for these public fixtures because `BuildGeneric` passes the
+  route label through unchanged. Do not normalize those fixture fields to
+  lowercase.
+- Keep standalone Phase 3 DEX-encoder fixtures lowercase `tessera`; public
+  Phase 4 fixtures intentionally exercise the public route label `Tessera`.
+- Existing public fixtures keep their original DEX keys, such as `UniswapV3`,
+  without modification.
+- No public-builder schema shape change is expected for Tessera. Only add a
+  schema rule if the generated fixture exposes a concrete contract gap; do not
+  broaden or weaken validation solely to fit Tessera.
+
+### Go End-To-End Tests
+
+Add a new real-registry Tessera public test instead of replacing the existing
+fixture-backed public-builder test.
+
+Keep these tests in `tessera_public_test.go` so fixture-backed public-builder
+failures and real Tessera encoder failures are diagnosed independently.
+
+Test flow for every Tessera public fixture:
+
+1. Load the public-builder fixture by name.
+2. Decode `BuildRequest`, `expectedResolvedInput`, `expectedParams`, and
+   `expectedTx`.
+3. Build fresh deps for the input-only pass with:
+   - Phase 1/2 resolved deps helper.
+   - `executor.NewFactory()`.
+   - real Tessera encoder from `tessera.New(tessera.DefaultConfig())`.
+   - alias registry mapping both `Tessera` and `tessera`.
+   - fixture approval checker using `expectedApprovalRequests` and
+     `approvalDecisions`.
+4. Wrap the real registry with a test recorder that captures Go DEX calls and
+   compares them to fixture `expectedDexCalls`:
+   - route position key.
+   - lookup key / `dexKey`.
+   - `NeedWrapNativeInput`.
+   - `needWrapNative`.
+   - `DexParamInput`.
+   - returned `DexExchangeParam`.
+5. Call `builder.BuildGenericInputForTest` and compare the resolved input to
+   `expectedResolvedInput`.
+6. Assert the input-pass approval checker and DEX recorder consumed exactly the
+   expected observations.
+7. Build a second fresh deps/recorder/checker set for the output pass. Do not
+   reuse the input-pass instances; the registries and checkers are stateful and
+   would otherwise double-consume observations.
+8. Call `builder.BuildGeneric` and compare `params` and `txObject`.
+9. Assert the output-pass approval checker and DEX recorder consumed exactly
+   the expected observations.
+
+The existing `TestBuildGenericPublicFixtures` should continue to run all
+public-builder fixtures with a fixture-backed DEX registry. The new real
+Tessera test proves that those same Tessera fixtures also pass with real Go
+DEX encoding.
+
+### Byte-Level Diagnostics
+
+Use existing resolved calldata diff helpers where possible.
+
+On a Tessera public mismatch, tests should report:
+
+- fixture name.
+- resolved input JSON mismatch location where available.
+- tx calldata selector and first differing byte offset.
+- expected vs got `executorData` byte length when generic calldata differs.
+- recorded Tessera `exchangeData` mismatch decoded as
+  `tesseraSwapWithAllowances(tokenIn, tokenOut, amountSpecified, amountCheck,
+recipient, swapData)` before printing raw hex.
+
+Do not leave failures as only full JSON dumps or long raw calldata strings.
+
+### Implementation Order
+
+1. Add the alias-aware static registry and unit tests.
+2. Extend public-builder fixture generation with the Tessera public matrix and
+   real TypeScript Tessera recording registry.
+3. Regenerate public-builder fixtures and update fixture schema/tests to
+   require the 12 Tessera names.
+4. Add Go Tessera public real-registry tests.
+5. Fix any exposed resolved/executor gaps with fixture coverage in the same
+   phase.
+6. Run the full Phase 4 gate list.
+
+We do not expect the Tessera matrix to expose new resolved/executor gaps because
+all routes are single-route / 100 percent / single-swap / single-exchange and
+flow through Executor01 for SELL or Executor03 for BUY. If a gap does surface,
+decide whether it is truly required for Tessera public parity in Phase 4 or
+should become a separate follow-up plan.
+
+### Out Of Scope
+
+- A production all-DEX registry.
+- HTTP DEX-param adapter implementation.
+- RPC/Redis-backed approval checker.
+- Go-side pricing, pool discovery, polling, quoter calls, or route generation.
+- Tenderly simulation or on-chain e2e tests from Go.
+- Direct public builder preprocessing.
+- Non-Tessera public-route parity fixtures.
+- Replacing the TypeScript runtime path in production.
+
+### Acceptance Checklist
+
+- Public-builder fixtures include all 12 Tessera route cases listed above.
+- Tessera public fixtures are generated by running the real TypeScript public
+  builder with real TypeScript Tessera encoding and recording observations.
+- The Go alias registry maps both `Tessera` and `tessera` to the real Go
+  Tessera encoder without changing `BuildGeneric`.
+- Go real-registry Tessera public tests match:
+  - `expectedDexCalls`.
+  - `expectedApprovalRequests`.
+  - `expectedResolvedInput`.
+  - `expectedParams`.
+  - `expectedTx`.
+- Existing fixture-backed public-builder tests continue passing for all public
+  fixtures, including Tessera.
+- Phase 3 standalone Tessera DEX-encoder tests continue passing.
+- Existing resolved generic tests continue passing.
+- `go test ./go/...`
+- `go vet ./go/...`
+- `gofmt -s -l go/` produces no output.
+- `yarn check:tsc`
+- `yarn jest tests/generic-swap-transaction-builder/fixtures/go-public-builder-fixtures.test.ts --runInBand`
+- `yarn jest tests/generic-swap-transaction-builder/dex-encoder/dex-encoder-fixtures.test.ts --runInBand`
+- `yarn jest tests/generic-swap-transaction-builder/resolved --runInBand`
+- `yarn fixtures:check`
+
+Phase 4 should not modify Phase 3 standalone DEX-encoder fixtures. The
+`dex-encoder-fixtures.test.ts` gate remains here to catch accidental
+regressions while public Tessera fixtures are added.
+
+### Handoff To Phase 5
+
+After Phase 4, Go should prove full public generic encoding for a real DEX via
+in-process Go code. Phase 5 can decide how this builder is integrated into the
+future Go API service:
+
+- document the final portable `BuildGeneric` API and dependency wiring.
+- decide whether the service uses the small alias registry, its own registry,
+  or generated DEX registration.
+- decide whether an HTTP adapter for the existing single-leg DEX-param
+  contract is still useful as a transition layer.
+- document which approval checker implementation will supply real RPC/Redis
+  decisions outside fixture tests.

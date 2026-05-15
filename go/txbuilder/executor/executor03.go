@@ -94,9 +94,6 @@ func (b Executor03Builder) validatePhase2dScope(
 	if len(priceRoute.BestRoute[0].Swaps) != 1 {
 		return fmt.Errorf("Executor03 Phase 2d supports a single swap only")
 	}
-	if wethPlan != nil {
-		return fmt.Errorf("Executor03 WETH plan calldata is not implemented in Phase 2d")
-	}
 
 	for _, orderedLeg := range orderedLegs {
 		if orderedLeg.RouteIndex != 0 || orderedLeg.SwapIndex != 0 {
@@ -326,15 +323,38 @@ func (b Executor03Builder) buildSingleSwapCallData(
 		return "", fmt.Errorf("Executor03 approve calldata is not implemented in Phase 2d")
 	}
 	if maybeWethCallData != nil &&
+		maybeWethCallData.Deposit != nil &&
 		curExchangeParam.NeedWrapNative.Value &&
 		isETHAddress(swap.SrcToken) {
-		return "", fmt.Errorf("Executor03 WETH deposit calldata is not implemented in Phase 2d")
+		depositCallData, err := buildExecutor03WrapEthCallData(
+			getWETHAddress(curExchangeParam, b.context),
+			maybeWethCallData.Deposit.Calldata,
+			sendEthEqualToFromAmountDontCheckBalanceAfterSwap,
+			0,
+		)
+		if err != nil {
+			return "", err
+		}
+		swapCallData, err = concatHex(string(depositCallData), string(swapCallData))
+		if err != nil {
+			return "", err
+		}
 	}
 	if index == len(exchangeParams)-1 &&
 		isETHAddress(swap.DestToken) &&
 		maybeWethCallData != nil &&
 		maybeWethCallData.Withdraw != nil {
-		return "", fmt.Errorf("Executor03 final WETH withdraw calldata is not implemented in Phase 2d")
+		withdrawCallData, err := buildExecutor03UnwrapEthCallData(
+			getWETHAddress(curExchangeParam, b.context),
+			maybeWethCallData.Withdraw.Calldata,
+		)
+		if err != nil {
+			return "", err
+		}
+		swapCallData, err = concatHex(string(swapCallData), string(withdrawCallData))
+		if err != nil {
+			return "", err
+		}
 	}
 
 	needWithdraw := anyExchangeParamNeedsWrapNative(exchangeParams) &&

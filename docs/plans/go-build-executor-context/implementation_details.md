@@ -64,21 +64,11 @@ Completed on 2026-05-14.
   `@paraswap/dex-lib/src/executor`, `paraswap-dex-lib/src/executor`, and
   `src/executor/(Executor|WETH)`. No downstream code deep-imports were found;
   matches were limited to this repo's tests and Go migration notes.
-  - Scope: `/Users/danylokaniev/work/paraswap`, covering all locally checked
-    out repos under that root.
-  - Package roots observed during the scan included `paraswap-api`,
-    `paraswap-sdk`, `paraswap-ui`, `paraswap-augustus`, `paraswap-contracts`,
-    `paraswap-core`, `paraswap-dex-lib`, `paraswap-dex-lib-private`,
-    `paraswap-limit-orders`, `paraswap-limit-orders-service`,
-    `paraswap-pooltracker`, `paraswap-rpc`, `paraswap-staking`,
-    `paraswap-configuration-service`, `paraswap-health-checker-service`,
-    `paraswap-initialization-service`, `paraswap-volume-tracker`,
-    `paraswap-gas-fetcher`, `cross-chain/across-*`, `solver/paraswap-solver-js`,
-    `portikus/*`, and `other/*`.
+  - Scope: local downstream checkouts available during implementation.
   - Exclusions: `node_modules`, `build`, `dist`, `.git`, `__snapshots__`, and
     `docs/plans`.
   - Command shape:
-    `rg --no-messages -n "@paraswap/dex-lib/src/executor|paraswap-dex-lib/src/executor|src/executor/(Executor|WETH)" /Users/danylokaniev/work/paraswap --glob '!**/node_modules/**' --glob '!**/build/**' --glob '!**/dist/**' --glob '!**/.git/**' --glob '!**/__snapshots__/**' --glob '!**/docs/plans/**'`
+    `rg --no-messages -n "@paraswap/dex-lib/src/executor|paraswap-dex-lib/src/executor|src/executor/(Executor|WETH)" <local-workspace-root> --glob '!**/node_modules/**' --glob '!**/build/**' --glob '!**/dist/**' --glob '!**/.git/**' --glob '!**/__snapshots__/**' --glob '!**/docs/plans/**'`
 - Snapshot test baseline restored:
   - executor snapshot tests now pass fixtures as `DexExchangeBuildParam[]`
   - each snapshot fixture exchange param is guarded to require boolean
