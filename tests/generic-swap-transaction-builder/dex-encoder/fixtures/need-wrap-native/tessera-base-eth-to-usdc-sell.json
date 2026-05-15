@@ -1,0 +1,37 @@
+{
+  "description": "Tessera 8453 SELL 0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee to 0x833589fcd6edb6e08f4c7c32d4f71b54bda02913 needWrapNative baseline.",
+  "dexKey": "tessera",
+  "expected": true,
+  "input": {
+    "route": {
+      "blockNumber": 45600823,
+      "destAmount": "2377679443",
+      "destToken": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+      "network": 8453,
+      "routeIndex": 0,
+      "routePercent": 100,
+      "side": "SELL",
+      "srcAmount": "1000000000000000000",
+      "srcToken": "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+    },
+    "swap": {
+      "destAmount": "2377679443",
+      "destToken": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+      "srcAmount": "1000000000000000000",
+      "srcToken": "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "swapIndex": 0
+    },
+    "swapExchange": {
+      "data": null,
+      "destAmount": "2377679443",
+      "exchange": "tessera",
+      "percent": 100,
+      "srcAmount": "1000000000000000000",
+      "swapExchangeIndex": 0
+    }
+  },
+  "kind": "need-wrap-native",
+  "name": "tessera-base-eth-to-usdc-sell",
+  "network": 8453,
+  "schemaVersion": 1
+}

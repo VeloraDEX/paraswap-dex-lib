@@ -14,6 +14,22 @@ import {
   type DexEncoderFixture,
 } from './dex-encoder-fixture-schema';
 
+const STANDALONE_GENERIC_DEX_KEYS = ['tessera'];
+const REQUIRED_TESSERA_FIXTURE_NAMES = [
+  'tessera-base-usdc-to-weth-sell',
+  'tessera-base-usdc-to-eth-sell',
+  'tessera-base-weth-to-usdc-sell',
+  'tessera-base-eth-to-usdc-sell',
+  'tessera-base-usdc-to-weth-buy',
+  'tessera-base-usdc-to-eth-buy',
+  'tessera-bsc-wbnb-to-usdt-sell',
+  'tessera-bsc-bnb-to-usdt-sell',
+  'tessera-bsc-usdt-to-wbnb-sell',
+  'tessera-bsc-usdt-to-bnb-sell',
+  'tessera-bsc-wbnb-to-usdt-buy',
+  'tessera-bsc-bnb-to-usdt-buy',
+];
+
 describe('DEX encoder conformance fixtures', () => {
   const loadedFixtures = loadDexEncoderFixtures();
 
@@ -44,15 +60,24 @@ describe('DEX encoder conformance fixtures', () => {
 
   it('covers every DEX used by resolved generic and direct fixtures', () => {
     const { genericDexKeys, directDexKeys } = getResolvedFixtureDexCoverage();
+    const expectedGenericDexKeys = [
+      ...new Set([...genericDexKeys, ...STANDALONE_GENERIC_DEX_KEYS]),
+    ].sort();
     const dexParamDexKeys = uniqueDexKeys('dex-param');
     const needWrapNativeDexKeys = uniqueDexKeys('need-wrap-native');
     const directParamDexKeys = uniqueDexKeys('direct-param');
 
     // This is the Phase 3 minimum coverage gate: parity with the resolved-build
-    // fixture surface, not a complete assertion over every V6-reachable DEX.
-    expect(dexParamDexKeys).toEqual(genericDexKeys);
-    expect(needWrapNativeDexKeys).toEqual(genericDexKeys);
+    // fixture surface plus standalone Tessera DEX encoder fixtures, not a
+    // complete assertion over every V6-reachable DEX.
+    expect(dexParamDexKeys).toEqual(expectedGenericDexKeys);
+    expect(needWrapNativeDexKeys).toEqual(expectedGenericDexKeys);
     expect(directParamDexKeys).toEqual(directDexKeys);
+
+    for (const name of REQUIRED_TESSERA_FIXTURE_NAMES) {
+      expect(hasFixture('dex-param', name)).toBe(true);
+      expect(hasFixture('need-wrap-native', name)).toBe(true);
+    }
   });
 
   it('rejects unsupported schema versions', () => {
@@ -151,6 +176,27 @@ describe('DEX encoder conformance fixtures', () => {
     ).toThrow(
       'bad-fixture.input.swapExchange.data.swaps[0].pool must be a lowercase 42-character hex address',
     );
+
+    const tesseraFixture = loadedFixtures.find(
+      ({ fixture }) =>
+        fixture.kind === 'dex-param' && fixture.dexKey === 'tessera',
+    )!.fixture;
+    const malformedTessera = mutateFixture(tesseraFixture, draft => {
+      draft.input.swapExchange.data = {};
+      draft.input.data = {};
+    });
+    const unknownDex = mutateFixture(tesseraFixture, draft => {
+      draft.dexKey = 'Tessera';
+      draft.input.dexKey = 'Tessera';
+      draft.input.swapExchange.exchange = 'Tessera';
+    });
+
+    expect(() =>
+      validateDexEncoderFixture(malformedTessera, 'bad-fixture'),
+    ).toThrow('bad-fixture.input.swapExchange.data must be null for tessera');
+    expect(() => validateDexEncoderFixture(unknownDex, 'bad-fixture')).toThrow(
+      'bad-fixture.input.swapExchange.data: unsupported DEX key Tessera',
+    );
   });
 
   function uniqueDexKeys(kind: DexEncoderFixture['kind']): string[] {
@@ -161,6 +207,12 @@ describe('DEX encoder conformance fixtures', () => {
           .map(({ fixture }) => fixture.dexKey),
       ),
     ].sort();
+  }
+
+  function hasFixture(kind: DexEncoderFixture['kind'], name: string): boolean {
+    return loadedFixtures.some(
+      ({ fixture }) => fixture.kind === kind && fixture.name === name,
+    );
   }
 });
 

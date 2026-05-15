@@ -484,6 +484,13 @@ function validateDexSpecificData(
     return;
   }
 
+  if (dexKey === 'tessera') {
+    if (value !== null) {
+      throw new Error(`${source} must be null for tessera`);
+    }
+    return;
+  }
+
   if (dexKey === 'UniswapV2') {
     validateUniswapV2Data(value, source);
     return;
@@ -511,7 +518,10 @@ function validateDexSpecificData(
 
   if (dexKey === 'GenericRFQ') {
     validateGenericRfqData(value, source);
+    return;
   }
+
+  throw new Error(`${source}: unsupported DEX key ${dexKey}`);
 }
 
 function validateUniswapV3LikeData(value: unknown, source: string): void {

@@ -11,6 +11,7 @@ import { CurveV2SwapType } from '../../../src/dex/curve-v2/types';
 import { GenericRFQ } from '../../../src/dex/generic-rfq/generic-rfq';
 import type { IDexTxBuilder, NeedWrapNativeFunc } from '../../../src/dex/idex';
 import { LitePsm } from '../../../src/dex/lite-psm/lite-psm';
+import { Tessera } from '../../../src/dex/tessera/tessera';
 import { UniswapV2 } from '../../../src/dex/uniswap-v2/uniswap-v2';
 import { UniswapV3 } from '../../../src/dex/uniswap-v3/uniswap-v3';
 import { Weth } from '../../../src/dex/weth/weth';
@@ -30,6 +31,7 @@ import type {
   NeedWrapNativeInput,
 } from '../../../src/generic-swap-transaction-builder/dex-encoder';
 import type { DirectContractMethodV6 } from '../../../src/generic-swap-transaction-builder/dex-encoder/direct-methods';
+import { Tokens } from '../../constants-e2e';
 import type {
   Address,
   DexExchangeParam as LegacyDexExchangeParam,
@@ -57,6 +59,13 @@ const AUGUSTUS_V6_ADDRESS = '0x6a000f20005980200259b80c5102003040001068';
 const POOL_ADDRESS = '0x4444444444444444444444444444444444444444';
 const BALANCER_POOL_ID = `0x${'44'.repeat(32)}`;
 const FIXED_DIRECT_ENCODER_TIME_MS = 1_700_000_000_000;
+const TESSERA_DEX_KEY = 'tessera';
+const TESSERA_RECIPIENT = '0x1111111111111111111111111111111111111111';
+const TESSERA_EXECUTOR_ADDRESS = '0x2222222222222222222222222222222222222222';
+const WRAPPED_NATIVE_BY_NETWORK: Record<number, Address> = {
+  [Network.BASE]: '0x4200000000000000000000000000000000000006',
+  [Network.BSC]: '0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c',
+};
 
 export function buildAllDexEncoderFixtures(): DexEncoderFixture[] {
   const resolvedFixtures = loadResolvedBuildFixtures()
@@ -67,6 +76,8 @@ export function buildAllDexEncoderFixtures(): DexEncoderFixture[] {
       ? buildGenericDexEncoderFixtures(fixture)
       : [buildDirectDexEncoderFixture(fixture)],
   );
+
+  fixtures.push(...buildTesseraDexEncoderFixtures());
 
   return fixtures.sort((a, b) =>
     `${a.kind}/${a.name}`.localeCompare(`${b.kind}/${b.name}`),
@@ -206,6 +217,223 @@ function buildGenericDexEncoderFixtures(
     };
 
     return [needWrapFixture, dexParamFixture];
+  });
+}
+
+type TesseraFixtureCase = {
+  name: string;
+  network: Network;
+  blockNumber: number;
+  srcToken: Address;
+  destToken: Address;
+  srcAmount: string;
+  destAmount: string;
+  side: SwapSide;
+};
+
+function buildTesseraDexEncoderFixtures(): DexEncoderFixture[] {
+  return tesseraFixtureCases().flatMap(fixtureCase => {
+    const needWrapNativeInput = buildTesseraNeedWrapNativeInput(fixtureCase);
+    const dexParamInput: DexParamInput = {
+      ...needWrapNativeInput,
+      dexKey: TESSERA_DEX_KEY,
+      srcToken: normalizeAddress(fixtureCase.srcToken),
+      destToken: normalizeAddress(fixtureCase.destToken),
+      srcAmount: fixtureCase.srcAmount,
+      destAmount: fixtureCase.destAmount,
+      recipient: TESSERA_RECIPIENT,
+      executorAddress: TESSERA_EXECUTOR_ADDRESS,
+      side: fixtureCase.side,
+      data: null,
+    };
+    const tessera = new Tessera(
+      buildDexHelper(
+        fixtureCase.network,
+        WRAPPED_NATIVE_BY_NETWORK[fixtureCase.network],
+      ),
+    );
+    const dexParam = withFixedDate(() =>
+      tessera.getDexParam(
+        dexParamInput.srcToken,
+        dexParamInput.destToken,
+        dexParamInput.srcAmount,
+        dexParamInput.destAmount,
+        dexParamInput.recipient,
+        null,
+        dexParamInput.side,
+      ),
+    );
+    const descriptionBase = `Tessera ${fixtureCase.network} ${fixtureCase.side} ${fixtureCase.srcToken} to ${fixtureCase.destToken}`;
+    const needWrapFixture: NeedWrapNativeFixture = {
+      schemaVersion: DEX_ENCODER_FIXTURE_SCHEMA_VERSION,
+      name: fixtureCase.name,
+      kind: 'need-wrap-native',
+      description: `${descriptionBase} needWrapNative baseline.`,
+      network: fixtureCase.network,
+      dexKey: TESSERA_DEX_KEY,
+      input: needWrapNativeInput,
+      expected: tessera.needWrapNative,
+    };
+    const dexParamFixture: DexParamFixture = {
+      schemaVersion: DEX_ENCODER_FIXTURE_SCHEMA_VERSION,
+      name: fixtureCase.name,
+      kind: 'dex-param',
+      description: `${descriptionBase} getDexParam baseline.`,
+      network: fixtureCase.network,
+      dexKey: TESSERA_DEX_KEY,
+      input: dexParamInput,
+      expected: normalizeDexExchangeParam(dexParam),
+    };
+
+    return [needWrapFixture, dexParamFixture];
+  });
+}
+
+function tesseraFixtureCases(): TesseraFixtureCase[] {
+  const baseWeth = normalizeAddress(Tokens[Network.BASE].WETH.address);
+  const baseUsdc = normalizeAddress(Tokens[Network.BASE].USDC.address);
+  const bscWbnb = normalizeAddress(Tokens[Network.BSC].WBNB.address);
+  const bscUsdt = normalizeAddress(Tokens[Network.BSC].USDT.address);
+  const baseUsdcShared = {
+    network: Network.BASE,
+    blockNumber: 45600823,
+    srcToken: baseUsdc,
+    srcAmount: '1000000',
+    destAmount: '420526831788390',
+  };
+  const baseWethShared = {
+    network: Network.BASE,
+    blockNumber: 45600823,
+    srcAmount: '1000000000000000000',
+    destToken: baseUsdc,
+    destAmount: '2377679443',
+  };
+  const bscWbnbShared = {
+    network: Network.BSC,
+    blockNumber: 96572572,
+    srcAmount: '1000000000000000000',
+    destToken: bscUsdt,
+    destAmount: '631755922471100996711',
+  };
+  const bscUsdtShared = {
+    network: Network.BSC,
+    blockNumber: 96572572,
+    srcToken: bscUsdt,
+    srcAmount: '1000000000000000000',
+    destAmount: '1582521639071061',
+  };
+
+  return [
+    {
+      name: 'tessera-base-usdc-to-weth-sell',
+      ...baseUsdcShared,
+      destToken: baseWeth,
+      side: SwapSide.SELL,
+    },
+    {
+      name: 'tessera-base-usdc-to-eth-sell',
+      ...baseUsdcShared,
+      destToken: ETHER_ADDRESS,
+      side: SwapSide.SELL,
+    },
+    {
+      name: 'tessera-base-weth-to-usdc-sell',
+      ...baseWethShared,
+      srcToken: baseWeth,
+      side: SwapSide.SELL,
+    },
+    {
+      name: 'tessera-base-eth-to-usdc-sell',
+      ...baseWethShared,
+      srcToken: ETHER_ADDRESS,
+      side: SwapSide.SELL,
+    },
+    {
+      name: 'tessera-base-usdc-to-weth-buy',
+      ...baseUsdcShared,
+      destToken: baseWeth,
+      side: SwapSide.BUY,
+    },
+    {
+      name: 'tessera-base-usdc-to-eth-buy',
+      ...baseUsdcShared,
+      destToken: ETHER_ADDRESS,
+      side: SwapSide.BUY,
+    },
+    {
+      name: 'tessera-bsc-wbnb-to-usdt-sell',
+      ...bscWbnbShared,
+      srcToken: bscWbnb,
+      side: SwapSide.SELL,
+    },
+    {
+      name: 'tessera-bsc-bnb-to-usdt-sell',
+      ...bscWbnbShared,
+      srcToken: ETHER_ADDRESS,
+      side: SwapSide.SELL,
+    },
+    {
+      name: 'tessera-bsc-usdt-to-wbnb-sell',
+      ...bscUsdtShared,
+      destToken: bscWbnb,
+      side: SwapSide.SELL,
+    },
+    {
+      name: 'tessera-bsc-usdt-to-bnb-sell',
+      ...bscUsdtShared,
+      destToken: ETHER_ADDRESS,
+      side: SwapSide.SELL,
+    },
+    {
+      name: 'tessera-bsc-wbnb-to-usdt-buy',
+      ...bscWbnbShared,
+      srcToken: bscWbnb,
+      side: SwapSide.BUY,
+    },
+    {
+      name: 'tessera-bsc-bnb-to-usdt-buy',
+      ...bscWbnbShared,
+      srcToken: ETHER_ADDRESS,
+      side: SwapSide.BUY,
+    },
+  ];
+}
+
+function buildTesseraNeedWrapNativeInput(
+  fixtureCase: TesseraFixtureCase,
+): NeedWrapNativeInput {
+  const swapExchange: OptimalSwapExchange<null> = {
+    exchange: TESSERA_DEX_KEY,
+    srcAmount: fixtureCase.srcAmount,
+    destAmount: fixtureCase.destAmount,
+    percent: 100,
+    data: null,
+  } as OptimalSwapExchange<null>;
+  const swap: OptimalSwap = {
+    srcToken: fixtureCase.srcToken,
+    destToken: fixtureCase.destToken,
+    srcAmount: fixtureCase.srcAmount,
+    destAmount: fixtureCase.destAmount,
+    swapExchanges: [swapExchange],
+  } as unknown as OptimalSwap;
+  const priceRoute: OptimalRate = {
+    network: fixtureCase.network,
+    side: fixtureCase.side,
+    blockNumber: fixtureCase.blockNumber,
+    srcToken: fixtureCase.srcToken,
+    destToken: fixtureCase.destToken,
+    srcAmount: fixtureCase.srcAmount,
+    destAmount: fixtureCase.destAmount,
+    bestRoute: [{ percent: 100, swaps: [swap] }],
+  } as OptimalRate;
+
+  return buildNeedWrapNativeInput({
+    priceRoute,
+    routeIndex: 0,
+    swap,
+    swapIndex: 0,
+    swapExchange,
+    swapExchangeIndex: 0,
   });
 }
 
@@ -616,17 +844,24 @@ function getCurrentTsDexBuilder(
 }
 
 function buildDirectDexHelper(): any {
+  return buildDexHelper(Network.MAINNET, WRAPPED_NATIVE_TOKEN_ADDRESS);
+}
+
+function buildDexHelper(
+  network: Network,
+  wrappedNativeTokenAddress: Address,
+): any {
   class DummyContract {}
 
   return {
     config: {
       isSlave: true,
       data: {
-        network: Network.MAINNET,
+        network,
         augustusAddress: AUGUSTUS_V6_ADDRESS,
         augustusV6Address: AUGUSTUS_V6_ADDRESS,
         augustusRFQAddress: NULL_ADDRESS,
-        wrappedNativeTokenAddress: WRAPPED_NATIVE_TOKEN_ADDRESS,
+        wrappedNativeTokenAddress,
         uniswapV2ExchangeRouterAddress: POOL_ADDRESS,
         tokenTransferProxyAddress: NULL_ADDRESS,
         multicallV2Address: NULL_ADDRESS,
@@ -635,15 +870,25 @@ function buildDirectDexHelper(): any {
         rfqConfigs: {},
         apiKeyTheGraph: '',
       },
-      wrapETH: <T extends { address: Address }>(token: T): T => ({
-        ...token,
-        address:
-          token.address.toLowerCase() === ETHER_ADDRESS
-            ? WRAPPED_NATIVE_TOKEN_ADDRESS
-            : normalizeAddress(token.address),
-      }),
+      wrapETH: <T extends { address: Address }>(
+        token: T | Address,
+      ): T | Address => {
+        if (typeof token === 'string') {
+          return token.toLowerCase() === ETHER_ADDRESS
+            ? wrappedNativeTokenAddress
+            : normalizeAddress(token);
+        }
+
+        return {
+          ...token,
+          address:
+            token.address.toLowerCase() === ETHER_ADDRESS
+              ? wrappedNativeTokenAddress
+              : normalizeAddress(token.address),
+        };
+      },
       isWETH: (address: Address): boolean =>
-        address.toLowerCase() === WRAPPED_NATIVE_TOKEN_ADDRESS,
+        address.toLowerCase() === wrappedNativeTokenAddress,
     },
     web3Provider: {
       eth: {

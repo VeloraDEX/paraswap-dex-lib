@@ -1,0 +1,37 @@
+{
+  "description": "Tessera 56 SELL 0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee to 0x55d398326f99059ff775485246999027b3197955 needWrapNative baseline.",
+  "dexKey": "tessera",
+  "expected": true,
+  "input": {
+    "route": {
+      "blockNumber": 96572572,
+      "destAmount": "631755922471100996711",
+      "destToken": "0x55d398326f99059ff775485246999027b3197955",
+      "network": 56,
+      "routeIndex": 0,
+      "routePercent": 100,
+      "side": "SELL",
+      "srcAmount": "1000000000000000000",
+      "srcToken": "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+    },
+    "swap": {
+      "destAmount": "631755922471100996711",
+      "destToken": "0x55d398326f99059ff775485246999027b3197955",
+      "srcAmount": "1000000000000000000",
+      "srcToken": "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "swapIndex": 0
+    },
+    "swapExchange": {
+      "data": null,
+      "destAmount": "631755922471100996711",
+      "exchange": "tessera",
+      "percent": 100,
+      "srcAmount": "1000000000000000000",
+      "swapExchangeIndex": 0
+    }
+  },
+  "kind": "need-wrap-native",
+  "name": "tessera-bsc-bnb-to-usdt-sell",
+  "network": 56,
+  "schemaVersion": 1
+}

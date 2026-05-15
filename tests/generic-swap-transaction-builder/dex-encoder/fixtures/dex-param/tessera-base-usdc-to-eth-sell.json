@@ -1,0 +1,51 @@
+{
+  "description": "Tessera 8453 SELL 0x833589fcd6edb6e08f4c7c32d4f71b54bda02913 to 0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee getDexParam baseline.",
+  "dexKey": "tessera",
+  "expected": {
+    "dexFuncHasRecipient": true,
+    "exchangeData": "0x3ae8b298000000000000000000000000833589fcd6edb6e08f4c7c32d4f71b54bda02913000000000000000000000000420000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000f42400000000000000000000000000000000000000000000000000000000000000000000000000000000000000000111111111111111111111111111111111111111100000000000000000000000000000000000000000000000000000000000000c00000000000000000000000000000000000000000000000000000000000000000",
+    "needWrapNative": true,
+    "targetExchange": "0x55555522005bcae1c2424d474bfd5ed477749e3e"
+  },
+  "input": {
+    "data": null,
+    "destAmount": "420526831788390",
+    "destToken": "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "dexKey": "tessera",
+    "executorAddress": "0x2222222222222222222222222222222222222222",
+    "recipient": "0x1111111111111111111111111111111111111111",
+    "route": {
+      "blockNumber": 45600823,
+      "destAmount": "420526831788390",
+      "destToken": "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "network": 8453,
+      "routeIndex": 0,
+      "routePercent": 100,
+      "side": "SELL",
+      "srcAmount": "1000000",
+      "srcToken": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
+    },
+    "side": "SELL",
+    "srcAmount": "1000000",
+    "srcToken": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+    "swap": {
+      "destAmount": "420526831788390",
+      "destToken": "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "srcAmount": "1000000",
+      "srcToken": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+      "swapIndex": 0
+    },
+    "swapExchange": {
+      "data": null,
+      "destAmount": "420526831788390",
+      "exchange": "tessera",
+      "percent": 100,
+      "srcAmount": "1000000",
+      "swapExchangeIndex": 0
+    }
+  },
+  "kind": "dex-param",
+  "name": "tessera-base-usdc-to-eth-sell",
+  "network": 8453,
+  "schemaVersion": 1
+}

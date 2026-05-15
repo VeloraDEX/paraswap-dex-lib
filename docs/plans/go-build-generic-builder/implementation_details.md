@@ -969,3 +969,424 @@ Phase 3 should not need to change `BuildGeneric`'s public signature or the DEX
 port interfaces. If Tessera exposes a missing DEX param field, update the
 Phase 1/2 DTO contract first and regenerate the fixture observations so the
 interface remains portable to the future Go API service.
+
+## Phase 3: Tessera DEX Encoder Parity
+
+### Goal
+
+Add the first real Go `builder.DexEncoder` implementation for Tessera and
+prove its single-leg `NeedWrapNative` / `GetDexParam` output against
+TypeScript-generated fixtures.
+
+Phase 3 should answer one narrow question: when the public builder calls the
+portable DEX encoder port for a Tessera leg, can the Go Tessera encoder return
+the same `DexExchangeParam` that the TypeScript Tessera builder returns?
+
+Full public-route Tessera parity remains Phase 4. Phase 3 must not require any
+`BuildGeneric` signature change, any HTTP endpoint dependency, or any runtime
+TypeScript bridge.
+
+### Source References
+
+Use these implementations as the source material:
+
+| Source                                | Purpose                                                                                              |
+| ------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `src/dex/tessera/tessera.ts`          | TypeScript parity source for `needWrapNative = true` and `getDexParam`.                              |
+| `src/dex/tessera/config.ts`           | TypeScript router-address config for Base and BSC.                                                   |
+| `src/config.ts`                       | TypeScript wrapped-native address source for Base and BSC network config entries.                    |
+| `src/abi/tessera/TesseraSwap.json`    | Canonical ABI for `tesseraSwapWithAllowances`.                                                       |
+| `src/dex/tessera/tessera-e2e.test.ts` | Route matrix that Phase 4 public fixtures will mirror; Phase 3 should mirror the DEX-param portions. |
+| `tmp/DEX-PARAM-API.md`                | Current HTTP adapter contract; useful for field semantics, not the core builder architecture.        |
+
+The existing Go Tessera implementation from `go-dex-lib` was used during
+planning, but developer-local filesystem paths must not be committed as source
+references. The portable behavior from that implementation is inlined below in
+the amount, native-token, and focused-test sections.
+
+### Current State
+
+- Phase 2 `BuildGeneric` can call a `builder.DexRegistry` and consume
+  `builder.DexExchangeParam`.
+- Phase 2 tests use a fixture-backed registry. No real DEX encoder is
+  registered yet.
+- The existing TypeScript DEX-encoder fixture system already has
+  `need-wrap-native` and `dex-param` fixture kinds, but the current committed
+  generic fixtures are driven by resolved-build fixtures and do not include
+  Tessera.
+- Tessera's TypeScript `getDexParam` ignores `data` and emits one
+  `tesseraSwapWithAllowances` call with empty `swapData`.
+- Tessera's DEX encoder key is lowercase `tessera`, matching
+  `Tessera.dexKeys = ['tessera']`. Phase 3 DEX-encoder fixtures use this exact
+  lowercase key. Route-level exchange labels in later public-route fixtures are
+  a Phase 4 concern because existing Tessera E2E routes use `exchange:
+'Tessera'`.
+
+### Execution Rule
+
+Implement only Tessera `NeedWrapNative` and `GetDexParam` behind the existing
+`builder.DexEncoder` interface.
+
+Do not add:
+
+- public-route Tessera fixtures or full `BuildGeneric` Tessera parity.
+- a production `DexRegistry` that auto-registers Tessera for public builds.
+- HTTP DEX-param adapter code.
+- Tessera pricing, pool state, quoter, polling, or discovery logic.
+- direct public builder support.
+
+### File Layout
+
+Add or update these paths:
+
+| Path                                                                                      | Purpose                                                                             |
+| ----------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| `go/txbuilder/dex/tessera/encoder.go`                                                     | `builder.DexEncoder` implementation.                                                |
+| `go/txbuilder/dex/tessera/config.go`                                                      | Base/BSC router and wrapped-native config used by the encoder.                      |
+| `go/txbuilder/dex/tessera/abi.go`                                                         | Embedded Tessera swap ABI loader.                                                   |
+| `go/txbuilder/dex/tessera/abi/tessera_swap.json`                                          | Copy of `src/abi/tessera/TesseraSwap.json`.                                         |
+| `go/txbuilder/dex/tessera/encoder_test.go`                                                | Fixture parity and focused semantic tests.                                          |
+| `go/txbuilder/dex/tessera/abi_test.go`                                                    | Drift test comparing embedded ABI copy with `src/abi/tessera/TesseraSwap.json`.     |
+| `go/txbuilder/internal/dexencodertest/fixtures.go`                                        | Test-only loader for `tests/generic-swap-transaction-builder/dex-encoder/fixtures`. |
+| `tests/generic-swap-transaction-builder/dex-encoder/dex-encoder-fixture-cases.ts`         | Add standalone Tessera fixture cases.                                               |
+| `tests/generic-swap-transaction-builder/dex-encoder/dex-encoder-fixture-cases.ts` helpers | Add a network-aware DexHelper builder for Tessera Base/BSC cases.                   |
+| `tests/generic-swap-transaction-builder/dex-encoder/dex-encoder-fixture-schema.ts`        | Validate lowercase `tessera` DEX data as `null`; reject unknown DEX keys.           |
+| `tests/generic-swap-transaction-builder/dex-encoder/dex-encoder-fixtures.test.ts`         | Require Tessera fixture names and canonical regeneration coverage.                  |
+
+Use `go/txbuilder/dex/tessera` rather than adding Tessera code to the public
+`builder` package. DEX encoders are pluggable dependencies; the builder should
+not know any concrete DEX implementation.
+
+### Public Shape
+
+Expose a small constructor:
+
+```go
+type Config struct {
+	RouterByNetwork        map[int]resolved.Address
+	WrappedNativeByNetwork map[int]resolved.Address
+}
+
+func DefaultConfig() Config
+func New(config Config) *Encoder
+```
+
+`Encoder` implements:
+
+```go
+var _ builder.DexEncoder = (*Encoder)(nil)
+```
+
+Rules:
+
+- `DefaultConfig` includes Base `8453` and BSC `56`.
+- Router address for both supported chains is
+  `0x55555522005bcae1c2424d474bfd5ed477749e3e`.
+- Wrapped-native addresses must match the chain config used by TypeScript and
+  the existing Go Tessera encoder:
+  - Base WETH: `0x4200000000000000000000000000000000000006`
+  - BSC WBNB: `0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c`
+- Config values are normalized to lowercase once at construction.
+- `Encoder` is immutable after `New`; methods must be safe for concurrent use
+  by a registry shared across goroutines.
+- `New` does not return an error. Tessera config validation is deferred to
+  `GetDexParam`, so misconfiguration surfaces on the first call that uses the
+  malformed network config.
+- Missing router config causes `GetDexParam` to fail clearly with:
+  `tessera: unsupported chain %d`. The wording intentionally matches the
+  existing Go Tessera encoder and the HTTP adapter's chain-id terminology,
+  even though the public builder DTO field is named `network`.
+- `NeedWrapNative` is static `true` for any network, matching the TypeScript
+  class field and the existing Go implementation. Chain support is enforced
+  by `GetDexParam`, not by `NeedWrapNative`. In `BuildGeneric` ordering this
+  means an unsupported Tessera network can pass the static `NeedWrapNative`
+  call and then fail at `GetDexParam`; this is expected for Phase 3.
+
+### ABI Rules
+
+The encoder packs this method:
+
+```text
+tesseraSwapWithAllowances(
+  address tokenIn,
+  address tokenOut,
+  int256 amountSpecified,
+  uint256 amountCheck,
+  address recipient,
+  bytes swapData
+)
+```
+
+Packing rules:
+
+- Use `go-ethereum/accounts/abi`, matching the import path already used under
+  `go/txbuilder/resolved`.
+- Use `common.IsHexAddress` before `common.HexToAddress`; do not allow
+  malformed nested addresses to be silently padded or truncated.
+- `swapData` is always empty bytes (`[]byte{}`), matching TypeScript's `0x`.
+- Output `ExchangeData` is lowercase `0x` hex.
+- `TargetExchange` is the configured router address.
+- `NeedWrapNative = true`.
+- `DexFuncHasRecipient = true`.
+- Every optional `builder.DexExchangeParam` field remains nil/absent in Phase
+  3 unless TypeScript starts returning it.
+
+Address validation errors should use a single format:
+
+- `invalid request: tessera %s is not a valid address`
+
+The field names should be `srcToken`, `destToken`, `recipient`, `router`, and
+`wrappedNativeToken` where applicable.
+
+### Amount Rules
+
+Port the signed-amount convention from TypeScript and the validation hardening
+summarized in this section.
+
+SELL:
+
+- `amountSpecified = srcAmount`
+- `amountCheck = 0`
+- `srcAmount` must parse as a decimal integer.
+- `srcAmount` must be non-negative and `<= 2^255 - 1`.
+
+BUY:
+
+- `amountSpecified = -destAmount`
+- `amountCheck = srcAmount`
+- Per Phase 2, `DexParamInput.SrcAmount` for BUY is the original,
+  unadjusted `swapExchange.srcAmount`, so Tessera's `amountCheck` is the
+  unadjusted value, matching the TypeScript Tessera builder.
+- `destAmount` must parse as a decimal integer, be positive, and be
+  `<= 2^255 - 1`.
+- `srcAmount` must parse as a decimal integer, be non-negative, and be
+  `<= 2^256 - 1`.
+- Reject zero BUY `destAmount`; otherwise `-0` encodes as `0` and silently
+  changes the call semantics.
+
+Unsupported side:
+
+- fail with `invalid request: tessera unsupported swap side %q`.
+
+Validation error strings should follow the existing Go Tessera implementation
+where possible:
+
+- `invalid request: tessera %s must be positive`
+- `invalid request: tessera %s must be non-negative`
+- `invalid request: tessera %s exceeds int256 maximum`
+- `invalid request: tessera %s exceeds uint256 maximum`
+
+The TypeScript builder does not enforce all of these bounds, but the Go
+service-facing implementation already does. Phase 3 adopts that hardening
+because it prevents silent ABI two's-complement reinterpretation.
+
+### Native Token Rules
+
+Tessera's router only accepts wrapped tokens.
+
+Before ABI packing:
+
+- If `srcToken` is native (`0xeeee...`) or zero address, replace it with the
+  configured wrapped-native token for the input network.
+- If `destToken` is native (`0xeeee...`) or zero address, replace it with the
+  configured wrapped-native token for the input network.
+- Already wrapped or ordinary ERC-20 tokens pass through normalized to
+  lowercase.
+
+Zero-address wrapping is Go hardening, not TypeScript fixture parity.
+TypeScript `ConfigHelper.wrapETH` only wraps the `0xeeee...` native sentinel.
+Do not add zero-address cases to TypeScript-generated Tessera parity fixtures
+unless the TypeScript side intentionally changes too; keep zero-address
+coverage as a focused Go-only semantic test.
+
+When Phase 3 tests invoke the encoder directly, this wrapping happens inside
+the Tessera encoder. When Phase 4 invokes Tessera through `BuildGeneric`, the
+public builder may already have normalized native tokens to wrapped-native
+tokens before `GetDexParam`; the Tessera encoder's wrapping must therefore be
+idempotent.
+
+### Fixture Generation
+
+Extend `tests/generic-swap-transaction-builder/dex-encoder` fixtures with
+standalone Tessera cases. These fixtures are not derived from resolved-build
+fixtures because no committed resolved fixture currently contains Tessera.
+
+Fixture generator rules:
+
+- Instantiate the real TypeScript `Tessera` class with a minimal DexHelper for
+  each supported network.
+- Add a network-aware helper variant; the existing generic fixture generator's
+  MAINNET-only helper is not sufficient for Tessera Base/BSC parity.
+- `data` must be `null`. Tessera's `getDexParam` ignores data entirely;
+  locking fixture data to `null` prevents accidentally adding a payload that
+  callers might later rely on.
+- `NeedWrapNativeInput` and `DexParamInput` should match the public builder
+  DTO contract from Phase 1/2.
+- Names should encode network, side, and native/wrapped case so failures are
+  easy to localize.
+- Example names:
+  - `tessera-base-usdc-to-weth-sell`
+  - `tessera-base-eth-to-usdc-sell`
+  - `tessera-bsc-bnb-to-usdt-buy`
+
+Required Phase 3 Tessera DEX-param fixture matrix:
+
+| Fixture theme         | Network | Side | Source token posture | Destination token posture |
+| --------------------- | ------- | ---- | -------------------- | ------------------------- |
+| Base USDC -> WETH     | 8453    | SELL | ERC-20               | wrapped-native            |
+| Base USDC -> ETH      | 8453    | SELL | ERC-20               | native                    |
+| Base WETH -> USDC     | 8453    | SELL | wrapped-native       | ERC-20                    |
+| Base ETH -> USDC      | 8453    | SELL | native               | ERC-20                    |
+| Base USDC -> WETH BUY | 8453    | BUY  | ERC-20               | wrapped-native            |
+| Base USDC -> ETH BUY  | 8453    | BUY  | ERC-20               | native                    |
+| BSC WBNB -> USDT      | 56      | SELL | wrapped-native       | ERC-20                    |
+| BSC BNB -> USDT       | 56      | SELL | native               | ERC-20                    |
+| BSC USDT -> WBNB      | 56      | SELL | ERC-20               | wrapped-native            |
+| BSC USDT -> BNB       | 56      | SELL | ERC-20               | native                    |
+| BSC WBNB -> USDT BUY  | 56      | BUY  | wrapped-native       | ERC-20                    |
+| BSC BNB -> USDT BUY   | 56      | BUY  | native               | ERC-20                    |
+
+These are the DEX-param counterparts of
+`src/dex/tessera/tessera-e2e.test.ts`. Phase 4 will reuse the same economic
+routes for full public builder fixtures.
+
+Each case should generate:
+
+- one `need-wrap-native` fixture with expected `true`.
+- one `dex-param` fixture with expected `DexExchangeParam`.
+
+Update the existing DEX-encoder fixture coverage gate instead of weakening it:
+
+- `direct-param` DEX keys must still equal the direct resolved-build DEX key
+  set exactly.
+- `dex-param` and `need-wrap-native` DEX keys must equal the generic
+  resolved-build DEX key set plus the standalone `tessera` key.
+- Add an explicit required-name check for every Tessera fixture in the matrix
+  so a generator bug cannot satisfy the key-set assertion with only one
+  Tessera case.
+
+Update `validateDexSpecificData` with an explicit lowercase `tessera` branch
+that requires `data === null`, and add a final `throw` for unknown DEX keys.
+This prevents a casing typo such as `Tessera` or an unsupported key from
+silently bypassing DEX-specific data validation.
+
+### Go Fixture Tests
+
+Add a Go fixture loader under `internal/dexencodertest` that can read the
+existing TS dex-encoder fixture root and filter by `dexKey == "tessera"`
+case-sensitively.
+
+The loader should mirror `internal/publicbuildertest` conventions:
+
+- `Collection` and `Fixture` wrapper types.
+- raw bytes preserved for optional canonical-byte diagnostics.
+- recursive fixture walk from the repository root.
+- schema-version and kind validation before test use.
+
+Tests:
+
+- `TestTesseraNeedWrapNativeFixtures`
+  - load every Tessera `need-wrap-native` fixture.
+  - call `Encoder.NeedWrapNative`.
+  - assert expected `true`.
+- `TestTesseraDexParamFixtures`
+  - load every Tessera `dex-param` fixture.
+  - decode fixture input into `builder.DexParamInput`.
+  - call `Encoder.GetDexParam`.
+  - compare output to fixture expected value:
+    - exact `NeedWrapNative`.
+    - exact `DexFuncHasRecipient`.
+    - exact lowercase `ExchangeData`.
+    - exact lowercase `TargetExchange`.
+    - nil optional fields remain nil.
+- On mismatch, decode the Tessera calldata and report the six method arguments
+  (`tokenIn`, `tokenOut`, `amountSpecified`, `amountCheck`, `recipient`,
+  `swapData`) before raw hex. Do not leave implementers debugging only a long
+  calldata string.
+
+### Focused Unit Tests
+
+Port the semantic coverage described below into this repo, adapted to
+`builder.DexParamInput`:
+
+- SELL happy path:
+  - selector matches
+    `tesseraSwapWithAllowances(address,address,int256,uint256,address,bytes)`.
+  - `amountSpecified = srcAmount`.
+  - `amountCheck = 0`.
+  - `swapData` is empty bytes.
+- BUY happy path:
+  - same selector as SELL.
+  - `amountSpecified = -destAmount`.
+  - `amountCheck = srcAmount`.
+- Base native source wraps to Base WETH.
+- Base native destination wraps to Base WETH.
+- Wrapped-native source token passes through unchanged, proving native wrapping
+  is idempotent for Phase 4.
+- BSC native source wraps to BSC WBNB.
+- zero-address source wraps like native.
+- unsupported network returns `tessera: unsupported chain %d`.
+- invalid side returns `invalid request: tessera unsupported swap side %q`.
+- SELL `srcAmount = 2^255 - 1` is accepted.
+- SELL `srcAmount = 2^255` is rejected.
+- SELL negative `srcAmount` is rejected.
+- BUY nil/empty or zero `destAmount` is rejected.
+- BUY `destAmount = 2^255` is rejected.
+- BUY `srcAmount = 2^256` is rejected.
+- malformed src, dest, recipient, router, or wrapped-native addresses fail
+  before ABI packing with the planned address error format.
+- decoded `swapData` length is exactly zero bytes, not one zero byte.
+- identical inputs produce identical calldata bytes.
+
+### Out Of Scope
+
+- Public Tessera `BuildGeneric` fixtures.
+- Production Tessera registry wiring.
+- HTTP endpoint adapter.
+- RPC, Redis, polling, pricing, state snapshots, or quoter math.
+- Tessera e2e / Tenderly simulation from Go.
+- Any non-Tessera DEX encoder.
+
+### Acceptance Checklist
+
+- `go/txbuilder/dex/tessera` implements `builder.DexEncoder`.
+- Tessera ABI drift test passes against `src/abi/tessera/TesseraSwap.json`.
+- Tessera config tests prove Base/BSC router and wrapped-native values match
+  the TypeScript sources.
+- TypeScript dex-encoder fixtures include Tessera Base/BSC SELL/BUY and
+  native/wrapped cases.
+- Go Tessera fixture tests pass against TypeScript-generated fixture output.
+- Focused amount, native-wrap, unsupported-network, and malformed-address tests
+  pass.
+- Phase 3 does not modify `go/txbuilder/builder` source files.
+- No developer-local `go-dex-lib` filesystem paths remain in committed plan or
+  implementation files.
+- Existing Phase 2 public-builder fixture-backed tests continue to pass.
+- Existing resolved generic tests continue to pass.
+- `go test ./go/...`
+- `go vet ./go/...`
+- `gofmt -s -l go/` produces no output.
+- `yarn check:tsc`
+- `yarn jest tests/generic-swap-transaction-builder/dex-encoder/dex-encoder-fixtures.test.ts --runInBand`
+- `yarn fixtures:check`
+
+### Handoff To Phase 4
+
+After Phase 3, Tessera can produce real Go `DexExchangeParam` values for one
+leg, but `BuildGeneric` still uses fixture-backed registries in its public
+builder parity suite.
+
+Phase 4 should:
+
+- add a concrete registry or test registry that maps Tessera's DEX keys to the
+  new Tessera encoder.
+- canonicalize public route exchange labels before registry lookup. At minimum
+  Phase 4 must map both `tessera` and the existing route label `Tessera` to the
+  same Tessera encoder, or define a stricter price-route contract and update
+  TypeScript fixture generation to emit the canonical lowercase key.
+- generate public-builder Tessera fixtures from the TypeScript public builder,
+  mirroring `src/dex/tessera/tessera-e2e.test.ts`.
+- run `BuildGeneric` end-to-end with the real Tessera encoder and compare
+  resolved input, params, and tx object.
+- only then decide whether to add a temporary HTTP adapter that maps
+  `builder.DexParamInput` to `tmp/DEX-PARAM-API.md`.
