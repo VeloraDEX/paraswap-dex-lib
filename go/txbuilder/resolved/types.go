@@ -44,8 +44,9 @@ type EncodingContext struct {
 }
 
 type BuildDeps struct {
-	EncodingContext EncodingContext
-	AugustusV6ABI   *ethabi.ABI
+	EncodingContext                EncodingContext
+	AugustusV6ABI                  *ethabi.ABI
+	ExecutorBytecodeBuilderFactory ExecutorBytecodeBuilderFactory
 }
 
 type BuildInput struct {
@@ -114,6 +115,6 @@ type TxObject struct {
 }
 
 type BuildOutput struct {
-	Params []any
-	Tx     TxObject
+	Params   []any    `json:"params"`
+	TxObject TxObject `json:"txObject"`
 }

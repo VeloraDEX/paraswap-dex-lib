@@ -4,8 +4,8 @@ Last updated: 2026-05-15
 
 This document tracks implementation details for
 `docs/plans/go-build-migration/implementation.md`. It is organized by
-implementation phase. Phase 1 and Phase 2 are complete; later sections should
-be added when the next phase is planned.
+implementation phase. Phase 1, Phase 2, and Phase 2a are complete; Phase 2b is
+the next planned implementation slice.
 
 ## Phase 1: Go Module And Fixture Foundation
 
@@ -775,12 +775,10 @@ Phase 2 is complete when:
   V6, and wrapped native token values with TypeScript-compatible messages.
 - `go vet ./go/...` passes.
 - `gofmt -s -l go/` produces no output.
-- `BuildTransactionFromResolved` remains unimplemented until Phase 2a.
-- Phase 2a remaining work is limited to orchestration through
-  `BuildTransactionFromResolved`, full input-field validation matching
-  TypeScript `validateTopLevelFields`, executor bytecode wiring from later
-  executor phases, final ABI encoding of the five-element params tuple, and
-  `TxObject` assembly.
+- Phase 2a has since implemented `BuildTransactionFromResolved`, full
+  input-field validation, executor bytecode wiring through a fixture-injected
+  seam, final ABI encoding of the five-element params tuple, and `TxObject`
+  assembly. See the Phase 2a section for the completed boundary details.
 
 ### Verification Commands
 
@@ -793,9 +791,15 @@ yarn jest tests/generic-swap-transaction-builder/resolved --runInBand
 
 ### Exit Notes For Phase 2a
 
-Phase 2a should call these Phase 2 helpers:
+Phase 2a should call or adapt these Phase 2 helpers:
 
-- `resolved.ValidateBuildDeps(input, deps)`
+- Replace `resolved.ValidateBuildDeps(input, deps)` with split helpers before
+  Phase 2a uses dependency validation in the boundary. The TypeScript
+  validation order runs executor validation before top-level field validation,
+  then encoding-context validation after top-level field validation. A
+  monolithic Go dependency validator cannot preserve that order for exact
+  `expectedError` parity, so Phase 2a should remove the wrapper and migrate
+  Phase 2 tests to the split helpers.
 - `resolved.ParseFeeInput(input)`
 - `resolved.BuildFeesV6(fee)`
 - `resolved.PackUUIDAndBlock(input.UUID, input.BlockNumber)`
@@ -842,3 +846,495 @@ Remaining `json.RawMessage` DTO fields for Phase 2a:
 
 `resolved.BuildInput.Fee` remains raw at the DTO boundary, but Phase 2 provides
 `ParseFeeInput` for Phase 2a orchestration.
+
+## Phase 2a: Generic Boundary Orchestration And Validation
+
+Phase 2a adds the Go `BuildTransactionFromResolved` boundary around the Phase 2
+encoding primitives. It ports the TypeScript validation boundary, final
+Augustus V6 ABI calldata assembly, and `TxObject` assembly. It does not port
+Executor01/02/03/WETH bytecode generation; tests inject fixture bytecode so the
+boundary can be verified before executor phases land.
+
+### Current Status
+
+- Phase 2a adds the public Go `BuildTransactionFromResolved` entry point.
+- Go parses typed generic route plan, resolved-leg, exchange-param, and
+  WETH-plan DTOs for boundary validation.
+- Generic boundary validation matches the TypeScript call order and exact
+  committed generic negative fixture `expectedError` strings.
+- Generic Augustus V6 calldata encoding is byte-for-byte covered by success
+  fixtures when executor bytecode is injected from `expectedParams[4]`.
+- Executor bytecode generation remains assigned to later executor phases.
+
+### Goal
+
+Land a reliable Go boundary that can:
+
+- reject all in-scope generic negative fixtures with exact `expectedError`
+  strings
+- accept all generic success fixtures when supplied their committed executor
+  bytecode payload
+- reproduce `expectedParams` and `expectedTx` exactly with fixture-injected
+  bytecode
+- provide the stable orchestration shell that later executor phases plug into
+
+### In Scope
+
+- Add:
+
+```go
+func BuildTransactionFromResolved(input BuildInput, deps BuildDeps) (BuildOutput, error)
+```
+
+- Add typed route, resolved-leg, exchange-param, and WETH-plan DTOs matching
+  the TypeScript `RoutePlan`, `ResolvedLeg`, `DexExchangeBuildParam`, and
+  `DepositWithdrawReturn` shapes used by resolved fixtures.
+- Parse raw fixture fields into typed validation data:
+  - `BuildInput.RoutePlan`
+  - `BuildInput.ResolvedLegs`
+  - `BuildInput.WethPlan`
+  - `BuildInput.Fee` through existing `ParseFeeInput`
+- Port generic boundary validation in the exact TypeScript call order from
+  `src/generic-swap-transaction-builder/resolved/build-transaction.ts`:
+  1. `validateSupportedContractMethod`
+  2. `validateExecutor`
+  3. `validateTopLevelFields`
+  4. `validateEncodingContext`
+  5. `validateRoutePlan`
+  6. `validateWethPlan`
+  7. `assertNoDuplicateResolvedLegs`
+  8. `assertRoutePlanLegCount`
+  9. a single pass over `resolvedLegs` in input order; for each leg, compute
+     `RoutePositionKey`, check membership in route keys, then call
+     `validateResolvedLeg(leg, index)`, then insert into `resolvedLegByKey`
+  10. a final pass over route keys in route-plan order to throw
+      `missing resolved leg for route position ${key}` for the first missing
+      key
+- Split Phase 2 dependency validation into `ValidateSupportedContractMethod`,
+  `ValidateExecutorDeps`, and `ValidateEncodingContextDeps` so Phase 2a can
+  call the helpers in the same positions as TypeScript. Remove
+  `ValidateBuildDeps` during Phase 2a and migrate Phase 2 tests to the split
+  helpers so there is no lower-level helper with ambiguous ordering semantics.
+- Add Go route-plan helpers equivalent to TypeScript:
+  - `RoutePositionKey(routeIndex, swapIndex, swapExchangeIndex) string`
+  - `WalkRoutePlan(routePlan RoutePlan) []RoutePlanExchange`
+  - `GetRoutePlanLegCount(routePlan RoutePlan) int`
+- Add top-level field validation helpers matching TypeScript error strings:
+  - lowercase address: `${field} must be a lowercase 42-character hex address`
+  - decimal amount: `${field} must be a decimal amount string`
+  - hex bytes: `${field} must be 0x-prefixed hex bytes`
+  - `needWrapNative`: `${field}.needWrapNative must be boolean`
+- Add final generic calldata encoding using the embedded Augustus V6 ABI and
+  `go-ethereum/accounts/abi`.
+- Add an executor-bytecode dependency seam for Phase 2a tests, for example:
+
+```go
+type ExecutorBytecodeBuilder interface {
+    BuildBytecode(input ExecutorBytecodeBuildInput) (HexBytes, error)
+}
+```
+
+`BuildTransactionFromResolved` must call this dependency only after validation
+passes. Phase 2a tests provide a fixture bytecode builder that returns
+`expectedParams[4]`. Later executor phases replace that test builder with real
+Go bytecode builders.
+
+### Out Of Scope
+
+- Do not port Executor01, Executor02, Executor03, or WETH bytecode builders.
+- Do not implement direct builder behavior or direct negative fixtures.
+- Do not add runtime bridge work.
+- Do not add Go-side DEX encoders.
+- Do not change fixture schema.
+- Do not create Go-only golden fixtures.
+
+### File Layout
+
+| Path                                      | Purpose                                                            |
+| ----------------------------------------- | ------------------------------------------------------------------ |
+| `go/txbuilder/resolved/build.go`          | Public `BuildTransactionFromResolved` orchestration.               |
+| `go/txbuilder/resolved/input_types.go`    | Route plan, resolved leg, exchange-param, and WETH-plan DTOs.      |
+| `go/txbuilder/resolved/input_parse.go`    | Raw JSON parsing into typed validation/build data.                 |
+| `go/txbuilder/resolved/input_validate.go` | Boundary validation in TypeScript call order.                      |
+| `go/txbuilder/resolved/route_plan.go`     | Route position keys, route walking, and leg-count helpers.         |
+| `go/txbuilder/resolved/calldata.go`       | Generic Augustus V6 ABI argument conversion and calldata encoding. |
+| `go/txbuilder/resolved/build_test.go`     | Success fixture orchestration and `TxObject` parity tests.         |
+| `go/txbuilder/resolved/negative_test.go`  | Generic negative fixture exact `expectedError` parity tests.       |
+
+Keep direct-builder parsing and direct-specific validation out of these files
+unless a shared helper is clearly reusable by Phase 3.
+
+### DTO Shape Requirements
+
+Phase 2a validates only a subset of executor-facing fields, but it must parse
+the complete resolved fixture shape so later executor phases do not inherit
+silently degraded typed values.
+
+`DexExchangeBuildParam` must include every field from
+`src/types.ts` `DexExchangeParam` plus `approveData`. Validation-sensitive
+fields must not let Go's JSON decoder preempt TypeScript-compatible validation
+errors. In particular, decode `needWrapNative` as `json.RawMessage` or through
+a custom nullable/raw wrapper, then check it in `validateExchangeParam` so
+`non-boolean-need-wrap-native` produces exactly
+`resolvedLegs[0].exchangeParam.needWrapNative must be boolean`.
+
+- `needWrapNative` as raw/custom decoded boolean, not plain `bool`
+- `needUnwrapNative *bool`
+- `skipApproval *bool`
+- `wethAddress *Address`
+- `exchangeData HexBytes`
+- `targetExchange Address`
+- `dexFuncHasRecipient bool`
+- `specialDexFlag *int`
+- `transferSrcTokenBeforeSwap *Address`
+- `spender *Address`
+- `sendEthButSupportsInsertFromAmount *bool`
+- `specialDexSupportsInsertFromAmount *bool`
+- `swappedAmountNotPresentInExchangeData *bool`
+- `returnAmountPos *int`
+- `insertFromAmountPos *int`
+- `amountsPacked128 *bool`
+- `permit2Approval *bool`
+- `approveData *ApproveData`, where `ApproveData` contains `token Address` and
+  `target Address`
+
+Phase 2a validation checks this DTO in the same order as TypeScript
+`validateExchangeParam(...)`:
+
+1. `needWrapNative` is boolean
+2. `targetExchange` is a lowercase address
+3. `exchangeData` is hex bytes
+4. optional `wethAddress` is a lowercase address
+5. optional `transferSrcTokenBeforeSwap` is a lowercase address
+6. optional `spender` is a lowercase address
+7. optional `approveData.token` is a lowercase address
+8. optional `approveData.target` is a lowercase address
+
+`WethPlan` must match `DepositWithdrawReturn` from
+`src/dex/weth/types.ts`:
+
+```go
+type WethPlan struct {
+    Deposit  *WethSubPlan `json:"deposit,omitempty"`
+    Withdraw *WethSubPlan `json:"withdraw,omitempty"`
+}
+
+type WethSubPlan struct {
+    Callee   Address       `json:"callee"`
+    Calldata HexBytes      `json:"calldata"`
+    Value    DecimalString `json:"value"`
+}
+```
+
+Go JSON unmarshaling failures for raw fields (`routePlan`, `resolvedLegs`,
+`wethPlan`, and `fee`) are non-parity errors in Phase 2a because no committed
+fixture probes malformed JSON shape before TypeScript boundary validation. Use
+clear Go-idiomatic error strings and revise only if a future shared fixture
+exercises them.
+
+### Public And Internal API Shape
+
+Phase 2a should keep the external boundary close to the TypeScript boundary:
+
+```go
+func BuildTransactionFromResolved(input BuildInput, deps BuildDeps) (BuildOutput, error)
+```
+
+`BuildDeps` should gain the smallest bytecode dependency needed for Phase 2a.
+Make the seam future-compatible with TypeScript's
+`createExecutorBytecodeBuilder(input.executorType, deps.encodingContext)` call.
+Prefer an executor factory keyed by `ExecutorType` plus `EncodingContext`, for
+example:
+
+```go
+type ExecutorBytecodeBuilderFactory interface {
+    CreateExecutorBytecodeBuilder(
+        executorType ExecutorType,
+        context EncodingContext,
+    ) (ExecutorBytecodeBuilder, error)
+}
+```
+
+Phase 2a fixture tests can use a factory that returns a fixture bytecode
+builder. Later executor phases replace that test factory with real builders. If
+the factory is nil, return a clear non-fixture error like
+`executor bytecode builder factory is required`; no committed fixture should
+depend on that message.
+
+The bytecode builder input should be typed and future-proof for executor
+phases:
+
+```go
+type ExecutorBytecodeBuildInput struct {
+    ExecutorType ExecutorType
+    Context      EncodingContext
+    RoutePlan    RoutePlan
+    ResolvedLegs []ResolvedLeg
+    Sender       Address
+    SrcToken     Address
+    DestToken    Address
+    DestAmount   DecimalString
+    WethPlan     *WethPlan
+}
+```
+
+Including `ExecutorType` and `EncodingContext` in the input is redundant with
+the factory call, but keeps test doubles and later builder implementations from
+depending on hidden closure state.
+
+Validation should return a parsed/validated internal value so orchestration does
+not parse raw JSON twice:
+
+```go
+type validatedBuildInput struct {
+    input            BuildInput
+    routePlan        RoutePlan
+    resolvedLegs     []ResolvedLeg
+    wethPlan         *WethPlan
+    fee              FeeInput
+    resolvedLegByKey map[string]ResolvedLeg
+}
+```
+
+`BuildTransactionFromResolved` should assemble:
+
+1. validated input
+2. executor bytecode from the dependency seam
+3. params from `BuildGenericSwapParams`
+4. calldata from typed ABI arguments
+5. `TxObject` with `from`, `to`, `value`, `data`, and gas fields
+
+The Go output shape must intentionally match the TypeScript boundary:
+
+```go
+type BuildOutput struct {
+    Params   []any    `json:"params"`
+    TxObject TxObject `json:"txObject"`
+}
+```
+
+Phase 2a should rename the current `BuildOutput.Tx` field or otherwise document
+an intentional divergence before implementation. The default target is exact
+`{ params, txObject }` parity.
+
+### Validation Parity Rules
+
+The canonical source is
+`src/generic-swap-transaction-builder/resolved/build-transaction.ts`. Match the
+function-call sequence, not only rule coverage.
+
+Use exact TypeScript error strings. Dynamic values must preserve argument order,
+separators, pluralization, and address casing. The in-scope generic negative
+fixtures are:
+
+- `unsupported-generic-method`
+- `executor-address-mismatch`
+- `malformed-address`
+- `malformed-amount`
+- `malformed-hex-bytes`
+- `malformed-weth-plan`
+- `duplicate-resolved-leg`
+- `missing-resolved-leg`
+- `out-of-route-resolved-leg`
+- `non-boolean-need-wrap-native`
+
+Direct-only negative fixtures remain Phase 3 scope:
+
+- `unsupported-direct-method`
+- `invalid-direct-side`
+- `direct-side-method-mismatch`
+
+Before marking Phase 2a complete, confirm the generic negative fixtures still
+pin the first-failing validation order. If a fixture stops doing that, update
+the shared TypeScript fixture matrix rather than adding Go-only coverage.
+
+`validateTopLevelFields` must run field checks in the TypeScript order:
+
+1. `executorAddress`
+2. `augustusV6Address`
+3. `wrappedNativeTokenAddress`
+4. `srcToken`
+5. `destToken`
+6. `userAddress`
+7. `beneficiary`
+8. `fee.partnerAddress`
+9. optional `fee.referrerAddress`
+10. `srcAmount`
+11. `destAmount`
+12. `minMaxAmount`
+13. `quotedAmount`
+14. `fee.partnerFeePercent`
+15. `permit`
+16. optional `gas.gasPrice`
+17. optional `gas.maxFeePerGas`
+18. optional `gas.maxPriorityFeePerGas`
+
+`validateRoutePlan` must use bracket-notation prefixes:
+
+- swap prefix:
+  `routePlan.routes[%d].swaps[%d]`
+- swap-exchange prefix:
+  `routePlan.routes[%d].swaps[%d].swapExchanges[%d]`
+
+Within each swap, validate fields in TypeScript order: `srcToken`,
+`destToken`, `srcAmount`, `destAmount`, then each swap exchange's `srcAmount`
+and `destAmount`.
+
+Resolved-leg validation uses the `resolvedLegs[%d]` prefix. `RoutePositionKey`
+format is `%d:%d:%d` for `routeIndex:swapIndex:swapExchangeIndex`, as pinned
+by `duplicate-resolved-leg` and `out-of-route-resolved-leg` fixtures.
+
+`validateResolvedLeg` must check fields in TypeScript order:
+
+1. `normalizedSrcToken`
+2. `normalizedDestToken`
+3. `recipient`
+4. `normalizedSrcAmount`
+5. `normalizedDestAmount`
+6. `exchangeParam` via `validateExchangeParam`
+
+`validateWethPlan` must check deposit before withdraw. For each sub-plan, check
+`callee`, then `calldata`, then `value`, matching the TypeScript field order.
+
+### ABI Encoding Rules
+
+`BuildGenericSwapParams` remains the fixture-shape helper. Phase 2a adds ABI
+argument conversion for the same five logical params:
+
+- executor address -> `common.Address`
+- generic data tuple:
+  - src token -> `common.Address`
+  - dest token -> `common.Address`
+  - from amount -> `*big.Int`
+  - to amount -> `*big.Int`
+  - quoted amount -> `*big.Int`
+  - metadata -> `[32]byte`
+  - beneficiary -> `common.Address`
+- partner and fee -> `*big.Int`
+- permit -> `[]byte`
+- executor data -> `[]byte`
+
+Use `abi.Method.Inputs.Pack(...)`, prepend the method selector, and serialize
+the final calldata as lowercase `0x` hex. Tests must compare `expectedTx.data`
+exactly.
+
+### Fixture Strategy
+
+Phase 2a uses committed fixtures only.
+
+- Success tests iterate the `phase2GenericSuccess` bucket. The test bytecode
+  builder returns each fixture's committed `expectedParams[4]`, then
+  `BuildTransactionFromResolved` must match:
+  - full `expectedParams`
+  - full `expectedTx`
+- Negative tests iterate the `phase2GenericNegative` bucket and compare
+  `err.Error()` exactly to `expectedError`.
+- Tests should assert the bytecode builder is not called when validation fails.
+- Tests should assert the bytecode builder is called exactly once for success
+  fixtures and receives typed route plan, resolved legs, sender, token, amount,
+  and WETH-plan values derived from the input.
+
+This proves boundary orchestration and ABI assembly while making it explicit
+that executor bytecode parity remains later phase work.
+
+### Implementation Order
+
+1. Split dependency validation helpers to preserve TypeScript validation order.
+2. Add typed route, resolved-leg, exchange-param, and WETH-plan DTOs.
+3. Add route-plan helpers and focused unit tests for route keys, walking, and
+   leg counts.
+4. Add top-level, route-plan, WETH-plan, and resolved-leg validators with exact
+   TS error strings.
+5. Add generic calldata ABI argument conversion and calldata encoding tests
+   using fixture bytecode.
+6. Add `BuildTransactionFromResolved` orchestration with bytecode dependency
+   seam.
+7. Add generic success bucket parity tests with fixture-injected bytecode.
+8. Add generic negative bucket exact `expectedError` tests.
+9. Run Phase 2a verification commands.
+
+### Implementation Tasks
+
+| Status | Task                                | Notes                                                                                   |
+| ------ | ----------------------------------- | --------------------------------------------------------------------------------------- |
+| Done   | Split dependency validation helpers | Preserve TS order: supported method, executor deps, top-level fields, context deps.     |
+| Done   | Add typed generic input DTOs        | Route plan, resolved legs, exchange params, WETH plan, and bytecode builder input.      |
+| Done   | Add route-plan helpers              | `RoutePositionKey`, `WalkRoutePlan`, `GetRoutePlanLegCount`.                            |
+| Done   | Add boundary validators             | Exact TS messages for top-level, WETH, route, duplicate, count, and resolved-leg rules. |
+| Done   | Add ABI calldata encoder            | Convert params to go-ethereum ABI types and compare fixture `expectedTx.data`.          |
+| Done   | Add bytecode dependency seam        | Fixture tests inject `expectedParams[4]`; real executor builders land later.            |
+| Done   | Add public boundary orchestration   | `BuildTransactionFromResolved` returns params plus `TxObject`.                          |
+| Done   | Add generic success parity tests    | All `phase2GenericSuccess` fixtures pass with injected bytecode.                        |
+| Done   | Add generic negative parity tests   | All `phase2GenericNegative` fixtures match exact `expectedError`.                       |
+| Done   | Run Phase 2a gates                  | Passed on 2026-05-15.                                                                   |
+
+### Acceptance Criteria
+
+Phase 2a is complete when:
+
+- `BuildTransactionFromResolved` exists and is the only Go public entry point
+  for generic resolved transaction builds.
+- Validation follows the TypeScript call order from `validateBuildInput(...)`.
+- Every `phase2GenericNegative` fixture fails with exact `expectedError`
+  parity.
+- Every `phase2GenericSuccess` fixture matches `expectedParams` and
+  `expectedTx` exactly when the test bytecode builder supplies fixture
+  `expectedParams[4]`.
+- The fixture bytecode builder is not called on validation failures.
+- ABI calldata encoding is byte-for-byte equal to fixture `expectedTx.data`
+  with injected bytecode.
+- `BuildTransactionFromResolved` returns a clear non-fixture error when no
+  bytecode builder is provided.
+- Executor bytecode generation remains unimplemented and assigned to
+  Phases 2b-2e.
+- `go test ./go/...` passes.
+- `go vet ./go/...` passes.
+- `gofmt -s -l go/` produces no output.
+- `yarn fixtures:check` passes.
+- `yarn jest tests/generic-swap-transaction-builder/resolved --runInBand`
+  passes.
+
+### Verification Commands
+
+```bash
+go test ./go/...
+go vet ./go/...
+gofmt -s -l go/
+yarn fixtures:check
+yarn jest tests/generic-swap-transaction-builder/resolved --runInBand
+```
+
+### Exit Notes For Phase 2b
+
+Before starting Executor01 work, record:
+
+- Bytecode seam:
+
+```go
+type ExecutorBytecodeBuilderFactory interface {
+    CreateExecutorBytecodeBuilder(
+        executorType ExecutorType,
+        context EncodingContext,
+    ) (ExecutorBytecodeBuilder, error)
+}
+
+type ExecutorBytecodeBuilder interface {
+    BuildBytecode(input ExecutorBytecodeBuildInput) (HexBytes, error)
+}
+```
+
+- Executor builders should consume the typed `ExecutorBytecodeBuildInput`,
+  `RoutePlan`, `ResolvedLeg`, `DexExchangeBuildParam`, and `WethPlan` DTOs from
+  `go/txbuilder/resolved/input_types.go`.
+- Success fixture coverage: all 22 `phase2GenericSuccess` fixtures pass with
+  injected bytecode from `expectedParams[4]`.
+- Negative fixture coverage: all 10 `phase2GenericNegative` fixtures match exact
+  `expectedError` strings. The current shared fixture set pins the first
+  failure for supported-method, executor-address, top-level field, WETH-plan,
+  duplicate-leg, leg-count, route-membership, and exchange-param
+  `needWrapNative` validation.
+- ABI calldata helpers: `encodeGenericCalldata`, `buildGenericSwapDataABI`,
+  `parseUint256`, and `decodeHexBytes`. No decoded-diff helper was needed in
+  Phase 2a.
+- Route DTO note: route and swap-exchange `percent` fields are `float64`,
+  because committed route plans can contain fractional percentages.

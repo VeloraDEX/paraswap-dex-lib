@@ -7,7 +7,7 @@ import (
 	"github.com/paraswap/paraswap-dex-lib/go/txbuilder/resolved"
 )
 
-func TestValidateBuildDepsAcceptsFixtureDeps(t *testing.T) {
+func TestValidateDepsAcceptsFixtureDeps(t *testing.T) {
 	for _, fixtureName := range []string{
 		"executor01-simple-sell-approved",
 		"executor02-multiswap-sell",
@@ -18,18 +18,24 @@ func TestValidateBuildDepsAcceptsFixtureDeps(t *testing.T) {
 			_, input := loadBuildInput(t, fixtureName)
 			deps := buildDepsForInput(t, input)
 
-			if err := resolved.ValidateBuildDeps(input, deps); err != nil {
+			if err := resolved.ValidateSupportedContractMethod(input.ContractMethod); err != nil {
+				t.Fatal(err)
+			}
+			if err := resolved.ValidateExecutorDeps(input, deps); err != nil {
+				t.Fatal(err)
+			}
+			if err := resolved.ValidateEncodingContextDeps(input, deps); err != nil {
 				t.Fatal(err)
 			}
 		})
 	}
 }
 
-func TestValidateBuildDepsRejectsExecutorAddressMismatchFixture(t *testing.T) {
+func TestValidateExecutorDepsRejectsExecutorAddressMismatchFixture(t *testing.T) {
 	fixture, input := loadBuildInput(t, "executor-address-mismatch")
 	deps := buildDepsForInput(t, input)
 
-	err := resolved.ValidateBuildDeps(input, deps)
+	err := resolved.ValidateExecutorDeps(input, deps)
 	if err == nil {
 		t.Fatal("expected executor address mismatch")
 	}
@@ -38,13 +44,14 @@ func TestValidateBuildDepsRejectsExecutorAddressMismatchFixture(t *testing.T) {
 	}
 }
 
-func TestValidateBuildDepsRejectsContextMismatches(t *testing.T) {
+func TestValidateDepsRejectsMismatches(t *testing.T) {
 	_, input := loadBuildInput(t, "executor01-simple-sell-approved")
 	deps := buildDepsForInput(t, input)
 
 	for _, testCase := range []struct {
 		name   string
 		mutate func(resolved.BuildInput, resolved.BuildDeps) (resolved.BuildInput, resolved.BuildDeps)
+		check  func(resolved.BuildInput, resolved.BuildDeps) error
 		want   string
 	}{
 		{
@@ -53,7 +60,8 @@ func TestValidateBuildDepsRejectsContextMismatches(t *testing.T) {
 				input.ExecutorType = "Executor99"
 				return input, deps
 			},
-			want: "unsupported executor type: Executor99",
+			check: resolved.ValidateExecutorDeps,
+			want:  "unsupported executor type: Executor99",
 		},
 		{
 			name: "network",
@@ -61,7 +69,8 @@ func TestValidateBuildDepsRejectsContextMismatches(t *testing.T) {
 				deps.EncodingContext.Network = input.Network + 1
 				return input, deps
 			},
-			want: "network mismatch: input 1, context 2",
+			check: resolved.ValidateEncodingContextDeps,
+			want:  "network mismatch: input 1, context 2",
 		},
 		{
 			name: "Augustus V6 address",
@@ -69,7 +78,8 @@ func TestValidateBuildDepsRejectsContextMismatches(t *testing.T) {
 				deps.EncodingContext.AugustusV6Address = "0x9999999999999999999999999999999999999999"
 				return input, deps
 			},
-			want: "augustusV6Address mismatch: input 0x6a000f20005980200259b80c5102003040001068, context 0x9999999999999999999999999999999999999999",
+			check: resolved.ValidateEncodingContextDeps,
+			want:  "augustusV6Address mismatch: input 0x6a000f20005980200259b80c5102003040001068, context 0x9999999999999999999999999999999999999999",
 		},
 		{
 			name: "wrapped native token address",
@@ -77,12 +87,13 @@ func TestValidateBuildDepsRejectsContextMismatches(t *testing.T) {
 				deps.EncodingContext.WrappedNativeTokenAddress = "0x8888888888888888888888888888888888888888"
 				return input, deps
 			},
-			want: "wrappedNativeTokenAddress mismatch: input 0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2, context 0x8888888888888888888888888888888888888888",
+			check: resolved.ValidateEncodingContextDeps,
+			want:  "wrappedNativeTokenAddress mismatch: input 0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2, context 0x8888888888888888888888888888888888888888",
 		},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
 			mutatedInput, mutatedDeps := testCase.mutate(input, deps)
-			err := resolved.ValidateBuildDeps(mutatedInput, mutatedDeps)
+			err := testCase.check(mutatedInput, mutatedDeps)
 			if err == nil || err.Error() != testCase.want {
 				t.Fatalf("expected %q, got %v", testCase.want, err)
 			}

@@ -2,7 +2,17 @@ package resolved
 
 import "fmt"
 
-func ValidateBuildDeps(input BuildInput, deps BuildDeps) error {
+func ValidateSupportedContractMethod(contractMethod string) error {
+	if !IsGenericContractMethod(contractMethod) {
+		return fmt.Errorf(
+			"unsupported generic contract method for resolved build: %s",
+			contractMethod,
+		)
+	}
+	return nil
+}
+
+func ValidateExecutorDeps(input BuildInput, deps BuildDeps) error {
 	if !IsSupportedExecutorType(input.ExecutorType) {
 		return fmt.Errorf("unsupported executor type: %s", input.ExecutorType)
 	}
@@ -16,6 +26,10 @@ func ValidateBuildDeps(input BuildInput, deps BuildDeps) error {
 		)
 	}
 
+	return nil
+}
+
+func ValidateEncodingContextDeps(input BuildInput, deps BuildDeps) error {
 	if input.Network != deps.EncodingContext.Network {
 		return fmt.Errorf(
 			"network mismatch: input %d, context %d",
