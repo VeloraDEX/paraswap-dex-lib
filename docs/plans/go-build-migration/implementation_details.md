@@ -4,8 +4,8 @@ Last updated: 2026-05-15
 
 This document tracks implementation details for
 `docs/plans/go-build-migration/implementation.md`. It is organized by
-implementation phase. Phase 1, Phase 2, and Phase 2a are complete; Phase 2b is
-the next planned implementation slice.
+implementation phase. Phase 1, Phase 2, Phase 2a, and Phase 2b are complete;
+Phase 2c is the next planned implementation slice.
 
 ## Phase 1: Go Module And Fixture Foundation
 
@@ -1338,3 +1338,359 @@ type ExecutorBytecodeBuilder interface {
   Phase 2a.
 - Route DTO note: route and swap-exchange `percent` fields are `float64`,
   because committed route plans can contain fractional percentages.
+
+## Phase 2b: Executor01 Bytecode Parity
+
+This section records the Executor01 implementation slice. It lands a real Go
+Executor01 bytecode builder behind the Phase 2a bytecode seam, without taking
+ownership of Executor02, Executor03, WETH-only, direct-builder, or runtime
+bridge behavior.
+
+### Current Status
+
+- Phase 2a still proves boundary validation, params construction, calldata
+  encoding, and tx object assembly for all success fixtures by injecting fixture
+  bytecode from `expectedParams[4]`.
+- `BuildTransactionFromResolved` calls an `ExecutorBytecodeBuilderFactory`
+  after validation succeeds.
+- Go now has a real Executor01 builder for the Phase 2b fixture set under
+  `go/txbuilder/executor`.
+- The canonical TypeScript sources for this phase are:
+  - `src/executor/Executor01BytecodeBuilder.ts`
+  - `src/executor/ExecutorBytecodeBuilder.ts`
+  - `src/executor/constants.ts`
+  - `src/executor/types.ts`
+  - `src/executor/route-plan.ts`
+- The committed resolved fixture matrix includes these Phase 2b acceptance
+  fixtures:
+  - `executor01-simple-sell-approved`
+  - `executor01-multiswap-sell`
+
+### Goal
+
+Replace fixture-injected bytecode with real Go-generated Executor01 bytecode
+for core Executor01 SELL paths, then prove the full resolved boundary still
+matches committed `expectedParams` and `expectedTx` exactly for the Phase 2b
+fixture set.
+
+Phase 2b parity means:
+
+- `expectedParams[4]` from committed fixtures equals Go-generated Executor01
+  bytecode.
+- Full `expectedParams` still matches exactly when `BuildTransactionFromResolved`
+  uses the real Executor01 builder.
+- Full `expectedTx` still matches exactly, including Augustus calldata whose
+  final dynamic bytes argument now comes from Go bytecode generation.
+
+### In Scope
+
+- Add a Go executor package or module area for reusable bytecode builders,
+  preferably `go/txbuilder/executor`, importing `go/txbuilder/resolved` types.
+- Add an Executor01 implementation that satisfies
+  `resolved.ExecutorBytecodeBuilder`.
+- Add a central factory implementation in `go/txbuilder/executor/factory.go`
+  that satisfies `resolved.ExecutorBytecodeBuilderFactory`. Phase 2b registers
+  only `resolved.Executor01`; Phase 2c/2d extend the same dispatcher with
+  Executor02/03 branches. Unsupported executor types must return a clear
+  non-fixture error in the format
+  `executor type not supported by Go bytecode factory: ${executorType}`.
+- Port the Executor01 subset required by the Phase 2b acceptance fixtures:
+  - walk route plan order; use `RoutePositionKey` only as the map lookup key,
+    not as a sort key
+  - `buildExecutorRoute`
+  - `getOrderedLegs`
+  - `getExchangeParams`
+  - `buildFlags` for the simple-swap and horizontal-multiswap branches covered
+    by the Phase 2b fixtures
+  - `buildSimpleSwapFlags` for the fixture-covered branch only
+  - `buildMultiMegaSwapFlags` for the fixture-covered Executor01 horizontal
+    multiswap branch only
+  - `buildSingleSwapCallData` for the fixture-covered path only
+  - `buildDexCallData` for the fixture-covered path only
+  - Executor01/02 call-data header packing
+  - final Executor01 top-level bytecode packing
+- Port the shared helper surface needed by that subset:
+  - hex concatenation, padding, byte-length, and solidity-pack equivalents for
+    the static byte widths used by Executor01
+  - decimal amount to ABI `uint256` encoding for amount-position discovery
+  - `findAmountPosInCalldata`
+  - `addTokenAddressToCallData`
+  - `isETHAddress` and wrapped-native address checks
+  - `getWETHAddress`
+  - `buildCallData` for Executor01/02 layout only
+- Add ERC20 ABI encoding helpers for any acceptance fixture path that needs
+  `approve` or `transfer` calldata.
+- Preserve the existing Phase 2a fixture-injected success test for non-Executor01
+  fixtures until later phases replace those builders.
+- Add new real-builder fixture tests for the Phase 2b Executor01 acceptance
+  set.
+- Broader Executor01 branch behavior is not part of Phase 2b unless it has
+  focused Go unit coverage. Without that coverage, keep it out of scope rather
+  than relying on unexercised implementation branches.
+
+### Out Of Scope
+
+- Do not port Executor02, Executor03, or WETH-only bytecode builders.
+- Do not make Executor01 responsible for BUY routes. Executor01 BUY is not a
+  supported route shape.
+- Do not implement direct-builder behavior.
+- Do not change fixture schema or add Go-only golden fixtures.
+- Do not claim Phase 2e cross-cutting coverage yet. The following fixture
+  themes remain assigned to Phase 2e unless they are required to satisfy the
+  Phase 2b named gates:
+  - WETH-only `0x` bytecode rule
+  - ETH/WETH deposit and withdraw edge coverage beyond what core Executor01
+    gates require
+  - Executor01 approval-missing and beneficiary-specific fixtures
+    (`executor01-simple-sell-approval-missing` and
+    `executor01-simple-sell-beneficiary`) unless Phase 2b intentionally expands
+    its fixture gate
+  - `permit2Approval`
+  - `transferSrcTokenBeforeSwap`
+  - `sendEthButSupportsInsertFromAmount`
+  - no-recipient DEX transfer/final-special-flag behavior
+  - `needUnwrapNative` WETH-source and WETH-destination overrides
+  - special-dex flags
+  - packed amount variants
+
+### File Layout
+
+| Path                                       | Purpose                                                                    |
+| ------------------------------------------ | -------------------------------------------------------------------------- |
+| `go/txbuilder/executor/types.go`           | Go `Flag`, `SpecialDex`, and bytecode constants matching TS.               |
+| `go/txbuilder/executor/hex.go`             | Hex concat, padding, byte-length, and static packing helpers.              |
+| `go/txbuilder/executor/base.go`            | Shared Executor01/02 helpers ported from `ExecutorBytecodeBuilder.ts`.     |
+| `go/txbuilder/executor/factory.go`         | Central dispatcher implementing `resolved.ExecutorBytecodeBuilderFactory`. |
+| `go/txbuilder/executor/executor01.go`      | Executor01 builder implementation.                                         |
+| `go/txbuilder/executor/executor01_test.go` | Focused builder unit tests against committed fixture bytecode.             |
+| `go/txbuilder/resolved/build_test.go`      | Add real Executor01 boundary parity cases alongside injected tests.        |
+
+Keep helpers small and reusable by Executor02/03 only when the TypeScript base
+builder already treats them as shared. Avoid abstracting ahead of the next
+executor unless the helper directly mirrors TypeScript shared code.
+
+### Bytecode Packing Rules
+
+Port byte layout exactly, not semantically:
+
+- Executor01/02 call-data item layout matches
+  `EXECUTOR_01_02_FUNCTION_CALL_DATA_TYPES` in
+  `src/executor/constants.ts`:
+  - `bytes20` token address
+  - `bytes4` calldata size
+  - `bytes2` from-amount position
+  - `bytes2` `srcTokenPos`; this is the source-token position and must not be
+    confused with destination-token position
+  - `bytes1` return-amount position
+  - `bytes1` `specialExchange` flag
+  - `bytes2` flag
+  - `bytes28` zero padding at the header tail, immediately before raw DEX
+    calldata
+  - `bytes` raw DEX calldata
+- Top-level Executor01 bytecode layout is:
+  - `bytes32` calldata offset, always 32
+  - `bytes32` calldata length, equal to decoded `swapsCalldata` byte length
+    plus `BYTES_64_LENGTH`, matching
+    `hexDataLength(swapsCalldata) + BYTES_64_LENGTH` in
+    `Executor01BytecodeBuilder.ts`
+  - raw concatenated swap calldata
+- Mirror all relevant constants from `src/executor/constants.ts`; byte-width
+  helpers, zero-padding constants, `EXECUTOR_01_02_FUNCTION_CALL_DATA_TYPES`,
+  return-amount positions, and WETH/metadata positions are canonical there. The
+  constants named in this plan are representative, not exhaustive.
+- All output bytes must serialize as lowercase even-length `0x` hex.
+- Address bytes in packed bytecode must use the raw 20-byte lowercase address,
+  not checksum casing.
+- `findAmountPosInCalldata` must match the TypeScript word-boundary search:
+  scan raw calldata for the encoded amount and use the first occurrence where
+  `(idx - FUNCTION_SELECTOR_LENGTH) % BYTES_64_LENGTH === 0`; fallback to
+  `exchangeData.length / 2` when not found, where `exchangeData.length` is the
+  original TypeScript hex string character length including the `0x` prefix.
+  In Go, do not use decoded byte length for this fallback. Add a unit test for
+  the not-found fallback.
+- Default return amount position is `255`.
+- Executor01 does not use `toAmountPos`; do not accidentally port Executor03
+  field ordering into this phase.
+
+### Flag Rules
+
+Port `Flag` and `SpecialDex` numeric constants from
+`src/executor/types.ts` verbatim. Tests should lock representative values for:
+
+- `INSERT_FROM_AMOUNT_DONT_CHECK_BALANCE_AFTER_SWAP = 3`
+- `SEND_ETH_EQUAL_TO_FROM_AMOUNT_DONT_CHECK_BALANCE_AFTER_SWAP = 9`
+- `INSERT_FROM_AMOUNT_CHECK_SRC_TOKEN_BALANCE_AFTER_SWAP = 11`
+- `SpecialDex.DEFAULT = 0`
+- `SpecialDex.SEND_NATIVE = 4`
+
+Executor01 flag calculation must mirror TypeScript branch order in
+`buildSimpleSwapFlags` and `buildMultiMegaSwapFlags` only for branches covered
+by Phase 2b fixtures. The required acceptance fixtures exercise basic
+`DexExchangeBuildParam` fields only: `dexFuncHasRecipient`, `exchangeData`,
+`needWrapNative`, and `targetExchange`.
+
+The Executor01 bytecode builder may read
+`DexExchangeBuildParam.NeedWrapNative.Value` directly. The resolved boundary
+guarantees `NeedWrapNative.Valid == true` before the bytecode seam is invoked.
+
+Do not implement or claim parity for these extra flag branches in Phase 2b
+unless focused unit tests pin their exact TS output:
+
+- ETH source without WETH wrapping
+- ETH destination without WETH unwrapping
+- DEXes without recipient support
+- special DEXes that cannot insert from amount
+- `needUnwrapNative` WETH-source and WETH-destination overrides
+- `sendEthButSupportsInsertFromAmount`
+
+### ABI Helpers
+
+Use go-ethereum ABI encoding rather than hand-built function selectors for
+ERC20/Permit2 helpers.
+
+- Embed or define the minimal ERC20 ABI fragments needed for Phase 2b:
+  - `approve(address,uint256)`
+  - `transfer(address,uint256)`
+  - `withdraw(uint256)` if an accepted fixture path requires WETH unwrap
+  - `deposit()` if an accepted fixture path requires WETH wrap
+- If Phase 2b includes `permit2Approval`, embed or define the minimal Permit2
+  ABI fragment for `approve(address,address,uint160,uint48)`. Otherwise leave
+  Permit2 to Phase 2e and make sure Phase 2b tests do not claim that coverage.
+- Add ABI selector tests for any fragment introduced in this phase.
+
+### Fixture Strategy
+
+Keep the Phase 2a all-success injected-bytecode test unchanged. Add a separate
+real-builder test group for Phase 2b.
+
+The required Phase 2b real-builder acceptance set is:
+
+- `executor01-simple-sell-approved`
+- `executor01-multiswap-sell`
+
+The test should:
+
+- build deps using the same fixture helper as Phase 2a
+- install the real Executor01 factory
+- call `BuildTransactionFromResolved`
+- assert full `expectedParams` equality
+- assert full `expectedTx` equality
+- assert Go-generated bytecode equals `expectedParams[4]` before comparing the
+  full tuple so bytecode mismatches are easy to isolate
+
+Additional Executor01 fixtures may be enabled during Phase 2b only when their
+bytecode features are implemented intentionally. Do not silently broaden the
+acceptance set by coverage tag alone.
+
+### Implementation Order
+
+1. Add executor constants and low-level hex packing helpers with focused unit
+   tests.
+2. Add route-ordering helpers in the executor package that consume Phase 2a
+   typed DTOs, walk route-plan order, and use `RoutePositionKey` only as the
+   map lookup key. They should fail with TS-compatible duplicate/missing route
+   errors only where shared TypeScript executor helpers do.
+3. Port Executor01 call-data packing and `buildDexCallData`.
+4. Add `findAmountPosInCalldata` tests, including the amount-not-found fallback
+   to original hex string length including `0x`, divided by 2.
+5. Port Executor01 flag calculation for the simple-swap and horizontal
+   multiswap branches covered by the Phase 2b fixtures.
+6. Port `buildSingleSwapCallData` for the acceptance fixture paths.
+7. Add the Executor01 builder and central executor factory with only the
+   Executor01 branch registered.
+8. Add direct bytecode tests comparing Go builder output to
+   `expectedParams[4]` for the Phase 2b fixture set.
+9. Add resolved-boundary tests using the real Executor01 factory for the Phase
+   2b fixture set.
+10. Run Phase 2b verification commands.
+
+### Implementation Tasks
+
+| Status | Task                               | Notes                                                                                    |
+| ------ | ---------------------------------- | ---------------------------------------------------------------------------------------- |
+| Done   | Add executor constants             | Mirrored TS `Flag`, `SpecialDex`, byte-length constants, and default positions.          |
+| Done   | Add hex/static packing helpers     | Lowercase `0x` output, fixed-width padding, length helpers, and concat.                  |
+| Done   | Add amount-position tests          | Covers word-boundary search and not-found fallback using TS string length.               |
+| Done   | Add ERC20 ABI helpers if needed    | Not needed for the Phase 2b acceptance fixtures; deferred to Phase 2e.                   |
+| Done   | Add shared base builder helpers    | Added `buildCallData`, amount-position search, WETH/address helpers, and route ordering. |
+| Done   | Port Executor01 flag builders      | Ported fixture-covered simple-swap and horizontal-multiswap branches with scope guards.  |
+| Done   | Port Executor01 call-data builders | Ported fixture-covered `buildDexCallData` and `buildSingleSwapCallData` paths.           |
+| Done   | Add central executor factory       | `executor.NewFactory()` registers Executor01 only; Phase 2c/2d extend the dispatcher.    |
+| Done   | Add Executor01 builder             | Satisfies Phase 2a bytecode seam for `Executor01`.                                       |
+| Done   | Add bytecode fixture tests         | Compares generated bytecode to `expectedParams[4]` for the Phase 2b fixtures.            |
+| Done   | Add resolved-boundary real tests   | Full `expectedParams` and `expectedTx` parity for Phase 2b fixtures.                     |
+| Done   | Run Phase 2b gates                 | Go tests/vet/format plus fixture and resolved Jest checks passed on 2026-05-15.          |
+
+### Acceptance Criteria
+
+Phase 2b is complete when:
+
+- The real Go Executor01 builder is used through
+  `ExecutorBytecodeBuilderFactory` for the Phase 2b fixture set.
+- `executor01-simple-sell-approved` matches generated bytecode,
+  `expectedParams`, and `expectedTx` exactly.
+- `executor01-multiswap-sell` matches generated bytecode, `expectedParams`, and
+  `expectedTx` exactly.
+- Non-Executor01 success fixtures continue to pass the Phase 2a injected-bytecode
+  tests.
+- No direct-builder, Executor02, Executor03, or WETH-only behavior is introduced
+  accidentally.
+- `go test ./go/...` passes.
+- `go vet ./go/...` passes.
+- `gofmt -s -l go/` produces no output.
+- `yarn fixtures:check` passes.
+- `yarn jest tests/generic-swap-transaction-builder/resolved --runInBand`
+  passes.
+
+### Verification Commands
+
+```bash
+go test ./go/...
+go vet ./go/...
+gofmt -s -l go/
+yarn fixtures:check
+yarn jest tests/generic-swap-transaction-builder/resolved --runInBand
+```
+
+### Exit Notes For Phase 2c
+
+- Executor package layout:
+  - `go/txbuilder/executor/types.go`
+  - `go/txbuilder/executor/hex.go`
+  - `go/txbuilder/executor/base.go`
+  - `go/txbuilder/executor/factory.go`
+  - `go/txbuilder/executor/executor01.go`
+- Public factory API: `executor.NewFactory()` returns a dispatcher satisfying
+  `resolved.ExecutorBytecodeBuilderFactory`. Phase 2b registers only
+  `resolved.Executor01`; unsupported executors return
+  `executor type not supported by Go bytecode factory: ${executorType}`.
+- Shared helpers now available for Executor02:
+  - route-plan ordered leg lookup through `getOrderedLegs`/`getExchangeParams`
+  - lowercase hex concat, fixed-width uint packing, byte-length helpers, and
+    `buildExecutor0102CallData`
+  - `findAmountPosInCalldata` with TS fallback semantics
+  - ETH/WETH address helpers and WETH-address selection
+- Phase 2b real-builder fixture coverage:
+  - `executor01-simple-sell-approved`
+  - `executor01-multiswap-sell`
+- Executor01 fixtures intentionally left for Phase 2e cross-cutting work:
+  - `executor01-simple-sell-approval-missing`
+  - `executor01-simple-sell-beneficiary`
+  - `executor01-eth-weth-deposit`
+  - `executor01-weth-eth-withdraw`
+- Byte-level hazards found during implementation:
+  - Executor01/02 packed call-data length uses decoded DEX calldata byte length
+    plus `BYTES_28_LENGTH`, matching the TS `hexDataLength(calldata) + 28`
+    call.
+  - `findAmountPosInCalldata` fallback uses the original hex string length
+    including `0x`, divided by 2, not decoded byte length.
+  - Destination-token position discovery normalizes the address once and uses
+    that same value for both append and index search; otherwise mixed-case
+    WETH/context addresses can produce misleading negative-offset errors.
+  - Route traversal must follow route-plan order and use route-position keys
+    only for map lookup; sorting by key would be wrong.
+- Phase 2b also added explicit scope guards so unverified Executor01 branches
+  fail loudly instead of producing bytecode. Deferred branches include
+  `needWrapNative=false`, no-recipient DEXes, `needUnwrapNative`,
+  `sendEthButSupportsInsertFromAmount`, special DEX flags, WETH plans,
+  approvals, Permit2, and manual amount/return-position overrides.

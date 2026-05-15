@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/paraswap/paraswap-dex-lib/go/txbuilder/executor"
 	"github.com/paraswap/paraswap-dex-lib/go/txbuilder/internal/testfixtures"
 	"github.com/paraswap/paraswap-dex-lib/go/txbuilder/resolved"
 )
@@ -70,6 +71,49 @@ func TestBuildTransactionFromResolvedMatchesGenericSuccessFixtures(t *testing.T)
 					factory.builder.input,
 					wantBuilderInput,
 				)
+			}
+		})
+	}
+}
+
+func TestBuildTransactionFromResolvedMatchesExecutor01RealBuilderFixtures(t *testing.T) {
+	for _, fixtureName := range []string{
+		"executor01-simple-sell-approved",
+		"executor01-multiswap-sell",
+	} {
+		t.Run(fixtureName, func(t *testing.T) {
+			fixture, input := loadBuildInput(t, fixtureName)
+			var expectedParams []any
+			if err := json.Unmarshal(fixture.ExpectedParams, &expectedParams); err != nil {
+				t.Fatal(err)
+			}
+			var expectedTx resolved.TxObject
+			if err := json.Unmarshal(fixture.ExpectedTx, &expectedTx); err != nil {
+				t.Fatal(err)
+			}
+			expectedBytecode, ok := expectedParams[4].(string)
+			if !ok {
+				t.Fatalf("expectedParams[4] is not bytecode string: %#v", expectedParams[4])
+			}
+
+			deps := buildDepsForInput(t, input)
+			deps.ExecutorBytecodeBuilderFactory = executor.NewFactory()
+
+			got, err := resolved.BuildTransactionFromResolved(input, deps)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(got.Params) != len(expectedParams) {
+				t.Fatalf("params length mismatch: got %d want %d", len(got.Params), len(expectedParams))
+			}
+			if gotBytecode, ok := got.Params[4].(string); !ok || gotBytecode != expectedBytecode {
+				t.Fatalf("bytecode mismatch:\n got: %#v\nwant: %s", got.Params[4], expectedBytecode)
+			}
+			if !reflect.DeepEqual(got.Params, expectedParams) {
+				t.Fatalf("params mismatch:\n got: %#v\nwant: %#v", got.Params, expectedParams)
+			}
+			if !reflect.DeepEqual(got.TxObject, expectedTx) {
+				t.Fatalf("txObject mismatch:\n got: %#v\nwant: %#v", got.TxObject, expectedTx)
 			}
 		})
 	}

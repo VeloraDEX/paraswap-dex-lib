@@ -1,0 +1,225 @@
+package executor
+
+import (
+	"fmt"
+	"strings"
+
+	"github.com/paraswap/paraswap-dex-lib/go/txbuilder/resolved"
+)
+
+type executorRoute struct {
+	BestRoute  []resolved.RoutePlanRoute
+	SrcToken   resolved.Address
+	DestToken  resolved.Address
+	DestAmount resolved.DecimalString
+}
+
+type orderedExecutorLeg struct {
+	resolved.RoutePlanExchange
+	ResolvedLeg resolved.ResolvedLeg
+}
+
+func buildExecutorRoute(input resolved.ExecutorBytecodeBuildInput) executorRoute {
+	return executorRoute{
+		BestRoute:  input.RoutePlan.Routes,
+		SrcToken:   input.SrcToken,
+		DestToken:  input.DestToken,
+		DestAmount: input.DestAmount,
+	}
+}
+
+func getOrderedLegs(input resolved.ExecutorBytecodeBuildInput) ([]orderedExecutorLeg, error) {
+	routePositions := resolved.WalkRoutePlan(input.RoutePlan)
+	routeKeys := make(map[string]struct{}, len(routePositions))
+	for _, routePosition := range routePositions {
+		routeKeys[resolved.RoutePlanExchangeKey(routePosition)] = struct{}{}
+	}
+
+	resolvedLegByKey := make(map[string]resolved.ResolvedLeg, len(input.ResolvedLegs))
+	duplicateKeys := make([]string, 0)
+	duplicateSeen := make(map[string]struct{})
+	extraKeys := make([]string, 0)
+	extraSeen := make(map[string]struct{})
+
+	for _, resolvedLeg := range input.ResolvedLegs {
+		key := resolved.ResolvedLegRoutePositionKey(resolvedLeg)
+		if _, ok := resolvedLegByKey[key]; ok {
+			if _, seen := duplicateSeen[key]; !seen {
+				duplicateKeys = append(duplicateKeys, key)
+				duplicateSeen[key] = struct{}{}
+			}
+		}
+		if _, ok := routeKeys[key]; !ok {
+			if _, seen := extraSeen[key]; !seen {
+				extraKeys = append(extraKeys, key)
+				extraSeen[key] = struct{}{}
+			}
+		}
+		resolvedLegByKey[key] = resolvedLeg
+	}
+
+	if len(duplicateKeys) > 0 {
+		return nil, fmt.Errorf(
+			"duplicate resolved leg route position(s): %s",
+			strings.Join(duplicateKeys, ", "),
+		)
+	}
+	if len(extraKeys) > 0 {
+		return nil, fmt.Errorf(
+			"resolved leg route position(s) not present in route plan: %s",
+			strings.Join(extraKeys, ", "),
+		)
+	}
+
+	ordered := make([]orderedExecutorLeg, 0, len(routePositions))
+	for _, routePosition := range routePositions {
+		key := resolved.RoutePlanExchangeKey(routePosition)
+		resolvedLeg, ok := resolvedLegByKey[key]
+		if !ok {
+			return nil, fmt.Errorf("missing resolved leg for route position %s", key)
+		}
+		ordered = append(ordered, orderedExecutorLeg{
+			RoutePlanExchange: routePosition,
+			ResolvedLeg:       resolvedLeg,
+		})
+	}
+
+	return ordered, nil
+}
+
+func getExchangeParams(input resolved.ExecutorBytecodeBuildInput) ([]resolved.DexExchangeBuildParam, error) {
+	orderedLegs, err := getOrderedLegs(input)
+	if err != nil {
+		return nil, err
+	}
+
+	exchangeParams := make([]resolved.DexExchangeBuildParam, 0, len(orderedLegs))
+	for _, orderedLeg := range orderedLegs {
+		exchangeParams = append(exchangeParams, orderedLeg.ResolvedLeg.ExchangeParam)
+	}
+	return exchangeParams, nil
+}
+
+func buildExecutor0102CallData(
+	tokenAddress resolved.Address,
+	calldata resolved.HexBytes,
+	fromAmountPos int,
+	srcTokenPos int,
+	special specialDex,
+	dexFlag flag,
+	returnAmountPos int,
+) (resolved.HexBytes, error) {
+	calldataLength, err := hexDataLength(string(calldata))
+	if err != nil {
+		return "", err
+	}
+
+	lengthField, err := leftPadUint(calldataLength+bytes28Length, 4)
+	if err != nil {
+		return "", err
+	}
+	fromAmountField, err := leftPadUint(fromAmountPos, 2)
+	if err != nil {
+		return "", err
+	}
+	srcTokenField, err := leftPadUint(srcTokenPos, 2)
+	if err != nil {
+		return "", err
+	}
+	returnAmountField, err := leftPadUint(returnAmountPos, 1)
+	if err != nil {
+		return "", err
+	}
+	specialField, err := leftPadUint(int(special), 1)
+	if err != nil {
+		return "", err
+	}
+	flagField, err := leftPadUint(int(dexFlag), 2)
+	if err != nil {
+		return "", err
+	}
+
+	return concatHex(
+		string(tokenAddress),
+		lengthField,
+		fromAmountField,
+		srcTokenField,
+		returnAmountField,
+		specialField,
+		flagField,
+		zeroBytes(bytes28Length),
+		string(calldata),
+	)
+}
+
+func buildExecutor01TopLevelBytecode(swapsCalldata resolved.HexBytes) (resolved.HexBytes, error) {
+	swapsLength, err := hexDataLength(string(swapsCalldata))
+	if err != nil {
+		return "", err
+	}
+	offset, err := leftPadUint(32, 32)
+	if err != nil {
+		return "", err
+	}
+	length, err := leftPadUint(swapsLength+bytes64Length, 32)
+	if err != nil {
+		return "", err
+	}
+	return concatHex(offset, length, string(swapsCalldata))
+}
+
+func findAmountPosInCalldata(exchangeData resolved.HexBytes, encodedAmount string) int {
+	rawCalldata := strip0x(string(exchangeData))
+	rawAmount := strip0x(encodedAmount)
+
+	amountIndex := -1
+	for searchStart := 0; searchStart < len(rawCalldata); {
+		relativeIndex := strings.Index(rawCalldata[searchStart:], rawAmount)
+		if relativeIndex == -1 {
+			break
+		}
+		idx := searchStart + relativeIndex
+		if (idx-functionSelectorLength)%bytes64Length == 0 {
+			amountIndex = idx
+			break
+		}
+		searchStart = idx + 1
+	}
+
+	if amountIndex == -1 {
+		return len(string(exchangeData)) / 2
+	}
+	return amountIndex / 2
+}
+
+func addTokenAddressToCallData(
+	callData resolved.HexBytes,
+	tokenAddress resolved.Address,
+) (resolved.HexBytes, error) {
+	if strings.Contains(strip0x(string(callData)), strip0x(string(tokenAddress))) {
+		return callData, nil
+	}
+	return concatHex(string(callData), zeroBytes(12), string(tokenAddress))
+}
+
+func isETHAddress(address resolved.Address) bool {
+	return strings.EqualFold(string(address), string(resolved.NativeTokenAddress))
+}
+
+func isWETHAddress(address resolved.Address, context resolved.EncodingContext) bool {
+	return strings.EqualFold(string(address), string(context.WrappedNativeTokenAddress))
+}
+
+func getWETHAddress(
+	exchangeParam resolved.DexExchangeBuildParam,
+	context resolved.EncodingContext,
+) resolved.Address {
+	if exchangeParam.WethAddress != nil {
+		return *exchangeParam.WethAddress
+	}
+	return context.WrappedNativeTokenAddress
+}
+
+func boolValue(value *bool) bool {
+	return value != nil && *value
+}
