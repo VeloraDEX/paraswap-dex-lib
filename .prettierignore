@@ -1,1 +1,2 @@
 tests/generic-swap-transaction-builder/fixtures/resolved-build/**/*.json
+tests/generic-swap-transaction-builder/fixtures/go-public-builder/**/*.json
