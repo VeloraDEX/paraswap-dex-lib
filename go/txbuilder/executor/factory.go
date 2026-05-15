@@ -23,6 +23,8 @@ func (Factory) CreateExecutorBytecodeBuilder(
 		return NewExecutor02Builder(context), nil
 	case resolved.Executor03:
 		return NewExecutor03Builder(context), nil
+	case resolved.ExecutorWETH:
+		return NewWETHBuilder(), nil
 	default:
 		return nil, fmt.Errorf("executor type not supported by Go bytecode factory: %s", executorType)
 	}

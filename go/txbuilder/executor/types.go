@@ -1,5 +1,7 @@
 package executor
 
+import "github.com/paraswap/paraswap-dex-lib/go/txbuilder/resolved"
+
 const (
 	functionSelectorLength = 8
 
@@ -7,10 +9,26 @@ const (
 	bytes64Length = 64
 	bytes96Length = 96
 
-	defaultReturnAmountPos  = 255
-	wrapUnwrapFromAmountPos = 4
-	erc20TransferAmountPos  = 36
+	defaultReturnAmountPos      = 255
+	wrapUnwrapFromAmountPos     = 4
+	erc20TransferAmountPos      = 36
+	approveCalldataDestTokenPos = 68
 )
+
+const (
+	permit2Address = "0x000000000022d473030f116ddee9f6b43ac78ba3"
+	maxUint        = resolved.DecimalString("115792089237316195423570985008687907853269984665640564039457584007913129639935")
+	maxUint160     = resolved.DecimalString("1461501637330902918203684832716283019655932542975")
+	maxUint48      = resolved.DecimalString("281474976710655")
+)
+
+var disabledMaxUnitApprovalTokens = map[int]map[string]struct{}{
+	1: {
+		"0xdac17f958d2ee523a2206206994597c13d831ec7": {},
+		"0xd101dcc414f310268c37eeb4cd376ccfa507f571": {},
+		"0x0f5d2fb29fb7d3cfee444a200298f468908cc942": {},
+	},
+}
 
 const (
 	swapExchange100Percentage          = 100

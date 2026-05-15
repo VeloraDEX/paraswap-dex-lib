@@ -4,8 +4,8 @@ Last updated: 2026-05-15
 
 This document tracks implementation details for
 `docs/plans/go-build-migration/implementation.md`. It is organized by
-implementation phase. Phase 1, Phase 2, Phase 2a, Phase 2b, Phase 2c, and
-Phase 2d are complete; Phase 2e is the next planned implementation slice.
+implementation phase. Phases 1, 2, 2a, 2b, 2c, 2d, and 2e are complete;
+Phase 2f is the next planned implementation slice.
 
 ## Phase 1: Go Module And Fixture Foundation
 
@@ -2212,3 +2212,398 @@ yarn jest tests/generic-swap-transaction-builder/resolved --runInBand
   `sendEthButSupportsInsertFromAmount`, `specialDexSupportsInsertFromAmount`,
   special DEX flags, manual amount/return positions, packed-128 amounts,
   no-recipient DEXes, and multi-route/multi-swap shapes.
+
+## Phase 2e: WETH And Cross-Cutting Generic Features
+
+This section plans the final generic-success fixture parity slice before the
+Phase 2f calldata-diagnostics work. Phase 2e should make the real Go executor
+factory handle every committed generic success fixture, while keeping unproven
+executor branches explicitly guarded.
+
+### Current Status
+
+- Phase 2e is complete as of 2026-05-15.
+- `executor.NewFactory()` dispatches Executor01, Executor02, Executor03, and
+  WETH. The WETH builder returns `0x` bytecode for the committed WETH-only
+  fixture.
+- The real-builder test covers every fixture in
+  `BucketPhase2GenericSuccess`, including:
+  - `executor01-simple-sell-approved`
+  - `executor01-multiswap-sell`
+  - `executor01-simple-sell-beneficiary`
+  - `edge-nonempty-permit`
+  - `edge-zero-quoted-amount`
+  - `fee-direct-transfer`
+  - `fee-nonzero-partner`
+  - `fee-referrer`
+  - `fee-surplus-to-user`
+  - `fee-take-surplus`
+  - `executor01-simple-sell-approval-missing`
+  - `permit2-approval`
+  - `transfer-src-token-before-swap`
+  - `need-unwrap-native`
+  - `executor01-eth-weth-deposit`
+  - `executor01-weth-eth-withdraw`
+  - `executor02-vertical-branch-sell`
+  - `executor02-multiswap-sell`
+  - `executor02-megaswap-sell`
+  - `same-token-internal-split`
+  - `executor03-buy`
+  - `weth-only-eth-to-weth`
+- The Phase 2a injected-bytecode test still covers the same generic success
+  bucket as a boundary-orchestration regression test.
+- The resolved boundary must continue rejecting Executor02 BUY /
+  `swapExactAmountOut*` and Executor03 non-BUY / non-`swapExactAmountOut*`
+  before factory dispatch.
+
+### Phase Boundary
+
+Phase 2e closes committed generic success fixture parity through real builders.
+It does not need to add new fixture kinds, direct-builder behavior, runtime
+bridge behavior, or decoded calldata diff helpers.
+
+Do not remove guards for branches that are not represented by committed generic
+fixtures or shared TypeScript fixtures. Go-only golden vectors are not allowed
+for unlocking new executor behavior in Phase 2e. Focused Go unit tests are
+allowed only for helper mechanics that are already needed by committed
+fixtures, such as approval layout or Permit2 packing. In the current fixture
+matrix, no-recipient Executor01 behavior, `sendEthButSupportsInsertFromAmount`,
+non-default `specialDexFlag`, manual `returnAmountPos` /
+`insertFromAmountPos`, `amountsPacked128`, and special-Dex insert-support
+branches are not accepted solely by the all-generic-success gate.
+
+### Required Fixture Gates
+
+Phase 2e should promote all generic success fixtures to the real-factory path:
+
+- Executor01 baseline and pass-through fixtures:
+  - `executor01-simple-sell-approved`
+  - `executor01-multiswap-sell`
+  - `executor01-simple-sell-beneficiary`
+  - `edge-nonempty-permit`
+  - `edge-zero-quoted-amount`
+  - `fee-direct-transfer`
+  - `fee-nonzero-partner`
+  - `fee-referrer`
+  - `fee-surplus-to-user`
+  - `fee-take-surplus`
+- Executor01 bytecode branch fixtures:
+  - `executor01-simple-sell-approval-missing`
+  - `permit2-approval`
+  - `transfer-src-token-before-swap`
+  - `need-unwrap-native`
+  - `executor01-eth-weth-deposit`
+  - `executor01-weth-eth-withdraw`
+- Executor02 fixture newly unlocked in Phase 2e:
+  - `same-token-internal-split`
+- Executor02 fixtures that must keep passing:
+  - `executor02-vertical-branch-sell`
+  - `executor02-multiswap-sell`
+  - `executor02-megaswap-sell`
+- Executor03 fixture that must keep passing:
+  - `executor03-buy`
+- WETH-only fixture:
+  - `weth-only-eth-to-weth`
+
+Fixture-to-branch map for the WETH-related Executor01 paths:
+
+| Fixture                        | WETH plan | Primary TypeScript branch                                                      |
+| ------------------------------ | --------- | ------------------------------------------------------------------------------ |
+| `executor01-eth-weth-deposit`  | yes       | `needWrapNative && maybeWethCallData.deposit && isETHAddress(swap.srcToken)`   |
+| `executor01-weth-eth-withdraw` | yes       | `needWrapNative && maybeWethCallData.withdraw && isETHAddress(swap.destToken)` |
+| `need-unwrap-native`           | no        | `needUnwrapNative && isWETH(swap.srcToken)`                                    |
+
+Newly unlocked fixture test seams:
+
+| Fixture                                   | Direct bytecode test      | Resolved real-builder test |
+| ----------------------------------------- | ------------------------- | -------------------------- |
+| `executor01-simple-sell-approval-missing` | yes                       | yes                        |
+| `permit2-approval`                        | yes                       | yes                        |
+| `transfer-src-token-before-swap`          | yes                       | yes                        |
+| `need-unwrap-native`                      | yes                       | yes                        |
+| `executor01-eth-weth-deposit`             | yes                       | yes                        |
+| `executor01-weth-eth-withdraw`            | yes                       | yes                        |
+| `same-token-internal-split`               | yes                       | yes                        |
+| `weth-only-eth-to-weth`                   | yes, assert bytecode `0x` | yes                        |
+
+### In Scope
+
+- Add `WETHBytecodeBuilder` in Go:
+  - `BuildBytecode` returns exactly `0x`.
+  - Factory dispatches `resolved.ExecutorWETH`.
+  - Executor address resolves through the existing deps helper, which maps
+    `ExecutorWETH` to `input.wrappedNativeTokenAddress`. Validation then
+    requires `input.executorAddress == context.executorsAddresses[WETH]`.
+  - Tests assert factory dispatch to `ExecutorWETH`, `expectedParams[0]` equals
+    `input.wrappedNativeTokenAddress`, `expectedParams[4] == "0x"`, `tx.value`
+    matches the fixture, and full `expectedParams` / `expectedTx` deep equality.
+- Port the shared approval helpers needed by Executor01:
+  - ERC20 `approve(address,uint256)` calldata.
+  - Permit2 token approval plus Permit2 spender approval calldata.
+  - `PERMIT2_ADDRESS`, `MAX_UINT = 2^256 - 1`, `MAX_UINT160 = 2^160 - 1`,
+    `MAX_UINT48 = 2^48 - 1`, and the mainnet
+    `DISABLED_MAX_UNIT_APPROVAL_TOKENS` reset-approval behavior from
+    `src/executor/ExecutorBytecodeBuilder.ts`.
+  - `MAX_UINT` is the ERC20 approve amount, `MAX_UINT160` is the Permit2
+    approve amount, and `MAX_UINT48` is the Permit2 approve expiration.
+  - Approval destination-token position constant
+    `APPROVE_CALLDATA_DEST_TOKEN_POS = 68`.
+- Port the Executor01 simple-swap flag logic from
+  `src/executor/Executor01BytecodeBuilder.ts`, including:
+  - native source `sendEth` flags
+  - native destination balance-check flags
+  - `needUnwrapNative` WETH-source unwrap override covered by the committed
+    `need-unwrap-native` fixture
+  - existing `forcePreventInsertFromAmount` computation stays aligned with TS,
+    but its inputs remain guarded in Phase 2e, so it evaluates false for
+    committed fixtures
+    Keep no-recipient balance-check behavior guarded until a committed shared
+    fixture covers it.
+- Port the Executor01 `buildSingleSwapCallData` composition order required by
+  committed fixtures:
+  - WETH source unwrap before DEX calldata for `needUnwrapNative` + WETH source.
+  - `transferSrcTokenBeforeSwap` prepended before DEX calldata and suppressing
+    approval.
+  - Approval calldata prepended when approval is missing, including Permit2.
+  - ETH-source WETH deposit path with optional WETH approval prepended, then
+    deposit, then DEX calldata.
+  - ETH-destination WETH withdraw path appended after DEX calldata.
+- Keep the Executor01 WETH helper semantics aligned with TS: the shared
+  `buildUnwrapEthCallData` passes withdraw calldata length into the
+  Executor03-only `toAmountPos` slot in TypeScript; Executor01/02 ignore that
+  slot and retain `returnAmountPos = 0xff`.
+- Explicitly unlock the `need-unwrap-native` fixture path:
+  - Lift the Executor01 `wethAddress` guard only for `needUnwrapNative` paths
+    represented by the committed fixture.
+  - Use `exchangeParam.wethAddress` when present, otherwise
+    `context.wrappedNativeTokenAddress`, matching TS `getWETHAddress`.
+  - Reuse Go's `isWETHAddress(address, context)` helper for WETH source
+    detection, matching TS `this.isWETH(...)`.
+  - Encode ERC20 `withdraw(uint256)` directly from the swap source amount and
+    prepend its executor-wrapped calldata when the source token is WETH.
+  - Keep the WETH-destination `needUnwrapNative` direct `deposit()` branch
+    guarded until a committed shared fixture covers it.
+  - This direct WETH-source override path is independent of `wethPlan`;
+    `wethPlan` only covers precomputed ETH-source deposit and ETH-destination
+    withdraw fixtures.
+- Enable the Executor02 same-token fixture by removing only the Phase 2c
+  same-token public-pair guard. Do not relax unrelated Executor02 guards unless
+  a committed shared fixture covers the branch.
+- Keep Executor03 Phase 2d guards in place; Phase 2e does not widen Executor03
+  beyond the committed BUY fixture.
+- Replace or extend the resolved real-builder fixture test so it iterates the
+  full `BucketPhase2GenericSuccess` set with `executor.NewFactory()` and deep
+  compares `expectedParams` and `expectedTx`.
+- Keep the existing injected-bytecode fixture test. It remains useful for
+  isolating boundary orchestration from executor bytecode.
+
+### Out Of Scope
+
+- No direct-builder implementation.
+- No runtime TypeScript-to-Go bridge.
+- No Executor01 or Executor02 BUY support.
+- No new Executor03 route shapes beyond `executor03-buy`.
+- No Phase 2f decoded calldata diff helper work.
+- No Go-only golden vectors for uncommitted executor branches.
+- No broad special-Dex, packed-128, or manual amount-position support without
+  a committed shared fixture added in the same change.
+
+### Byte-Level Rules And Hazards
+
+- WETH-only expected bytecode is exactly `0x`; do not encode the WETH deposit
+  call as executor bytecode for `weth-only-eth-to-weth`.
+- WETH-only `tx.value` is still derived by `BuildTxValue` from native
+  `srcToken` and SELL side; the WETH bytecode builder should not special-case
+  transaction value.
+- Approval calldata must be wrapped in the executor item layout, not appended as
+  raw ERC20 or Permit2 calldata.
+- ERC20 approval calldata appends `ZEROS_12_BYTES + tokenAddr` before the
+  executor item wrap when `flag % 3 == 2` (`checkSrcTokenBalance`), matching
+  `ExecutorBytecodeBuilder.buildApproveCallData`.
+- Permit2 approval order is:
+  1. ERC20 approval from token to Permit2.
+  2. Permit2 approval from Permit2 to spender.
+     Preserve the optional disabled-token reset approval before each max approval.
+- Permit2 approval flag asymmetry is required: the first call, ERC20 to
+  Permit2, always uses `DONT_INSERT_FROM_AMOUNT_DONT_CHECK_BALANCE_AFTER_SWAP`
+  (`0`); only the second call, Permit2 to spender, uses
+  `flags.approves[index]`. Disabled-token reset approvals also use flag `0`.
+- Permit2 spender approval uses different marker placement from ERC20 approval:
+  first wrap the raw Permit2 `approve(token, spender, amount, expiration)`
+  calldata in the executor item layout, then append `ZEROS_12_BYTES + tokenAddr`
+  after that wrapped item when `flag % 3 == 2`, matching
+  `ExecutorBytecodeBuilder.buildPermit2CallData`.
+- `transferSrcTokenBeforeSwap` selects WETH as the transfer token when the swap
+  source is native ETH; otherwise it uses the lowercased swap source token.
+- `transferSrcTokenBeforeSwap` suppresses approval, matching the TS condition.
+- Executor01 ETH-source WETH deposit order is optional WETH approval, then WETH
+  deposit wrapper, then DEX calldata.
+- Executor01 ETH-destination WETH withdraw appends the WETH withdraw wrapper
+  after DEX calldata only when the next exchange param is absent or does not
+  need native wrapping.
+- Executor01 `needUnwrapNative` with WETH source does not consume `wethPlan`.
+  It encodes ERC20 `withdraw(uint256)` from ABI locally, matching
+  `src/executor/Executor01BytecodeBuilder.ts`. The WETH-destination direct
+  `deposit()` override remains guarded until a committed shared fixture covers
+  it.
+- Same-token Executor02 parity should not deduplicate source and destination
+  token lookups. The committed fixture has two swap exchanges with 50/50
+  metadata and public `srcToken == destToken`. `addMultiSwapMetadata` must use
+  the position of the first token occurrence in the leg calldata, matching TS
+  `indexOf` semantics. Do not deduplicate token append calls or short-circuit
+  the search.
+- Keep all serialized output lowercase `0x` hex and decimal strings, matching
+  the existing parity definition.
+
+### Post-Phase-2e Guard Matrix
+
+After Phase 2e, every guard below should have named rejection coverage unless a
+committed shared fixture explicitly unlocks it in the same change:
+
+- Resolved-boundary fences:
+  - Executor02 `BUY` / `swapExactAmountOut*` rejects before factory dispatch.
+  - Executor03 non-BUY / non-`swapExactAmountOut*` rejects before factory
+    dispatch.
+- Executor01 guarded branches:
+  - no-recipient DEX behavior
+  - WETH-destination `needUnwrapNative` direct deposit override
+  - `sendEthButSupportsInsertFromAmount`
+  - non-default `specialDexFlag`
+  - `specialDexSupportsInsertFromAmount`
+  - `swappedAmountNotPresentInExchangeData`
+  - manual `returnAmountPos`
+  - manual `insertFromAmountPos`
+  - `amountsPacked128`
+  - `skipApproval` if it appears without an approval-missing committed fixture
+    path that proves parity
+  - spender override if it appears without an approval-missing committed
+    fixture path that proves parity
+- Executor02 guarded branches:
+  - `needUnwrapNative`
+  - custom `wethAddress`
+  - `transferSrcTokenBeforeSwap`
+  - spender override
+  - `sendEthButSupportsInsertFromAmount`
+  - `specialDexSupportsInsertFromAmount`
+  - `swappedAmountNotPresentInExchangeData`
+  - manual `returnAmountPos`
+  - manual `insertFromAmountPos`
+  - `amountsPacked128`
+  - Permit2 approval
+  - `skipApproval`
+  - approval calldata
+  - non-default `specialDexFlag`
+- Executor03 guarded branches:
+  - WETH deposit/withdraw
+  - approval calldata
+  - Permit2 approval
+  - `skipApproval`
+  - `transferSrcTokenBeforeSwap`
+  - custom WETH
+  - `needUnwrapNative`
+  - spender override
+  - `swappedAmountNotPresentInExchangeData`
+  - `sendEthButSupportsInsertFromAmount`
+  - `specialDexSupportsInsertFromAmount`
+  - non-default `specialDexFlag`
+  - manual amount/return positions
+  - `amountsPacked128`
+  - no-recipient DEX behavior
+  - multi-route or multi-swap shapes
+
+### Implementation Order
+
+1. Add `WETHBytecodeBuilder`, register `ExecutorWETH` in `executor.NewFactory()`,
+   and add direct/resolved tests for `weth-only-eth-to-weth`.
+2. Add shared approval/Permit2 ABI helpers and focused unit tests for:
+   - ERC20 approval wrapper layout
+   - Permit2 two-call approval sequence
+   - disabled-token reset approval behavior
+3. Port Executor01 simple-swap flag computation and `buildSingleSwapCallData`
+   composition order from TypeScript.
+4. Remove Executor01 guards only for branches covered by committed Phase 2e
+   fixtures or shared TypeScript fixtures.
+5. Add direct Executor01 bytecode tests for:
+   - `executor01-simple-sell-approval-missing`
+   - `permit2-approval`
+   - `transfer-src-token-before-swap`
+   - `need-unwrap-native`
+   - `executor01-eth-weth-deposit`
+   - `executor01-weth-eth-withdraw`
+6. Remove the Executor02 same-token guard and add direct bytecode plus
+   resolved-boundary tests for `same-token-internal-split`.
+7. Change the resolved real-builder parity test to cover every fixture in
+   `BucketPhase2GenericSuccess`; keep any failure output grouped by fixture
+   name.
+8. Add or update named rejection tests for the post-Phase-2e guard matrix.
+9. Re-run the full Phase 2e verification gate.
+
+### Implementation Tasks
+
+| Status | Task                                   | Notes                                                                                   |
+| ------ | -------------------------------------- | --------------------------------------------------------------------------------------- |
+| Done   | Add WETH builder                       | `BuildBytecode` returns `0x`; factory dispatches `ExecutorWETH`.                        |
+| Done   | Add approval helpers                   | ERC20 approve, Permit2 approve, constants, disabled-token reset behavior, unit tests.   |
+| Done   | Port Executor01 flags                  | Match TS simple-swap flag selection for Phase 2e branches.                              |
+| Done   | Port Executor01 composed calldata      | Approval, Permit2, transfer-before-swap, WETH deposit, WETH withdraw, need unwrap.      |
+| Done   | Lift covered Executor01 guards         | Only branches represented by committed fixtures or shared TS fixtures.                  |
+| Done   | Enable Executor02 same-token route     | Remove the same-token guard and prove `same-token-internal-split` parity.               |
+| Done   | Add direct bytecode fixture tests      | Cover each newly unlocked bytecode branch by comparing `expectedParams[4]`.             |
+| Done   | Promote all generic success real tests | Iterate `BucketPhase2GenericSuccess` through `executor.NewFactory()`.                   |
+| Done   | Preserve unsupported branch guards     | Keep Executor02 BUY and Executor03 non-BUY boundary fences plus untested branch guards. |
+| Done   | Add guard-matrix rejection tests       | Named tests for every branch that remains guarded after Phase 2e.                       |
+| Done   | Run Phase 2e gates                     | Go tests/vet/format plus fixture and resolved Jest checks passed on 2026-05-15.         |
+
+### Acceptance Criteria
+
+Phase 2e is complete when:
+
+- Every fixture in `BucketPhase2GenericSuccess` matches `expectedParams` and
+  `expectedTx` exactly through `executor.NewFactory()`.
+- `weth-only-eth-to-weth` uses `ExecutorWETH`, emits bytecode `0x`, and keeps
+  `tx.value` parity.
+- The newly unlocked Executor01 branch fixtures match `expectedParams[4]`
+  directly in executor tests and match full transaction parity in resolved
+  tests.
+- `same-token-internal-split` matches bytecode and full transaction parity.
+- Existing Executor01, Executor02, and Executor03 fixture parity remains green.
+- Boundary fences remain active for Executor02 BUY / `swapExactAmountOut*` and
+  Executor03 non-BUY / non-`swapExactAmountOut*`.
+- Uncommitted/unproven branch guards remain covered by rejection tests.
+- The Phase 2a injected-bytecode test continues to pass for
+  `BucketPhase2GenericSuccess`; after Phase 2e it is a boundary-orchestration
+  regression test, while the real-factory test is the primary generic-success
+  parity gate.
+- `go test ./go/...` passes.
+- `go vet ./go/...` passes.
+- `gofmt -s -l go/` produces no output.
+- `yarn fixtures:check` passes.
+- `yarn jest tests/generic-swap-transaction-builder/resolved --runInBand`
+  passes.
+
+### Verification Commands
+
+```bash
+go test ./go/...
+go vet ./go/...
+gofmt -s -l go/
+yarn fixtures:check
+yarn jest tests/generic-swap-transaction-builder/resolved --runInBand
+```
+
+### Exit Notes For Phase 2f
+
+- The final committed generic success fixture count covered by real builders is
+  the full `BucketPhase2GenericSuccess` set.
+- Executor01 guards remain intentionally active for uncommitted no-recipient,
+  WETH-destination `needUnwrapNative`, send-ETH insert-support, non-default
+  special-Dex, special-Dex insert-support, swapped-amount-absent,
+  manual-position, packed-amount, skip-approval, and spender-override branches.
+- Executor02 and Executor03 guard matrices remain active for branches listed
+  above; Executor02 same-token parity is now unlocked only for the committed
+  `same-token-internal-split` fixture.
+- Approval and Permit2 helper tests lock the ERC20 marker placement, Permit2
+  marker-after-wrapper placement, and disabled-token reset approval ordering.
+- No new shared fixtures were needed for Phase 2e.
+- Phase 2f can reuse the existing byte-positioning helpers and the full
+  real-builder generic fixture gate for calldata diff output.

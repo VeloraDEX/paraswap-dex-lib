@@ -164,10 +164,6 @@ func (b Executor02Builder) validatePhase2cScope(
 	priceRoute executorRoute,
 	exchangeParams []resolved.DexExchangeBuildParam,
 ) error {
-	if strings.EqualFold(string(priceRoute.SrcToken), string(priceRoute.DestToken)) {
-		return fmt.Errorf("Executor02 same-token routes are not implemented in Phase 2c")
-	}
-
 	for index, exchangeParam := range exchangeParams {
 		if boolValue(exchangeParam.NeedUnwrapNative) {
 			return fmt.Errorf("Executor02 needUnwrapNative is not implemented in Phase 2c")

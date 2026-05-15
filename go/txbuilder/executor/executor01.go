@@ -30,7 +30,7 @@ func (b Executor01Builder) BuildBytecode(input resolved.ExecutorBytecodeBuildInp
 	if len(exchangeParams) == 0 {
 		return "", fmt.Errorf("Executor01 requires at least one exchange param")
 	}
-	if err := b.validatePhase2bScope(priceRoute, exchangeParams, input.WethPlan); err != nil {
+	if err := b.validatePhase2eScope(priceRoute, exchangeParams, input.WethPlan); err != nil {
 		return "", err
 	}
 
@@ -58,20 +58,46 @@ func (b Executor01Builder) BuildBytecode(input resolved.ExecutorBytecodeBuildInp
 	}
 
 	lastParam := exchangeParams[len(exchangeParams)-1]
+	// Phase 2e rejects dexFuncHasRecipient=false before bytecode generation.
+	// Re-verify these no-recipient trailers before relaxing that scope guard.
 	if !lastParam.DexFuncHasRecipient && !isETHAddress(priceRoute.DestToken) {
-		return "", fmt.Errorf("Executor01 final transfer calldata is not implemented in Phase 2b")
+		transferCallData, err := buildERC20TransferCalldata(
+			b.context.AugustusV6Address,
+			priceRoute.DestAmount,
+		)
+		if err != nil {
+			return "", err
+		}
+		wrappedTransferCallData, err := buildTransferCallData(
+			transferCallData,
+			priceRoute.DestToken,
+		)
+		if err != nil {
+			return "", err
+		}
+		swapsCalldata, err = concatHex(string(swapsCalldata), string(wrappedTransferCallData))
+		if err != nil {
+			return "", err
+		}
 	}
-	if input.WethPlan != nil && input.WethPlan.Withdraw != nil && isETHAddress(priceRoute.DestToken) {
-		return "", fmt.Errorf("Executor01 final WETH withdraw calldata is not implemented in Phase 2b")
-	}
-	if !lastParam.DexFuncHasRecipient && isETHAddress(priceRoute.DestToken) {
-		return "", fmt.Errorf("Executor01 final special-flag calldata is not implemented in Phase 2b")
+	// Final native-send trailer is live for ETH-destination WETH withdraw
+	// fixtures; the no-recipient ETH-destination arm remains scope-guarded.
+	if (input.WethPlan != nil && input.WethPlan.Withdraw != nil && isETHAddress(priceRoute.DestToken)) ||
+		(!lastParam.DexFuncHasRecipient && isETHAddress(priceRoute.DestToken)) {
+		finalSpecialFlagCalldata, err := buildFinalSpecialFlagCalldata(b.context)
+		if err != nil {
+			return "", err
+		}
+		swapsCalldata, err = concatHex(string(swapsCalldata), string(finalSpecialFlagCalldata))
+		if err != nil {
+			return "", err
+		}
 	}
 
 	return buildExecutor01TopLevelBytecode(swapsCalldata)
 }
 
-func (b Executor01Builder) validatePhase2bScope(
+func (b Executor01Builder) validatePhase2eScope(
 	priceRoute executorRoute,
 	exchangeParams []resolved.DexExchangeBuildParam,
 	wethPlan *resolved.WethPlan,
@@ -79,15 +105,12 @@ func (b Executor01Builder) validatePhase2bScope(
 	if len(priceRoute.BestRoute) != 1 {
 		return fmt.Errorf("Executor01 does not support routes with multiple entries; mega-swap uses Executor02/Executor03")
 	}
-	if wethPlan != nil {
-		return fmt.Errorf("Executor01 WETH plan calldata is not implemented in Phase 2b")
-	}
 
 	exchangeParamIndex := 0
 	for _, route := range priceRoute.BestRoute {
 		for _, swap := range route.Swaps {
 			if len(swap.SwapExchanges) != 1 {
-				return fmt.Errorf("Executor01 Phase 2b supports one swapExchange per swap")
+				return fmt.Errorf("Executor01 Phase 2e supports one swapExchange per swap")
 			}
 			if exchangeParamIndex >= len(exchangeParams) {
 				return fmt.Errorf("missing exchange param for route position")
@@ -95,52 +118,50 @@ func (b Executor01Builder) validatePhase2bScope(
 
 			exchangeParam := exchangeParams[exchangeParamIndex]
 			if !exchangeParam.NeedWrapNative.Value {
-				return fmt.Errorf("Executor01 needWrapNative=false is not implemented in Phase 2b")
+				return fmt.Errorf("Executor01 needWrapNative=false is not implemented in Phase 2e")
 			}
 			if !exchangeParam.DexFuncHasRecipient {
-				return fmt.Errorf("Executor01 dexFuncHasRecipient=false is not implemented in Phase 2b")
+				return fmt.Errorf("Executor01 dexFuncHasRecipient=false is not implemented in Phase 2e")
 			}
-			if boolValue(exchangeParam.NeedUnwrapNative) {
-				return fmt.Errorf("Executor01 needUnwrapNative is not implemented in Phase 2b")
+			if boolValue(exchangeParam.NeedUnwrapNative) && isWETHAddress(swap.DestToken, b.context) {
+				return fmt.Errorf("Executor01 WETH-destination needUnwrapNative is not implemented in Phase 2e")
+			}
+			if boolValue(exchangeParam.NeedUnwrapNative) && !isWETHAddress(swap.SrcToken, b.context) {
+				return fmt.Errorf("Executor01 needUnwrapNative is not implemented in Phase 2e")
 			}
 			if exchangeParam.WethAddress != nil {
-				return fmt.Errorf("Executor01 custom wethAddress is not implemented in Phase 2b")
-			}
-			if exchangeParam.TransferSrcTokenBeforeSwap != nil {
-				return fmt.Errorf("Executor01 transferSrcTokenBeforeSwap calldata is not implemented in Phase 2b")
+				if !boolValue(exchangeParam.NeedUnwrapNative) ||
+					!isWETHAddress(swap.SrcToken, b.context) ||
+					!isWETHAddress(*exchangeParam.WethAddress, b.context) {
+					return fmt.Errorf("Executor01 custom wethAddress is not implemented in Phase 2e")
+				}
 			}
 			if exchangeParam.Spender != nil {
-				return fmt.Errorf("Executor01 spender override is not implemented in Phase 2b")
+				return fmt.Errorf("Executor01 spender override is not implemented in Phase 2e")
 			}
 			if boolValue(exchangeParam.SendEthButSupportsInsertFromAmount) {
-				return fmt.Errorf("Executor01 sendEthButSupportsInsertFromAmount is not implemented in Phase 2b")
+				return fmt.Errorf("Executor01 sendEthButSupportsInsertFromAmount is not implemented in Phase 2e")
 			}
 			if exchangeParam.SpecialDexSupportsInsertFromAmount != nil {
-				return fmt.Errorf("Executor01 special-dex insert support is not implemented in Phase 2b")
+				return fmt.Errorf("Executor01 special-dex insert support is not implemented in Phase 2e")
 			}
 			if boolValue(exchangeParam.SwappedAmountNotPresentInExchangeData) {
-				return fmt.Errorf("Executor01 swappedAmountNotPresentInExchangeData is not implemented in Phase 2b")
+				return fmt.Errorf("Executor01 swappedAmountNotPresentInExchangeData is not implemented in Phase 2e")
 			}
 			if exchangeParam.ReturnAmountPos != nil {
-				return fmt.Errorf("Executor01 returnAmountPos override is not implemented in Phase 2b")
+				return fmt.Errorf("Executor01 returnAmountPos override is not implemented in Phase 2e")
 			}
 			if exchangeParam.InsertFromAmountPos != nil {
-				return fmt.Errorf("Executor01 insertFromAmountPos override is not implemented in Phase 2b")
+				return fmt.Errorf("Executor01 insertFromAmountPos override is not implemented in Phase 2e")
 			}
 			if boolValue(exchangeParam.AmountsPacked128) {
-				return fmt.Errorf("Executor01 amountsPacked128 is not implemented in Phase 2b")
-			}
-			if boolValue(exchangeParam.Permit2Approval) {
-				return fmt.Errorf("Executor01 permit2Approval is not implemented in Phase 2b")
+				return fmt.Errorf("Executor01 amountsPacked128 is not implemented in Phase 2e")
 			}
 			if boolValue(exchangeParam.SkipApproval) {
-				return fmt.Errorf("Executor01 skipApproval is not implemented in Phase 2b")
-			}
-			if exchangeParam.ApproveData != nil {
-				return fmt.Errorf("Executor01 approve calldata is not implemented in Phase 2b")
+				return fmt.Errorf("Executor01 skipApproval is not implemented in Phase 2e")
 			}
 			if exchangeParam.SpecialDexFlag != nil && *exchangeParam.SpecialDexFlag != int(specialDexDefault) {
-				return fmt.Errorf("Executor01 specialDexFlag is not implemented in Phase 2b")
+				return fmt.Errorf("Executor01 specialDexFlag is not implemented in Phase 2e")
 			}
 
 			exchangeParamIndex++
@@ -245,9 +266,69 @@ func (b Executor01Builder) buildSimpleSwapFlags(
 	exchangeParamIndex int,
 	wethPlan *resolved.WethPlan,
 ) (flag, flag, error) {
-	return insertFromAmountDontCheckBalanceAfterSwap,
-		dontInsertFromAmountDontCheckBalanceAfterSwap,
-		nil
+	swap := priceRoute.BestRoute[routeIndex].Swaps[swapIndex]
+	exchangeParam := exchangeParams[exchangeParamIndex]
+	isEthSrc := isETHAddress(swap.SrcToken)
+	isEthDest := isETHAddress(swap.DestToken)
+	isWETHSrc := boolValue(exchangeParam.NeedUnwrapNative) && isWETHAddress(swap.SrcToken, b.context)
+	isWETHDest := boolValue(exchangeParam.NeedUnwrapNative) && isWETHAddress(swap.DestToken, b.context)
+	needWrap := exchangeParam.NeedWrapNative.Value &&
+		isEthSrc &&
+		wethPlan != nil &&
+		wethPlan.Deposit != nil
+	needUnwrap := exchangeParam.NeedWrapNative.Value &&
+		isEthDest &&
+		wethPlan != nil &&
+		wethPlan.Withdraw != nil
+	isSpecialDex := exchangeParam.SpecialDexFlag != nil &&
+		*exchangeParam.SpecialDexFlag != int(specialDexDefault)
+	forcePreventInsertFromAmount :=
+		boolValue(exchangeParam.SwappedAmountNotPresentInExchangeData) ||
+			(isSpecialDex && !boolValue(exchangeParam.SpecialDexSupportsInsertFromAmount))
+
+	dexFlag := insertFromAmountDontCheckBalanceAfterSwap
+	if forcePreventInsertFromAmount {
+		dexFlag = dontInsertFromAmountDontCheckBalanceAfterSwap
+	}
+	approveFlag := dontInsertFromAmountDontCheckBalanceAfterSwap
+
+	if isEthSrc && !needWrap {
+		if exchangeParam.DexFuncHasRecipient {
+			if !boolValue(exchangeParam.SendEthButSupportsInsertFromAmount) {
+				dexFlag = sendEthEqualToFromAmountDontCheckBalanceAfterSwap
+			} else {
+				dexFlag = sendEthEqualToFromAmountPlusInsertFromAmountDontCheckBalanceAfterSwap
+			}
+		} else if !boolValue(exchangeParam.SendEthButSupportsInsertFromAmount) {
+			dexFlag = sendEthEqualToFromAmountCheckSrcTokenBalanceAfterSwap
+		} else {
+			dexFlag = sendEthEqualToFromAmountPlusInsertFromAmountCheckSrcTokenBalanceAfterSwap
+		}
+	} else if isEthDest && !needUnwrap {
+		if forcePreventInsertFromAmount {
+			dexFlag = dontInsertFromAmountCheckEthBalanceAfterSwap
+		} else {
+			dexFlag = insertFromAmountCheckEthBalanceAfterSwap
+		}
+	} else if !exchangeParam.DexFuncHasRecipient || (isEthDest && needUnwrap) {
+		if forcePreventInsertFromAmount {
+			dexFlag = dontInsertFromAmountCheckSrcTokenBalanceAfterSwap
+		} else {
+			dexFlag = insertFromAmountCheckSrcTokenBalanceAfterSwap
+		}
+	}
+
+	if isWETHSrc {
+		dexFlag = sendEthEqualToFromAmountCheckSrcTokenBalanceAfterSwap
+	} else if isWETHDest {
+		if forcePreventInsertFromAmount {
+			dexFlag = dontInsertFromAmountCheckEthBalanceAfterSwap
+		} else {
+			dexFlag = insertFromAmountCheckEthBalanceAfterSwap
+		}
+	}
+
+	return dexFlag, approveFlag, nil
 }
 
 func (b Executor01Builder) buildMultiMegaSwapFlags(
@@ -258,15 +339,90 @@ func (b Executor01Builder) buildMultiMegaSwapFlags(
 	exchangeParamIndex int,
 	wethPlan *resolved.WethPlan,
 ) (flag, flag, error) {
+	swap := priceRoute.BestRoute[routeIndex].Swaps[swapIndex]
+	exchangeParam := exchangeParams[exchangeParamIndex]
 	isLastSwap := swapIndex == len(priceRoute.BestRoute[routeIndex].Swaps)-1
+	isEthSrc := isETHAddress(swap.SrcToken)
+	isEthDest := isETHAddress(swap.DestToken)
+	isWETHSrc := boolValue(exchangeParam.NeedUnwrapNative) && isWETHAddress(swap.SrcToken, b.context)
+	isWETHDest := boolValue(exchangeParam.NeedUnwrapNative) && isWETHAddress(swap.DestToken, b.context)
+	isSpecialDex := exchangeParam.SpecialDexFlag != nil &&
+		*exchangeParam.SpecialDexFlag != int(specialDexDefault)
+	forcePreventInsertFromAmount :=
+		boolValue(exchangeParam.SwappedAmountNotPresentInExchangeData) ||
+			(isSpecialDex && !boolValue(exchangeParam.SpecialDexSupportsInsertFromAmount))
+	needUnwrap := exchangeParam.NeedWrapNative.Value &&
+		isEthDest &&
+		wethPlan != nil &&
+		wethPlan.Withdraw != nil
+	forceBalanceOfCheck := true
 	if isLastSwap {
-		return insertFromAmountDontCheckBalanceAfterSwap,
-			dontInsertFromAmountDontCheckBalanceAfterSwap,
-			nil
+		forceBalanceOfCheck = !exchangeParam.DexFuncHasRecipient || needUnwrap
 	}
-	return insertFromAmountCheckSrcTokenBalanceAfterSwap,
-		dontInsertFromAmountDontCheckBalanceAfterSwap,
-		nil
+	needSendEth := isEthSrc && !exchangeParam.NeedWrapNative.Value
+	needCheckEthBalance := isEthDest && !exchangeParam.NeedWrapNative.Value
+	needCheckSrcTokenBalanceOf := needUnwrap && !isLastSwap
+
+	dexFlag := insertFromAmountDontCheckBalanceAfterSwap
+	approveFlag := dontInsertFromAmountDontCheckBalanceAfterSwap
+	if needSendEth {
+		preventInsertForSendEth :=
+			forcePreventInsertFromAmount ||
+				!boolValue(exchangeParam.SendEthButSupportsInsertFromAmount)
+		if forceBalanceOfCheck {
+			if preventInsertForSendEth {
+				dexFlag = sendEthEqualToFromAmountCheckSrcTokenBalanceAfterSwap
+			} else {
+				dexFlag = sendEthEqualToFromAmountPlusInsertFromAmountCheckSrcTokenBalanceAfterSwap
+			}
+		} else if exchangeParam.DexFuncHasRecipient {
+			if preventInsertForSendEth {
+				dexFlag = sendEthEqualToFromAmountDontCheckBalanceAfterSwap
+			} else {
+				dexFlag = sendEthEqualToFromAmountPlusInsertFromAmountDontCheckBalanceAfterSwap
+			}
+		} else if preventInsertForSendEth {
+			dexFlag = sendEthEqualToFromAmountCheckSrcTokenBalanceAfterSwap
+		} else {
+			dexFlag = sendEthEqualToFromAmountPlusInsertFromAmountCheckSrcTokenBalanceAfterSwap
+		}
+	} else if needCheckEthBalance {
+		if needCheckSrcTokenBalanceOf || forceBalanceOfCheck {
+			if forcePreventInsertFromAmount && exchangeParam.DexFuncHasRecipient {
+				dexFlag = dontInsertFromAmountCheckEthBalanceAfterSwap
+			} else {
+				dexFlag = insertFromAmountCheckEthBalanceAfterSwap
+			}
+		} else if forcePreventInsertFromAmount && exchangeParam.DexFuncHasRecipient {
+			dexFlag = dontInsertFromAmountDontCheckBalanceAfterSwap
+		} else {
+			dexFlag = insertFromAmountDontCheckBalanceAfterSwap
+		}
+	} else {
+		if needCheckSrcTokenBalanceOf || forceBalanceOfCheck {
+			if forcePreventInsertFromAmount {
+				dexFlag = dontInsertFromAmountCheckSrcTokenBalanceAfterSwap
+			} else {
+				dexFlag = insertFromAmountCheckSrcTokenBalanceAfterSwap
+			}
+		} else if forcePreventInsertFromAmount {
+			dexFlag = dontInsertFromAmountDontCheckBalanceAfterSwap
+		} else {
+			dexFlag = insertFromAmountDontCheckBalanceAfterSwap
+		}
+	}
+
+	if isWETHSrc {
+		dexFlag = sendEthEqualToFromAmountCheckSrcTokenBalanceAfterSwap
+	} else if isWETHDest {
+		if forcePreventInsertFromAmount {
+			dexFlag = dontInsertFromAmountCheckEthBalanceAfterSwap
+		} else {
+			dexFlag = insertFromAmountCheckEthBalanceAfterSwap
+		}
+	}
+
+	return dexFlag, approveFlag, nil
 }
 
 func (b Executor01Builder) buildSingleSwapCallData(
@@ -283,7 +439,9 @@ func (b Executor01Builder) buildSingleSwapCallData(
 		return "", fmt.Errorf("missing swap for exchange param index %d", index)
 	}
 
-	return b.buildDexCallData(
+	swap := priceRoute.BestRoute[0].Swaps[index]
+	curExchangeParam := exchangeParams[index]
+	dexCallData, err := b.buildDexCallData(
 		priceRoute,
 		exchangeParams,
 		0,
@@ -292,6 +450,142 @@ func (b Executor01Builder) buildSingleSwapCallData(
 		index,
 		flags.dexes[index],
 	)
+	if err != nil {
+		return "", err
+	}
+
+	swapCallData := dexCallData
+	isWETHSrcUnwrap :=
+		boolValue(curExchangeParam.NeedUnwrapNative) &&
+			isWETHAddress(swap.SrcToken, b.context)
+	if isWETHSrcUnwrap {
+		withdrawRawCalldata, err := buildERC20WithdrawCalldata(swap.SwapExchanges[0].SrcAmount)
+		if err != nil {
+			return "", err
+		}
+		withdrawCallData, err := buildUnwrapEthCallData(
+			getWETHAddress(curExchangeParam, b.context),
+			withdrawRawCalldata,
+		)
+		if err != nil {
+			return "", err
+		}
+		swapCallData, err = concatHex(string(withdrawCallData), string(dexCallData))
+		if err != nil {
+			return "", err
+		}
+	}
+
+	if curExchangeParam.TransferSrcTokenBeforeSwap != nil {
+		transferCallData, err := buildERC20TransferCalldata(
+			*curExchangeParam.TransferSrcTokenBeforeSwap,
+			swap.SwapExchanges[0].SrcAmount,
+		)
+		if err != nil {
+			return "", err
+		}
+		tokenAddress := resolved.Address(lowerHex(string(swap.SrcToken)))
+		if isETHAddress(swap.SrcToken) {
+			tokenAddress = getWETHAddress(curExchangeParam, b.context)
+		}
+		wrappedTransferCallData, err := buildTransferCallData(transferCallData, tokenAddress)
+		if err != nil {
+			return "", err
+		}
+		swapCallData, err = concatHex(string(wrappedTransferCallData), string(swapCallData))
+		if err != nil {
+			return "", err
+		}
+	}
+
+	if int(flags.dexes[index])%4 != 1 &&
+		(!isETHAddress(swap.SrcToken) || (isETHAddress(swap.SrcToken) && index != 0)) &&
+		curExchangeParam.TransferSrcTokenBeforeSwap == nil &&
+		!boolValue(curExchangeParam.SkipApproval) &&
+		curExchangeParam.ApproveData != nil {
+		approveCallData, err := buildApproveCallData(
+			b.context,
+			curExchangeParam.ApproveData.Target,
+			curExchangeParam.ApproveData.Token,
+			flags.approves[index],
+			boolValue(curExchangeParam.Permit2Approval),
+			maxUint,
+		)
+		if err != nil {
+			return "", err
+		}
+		swapCallData, err = concatHex(string(approveCallData), string(swapCallData))
+		if err != nil {
+			return "", err
+		}
+	}
+
+	if curExchangeParam.NeedWrapNative.Value && wethPlan != nil {
+		if wethPlan.Deposit != nil && isETHAddress(swap.SrcToken) {
+			var prevExchangeParam *resolved.DexExchangeBuildParam
+			if index > 0 {
+				prevExchangeParam = &exchangeParams[index-1]
+			}
+			if prevExchangeParam == nil || !prevExchangeParam.NeedWrapNative.Value {
+				approveWethCallData := resolved.HexBytes("0x")
+				if curExchangeParam.ApproveData != nil &&
+					curExchangeParam.TransferSrcTokenBeforeSwap == nil &&
+					!boolValue(curExchangeParam.SkipApproval) {
+					approveWethCallData, err = buildApproveCallData(
+						b.context,
+						curExchangeParam.ApproveData.Target,
+						curExchangeParam.ApproveData.Token,
+						flags.approves[index],
+						boolValue(curExchangeParam.Permit2Approval),
+						maxUint,
+					)
+					if err != nil {
+						return "", err
+					}
+				}
+
+				depositCallData, err := buildWrapEthCallData(
+					getWETHAddress(curExchangeParam, b.context),
+					wethPlan.Deposit.Calldata,
+					sendEthEqualToFromAmountDontCheckBalanceAfterSwap,
+					0,
+				)
+				if err != nil {
+					return "", err
+				}
+				swapCallData, err = concatHex(
+					string(approveWethCallData),
+					string(depositCallData),
+					string(swapCallData),
+				)
+				if err != nil {
+					return "", err
+				}
+			}
+		}
+
+		if wethPlan.Withdraw != nil && isETHAddress(swap.DestToken) {
+			var nextExchangeParam *resolved.DexExchangeBuildParam
+			if index+1 < len(exchangeParams) {
+				nextExchangeParam = &exchangeParams[index+1]
+			}
+			if nextExchangeParam == nil || !nextExchangeParam.NeedWrapNative.Value {
+				withdrawCallData, err := buildUnwrapEthCallData(
+					getWETHAddress(curExchangeParam, b.context),
+					wethPlan.Withdraw.Calldata,
+				)
+				if err != nil {
+					return "", err
+				}
+				swapCallData, err = concatHex(string(swapCallData), string(withdrawCallData))
+				if err != nil {
+					return "", err
+				}
+			}
+		}
+	}
+
+	return swapCallData, nil
 }
 
 func (b Executor01Builder) buildDexCallData(

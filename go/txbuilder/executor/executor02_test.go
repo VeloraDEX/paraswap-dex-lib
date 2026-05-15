@@ -152,6 +152,7 @@ func TestExecutor02BuildBytecodeMatchesPhase2cFixtures(t *testing.T) {
 		"executor02-vertical-branch-sell",
 		"executor02-multiswap-sell",
 		"executor02-megaswap-sell",
+		"same-token-internal-split",
 	} {
 		t.Run(fixtureName, func(t *testing.T) {
 			input, expectedParams := executortest.LoadBuildInputWithExpectedParams(t, fixtureName)
@@ -311,19 +312,5 @@ func TestExecutor02RejectsPhase2cOutOfScopeBranches(t *testing.T) {
 				t.Fatalf("unexpected error:\n got: %v\nwant: %s", err, testCase.want)
 			}
 		})
-	}
-}
-
-func TestExecutor02RejectsSameTokenPhase2eFixture(t *testing.T) {
-	input, _ := executortest.LoadBuildInputWithExpectedParams(t, "same-token-internal-split")
-	deps, err := resolvedtest.BuildDepsFromFixtureInput(input)
-	if err != nil {
-		t.Fatal(err)
-	}
-	builder := NewExecutor02Builder(deps.EncodingContext)
-
-	_, err = builder.BuildBytecode(executortest.ParseExpectedBytecodeBuildInput(t, input, deps.EncodingContext))
-	if err == nil || err.Error() != "Executor02 same-token routes are not implemented in Phase 2c" {
-		t.Fatalf("unexpected error:\n got: %v\nwant: %s", err, "Executor02 same-token routes are not implemented in Phase 2c")
 	}
 }

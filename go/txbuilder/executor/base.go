@@ -323,6 +323,146 @@ func buildTransferCallData(
 	)
 }
 
+func buildApproveCallData(
+	context resolved.EncodingContext,
+	spender resolved.Address,
+	tokenAddress resolved.Address,
+	dexFlag flag,
+	permit2 bool,
+	amount resolved.DecimalString,
+) (resolved.HexBytes, error) {
+	if permit2 {
+		return buildPermit2CallData(context, spender, tokenAddress, dexFlag)
+	}
+
+	approveCalldata, err := buildERC20ApproveCalldata(spender, amount)
+	if err != nil {
+		return "", err
+	}
+	if int(dexFlag)%3 == 2 {
+		approveCalldata, err = concatHex(string(approveCalldata), zeroBytes(12), string(tokenAddress))
+		if err != nil {
+			return "", err
+		}
+	}
+
+	approvalCalldata, err := buildExecutor0102CallData(
+		tokenAddress,
+		approveCalldata,
+		0,
+		approveCalldataDestTokenPos,
+		specialDexDefault,
+		dexFlag,
+		defaultReturnAmountPos,
+	)
+	if err != nil {
+		return "", err
+	}
+
+	if amount != "0" && isDisabledMaxUnitApprovalToken(context.Network, tokenAddress) {
+		resetCalldata, err := buildApproveCallData(
+			context,
+			spender,
+			tokenAddress,
+			dontInsertFromAmountDontCheckBalanceAfterSwap,
+			false,
+			resolved.DecimalString("0"),
+		)
+		if err != nil {
+			return "", err
+		}
+		return concatHex(string(resetCalldata), string(approvalCalldata))
+	}
+
+	return approvalCalldata, nil
+}
+
+func buildPermit2CallData(
+	context resolved.EncodingContext,
+	spender resolved.Address,
+	tokenAddress resolved.Address,
+	dexFlag flag,
+) (resolved.HexBytes, error) {
+	approveData, err := buildERC20ApproveCalldata(resolved.Address(permit2Address), maxUint)
+	if err != nil {
+		return "", err
+	}
+	approvalCalldata, err := buildExecutor0102CallData(
+		tokenAddress,
+		approveData,
+		0,
+		approveCalldataDestTokenPos,
+		specialDexDefault,
+		dontInsertFromAmountDontCheckBalanceAfterSwap,
+		defaultReturnAmountPos,
+	)
+	if err != nil {
+		return "", err
+	}
+
+	if isDisabledMaxUnitApprovalToken(context.Network, tokenAddress) {
+		resetApprove, err := buildERC20ApproveCalldata(resolved.Address(permit2Address), "0")
+		if err != nil {
+			return "", err
+		}
+		resetCalldata, err := buildExecutor0102CallData(
+			tokenAddress,
+			resetApprove,
+			0,
+			approveCalldataDestTokenPos,
+			specialDexDefault,
+			dontInsertFromAmountDontCheckBalanceAfterSwap,
+			defaultReturnAmountPos,
+		)
+		if err != nil {
+			return "", err
+		}
+		approvalCalldata, err = concatHex(string(resetCalldata), string(approvalCalldata))
+		if err != nil {
+			return "", err
+		}
+	}
+
+	permit2Data, err := buildPermit2ApproveCalldata(
+		tokenAddress,
+		spender,
+		maxUint160,
+		maxUint48,
+	)
+	if err != nil {
+		return "", err
+	}
+	permit2Calldata, err := buildExecutor0102CallData(
+		resolved.Address(permit2Address),
+		permit2Data,
+		0,
+		approveCalldataDestTokenPos,
+		specialDexDefault,
+		dexFlag,
+		defaultReturnAmountPos,
+	)
+	if err != nil {
+		return "", err
+	}
+	if int(dexFlag)%3 == 2 {
+		permit2Calldata, err = concatHex(string(permit2Calldata), zeroBytes(12), string(tokenAddress))
+		if err != nil {
+			return "", err
+		}
+	}
+
+	return concatHex(string(approvalCalldata), string(permit2Calldata))
+}
+
+func isDisabledMaxUnitApprovalToken(network int, tokenAddress resolved.Address) bool {
+	tokens, ok := disabledMaxUnitApprovalTokens[network]
+	if !ok {
+		return false
+	}
+	_, ok = tokens[lowerHex(string(tokenAddress))]
+	return ok
+}
+
 func buildFinalSpecialFlagCalldata(context resolved.EncodingContext) (resolved.HexBytes, error) {
 	return buildExecutor0102CallData(
 		context.AugustusV6Address,

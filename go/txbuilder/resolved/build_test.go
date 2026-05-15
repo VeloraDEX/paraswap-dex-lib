@@ -77,16 +77,17 @@ func TestBuildTransactionFromResolvedMatchesGenericSuccessFixtures(t *testing.T)
 }
 
 func TestBuildTransactionFromResolvedMatchesRealBuilderFixtures(t *testing.T) {
-	for _, fixtureName := range []string{
-		"executor01-simple-sell-approved",
-		"executor01-multiswap-sell",
-		"executor02-vertical-branch-sell",
-		"executor02-multiswap-sell",
-		"executor02-megaswap-sell",
-		"executor03-buy",
-	} {
-		t.Run(fixtureName, func(t *testing.T) {
-			fixture, input := loadBuildInput(t, fixtureName)
+	collection, err := testfixtures.LoadResolvedBuildFixtures()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, fixture := range collection.Buckets[testfixtures.BucketPhase2GenericSuccess] {
+		t.Run(fixture.Name, func(t *testing.T) {
+			var input resolved.BuildInput
+			if err := json.Unmarshal(fixture.Input, &input); err != nil {
+				t.Fatal(err)
+			}
 			var expectedParams []any
 			if err := json.Unmarshal(fixture.ExpectedParams, &expectedParams); err != nil {
 				t.Fatal(err)

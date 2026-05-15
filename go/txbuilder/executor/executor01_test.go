@@ -89,10 +89,24 @@ func TestBuildExecutor0102CallDataLayout(t *testing.T) {
 	}
 }
 
-func TestExecutor01BuildBytecodeMatchesPhase2bFixtures(t *testing.T) {
+func TestExecutor01BuildBytecodeMatchesPhase2eFixtures(t *testing.T) {
 	for _, fixtureName := range []string{
+		"edge-nonempty-permit",
+		"edge-zero-quoted-amount",
+		"executor01-eth-weth-deposit",
 		"executor01-simple-sell-approved",
+		"executor01-simple-sell-approval-missing",
+		"executor01-simple-sell-beneficiary",
 		"executor01-multiswap-sell",
+		"executor01-weth-eth-withdraw",
+		"fee-direct-transfer",
+		"fee-nonzero-partner",
+		"fee-referrer",
+		"fee-surplus-to-user",
+		"fee-take-surplus",
+		"need-unwrap-native",
+		"permit2-approval",
+		"transfer-src-token-before-swap",
 	} {
 		t.Run(fixtureName, func(t *testing.T) {
 			input, expectedParams := executortest.LoadBuildInputWithExpectedParams(t, fixtureName)
@@ -134,7 +148,7 @@ func TestExecutor01DestTokenPositionUsesNormalizedAddress(t *testing.T) {
 	}
 }
 
-func TestExecutor01RejectsPhase2bOutOfScopeBranches(t *testing.T) {
+func TestExecutor01RejectsPhase2eOutOfScopeBranches(t *testing.T) {
 	input, _ := executortest.LoadBuildInputWithExpectedParams(t, "executor01-simple-sell-approved")
 	deps, err := resolvedtest.BuildDepsFromFixtureInput(input)
 	if err != nil {
@@ -152,22 +166,23 @@ func TestExecutor01RejectsPhase2bOutOfScopeBranches(t *testing.T) {
 			mutate: func(input *resolved.ExecutorBytecodeBuildInput) {
 				input.ResolvedLegs[0].ExchangeParam.NeedWrapNative.Value = false
 			},
-			want: "Executor01 needWrapNative=false is not implemented in Phase 2b",
+			want: "Executor01 needWrapNative=false is not implemented in Phase 2e",
 		},
 		{
 			name: "no recipient dex",
 			mutate: func(input *resolved.ExecutorBytecodeBuildInput) {
 				input.ResolvedLegs[0].ExchangeParam.DexFuncHasRecipient = false
 			},
-			want: "Executor01 dexFuncHasRecipient=false is not implemented in Phase 2b",
+			want: "Executor01 dexFuncHasRecipient=false is not implemented in Phase 2e",
 		},
 		{
-			name: "need unwrap native",
+			name: "WETH destination need unwrap native",
 			mutate: func(input *resolved.ExecutorBytecodeBuildInput) {
 				value := true
 				input.ResolvedLegs[0].ExchangeParam.NeedUnwrapNative = &value
+				input.RoutePlan.Routes[0].Swaps[0].DestToken = deps.EncodingContext.WrappedNativeTokenAddress
 			},
-			want: "Executor01 needUnwrapNative is not implemented in Phase 2b",
+			want: "Executor01 WETH-destination needUnwrapNative is not implemented in Phase 2e",
 		},
 		{
 			name: "send eth insert support",
@@ -175,7 +190,82 @@ func TestExecutor01RejectsPhase2bOutOfScopeBranches(t *testing.T) {
 				value := true
 				input.ResolvedLegs[0].ExchangeParam.SendEthButSupportsInsertFromAmount = &value
 			},
-			want: "Executor01 sendEthButSupportsInsertFromAmount is not implemented in Phase 2b",
+			want: "Executor01 sendEthButSupportsInsertFromAmount is not implemented in Phase 2e",
+		},
+		{
+			name: "custom weth without need unwrap",
+			mutate: func(input *resolved.ExecutorBytecodeBuildInput) {
+				value := resolved.Address("0x3333333333333333333333333333333333333333")
+				input.ResolvedLegs[0].ExchangeParam.WethAddress = &value
+			},
+			want: "Executor01 custom wethAddress is not implemented in Phase 2e",
+		},
+		{
+			name: "custom weth with source need unwrap",
+			mutate: func(input *resolved.ExecutorBytecodeBuildInput) {
+				value := true
+				input.ResolvedLegs[0].ExchangeParam.NeedUnwrapNative = &value
+				input.RoutePlan.Routes[0].Swaps[0].SrcToken = deps.EncodingContext.WrappedNativeTokenAddress
+				customWeth := resolved.Address("0x3333333333333333333333333333333333333333")
+				input.ResolvedLegs[0].ExchangeParam.WethAddress = &customWeth
+			},
+			want: "Executor01 custom wethAddress is not implemented in Phase 2e",
+		},
+		{
+			name: "spender override",
+			mutate: func(input *resolved.ExecutorBytecodeBuildInput) {
+				value := resolved.Address("0x5555555555555555555555555555555555555555")
+				input.ResolvedLegs[0].ExchangeParam.Spender = &value
+			},
+			want: "Executor01 spender override is not implemented in Phase 2e",
+		},
+		{
+			name: "special dex insert support",
+			mutate: func(input *resolved.ExecutorBytecodeBuildInput) {
+				value := true
+				input.ResolvedLegs[0].ExchangeParam.SpecialDexSupportsInsertFromAmount = &value
+			},
+			want: "Executor01 special-dex insert support is not implemented in Phase 2e",
+		},
+		{
+			name: "swapped amount absent",
+			mutate: func(input *resolved.ExecutorBytecodeBuildInput) {
+				value := true
+				input.ResolvedLegs[0].ExchangeParam.SwappedAmountNotPresentInExchangeData = &value
+			},
+			want: "Executor01 swappedAmountNotPresentInExchangeData is not implemented in Phase 2e",
+		},
+		{
+			name: "return amount position",
+			mutate: func(input *resolved.ExecutorBytecodeBuildInput) {
+				value := 32
+				input.ResolvedLegs[0].ExchangeParam.ReturnAmountPos = &value
+			},
+			want: "Executor01 returnAmountPos override is not implemented in Phase 2e",
+		},
+		{
+			name: "insert from amount position",
+			mutate: func(input *resolved.ExecutorBytecodeBuildInput) {
+				value := 4
+				input.ResolvedLegs[0].ExchangeParam.InsertFromAmountPos = &value
+			},
+			want: "Executor01 insertFromAmountPos override is not implemented in Phase 2e",
+		},
+		{
+			name: "packed amounts",
+			mutate: func(input *resolved.ExecutorBytecodeBuildInput) {
+				value := true
+				input.ResolvedLegs[0].ExchangeParam.AmountsPacked128 = &value
+			},
+			want: "Executor01 amountsPacked128 is not implemented in Phase 2e",
+		},
+		{
+			name: "skip approval",
+			mutate: func(input *resolved.ExecutorBytecodeBuildInput) {
+				value := true
+				input.ResolvedLegs[0].ExchangeParam.SkipApproval = &value
+			},
+			want: "Executor01 skipApproval is not implemented in Phase 2e",
 		},
 		{
 			name: "special dex flag",
@@ -183,30 +273,7 @@ func TestExecutor01RejectsPhase2bOutOfScopeBranches(t *testing.T) {
 				value := int(specialDexSwapOnBalancerV1)
 				input.ResolvedLegs[0].ExchangeParam.SpecialDexFlag = &value
 			},
-			want: "Executor01 specialDexFlag is not implemented in Phase 2b",
-		},
-		{
-			name: "weth plan",
-			mutate: func(input *resolved.ExecutorBytecodeBuildInput) {
-				input.WethPlan = &resolved.WethPlan{
-					Deposit: &resolved.WethSubPlan{
-						Callee:   deps.EncodingContext.WrappedNativeTokenAddress,
-						Calldata: "0xd0e30db0",
-						Value:    "0",
-					},
-				}
-			},
-			want: "Executor01 WETH plan calldata is not implemented in Phase 2b",
-		},
-		{
-			name: "approval",
-			mutate: func(input *resolved.ExecutorBytecodeBuildInput) {
-				input.ResolvedLegs[0].ExchangeParam.ApproveData = &resolved.ApproveData{
-					Target: "0x2222222222222222222222222222222222222222",
-					Token:  input.SrcToken,
-				}
-			},
-			want: "Executor01 approve calldata is not implemented in Phase 2b",
+			want: "Executor01 specialDexFlag is not implemented in Phase 2e",
 		},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
@@ -253,9 +320,12 @@ func TestFactoryCreatesRegisteredExecutors(t *testing.T) {
 		t.Fatal("expected Executor03 builder")
 	}
 
-	_, err = factory.CreateExecutorBytecodeBuilder(resolved.ExecutorWETH, deps.EncodingContext)
-	if err == nil || err.Error() != "executor type not supported by Go bytecode factory: WETH" {
-		t.Fatalf("unexpected unsupported executor error: %v", err)
+	builder, err = factory.CreateExecutorBytecodeBuilder(resolved.ExecutorWETH, deps.EncodingContext)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if builder == nil {
+		t.Fatal("expected WETH builder")
 	}
 }
 
