@@ -245,8 +245,16 @@ func TestFactoryCreatesRegisteredExecutors(t *testing.T) {
 		t.Fatal("expected Executor02 builder")
 	}
 
-	_, err = factory.CreateExecutorBytecodeBuilder(resolved.Executor03, deps.EncodingContext)
-	if err == nil || err.Error() != "executor type not supported by Go bytecode factory: Executor03" {
+	builder, err = factory.CreateExecutorBytecodeBuilder(resolved.Executor03, deps.EncodingContext)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if builder == nil {
+		t.Fatal("expected Executor03 builder")
+	}
+
+	_, err = factory.CreateExecutorBytecodeBuilder(resolved.ExecutorWETH, deps.EncodingContext)
+	if err == nil || err.Error() != "executor type not supported by Go bytecode factory: WETH" {
 		t.Fatalf("unexpected unsupported executor error: %v", err)
 	}
 }

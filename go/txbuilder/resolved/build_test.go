@@ -83,6 +83,7 @@ func TestBuildTransactionFromResolvedMatchesRealBuilderFixtures(t *testing.T) {
 		"executor02-vertical-branch-sell",
 		"executor02-multiswap-sell",
 		"executor02-megaswap-sell",
+		"executor03-buy",
 	} {
 		t.Run(fixtureName, func(t *testing.T) {
 			fixture, input := loadBuildInput(t, fixtureName)
@@ -162,6 +163,46 @@ func TestBuildTransactionFromResolvedRejectsExecutor02OutMethodBeforeFactory(t *
 	}
 	if factory.createCalls != 0 {
 		t.Fatalf("factory should not be called for Executor02 Out method, got %d calls", factory.createCalls)
+	}
+}
+
+func TestBuildTransactionFromResolvedRejectsExecutor03NonBuyBeforeFactory(t *testing.T) {
+	for _, testCase := range []struct {
+		name           string
+		side           resolved.Side
+		contractMethod string
+	}{
+		{
+			name:           "sell exact in",
+			side:           resolved.SideSell,
+			contractMethod: resolved.ContractMethodSwapExactAmountIn,
+		},
+		{
+			name:           "buy exact in",
+			side:           resolved.SideBuy,
+			contractMethod: resolved.ContractMethodSwapExactAmountInPro,
+		},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			_, input := loadBuildInput(t, "executor03-buy")
+			input.Side = testCase.side
+			input.ContractMethod = testCase.contractMethod
+			deps := buildDepsForInput(t, input)
+			factory := &fixtureBytecodeFactory{bytecode: "0x"}
+			deps.ExecutorBytecodeBuilderFactory = factory
+
+			_, err := resolved.BuildTransactionFromResolved(input, deps)
+			if err == nil || err.Error() != "Executor03 non-BUY routes are not implemented in Phase 2d" {
+				t.Fatalf(
+					"unexpected error:\n got: %v\nwant: %s",
+					err,
+					"Executor03 non-BUY routes are not implemented in Phase 2d",
+				)
+			}
+			if factory.createCalls != 0 {
+				t.Fatalf("factory should not be called for Executor03 non-BUY, got %d calls", factory.createCalls)
+			}
+		})
 	}
 }
 

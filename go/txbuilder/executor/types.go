@@ -5,6 +5,7 @@ const (
 
 	bytes28Length = 28
 	bytes64Length = 64
+	bytes96Length = 96
 
 	defaultReturnAmountPos  = 255
 	wrapUnwrapFromAmountPos = 4

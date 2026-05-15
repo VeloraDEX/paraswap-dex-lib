@@ -152,6 +152,58 @@ func buildExecutor0102CallData(
 	)
 }
 
+func buildExecutor03CallData(
+	tokenAddress resolved.Address,
+	calldata resolved.HexBytes,
+	fromAmountPos int,
+	destTokenPos int,
+	special specialDex,
+	dexFlag flag,
+	toAmountPos int,
+) (resolved.HexBytes, error) {
+	calldataLength, err := hexDataLength(string(calldata))
+	if err != nil {
+		return "", err
+	}
+
+	lengthField, err := leftPadUint(calldataLength+bytes28Length, 2)
+	if err != nil {
+		return "", err
+	}
+	toAmountField, err := leftPadUint(toAmountPos, 2)
+	if err != nil {
+		return "", err
+	}
+	fromAmountField, err := leftPadUint(fromAmountPos, 2)
+	if err != nil {
+		return "", err
+	}
+	destTokenField, err := leftPadUint(destTokenPos, 2)
+	if err != nil {
+		return "", err
+	}
+	specialField, err := leftPadUint(int(special), 2)
+	if err != nil {
+		return "", err
+	}
+	flagField, err := leftPadUint(int(dexFlag), 2)
+	if err != nil {
+		return "", err
+	}
+
+	return concatHex(
+		string(tokenAddress),
+		lengthField,
+		toAmountField,
+		fromAmountField,
+		destTokenField,
+		specialField,
+		flagField,
+		zeroBytes(bytes28Length),
+		string(calldata),
+	)
+}
+
 func buildExecutor01TopLevelBytecode(swapsCalldata resolved.HexBytes) (resolved.HexBytes, error) {
 	swapsLength, err := hexDataLength(string(swapsCalldata))
 	if err != nil {
@@ -162,6 +214,22 @@ func buildExecutor01TopLevelBytecode(swapsCalldata resolved.HexBytes) (resolved.
 		return "", err
 	}
 	length, err := leftPadUint(swapsLength+bytes64Length, 32)
+	if err != nil {
+		return "", err
+	}
+	return concatHex(offset, length, string(swapsCalldata))
+}
+
+func buildExecutor03TopLevelBytecode(swapsCalldata resolved.HexBytes) (resolved.HexBytes, error) {
+	swapsLength, err := hexDataLength(string(swapsCalldata))
+	if err != nil {
+		return "", err
+	}
+	offset, err := leftPadUint(32, 32)
+	if err != nil {
+		return "", err
+	}
+	length, err := leftPadUint(swapsLength+bytes96Length, 32)
 	if err != nil {
 		return "", err
 	}

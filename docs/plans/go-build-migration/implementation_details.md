@@ -4,8 +4,8 @@ Last updated: 2026-05-15
 
 This document tracks implementation details for
 `docs/plans/go-build-migration/implementation.md`. It is organized by
-implementation phase. Phase 1, Phase 2, Phase 2a, and Phase 2b are complete;
-Phase 2c is complete; Phase 2d is the next planned implementation slice.
+implementation phase. Phase 1, Phase 2, Phase 2a, Phase 2b, Phase 2c, and
+Phase 2d are complete; Phase 2e is the next planned implementation slice.
 
 ## Phase 1: Go Module And Fixture Foundation
 
@@ -2030,7 +2030,7 @@ yarn fixtures:check
 yarn jest tests/generic-swap-transaction-builder/resolved --runInBand
 ```
 
-### Exit Notes For Phase 2d
+### Exit Notes For Phase 2c
 
 - Executor02 real-builder fixture coverage:
   - `executor02-vertical-branch-sell`
@@ -2055,3 +2055,160 @@ yarn jest tests/generic-swap-transaction-builder/resolved --runInBand
 - The resolved boundary rejects Executor02 `BUY` /
   `swapExactAmountOut*` inputs before factory dispatch until a later phase
   intentionally scopes that behavior.
+
+## Phase 2d: Executor03 BUY Bytecode Parity
+
+This section captures the fourth executor implementation slice. It is scoped to
+the committed Executor03 BUY fixture and the Executor03-specific packing
+primitives needed by that fixture.
+
+### Current Status
+
+- Phase 2d is complete as of 2026-05-15.
+- `executor.NewFactory()` dispatches Executor01, Executor02, and Executor03.
+- The only real-builder Executor03 fixture covered by Phase 2d is
+  `executor03-buy`.
+- The resolved boundary only allows Executor03 through the real factory for
+  `BUY` inputs using `swapExactAmountOut` or `swapExactAmountOutPro`.
+- WETH-only, direct-builder, runtime bridge behavior, and unverified Executor03
+  branches remain out of scope.
+
+### In Scope
+
+- Add `Executor03Builder` implementing `resolved.ExecutorBytecodeBuilder`.
+- Port the Executor03 call-data item layout from
+  `EXECUTOR_03_FUNCTION_CALL_DATA_TYPES`:
+  - bytes20 token address
+  - bytes2 calldata-size field, with value `len(dexCallData) + 28`
+  - bytes2 `toAmountPos`
+  - bytes2 `fromAmountPos`
+  - bytes2 destination-token balance-check position
+  - bytes2 special DEX flag
+  - bytes2 executor flag
+  - bytes28 trailing zero padding as a separate header-tail field
+  - raw DEX calldata
+- Add the Executor03 top-level bytecode wrapper using `len(swapsCalldata) + 96`,
+  matching the TS `BYTES_96_LENGTH` rule.
+- Add Executor03 metadata packing:
+  - bytes4 calldata size
+  - bytes4 withdraw flag
+  - bytes8 destination-token position
+  - bytes8 source-token position
+  - bytes8 `ceil(percent * 100)`
+  - raw per-leg calldata
+- Preserve Executor03 route-leg ordering semantics: reorder DEXes with
+  `needWrapNative=true` last. The TypeScript comparator is a single-argument
+  `.sort(e => (e.exchangeParam.needWrapNative ? 1 : -1))`; the Go port treats
+  this as the intended stable partition: `needWrapNative=false` first, then
+  `needWrapNative=true`, preserving relative order inside each partition.
+- Preserve Executor03's dual-index pattern:
+  - `index` is the post-sort index into reordered `exchangeParams` and
+    reordered metadata percentages.
+  - `swapExchangeIndex` is the original pre-sort route-plan index used by
+    `buildDexCallData` to read original `srcAmount` and `destAmount`.
+- Add positive uint256 amount-position lookup plus negative int256 fallback for
+  `fromAmountPos` and `toAmountPos`. The not-found sentinel for
+  `findAmountPosInCalldata` is `len(exchangeData) / 2`, including the `0x`
+  prefix, not `-1`; negative-encoding fallback triggers when the returned
+  position is `>= len(exchangeData) / 2`.
+- Add a resolved-boundary guard that rejects Executor03 non-BUY /
+  non-`swapExactAmountOut*` inputs before factory dispatch.
+- Add direct bytecode and resolved-boundary parity tests for `executor03-buy`.
+- Add guard tests for Executor03 branches that remain outside Phase 2d.
+
+### Out Of Scope
+
+- No Executor03 WETH deposit/withdraw calldata.
+- No Executor03 approvals, Permit2, `skipApproval`,
+  `transferSrcTokenBeforeSwap`, custom WETH, `needUnwrapNative`, spender
+  override, `swappedAmountNotPresentInExchangeData`,
+  `sendEthButSupportsInsertFromAmount`, `specialDexSupportsInsertFromAmount`,
+  special DEX flags, packed-128 amount, manual amount/return-position, or
+  no-recipient DEX branches.
+- No multi-route or multi-swap Executor03 behavior.
+- No WETH-only executor behavior.
+- No direct-builder or runtime bridge behavior.
+
+### Implementation Tasks
+
+| Status | Task                                    | Notes                                                                                   |
+| ------ | --------------------------------------- | --------------------------------------------------------------------------------------- |
+| Done   | Add Executor03 call-data layout helpers | Added Executor03 item packing and top-level `+96` wrapper helpers.                      |
+| Done   | Add Executor03 metadata helper          | Packs calldata size, withdraw flag, token positions, percentage, and raw swap calldata. |
+| Done   | Add Executor03 builder                  | Implements scoped single-route/single-swap BUY fixture behavior.                        |
+| Done   | Preserve needWrapNative ordering        | Sorts `needWrapNative=true` DEXes last while keeping original `swapExchangeIndex`.      |
+| Done   | Add amount fallback test                | Locks the negative int256 amount-position fallback path.                                |
+| Done   | Add deferred-branch guards              | Rejects unverified Executor03 branches with explicit Phase 2d errors and tests.         |
+| Done   | Add resolved-boundary scope guard       | Rejects Executor03 non-BUY / non-`swapExactAmountOut*` inputs before factory dispatch.  |
+| Done   | Register Executor03 in factory          | `executor.NewFactory()` now creates Executor03 builders; WETH remains unsupported.      |
+| Done   | Add bytecode fixture tests              | Compares builder output to `expectedParams[4]` for `executor03-buy`.                    |
+| Done   | Add resolved-boundary real-builder test | Compares full `expectedParams` and `expectedTx` for `executor03-buy`.                   |
+| Done   | Run Phase 2d gates                      | Go tests/vet/format plus fixture and resolved Jest checks passed on 2026-05-15.         |
+
+### Acceptance Criteria
+
+Phase 2d is complete when:
+
+- `executor03-buy` matches generated bytecode, `expectedParams`, and
+  `expectedTx` exactly through the real Go factory.
+- Executor03 non-BUY / non-`swapExactAmountOut*` inputs reject before factory
+  dispatch, locked by
+  `TestBuildTransactionFromResolvedRejectsExecutor03NonBuyBeforeFactory`.
+- Negative int256 amount-position fallback is covered by a focused Executor03
+  unit test.
+- Executor01 and Executor02 real-builder fixture tests continue to pass through
+  the same central factory.
+- The Executor03 scope validator rejects each deferred branch with explicit
+  Phase 2d error strings, locked by
+  `TestExecutor03RejectsPhase2dOutOfScopeBranches`.
+- Non-Executor01/02/03 success fixtures continue to pass the Phase 2a
+  injected-bytecode tests.
+- WETH-only, direct-builder, and runtime bridge behavior are not introduced
+  accidentally.
+- `go test ./go/...` passes.
+- `go vet ./go/...` passes.
+- `gofmt -s -l go/` produces no output.
+- `yarn fixtures:check` passes.
+- `yarn jest tests/generic-swap-transaction-builder/resolved --runInBand`
+  passes.
+
+### Verification Commands
+
+```bash
+go test ./go/...
+go vet ./go/...
+gofmt -s -l go/
+yarn fixtures:check
+yarn jest tests/generic-swap-transaction-builder/resolved --runInBand
+```
+
+### Exit Notes For Phase 2e
+
+- Executor03 real-builder fixture coverage:
+  - `executor03-buy`
+- `executor.NewFactory()` now dispatches Executor01, Executor02, and
+  Executor03. `WETH` still returns the unsupported-executor error until the
+  WETH-only phase lands.
+- The resolved boundary rejects Executor03 non-BUY /
+  non-`swapExactAmountOut*` inputs before factory dispatch until a later phase
+  intentionally scopes that behavior.
+- Executor03 uses its own item layout and top-level length rule; do not reuse
+  the Executor01/02 item layout for future Executor03 branches.
+- Executor03 metadata uses `ceil(percent * 100)`. Do not reuse Executor02's
+  `round(percent * 100)` behavior; the rounding directions intentionally
+  differ.
+- Executor03 metadata searches lowercased token addresses in the final per-leg
+  calldata. The TypeScript implementation relies on
+  `addTokenAddressToCallData` having pre-populated both addresses and does not
+  check for `-1`; the Go port hardens this contract by failing explicitly when
+  either address is missing.
+- Executor03 flags occupy bytes2, not bytes1 like Executor01/02. The high bit
+  is reserved for packed-128 amount mode via `flag | 0x8000`; Phase 2e should
+  wire this when `amountsPacked128` enters scope.
+- Phase 2d intentionally keeps guards for unverified Executor03 branches:
+  WETH deposit/withdraw, approvals, Permit2, `skipApproval`,
+  `transferSrcTokenBeforeSwap`, custom WETH, `needUnwrapNative`, spender
+  override, `swappedAmountNotPresentInExchangeData`,
+  `sendEthButSupportsInsertFromAmount`, `specialDexSupportsInsertFromAmount`,
+  special DEX flags, manual amount/return positions, packed-128 amounts,
+  no-recipient DEXes, and multi-route/multi-swap shapes.
