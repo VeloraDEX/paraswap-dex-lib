@@ -13,7 +13,7 @@ tests/configs.json
 local-scripts
 tests/debug-price-route.json
 .husky/.git-secrets-installed
-.claude/
+.claude/worktrees/
 
 # Rust / NAPI-RS native addon
 native/target/
