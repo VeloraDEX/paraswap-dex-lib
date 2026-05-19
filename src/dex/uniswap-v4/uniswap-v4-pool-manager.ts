@@ -40,6 +40,7 @@ import {
   TICK_BITMAP_TO_USE_BY_CHAIN,
 } from './constants';
 import { IBaseHook } from './hooks/types';
+import { RustV4RegistryType } from './contract-math/native-bridge';
 
 export class UniswapV4PoolManager extends StatefulEventSubscriber<PoolManagerState> {
   handlers: {
@@ -68,6 +69,8 @@ export class UniswapV4PoolManager extends StatefulEventSubscriber<PoolManagerSta
   private poolsCacheKey = 'pools_cache';
   private supportedHookAddresses: string[];
   private hookInstancesByAddress: Record<string, IBaseHook>;
+
+  public v4Registry: RustV4RegistryType | null = null;
 
   constructor(
     readonly dexHelper: IDexHelper,
@@ -199,6 +202,7 @@ export class UniswapV4PoolManager extends StatefulEventSubscriber<PoolManagerSta
       poolKey.tickSpacing.toString(),
       this.getHook(poolId, poolKey),
     );
+    eventPool.registry = this.v4Registry;
 
     await eventPool.initialize(blockNumber);
     this.eventPools[poolId] = eventPool;
@@ -444,6 +448,7 @@ export class UniswapV4PoolManager extends StatefulEventSubscriber<PoolManagerSta
       poolKey.tickSpacing.toString(),
       this.getHook(id, poolKey),
     );
+    eventPool.registry = this.v4Registry;
     await eventPool.initialize(log.blockNumber);
 
     this.eventPools[id] = eventPool;

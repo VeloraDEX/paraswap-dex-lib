@@ -70,6 +70,7 @@ export type UniswapV3Data = {
     currentFee?: NumberAsString;
   }[];
   isApproved?: boolean;
+  useRust?: boolean;
 };
 
 export type DecodeStateMultiCallFunc = (

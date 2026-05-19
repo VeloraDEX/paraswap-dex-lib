@@ -27,6 +27,10 @@ import { TickBitMap } from './contract-math/TickBitMap';
 import { uint256ToBigInt } from '../../lib/decoders';
 import { decodeStateMultiCallResultWithRelativeBitmaps } from './utils';
 import { _reduceTickBitmap, _reduceTicks } from './contract-math/utils';
+import {
+  solidlyRegistrySetPool,
+  RustPoolRegistryType,
+} from './contract-math/native-bridge';
 
 const FEES_TO_TICK_SPACING: Record<number, bigint> = {
   500: 10n,
@@ -58,6 +62,8 @@ export class SolidlyV3EventPool extends StatefulEventSubscriber<PoolState> {
 
   public initFailed = false;
   public initRetryAttemptCount = 0;
+
+  public registry: RustPoolRegistryType | null = null;
 
   // public readonly feeCodeAsString;
   public readonly tickSpacingAsString: string;
@@ -256,6 +262,13 @@ export class SolidlyV3EventPool extends StatefulEventSubscriber<PoolState> {
 
   getBitmapRangeToRequest() {
     return TICK_BITMAP_TO_USE + TICK_BITMAP_BUFFER;
+  }
+
+  _setState(state: any, blockNumber: number, reason?: string): void {
+    super._setState(state, blockNumber);
+    if (this.registry && state) {
+      solidlyRegistrySetPool(this.registry, this.name, state);
+    }
   }
 
   async generateState(blockNumber: number): Promise<Readonly<PoolState>> {

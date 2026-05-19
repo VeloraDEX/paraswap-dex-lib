@@ -2,7 +2,7 @@ import {
   InitializeStateOptions,
   StatefulEventSubscriber,
 } from '../../stateful-event-subscriber';
-import { DexParams, PoolPairsInfo, PoolState, TickInfo } from './types';
+import { DexParams, Pool, PoolPairsInfo, PoolState, TickInfo } from './types';
 import { IDexHelper } from '../../dex-helper';
 import { Log, Logger } from '../../types';
 import { BytesLike, Interface } from 'ethers/lib/utils';
@@ -24,6 +24,10 @@ import { MultiResult } from '../../lib/multi-wrapper';
 import { NumberAsString } from '@paraswap/core';
 import { extractSuccessAndValue } from '../../lib/decoders';
 import { IBaseHook } from './hooks/types';
+import {
+  v4RegistrySetPool,
+  RustV4RegistryType,
+} from './contract-math/native-bridge';
 
 export class UniswapV4Pool extends StatefulEventSubscriber<PoolState> {
   handlers: {
@@ -42,6 +46,8 @@ export class UniswapV4Pool extends StatefulEventSubscriber<PoolState> {
   poolManagerIface: Interface;
 
   stateMulticallIface: Interface;
+
+  public registry: RustV4RegistryType | null = null;
 
   constructor(
     readonly dexHelper: IDexHelper,
@@ -82,6 +88,23 @@ export class UniswapV4Pool extends StatefulEventSubscriber<PoolState> {
     options?: InitializeStateOptions<PoolState>,
   ) {
     await super.initialize(blockNumber, options);
+  }
+
+  _setState(state: any, blockNumber: number, reason?: string): void {
+    super._setState(state, blockNumber);
+    if (this.registry && state) {
+      const pool: Pool = {
+        id: this.poolId,
+        key: {
+          currency0: this.token0,
+          currency1: this.token1,
+          fee: this.fee,
+          tickSpacing: parseInt(this.tickSpacing),
+          hooks: this.hooks,
+        },
+      };
+      v4RegistrySetPool(this.registry, this.poolId, state, pool, this.network);
+    }
   }
 
   getPoolIdentifierData(): PoolPairsInfo {
