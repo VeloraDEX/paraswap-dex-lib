@@ -1828,4 +1828,24 @@ describe('UniswapV2 E2E Mainnet', () => {
       }),
     );
   });
+
+  describe('RubiconAquila', () => {
+    const dexKey = 'RubiconAquila';
+
+    describe('Simpleswap', () => {
+      it('RubiconAquila WETH -> USDC', async () => {
+        await testE2E(
+          tokens.WETH,
+          tokens.USDC,
+          holders.WETH,
+          '10000000000000000',
+          SwapSide.SELL,
+          dexKey,
+          ContractMethod.simpleSwap,
+          network,
+          provider,
+        );
+      });
+    });
+  });
 });
