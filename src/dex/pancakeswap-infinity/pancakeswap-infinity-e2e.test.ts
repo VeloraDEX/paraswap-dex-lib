@@ -26,13 +26,10 @@ type TestRoute = {
   pool: Pool;
 };
 
-// NOTE: pools whose `hooks` address registers callbacks (non-zero hooks
-// registration bitmap, lower 16 bits of the on-chain `parameters` bytes32)
-// cannot be round-tripped through this encoder yet — see `encodeParameters`
-// in ./encoder.ts. The `parameters` it produces will not match the pool's
-// on-chain value, so `poolId = keccak256(poolKey)` mismatches and swaps
-// revert. Only add test routes for pools with `hooks = address(0)` (or hook
-// contracts that register no callbacks) until that's fixed.
+// NOTE: Pools whose `hooks` address registers callbacks need a matching
+// entry in `HOOKS_REGISTRATION_BITMAP` in ./encoder.ts so the encoded
+// `parameters` matches the on-chain value. Hookless pools
+// (`hooks == address(0)`) need no entry.
 const testRoutes: TestRoute[] = [
   {
     // CAKE -> BNB via CLPool (no hooks)
@@ -127,6 +124,31 @@ const testRoutes: TestRoute[] = [
         poolManager: '0xa0ffb9c1ce1fe56963b0321b32e7a0302114058b',
         fee: '335',
         tickSpacing: 1,
+      },
+    },
+  },
+  {
+    // USDT -> 0x5506...54a1 via CLPool with CLAlphaHook
+    // (hooksRegistration=69, tickSpacing=10)
+    name: 'USDT -> 0x5506...54a1 (zeroForOne=false, CLAlphaHook, tickSpacing=10)',
+    srcToken: '0x55d398326f99059ff775485246999027b3197955',
+    destToken: '0x5506599c722389a60580b5213ea1da60d64754a1',
+    srcDecimals: 18,
+    destDecimals: 18,
+    srcAmount: '10000000000000000000',
+    destAmount: '69267209298029908090',
+    blockNumber: 99762726,
+    side: SwapSide.SELL,
+    zeroForOne: false,
+    pool: {
+      id: '0xce7217a1091a273e0253557f03bde40386935bda4602ab8ab5c966ee664a3295',
+      key: {
+        currency0: '0x5506599c722389a60580b5213ea1da60d64754a1',
+        currency1: '0x55d398326f99059ff775485246999027b3197955',
+        hooks: '0xb0baa371b899950b4ef6a27c21baf5ef7c434d0f',
+        poolManager: '0xa0ffb9c1ce1fe56963b0321b32e7a0302114058b',
+        fee: '67',
+        tickSpacing: 10,
       },
     },
   },

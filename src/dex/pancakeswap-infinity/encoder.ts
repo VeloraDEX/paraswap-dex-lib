@@ -59,20 +59,27 @@ function getFirstStep(data: PancakeSwapInfinityData): PathStep {
 //   bits [16:39] — tickSpacing (int24)
 //   bits [40:]   — reserved / zero for CL pools
 //
-// WARNING — incorrect for pools with hook callbacks registered:
-// The new PancakeSwapInfinityData shape carries only `tickSpacing`, not the
-// hooks registration bitmap, so we zero out bits [0:15]. For pools where
-// `hooks == address(0)` (or a hook contract that registers no callbacks)
-// the bitmap is 0 and this is correct. For any pool with registered hook
-// callbacks, the produced `parameters` differs from the on-chain value,
-// which changes `poolId = keccak256(poolKey)` and causes the swap to revert
-// (`PoolNotInitialized`). Fix requires either extending the input shape
-// with `hooksRegistration`, or reading the bitmap from the hook contract.
-function encodeParameters(tickSpacing: number): string {
-  return ethers.utils.hexZeroPad(
-    ethers.utils.hexlify(BigInt(tickSpacing) << 16n),
-    32,
-  );
+// `hooksRegistration` must match the value the hook contract returns from
+// `getHooksRegistrationBitmap()` (0 for hookless pools). A mismatch
+// produces a different `poolId = keccak256(poolKey)` and the swap reverts
+// with `PoolNotInitialized`.
+const HOOKS_REGISTRATION_BITMAP: Record<string, number> = {
+  '0xb0baa371b899950b4ef6a27c21baf5ef7c434d0f': 69,
+  '0x72e09ebd9b24f47730b651889a4ed984cba53d90': 85,
+  '0x9a9b5331ce8d74b2b721291d57de696e878353fd': 85,
+};
+
+function getHooksRegistration(hooks: string): number {
+  return HOOKS_REGISTRATION_BITMAP[hooks.toLowerCase()] ?? 0;
+}
+
+function encodeParameters(
+  tickSpacing: number,
+  hooksRegistration: number,
+): string {
+  const packed =
+    (BigInt(tickSpacing) << 16n) | BigInt(hooksRegistration & 0xffff);
+  return ethers.utils.hexZeroPad(ethers.utils.hexlify(packed), 32);
 }
 
 function encodePoolKeyTuple(step: PathStep): any[] {
@@ -83,7 +90,10 @@ function encodePoolKeyTuple(step: PathStep): any[] {
     key.hooks,
     key.poolManager,
     key.fee,
-    encodeParameters(key.tickSpacing),
+    encodeParameters(
+      key.tickSpacing,
+      getHooksRegistration(key.hooks.toLowerCase()),
+    ),
   ];
 }
 

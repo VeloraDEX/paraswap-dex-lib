@@ -17,13 +17,6 @@ const routerAddress =
 const routerIface = new Interface(RouterAbi);
 
 // ERC20/ERC20 pool (no native currency).
-// NOTE: this fixture sets a non-zero `hooks` address, but the encoder
-// reconstructs `parameters` from `tickSpacing` alone and zeroes out the
-// hooks registration bitmap — so the `parameters` bytes32 produced here
-// does not match the real on-chain pool. That's fine for these tests
-// (they only assert router command structure, not poolId correctness),
-// but any on-chain simulation against this pool would revert with
-// `PoolNotInitialized`. See `encodeParameters` in ./encoder.ts.
 const pool: Pool = {
   id: '0x0000000000000000000000000000000000000000000000000000000000000001',
   key: {
