@@ -2,7 +2,7 @@ import { Interface } from '@ethersproject/abi';
 import { IDexHelper } from '../dex-helper';
 import ERC20ABI from '../abi/erc20.json';
 import Permit2Abi from '../abi/permit2.json';
-import { ethers } from 'ethers';
+import { BigNumber, ethers } from 'ethers';
 import {
   Address,
   OptimalRate,
@@ -278,6 +278,78 @@ export abstract class ExecutorBytecodeBuilder<S = {}, D = {}> {
     }
 
     return (amountIndex !== -1 ? amountIndex : exchangeData.length) / 2;
+  }
+
+  protected applyIs128(flag: number): number {
+    return flag | 0x8000;
+  }
+
+  protected findAmountPosWithFallback(
+    exchangeData: string,
+    amount: string,
+    is128: boolean,
+  ): number {
+    if (is128) {
+      return this.findAmount128PosInCalldata(exchangeData, amount);
+    }
+
+    const positiveEncoded = ethers.utils.defaultAbiCoder.encode(
+      ['uint256'],
+      [amount],
+    );
+    let pos = this.findAmountPosInCalldata(exchangeData, positiveEncoded);
+
+    if (pos >= exchangeData.length / 2) {
+      const negativeEncoded = ethers.utils.defaultAbiCoder.encode(
+        ['int256'],
+        [BigNumber.from(amount).mul(-1)],
+      );
+      pos = this.findAmountPosInCalldata(exchangeData, negativeEncoded);
+    }
+
+    return pos;
+  }
+
+  private findAmount128PosInCalldata(
+    exchangeData: string,
+    amount: string,
+  ): number {
+    const rawCalldata = exchangeData.replace('0x', '');
+    const amountBN = BigNumber.from(amount);
+
+    const positiveHex = hexZeroPad(
+      amountBN.toTwos(128).toHexString(),
+      16,
+    ).replace('0x', '');
+    let idx = this.findByteAligned(rawCalldata, positiveHex);
+
+    if (idx === -1) {
+      const negativeHex = hexZeroPad(
+        amountBN.mul(-1).toTwos(128).toHexString(),
+        16,
+      ).replace('0x', '');
+      idx = this.findByteAligned(rawCalldata, negativeHex);
+    }
+
+    if (idx !== -1) {
+      const slotPos = idx / 2 - 16;
+      if (slotPos >= 0) {
+        return slotPos;
+      }
+    }
+
+    return exchangeData.length / 2;
+  }
+
+  private findByteAligned(rawCalldata: string, pattern: string): number {
+    for (
+      let idx = rawCalldata.indexOf(pattern);
+      idx !== -1;
+      idx = rawCalldata.indexOf(pattern, idx + 1)
+    ) {
+      if (idx % 2 === 0) return idx;
+    }
+    return -1;
   }
 
   protected buildWrapEthCallData(

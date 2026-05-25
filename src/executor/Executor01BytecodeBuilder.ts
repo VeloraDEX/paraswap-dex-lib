@@ -395,7 +395,11 @@ export class Executor01BytecodeBuilder extends ExecutorBytecodeBuilder<
     const insertFromAmount = flag % 4 === 3 || flag % 4 === 2;
     const exchangeParam = exchangeParams[exchangeParamIndex];
     const swap = priceRoute.bestRoute[routeIndex].swaps[swapIndex];
-    let { exchangeData, specialDexFlag } = exchangeParam;
+    let {
+      exchangeData,
+      specialDexFlag,
+      amountsPacked128 = false,
+    } = exchangeParam;
 
     const returnAmountPos =
       exchangeParam.returnAmountPos !== undefined
@@ -423,21 +427,23 @@ export class Executor01BytecodeBuilder extends ExecutorBytecodeBuilder<
       if (exchangeParam.insertFromAmountPos) {
         fromAmountPos = exchangeParam.insertFromAmountPos;
       } else {
-        const fromAmount = ethers.utils.defaultAbiCoder.encode(
-          ['uint256'],
-          [swap.swapExchanges[swapExchangeIndex].srcAmount],
+        fromAmountPos = this.findAmountPosWithFallback(
+          exchangeData,
+          swap.swapExchanges[swapExchangeIndex].srcAmount,
+          amountsPacked128,
         );
-
-        fromAmountPos = this.findAmountPosInCalldata(exchangeData, fromAmount);
       }
     }
+
+    const finalFlag = amountsPacked128 ? this.applyIs128(flag) : flag;
+
     return this.buildCallData(
       exchangeParam.targetExchange,
       exchangeData,
       fromAmountPos,
       destTokenPos,
       specialDexFlag || SpecialDex.DEFAULT,
-      flag,
+      finalFlag as Flag,
       undefined,
       returnAmountPos,
     );

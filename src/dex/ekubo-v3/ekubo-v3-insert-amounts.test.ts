@@ -51,17 +51,19 @@ Object.entries(testConfigs).forEach(([networkStr, config]) => {
             config.tokensToTest.forEach(
               ({ pair: [tokenA, tokenB], limitPools }) => {
                 it(`${tokenA.symbol} -> ${tokenB.symbol}`, async () => {
+                  const testAmount =
+                    side === SwapSide.SELL ? tokenA.amount : tokenB.amount;
+
                   await testInsertAmounts({
                     srcToken: tokens[tokenA.symbol],
                     destToken: tokens[tokenB.symbol],
-                    amount: String(
-                      side === SwapSide.SELL ? tokenA.amount : tokenB.amount,
-                    ),
+                    amount: String(testAmount),
                     side,
                     dexKey: DEX_KEY,
                     contractMethod,
                     network,
                     poolIdentifiers: limitPools && { [DEX_KEY]: limitPools },
+                    offsetBps: 1000n,
                   });
                 });
               },

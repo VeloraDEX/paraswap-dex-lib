@@ -13,11 +13,11 @@ import { AUGUSTUS_V6_INTERFACE } from './utils-e2e';
 import { BigNumber } from 'ethers';
 import { sleep } from './utils';
 
-const DEFAULT_AMOUNT_OFFSET = 5n;
+const DEFAULT_OFFSET_BPS = 100n;
 
 /**
- * Modifies the top-level Augustus V6 calldata to shift fromAmount and
- * toAmount by a small offset. This simulates what happens when a client
+ * Modifies the top-level Augustus V6 calldata to shift fromAmount,
+ * toAmount, and quotedAmount by a small offset. This simulates what happens when a client
  * builds calldata for a swap and then dynamically changes the amounts at
  * execution time. The executor should propagate these top-level amount
  * changes into the individual DEX calldata (via insertFromAmount).
@@ -25,7 +25,7 @@ const DEFAULT_AMOUNT_OFFSET = 5n;
 function tweakAmounts(
   data: string,
   contractMethod: ContractMethod,
-  offset: bigint,
+  offsetBps: bigint,
 ): string {
   const decoded = AUGUSTUS_V6_INTERFACE.decodeFunctionData(
     contractMethod,
@@ -33,13 +33,25 @@ function tweakAmounts(
   );
 
   const swapData = decoded.swapData;
+  const fromAmount = BigNumber.from(swapData.fromAmount);
+  const toAmount = BigNumber.from(swapData.toAmount);
+  const quotedAmount = BigNumber.from(swapData.quotedAmount);
+  const fromAmountOffset = fromAmount
+    .mul(offsetBps.toString())
+    .div(10000)
+    .add(1);
+  const toAmountOffset = toAmount.mul(offsetBps.toString()).div(10000).add(1);
+  const quotedAmountOffset = quotedAmount
+    .mul(offsetBps.toString())
+    .div(10000)
+    .add(1);
 
   const newSwapData = {
     srcToken: swapData.srcToken,
     destToken: swapData.destToken,
-    fromAmount: BigNumber.from(swapData.fromAmount).add(offset.toString()),
-    toAmount: BigNumber.from(swapData.toAmount).add(offset.toString()),
-    quotedAmount: swapData.quotedAmount,
+    fromAmount: fromAmount.add(fromAmountOffset),
+    toAmount: toAmount.add(toAmountOffset),
+    quotedAmount: quotedAmount.add(quotedAmountOffset),
     metadata: swapData.metadata,
     beneficiary: swapData.beneficiary,
   };
@@ -62,7 +74,7 @@ export async function testInsertAmounts(params: {
   contractMethod: ContractMethod;
   network: Network;
   poolIdentifiers?: { [key: string]: string[] | null } | null;
-  amountOffset?: bigint;
+  offsetBps?: bigint;
   sleepMs?: number;
 }) {
   const {
@@ -74,7 +86,7 @@ export async function testInsertAmounts(params: {
     contractMethod,
     network,
     poolIdentifiers,
-    amountOffset = DEFAULT_AMOUNT_OFFSET,
+    offsetBps = DEFAULT_OFFSET_BPS,
     sleepMs,
   } = params;
   const sdk = new LocalParaswapSDK(network, dexKey, '');
@@ -123,7 +135,7 @@ export async function testInsertAmounts(params: {
     );
   }
 
-  const slippage = 100n;
+  const slippage = offsetBps * 2n;
   const minMaxAmount =
     (side === SwapSide.SELL
       ? BigInt(priceRoute.destAmount) * (10000n - slippage)
@@ -139,25 +151,27 @@ export async function testInsertAmounts(params: {
     'Transaction params missing `to` property',
   );
 
-  // Tweak the amounts before simulating
-  const tweakedData = tweakAmounts(
-    swapParams.data,
-    contractMethod,
-    amountOffset,
-  );
-
-  const simulationRequest = {
+  const buildSimulationRequest = (data: string) => ({
     chainId: network,
     from: swapParams.from,
     to: swapParams.to,
-    data: tweakedData,
+    data,
     value: swapParams.value,
     blockNumber: priceRoute.blockNumber,
     stateOverride,
-  };
+  });
+
+  const baselineSimulation = await tenderlySimulator.simulateTransaction(
+    buildSimulationRequest(swapParams.data),
+  );
+
+  // Tweak the amounts before simulating.
+  const tweakedData = tweakAmounts(swapParams.data, contractMethod, offsetBps);
 
   const { transaction, simulation } =
-    await tenderlySimulator.simulateTransaction(simulationRequest);
+    await tenderlySimulator.simulateTransaction(
+      buildSimulationRequest(tweakedData),
+    );
 
   if (sdk.releaseResources) {
     await sdk.releaseResources();
@@ -178,6 +192,19 @@ export async function testInsertAmounts(params: {
       ? decodedOutput.receivedAmount
       : decodedOutput.spentAmount;
   const diff = expectedAmount.sub(simulatedAmount).abs();
+
+  expect(baselineSimulation.simulation.status).toEqual(true);
+
+  const decodedBaselineOutput = AUGUSTUS_V6_INTERFACE.decodeFunctionResult(
+    contractMethod,
+    baselineSimulation.transaction.transaction_info.call_trace.output,
+  );
+  const baselineAmount: BigNumber =
+    side === SwapSide.SELL
+      ? decodedBaselineOutput.receivedAmount
+      : decodedBaselineOutput.spentAmount;
+
+  expect(simulatedAmount.gt(baselineAmount)).toEqual(true);
 
   console.log(`Expected amount: ${expectedAmount.toString()}`);
   console.log(`Simulated amount: ${simulatedAmount.toString()}`);

@@ -319,8 +319,13 @@ export class Executor02BytecodeBuilder extends ExecutorBytecodeBuilder<
 
     const swap = priceRoute.bestRoute[routeIndex].swaps[swapIndex];
     const exchangeParam = exchangeParams[exchangeParamIndex];
-    let { exchangeData, specialDexFlag, targetExchange, needWrapNative } =
-      exchangeParam;
+    let {
+      exchangeData,
+      specialDexFlag,
+      targetExchange,
+      needWrapNative,
+      amountsPacked128 = false,
+    } = exchangeParam;
 
     const routeNeedsRootUnwrapEth = this.doesRouteNeedsRootUnwrapEth(
       priceRoute,
@@ -395,14 +400,15 @@ export class Executor02BytecodeBuilder extends ExecutorBytecodeBuilder<
       if (exchangeParam.insertFromAmountPos) {
         fromAmountPos = exchangeParam.insertFromAmountPos;
       } else {
-        const fromAmount = ethers.utils.defaultAbiCoder.encode(
-          ['uint256'],
-          [swapExchange.srcAmount],
+        fromAmountPos = this.findAmountPosWithFallback(
+          exchangeData,
+          swapExchange.srcAmount,
+          amountsPacked128,
         );
-
-        fromAmountPos = this.findAmountPosInCalldata(exchangeData, fromAmount);
       }
     }
+
+    const finalFlag = amountsPacked128 ? this.applyIs128(flag) : flag;
 
     return this.buildCallData(
       targetExchange,
@@ -410,7 +416,7 @@ export class Executor02BytecodeBuilder extends ExecutorBytecodeBuilder<
       fromAmountPos,
       destTokenPos,
       specialDexFlag || SpecialDex.DEFAULT,
-      flag,
+      finalFlag as Flag,
       undefined,
       returnAmountPos,
     );
