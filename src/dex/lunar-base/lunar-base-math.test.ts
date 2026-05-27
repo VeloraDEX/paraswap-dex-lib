@@ -1,10 +1,10 @@
 import { quoteXToY, quoteYToX } from './math';
-import { DarkPoolsPoolState } from './types';
+import { LunarBasePoolState } from './types';
 
 const Q96 = 1n << 96n;
 const FIVE_PERCENT_Q24 = Math.floor((5 * (1 << 24)) / 100);
 
-const baseState: DarkPoolsPoolState = {
+const baseState: LunarBasePoolState = {
   anchorPrice: Q96,
   feeAskX24: FIVE_PERCENT_Q24,
   feeBidX24: FIVE_PERCENT_Q24,
@@ -17,7 +17,7 @@ const baseState: DarkPoolsPoolState = {
   paused: false,
 };
 
-describe('DarkPools PMM math', () => {
+describe('LunarBase PMM math', () => {
   it('quotes the linear X -> Y fallback with Q24 fee rounding', () => {
     const quote = quoteXToY(baseState, 1_000n, 1n);
 

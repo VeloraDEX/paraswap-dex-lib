@@ -1,30 +1,30 @@
 import { Address } from '../../types';
 
-export type DarkPoolsTokenConfig = {
+export type LunarBaseTokenConfig = {
   address: Address;
   poolAddress: Address;
   decimals: number;
   symbol: string;
 };
 
-export type DarkPoolsPoolConfig = {
+export type LunarBasePoolConfig = {
   address: Address;
-  tokenX: DarkPoolsTokenConfig;
-  tokenY: DarkPoolsTokenConfig;
+  tokenX: LunarBaseTokenConfig;
+  tokenY: LunarBaseTokenConfig;
 };
 
 export type DexParams = {
-  pools: DarkPoolsPoolConfig[];
+  pools: LunarBasePoolConfig[];
 };
 
-export type DarkPoolsData = {
+export type LunarBaseData = {
   pool: Address;
   tokenIn: Address;
   tokenOut: Address;
   isXToY: boolean;
 };
 
-export type DarkPoolsPoolState = {
+export type LunarBasePoolState = {
   anchorPrice: bigint;
   feeAskX24: number;
   feeBidX24: number;
@@ -37,7 +37,7 @@ export type DarkPoolsPoolState = {
   paused: boolean;
 };
 
-export type DarkPoolsQuoteResult = {
+export type LunarBaseQuoteResult = {
   amountOut: bigint;
   sqrtPriceNext: bigint;
   fee: bigint;

@@ -5,8 +5,8 @@ import { IDexHelper } from '../../dex-helper/idex-helper';
 import { StatefulEventSubscriber } from '../../stateful-event-subscriber';
 import { Address, Log, Logger } from '../../types';
 import { catchParseLogError } from '../../utils';
-import PoolABI from '../../abi/dark-pools/pool.json';
-import { DarkPoolsPoolState } from './types';
+import PoolABI from '../../abi/lunar-base/pool.json';
+import { LunarBasePoolState } from './types';
 
 const poolIface = new Interface(PoolABI as JsonFragment[]);
 
@@ -22,7 +22,7 @@ export async function getOnChainState(
   multiContract: Contract,
   pool: Address,
   blockNumber: number | 'latest',
-): Promise<DarkPoolsPoolState> {
+): Promise<LunarBasePoolState> {
   const calls = [
     'state',
     'concentrationK',
@@ -84,13 +84,13 @@ export async function getOnChainState(
   };
 }
 
-export class DarkPoolsEventPool extends StatefulEventSubscriber<DarkPoolsPoolState> {
+export class LunarBaseEventPool extends StatefulEventSubscriber<LunarBasePoolState> {
   private readonly handlers: Record<
     string,
     (
       log: Readonly<Log>,
-      state: DeepReadonly<DarkPoolsPoolState>,
-    ) => DeepReadonly<DarkPoolsPoolState>
+      state: DeepReadonly<LunarBasePoolState>,
+    ) => DeepReadonly<LunarBasePoolState>
   >;
 
   constructor(
@@ -122,7 +122,7 @@ export class DarkPoolsEventPool extends StatefulEventSubscriber<DarkPoolsPoolSta
 
   async generateState(
     blockNumber: number | 'latest' = 'latest',
-  ): Promise<DeepReadonly<DarkPoolsPoolState>> {
+  ): Promise<DeepReadonly<LunarBasePoolState>> {
     return getOnChainState(
       this.dexHelper.multiContract,
       this.pool,
@@ -132,7 +132,7 @@ export class DarkPoolsEventPool extends StatefulEventSubscriber<DarkPoolsPoolSta
 
   async getOrGenerateState(
     blockNumber: number,
-  ): Promise<DeepReadonly<DarkPoolsPoolState> | null> {
+  ): Promise<DeepReadonly<LunarBasePoolState> | null> {
     const state = this.getState(blockNumber);
     if (state) return state;
 
@@ -147,9 +147,9 @@ export class DarkPoolsEventPool extends StatefulEventSubscriber<DarkPoolsPoolSta
   }
 
   protected processLog(
-    state: DeepReadonly<DarkPoolsPoolState>,
+    state: DeepReadonly<LunarBasePoolState>,
     log: Readonly<Log>,
-  ): AsyncOrSync<DeepReadonly<DarkPoolsPoolState> | null> {
+  ): AsyncOrSync<DeepReadonly<LunarBasePoolState> | null> {
     const handler = this.handlers[log.topics[0]];
     if (!handler) return null;
 
@@ -163,8 +163,8 @@ export class DarkPoolsEventPool extends StatefulEventSubscriber<DarkPoolsPoolSta
 
   private handleStateUpdated(
     log: Readonly<Log>,
-    state: DeepReadonly<DarkPoolsPoolState>,
-  ): DeepReadonly<DarkPoolsPoolState> {
+    state: DeepReadonly<LunarBasePoolState>,
+  ): DeepReadonly<LunarBasePoolState> {
     const event = poolIface.parseLog(log);
     return {
       ...state,
@@ -177,8 +177,8 @@ export class DarkPoolsEventPool extends StatefulEventSubscriber<DarkPoolsPoolSta
 
   private handleSync(
     log: Readonly<Log>,
-    state: DeepReadonly<DarkPoolsPoolState>,
-  ): DeepReadonly<DarkPoolsPoolState> {
+    state: DeepReadonly<LunarBasePoolState>,
+  ): DeepReadonly<LunarBasePoolState> {
     const event = poolIface.parseLog(log);
     return {
       ...state,
@@ -189,8 +189,8 @@ export class DarkPoolsEventPool extends StatefulEventSubscriber<DarkPoolsPoolSta
 
   private handleConcentrationKSet(
     log: Readonly<Log>,
-    state: DeepReadonly<DarkPoolsPoolState>,
-  ): DeepReadonly<DarkPoolsPoolState> {
+    state: DeepReadonly<LunarBasePoolState>,
+  ): DeepReadonly<LunarBasePoolState> {
     const event = poolIface.parseLog(log);
     return {
       ...state,
@@ -200,8 +200,8 @@ export class DarkPoolsEventPool extends StatefulEventSubscriber<DarkPoolsPoolSta
 
   private handleBlockDelaySet(
     log: Readonly<Log>,
-    state: DeepReadonly<DarkPoolsPoolState>,
-  ): DeepReadonly<DarkPoolsPoolState> {
+    state: DeepReadonly<LunarBasePoolState>,
+  ): DeepReadonly<LunarBasePoolState> {
     const event = poolIface.parseLog(log);
     return {
       ...state,
@@ -211,8 +211,8 @@ export class DarkPoolsEventPool extends StatefulEventSubscriber<DarkPoolsPoolSta
 
   private handleBlacklistFeeMultiplierSet(
     log: Readonly<Log>,
-    state: DeepReadonly<DarkPoolsPoolState>,
-  ): DeepReadonly<DarkPoolsPoolState> {
+    state: DeepReadonly<LunarBasePoolState>,
+  ): DeepReadonly<LunarBasePoolState> {
     const event = poolIface.parseLog(log);
     return {
       ...state,
@@ -222,17 +222,17 @@ export class DarkPoolsEventPool extends StatefulEventSubscriber<DarkPoolsPoolSta
 
   private handlePaused(
     _log: Readonly<Log>,
-    state: DeepReadonly<DarkPoolsPoolState>,
-  ): DeepReadonly<DarkPoolsPoolState> {
+    state: DeepReadonly<LunarBasePoolState>,
+  ): DeepReadonly<LunarBasePoolState> {
     return { ...state, paused: true };
   }
 
   private handleUnpaused(
     _log: Readonly<Log>,
-    state: DeepReadonly<DarkPoolsPoolState>,
-  ): DeepReadonly<DarkPoolsPoolState> {
+    state: DeepReadonly<LunarBasePoolState>,
+  ): DeepReadonly<LunarBasePoolState> {
     return { ...state, paused: false };
   }
 }
 
-export { poolIface as DarkPoolsPoolIface };
+export { poolIface as LunarBasePoolIface };
