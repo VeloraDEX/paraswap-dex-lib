@@ -15,6 +15,7 @@ import {
   PreprocessTransactionOptions,
   TransferFeeParams,
   Config,
+  GetDexParamOptions,
 } from '../types';
 import { SwapSide, Network } from '../constants';
 import { IDexHelper } from '../dex-helper/idex-helper';
@@ -84,6 +85,7 @@ export interface IDexTxBuilderV6<ExchangeData, DirectParam = null> {
     data: ExchangeData,
     side: SwapSide,
     executorAddress: Address,
+    options?: GetDexParamOptions,
   ): AsyncOrSync<DexExchangeParam>;
 
   // Returns params for direct method

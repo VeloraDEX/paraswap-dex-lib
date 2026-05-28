@@ -3,6 +3,7 @@ import {
   DexExchangeBuildParam,
   DexExchangeParam,
   DexExchangeParamWithBooleanNeedWrapNative,
+  GetDexParamOptions,
   OptimalRate,
   OptimalSwap,
   OptimalSwapExchange,
@@ -184,6 +185,7 @@ export class GenericSwapTransactionBuilder {
     minMaxAmount: string,
     bytecodeBuilder: ExecutorBytecodeBuilder,
     userAddress: string,
+    getDexParamOptions?: GetDexParamOptions,
   ): Promise<string> {
     const side = priceRoute.side;
     const rawDexParams = await Promise.all(
@@ -236,6 +238,7 @@ export class GenericSwapTransactionBuilder {
                 data: se.data,
                 side,
                 executorAddress,
+                options: getDexParamOptions,
               });
 
               // The local `newDexs[*].needWrapNative` is the single source of
@@ -254,6 +257,7 @@ export class GenericSwapTransactionBuilder {
                 se.data,
                 side,
                 executorAddress,
+                getDexParamOptions,
               );
             }
 
@@ -327,6 +331,7 @@ export class GenericSwapTransactionBuilder {
     data: any;
     side: SwapSide;
     executorAddress: Address;
+    options?: GetDexParamOptions;
   }): Promise<DexExchangeParam> {
     if (!this.newDexsApiUrl) {
       throw new Error(
@@ -349,6 +354,7 @@ export class GenericSwapTransactionBuilder {
       executorAddress: args.executorAddress,
       side: args.side,
       data: args.data,
+      ...(args.options ? { options: args.options } : {}),
     };
 
     const raw =
@@ -376,6 +382,7 @@ export class GenericSwapTransactionBuilder {
     beneficiary: Address,
     permit: string,
     uuid: string,
+    getDexParamOptions?: GetDexParamOptions,
   ) {
     const executorName =
       this.executorDetector.getExecutorByPriceRoute(priceRoute);
@@ -389,6 +396,7 @@ export class GenericSwapTransactionBuilder {
       minMaxAmount,
       bytecodeBuilder,
       userAddress,
+      getDexParamOptions,
     );
 
     const side = priceRoute.side;
@@ -580,6 +588,7 @@ export class GenericSwapTransactionBuilder {
     uuid,
     beneficiary = NULL_ADDRESS,
     onlyParams = false,
+    getDexParamOptions,
   }: {
     priceRoute: OptimalRate;
     minMaxAmount: string;
@@ -600,6 +609,7 @@ export class GenericSwapTransactionBuilder {
     uuid: string;
     beneficiary?: Address;
     onlyParams?: boolean;
+    getDexParamOptions?: GetDexParamOptions;
   }): Promise<TxObject | (string | string[])[]> {
     // if quotedAmount wasn't passed, use the amount from the route
     const _quotedAmount = quotedAmount
@@ -652,6 +662,7 @@ export class GenericSwapTransactionBuilder {
         _beneficiary,
         permit || '0x',
         uuid,
+        getDexParamOptions,
       ));
     }
 

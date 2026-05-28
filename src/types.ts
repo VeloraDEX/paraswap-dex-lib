@@ -158,6 +158,10 @@ export type AdapterExchangeParam = {
   networkFee: string;
 };
 
+export type GetDexParamOptions = {
+  nowTimestampMs?: number;
+};
+
 export type DexExchangeParam = {
   needWrapNative: boolean | NeedWrapNativeFunc;
   // When true, the executor unwraps WETH -> ETH before calling the DEX (if src

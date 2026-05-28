@@ -29,6 +29,7 @@ export {
   Logger,
   BlockHeader,
   Config,
+  GetDexParamOptions,
 } from './types';
 
 export { IDex } from './dex/idex';
