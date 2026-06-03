@@ -618,12 +618,7 @@ export class GenericSwapTransactionBuilder {
       ? priceRoute.destAmount
       : priceRoute.srcAmount;
 
-    // if beneficiary is not defined, then in smart contract it will be replaced to msg.sender
-    const _beneficiary =
-      beneficiary !== NULL_ADDRESS &&
-      beneficiary.toLowerCase() !== userAddress.toLowerCase()
-        ? beneficiary
-        : NULL_ADDRESS;
+    const _beneficiary = beneficiary;
 
     let encoder: (...params: any[]) => string;
     let params: (string | string[])[];
