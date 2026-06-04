@@ -435,7 +435,7 @@ export const UniswapV3Config: DexConfigMap<DexParams> = {
   AerodromeSlipstreamNewFactory: {
     [Network.BASE]: {
       factory: '0xaDe65c38CD4849aDBA595a4323a8C7DdfE89716a',
-      quoter: '0x254cF9E1E6e233aa1AC962CB9B05b2cfeAaE15b0',
+      quoter: '0xfa2CB6D6cea79D6Efa102e527B3D67b2e61E3659',
       router: '0xcbBb8035cAc7D4B3Ca7aBb74cF7BdF900215Ce0D',
       supportedFees: SUPPORTED_FEES,
       tickSpacings: [1n, 10n, 50n, 100n, 200n, 500n, 2000n],

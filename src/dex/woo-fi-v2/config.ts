@@ -2,11 +2,13 @@ import { DexParams } from './types';
 import { DexConfigMap, AdapterMappings } from '../../types';
 import { Network, SwapSide } from '../../constants';
 
+const WOO_ORACLE_V2_ADDRESS = '0xf9b0c8Ee13AE2fC0665764ecbdB417685dEa8081';
+
 export const WooFiV2Config: DexConfigMap<DexParams> = {
   WooFiV2: {
     [Network.OPTIMISM]: {
       wooPPV2Address: '0x5520385bFcf07Ec87C4c53A7d8d65595Dff69FA4',
-      wooOracleV2Address: '0xA43305Ce0164D87d7B2368f91a1dcC4eBdA75127',
+      wooOracleV2Address: WOO_ORACLE_V2_ADDRESS,
       integrationHelperAddress: '0x96329d66074EB8386Ae8bFD6698B2E3FDA87e15E',
       // USDC
       quoteToken: {
@@ -16,7 +18,7 @@ export const WooFiV2Config: DexConfigMap<DexParams> = {
     },
     [Network.BSC]: {
       wooPPV2Address: '0x5520385bFcf07Ec87C4c53A7d8d65595Dff69FA4',
-      wooOracleV2Address: '0x2A375567f5E13F6bd74fDa7627Df3b1Af6BfA5a6',
+      wooOracleV2Address: WOO_ORACLE_V2_ADDRESS,
       integrationHelperAddress: '0xAA9c15cd603428cA8ddD45e933F8EfE3Afbcc173',
       // USDT
       quoteToken: {
@@ -26,7 +28,7 @@ export const WooFiV2Config: DexConfigMap<DexParams> = {
     },
     [Network.POLYGON]: {
       wooPPV2Address: '0x5520385bFcf07Ec87C4c53A7d8d65595Dff69FA4',
-      wooOracleV2Address: '0x2A8Ede62D0717C8C92b88639ecf603FDF31A8428',
+      wooOracleV2Address: WOO_ORACLE_V2_ADDRESS,
       integrationHelperAddress: '0x7Ba560eB735AbDCf9a3a5692272652A0cc81850d',
       // USDC
       quoteToken: {
@@ -36,7 +38,7 @@ export const WooFiV2Config: DexConfigMap<DexParams> = {
     },
     [Network.SONIC]: {
       wooPPV2Address: '0x5520385bFcf07Ec87C4c53A7d8d65595Dff69FA4',
-      wooOracleV2Address: '0x2A375567f5E13F6bd74fDa7627Df3b1Af6BfA5a6',
+      wooOracleV2Address: WOO_ORACLE_V2_ADDRESS,
       integrationHelperAddress: '0xc8521e41DE46036A61c562062862681f0060CD7E',
       // USDC
       quoteToken: {
@@ -46,7 +48,7 @@ export const WooFiV2Config: DexConfigMap<DexParams> = {
     },
     [Network.ARBITRUM]: {
       wooPPV2Address: '0x5520385bFcf07Ec87C4c53A7d8d65595Dff69FA4',
-      wooOracleV2Address: '0xCf4EA1688bc23DD93D933edA535F8B72FC8934Ec',
+      wooOracleV2Address: WOO_ORACLE_V2_ADDRESS,
       integrationHelperAddress: '0x28D2B949024FE50627f1EbC5f0Ca3Ca721148E40',
       // USDC
       quoteToken: {
@@ -56,7 +58,7 @@ export const WooFiV2Config: DexConfigMap<DexParams> = {
     },
     [Network.AVALANCHE]: {
       wooPPV2Address: '0x5520385bFcf07Ec87C4c53A7d8d65595Dff69FA4',
-      wooOracleV2Address: '0x2A375567f5E13F6bd74fDa7627Df3b1Af6BfA5a6',
+      wooOracleV2Address: WOO_ORACLE_V2_ADDRESS,
       integrationHelperAddress: '0x020630613E296c3E9b06186f630D1bF97A2B6Ad1',
       // USDC
       quoteToken: {
@@ -66,7 +68,7 @@ export const WooFiV2Config: DexConfigMap<DexParams> = {
     },
     [Network.BASE]: {
       wooPPV2Address: '0x5520385bFcf07Ec87C4c53A7d8d65595Dff69FA4',
-      wooOracleV2Address: '0x2A375567f5E13F6bd74fDa7627Df3b1Af6BfA5a6',
+      wooOracleV2Address: WOO_ORACLE_V2_ADDRESS,
       integrationHelperAddress: '0xC4E9B633685461E7B7A807D12a246C81f96F31B8',
       // USDbC
       quoteToken: {
