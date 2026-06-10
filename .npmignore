@@ -1,5 +1,12 @@
 **/*
 !/build/**
+!/native/**
+# Exclude native build artifacts (rebuilt from source on install)
+native/target/**
+native/node_modules/**
+native/*.node
+native/index.js
+native/index.d.ts
 !LICENSE
 !package.json
 !README.md

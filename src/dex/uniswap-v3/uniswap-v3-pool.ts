@@ -30,6 +30,10 @@ import { TickBitMap } from './contract-math/TickBitMap';
 import { uint256ToBigInt } from '../../lib/decoders';
 import { decodeStateMultiCallResultWithRelativeBitmaps } from './utils';
 import { _reduceTickBitmap, _reduceTicks } from './contract-math/utils';
+import {
+  registrySetPool,
+  RustPoolRegistryType,
+} from './contract-math/native-bridge';
 
 export class UniswapV3EventPool extends StatefulEventSubscriber<PoolState> {
   handlers: {
@@ -57,6 +61,8 @@ export class UniswapV3EventPool extends StatefulEventSubscriber<PoolState> {
 
   public initFailed = false;
   public initRetryAttemptCount = 0;
+
+  public registry: RustPoolRegistryType | null = null;
 
   public feeCodeAsString;
 
@@ -290,6 +296,9 @@ export class UniswapV3EventPool extends StatefulEventSubscriber<PoolState> {
     // );
     // }
     super._setState(state, blockNumber);
+    if (this.registry && state) {
+      registrySetPool(this.registry, this.name, state);
+    }
   }
 
   async generateState(blockNumber: number): Promise<Readonly<PoolState>> {

@@ -30,9 +30,14 @@ import {
   swapExactOutputSingleCalldata,
 } from './encoder';
 import { UniswapV4PoolManager } from './uniswap-v4-pool-manager';
+import { UniswapV4Pool } from './uniswap-v4-pool';
 import { DeepReadonly } from 'ts-essentials';
 import { PoolState } from './types';
 import { uniswapV4PoolMath } from './contract-math/uniswap-v4-pool-math';
+import {
+  createV4Registry,
+  RustV4RegistryType,
+} from './contract-math/native-bridge';
 import { SwapSide } from '@paraswap/core';
 import { queryAvailablePoolsForToken } from './subgraph';
 import _ from 'lodash';
@@ -54,6 +59,8 @@ export class UniswapV4 extends SimpleExchange implements IDex<UniswapV4Data> {
 
   public static dexKeysWithNetwork: { key: string; networks: Network[] }[] =
     getDexKeysWithNetwork(UniswapV4Config);
+
+  public readonly v4Registry: RustV4RegistryType | null = createV4Registry();
 
   private wethAddress: string;
   private supportedHooks: IBaseHook[] = [];
@@ -87,6 +94,13 @@ export class UniswapV4 extends SimpleExchange implements IDex<UniswapV4Data> {
       this.supportedHooks,
       this.logger,
       this.cacheStateKey,
+    );
+    this.poolManager.v4Registry = this.v4Registry;
+
+    this.logger.info(
+      `${dexKey}: native Rust math ${
+        this.v4Registry ? 'enabled' : 'not available'
+      }`,
     );
   }
 
@@ -187,6 +201,9 @@ export class UniswapV4 extends SimpleExchange implements IDex<UniswapV4Data> {
     side: SwapSide,
     blockNumber: number,
     limitPools?: string[],
+    transferFees?: {},
+    isFirstSwap?: boolean,
+    useRust?: boolean,
   ): Promise<ExchangePrices<UniswapV4Data> | null> {
     const pools: Pool[] = await this.poolManager.getAvailablePoolsForPair(
       from.address.toLowerCase(),
@@ -198,85 +215,179 @@ export class UniswapV4 extends SimpleExchange implements IDex<UniswapV4Data> {
       limitPools?.filter(t => pools.find(p => p.id === t)) ??
       pools.map(t => t.id);
 
-    const pricesPromises = availablePools.map(async poolId => {
-      const pool = pools.find(p => p.id === poolId)!;
+    // Resolve all event pools and their states upfront
+    type ResolvedPool = {
+      pool: Pool;
+      poolId: string;
+      zeroForOne: boolean;
+      eventPool: UniswapV4Pool | null;
+      poolState: DeepReadonly<PoolState> | null;
+    };
 
-      const fromAddress = from.address.toLowerCase();
-      const poolCurrency0 = pool.key.currency0;
+    const resolved: ResolvedPool[] = await Promise.all(
+      availablePools.map(async poolId => {
+        const pool = pools.find(p => p.id === poolId)!;
 
-      const isFromEth = isETHAddress(fromAddress);
-      const isFromWeth = fromAddress === this.wethAddress;
+        const fromAddress = from.address.toLowerCase();
+        const poolCurrency0 = pool.key.currency0;
 
-      const currency0IsEth = poolCurrency0 === NULL_ADDRESS;
-      const currency0IsWeth = poolCurrency0 === this.wethAddress;
+        const isFromEth = isETHAddress(fromAddress);
+        const isFromWeth = fromAddress === this.wethAddress;
 
-      const zeroForOne =
-        fromAddress === poolCurrency0 ||
-        (isFromEth && currency0IsEth) || // ETH is src and native ETH pool
-        (isFromEth && currency0IsWeth) || // ETH is src and WETH pool
-        (isFromWeth && currency0IsEth); // WETH is src and native ETH pool
-      // WETH is src and WETH pool is handled in fromAddress === poolCurrency0 case
+        const currency0IsEth = poolCurrency0 === NULL_ADDRESS;
+        const currency0IsWeth = poolCurrency0 === this.wethAddress;
 
-      const eventPool = await this.poolManager.getEventPool(
-        poolId,
-        blockNumber,
-      );
+        const zeroForOne =
+          fromAddress === poolCurrency0 ||
+          (isFromEth && currency0IsEth) ||
+          (isFromEth && currency0IsWeth) ||
+          (isFromWeth && currency0IsEth);
 
-      const poolState = (await eventPool?.getState(blockNumber)) || null;
-
-      let prices: bigint[] | null;
-      if (poolState !== null && poolState.isValid) {
-        prices = this._getOutputs(
-          pool,
-          poolState,
-          amounts,
-          zeroForOne,
-          side,
-          eventPool?.hook,
-        );
-      } else {
-        this.logger.warn(
-          `${this.dexKey}-${this.network}: pool ${poolId} state was not found...falling back to rpc`,
-        );
-        prices = await this.queryPriceFromRpc(
-          zeroForOne,
-          amounts,
-          pool,
-          side,
+        const eventPool = await this.poolManager.getEventPool(
+          poolId,
           blockNumber,
         );
-      }
 
-      if (prices === null) {
-        return null;
-      }
+        const poolState = eventPool?.getState(blockNumber) || null;
 
-      if (prices?.every(price => price === 0n || price === 1n)) {
-        return null;
-      }
+        return { pool, poolId, zeroForOne, eventPool, poolState };
+      }),
+    );
 
-      return {
-        unit: BI_POWS[to.decimals],
-        prices,
-        data: {
-          path: [
-            {
-              pool: {
-                id: pool.id,
-                key: pool.key,
-              },
-              tokenIn: zeroForOne ? pool.key.currency0 : pool.key.currency1,
-              tokenOut: zeroForOne ? pool.key.currency1 : pool.key.currency0,
+    // Collect pools eligible for batch Rust query:
+    // must have valid state, no hook (hooks need JS evaluation),
+    // and all share the same zeroForOne direction
+    const eligible: ResolvedPool[] = [];
+    for (const r of resolved) {
+      if (r.poolState && r.poolState.isValid && !r.eventPool?.hook) {
+        eligible.push(r);
+      }
+    }
+
+    // Group eligible pools by zeroForOne for batch Rust queries
+    const useBatchRust =
+      useRust !== false && this.v4Registry && eligible.length > 0;
+
+    let batchResults: Map<string, bigint[]> | null = null;
+
+    if (useBatchRust) {
+      const sideNum = side === SwapSide.SELL ? 0 : 1;
+
+      // Group by zeroForOne direction
+      const zeroForOneKeys = eligible
+        .filter(e => e.zeroForOne)
+        .map(e => e.poolId);
+      const oneForZeroKeys = eligible
+        .filter(e => !e.zeroForOne)
+        .map(e => e.poolId);
+
+      batchResults = new Map();
+
+      try {
+        if (zeroForOneKeys.length > 0) {
+          const raw = this.v4Registry!.queryMany(
+            zeroForOneKeys,
+            amounts,
+            true,
+            sideNum,
+          );
+
+          for (const r of raw) {
+            batchResults.set(r.key, r.outputs);
+          }
+        }
+        if (oneForZeroKeys.length > 0) {
+          const raw = this.v4Registry!.queryMany(
+            oneForZeroKeys,
+            amounts,
+            false,
+            sideNum,
+          );
+
+          for (const r of raw) {
+            batchResults.set(r.key, r.outputs);
+          }
+        }
+      } catch (e) {
+        this.logger.debug(
+          'V4 batch Rust query failed, falling back to per-pool',
+          e,
+        );
+        batchResults = null;
+      }
+    }
+
+    const pricesPromises = resolved.map(
+      async ({ pool, poolId, zeroForOne, eventPool, poolState }) => {
+        let prices: bigint[] | null = null;
+        let usedRust = false;
+
+        // Try batch Rust results first
+        if (batchResults && !eventPool?.hook) {
+          const rustOutputs = batchResults.get(poolId);
+          if (rustOutputs && rustOutputs.length > 0) {
+            prices = rustOutputs as bigint[];
+            usedRust = true;
+          }
+        }
+
+        // Fallback to per-pool JS math or RPC
+        if (!prices) {
+          if (poolState !== null && poolState.isValid) {
+            prices = this._getOutputs(
+              pool,
+              poolState,
+              amounts,
               zeroForOne,
-            },
-          ],
-        },
-        poolAddresses: [this.poolManagerAddress],
-        exchange: this.dexKey,
-        gasCost: 100_000,
-        poolIdentifiers: [poolId],
-      };
-    });
+              side,
+              eventPool?.hook,
+            );
+          } else {
+            this.logger.warn(
+              `${this.dexKey}-${this.network}: pool ${poolId} state was not found...falling back to rpc`,
+            );
+            prices = await this.queryPriceFromRpc(
+              zeroForOne,
+              amounts,
+              pool,
+              side,
+              blockNumber,
+            );
+          }
+        }
+
+        if (prices === null) {
+          return null;
+        }
+
+        if (prices.every(price => price === 0n || price === 1n)) {
+          return null;
+        }
+
+        return {
+          unit: BI_POWS[to.decimals],
+          prices,
+          data: {
+            path: [
+              {
+                pool: {
+                  id: pool.id,
+                  key: pool.key,
+                },
+                tokenIn: zeroForOne ? pool.key.currency0 : pool.key.currency1,
+                tokenOut: zeroForOne ? pool.key.currency1 : pool.key.currency0,
+                zeroForOne,
+              },
+            ],
+            useRust: usedRust,
+          },
+          poolAddresses: [this.poolManagerAddress],
+          exchange: this.dexKey,
+          gasCost: 100_000,
+          poolIdentifiers: [poolId],
+        };
+      },
+    );
 
     const prices = await Promise.all(pricesPromises);
     return prices.filter(res => res !== null);

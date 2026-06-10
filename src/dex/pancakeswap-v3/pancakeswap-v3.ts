@@ -12,6 +12,7 @@ import {
   NumberAsString,
   PoolPrices,
   DexExchangeParam,
+  TransferFeeParams,
 } from '../../types';
 import { SwapSide, Network, CACHE_PREFIX } from '../../constants';
 import * as CALLDATA_GAS_COST from '../../calldata-gas-cost';
@@ -48,6 +49,10 @@ import {
   PANCAKESWAPV3_TICK_GAS_COST,
 } from './constants';
 import { DeepReadonly } from 'ts-essentials';
+import {
+  createRegistry,
+  RustPoolRegistryType,
+} from '../uniswap-v3/contract-math/native-bridge';
 import { pancakeswapV3Math } from './contract-math/pancakeswap-v3-math';
 import { Contract } from 'web3-eth-contract';
 import { AbiItem } from 'web3-utils';
@@ -98,6 +103,8 @@ export class PancakeswapV3
 
   readonly hasConstantPriceLargeAmounts = false;
   readonly needWrapNative = true;
+
+  public readonly registry: RustPoolRegistryType | null = createRegistry();
 
   intervalTask?: NodeJS.Timeout;
 
@@ -152,6 +159,12 @@ export class PancakeswapV3
       this.config.factory,
       this.logger,
       this.onPoolCreatedDeleteFromNonExistingSet,
+    );
+
+    this.logger.info(
+      `${dexKey}: native Rust math ${
+        this.registry ? 'enabled' : 'not available'
+      }`,
     );
   }
 
@@ -334,6 +347,7 @@ export class PancakeswapV3
         this.config.initHash,
         this.config.deployer,
       );
+    pool.registry = this.registry;
 
     let result: PancakeSwapV3EventPool | null = pool;
 
@@ -605,6 +619,9 @@ export class PancakeswapV3
     side: SwapSide,
     blockNumber: number,
     limitPools?: string[],
+    transferFees?: TransferFeeParams,
+    isFirstSwap?: boolean,
+    useRust?: boolean,
   ): Promise<null | ExchangePrices<UniswapV3Data>> {
     try {
       const _srcToken = this.dexHelper.config.wrapETH(srcToken);
@@ -723,79 +740,148 @@ export class PancakeswapV3
 
       const zeroForOne = token0 === _srcAddress ? true : false;
 
-      const result = await Promise.all(
-        poolsToUse.poolWithState.map(async (pool, i) => {
-          const state = states[i];
-
-          if (state.liquidity <= 0n) {
-            if (state.liquidity < 0) {
-              this.logger.error(
-                `${this.dexKey}-${this.network}: ${pool.poolAddress} pool has negative liquidity: ${state.liquidity}. Find with key: ${pool.mapKey}`,
-              );
-            }
-            this.logger.trace(`pool have 0 liquidity`);
-            return null;
+      // Filter eligible pools (positive liquidity)
+      const eligible: {
+        pool: PancakeSwapV3EventPool;
+        state: DeepReadonly<PoolState>;
+        idx: number;
+      }[] = [];
+      for (let i = 0; i < poolsToUse.poolWithState.length; i++) {
+        const pool = poolsToUse.poolWithState[i];
+        const state = states[i];
+        if (state.liquidity <= 0n) {
+          if (state.liquidity < 0) {
+            this.logger.error(
+              `${this.dexKey}-${this.network}: ${pool.poolAddress} pool has negative liquidity: ${state.liquidity}. Find with key: ${pool.mapKey}`,
+            );
           }
+          this.logger.trace(`pool have 0 liquidity`);
+          continue;
+        }
+        eligible.push({ pool, state, idx: i });
+      }
 
-          const balanceDestToken =
-            _destAddress === pool.token0 ? state.balance0 : state.balance1;
+      // Batch query via registry (parallel Rust) or fallback to per-pool
+      const useBatchRust =
+        useRust !== false && this.registry && eligible.length > 1;
+      let batchUnitResults: Map<string, OutputResult> | null = null;
+      let batchPriceResults: Map<string, OutputResult> | null = null;
 
-          const unitResult = this._getOutputs(
+      if (useBatchRust) {
+        const poolKeys = eligible.map(e => e.pool.name);
+        const sideNum = side === SwapSide.SELL ? 0 : 1;
+        try {
+          const unitRaw = this.registry!.queryMany(
+            poolKeys,
+            [unitAmount],
+            zeroForOne,
+            sideNum,
+          );
+          const priceRaw = this.registry!.queryMany(
+            poolKeys,
+            _amounts,
+            zeroForOne,
+            sideNum,
+          );
+          batchUnitResults = new Map(unitRaw.map(r => [r.key, r]));
+          batchPriceResults = new Map(priceRaw.map(r => [r.key, r]));
+        } catch (e) {
+          this.logger.debug(
+            'Batch Rust query failed, falling back to per-pool',
+            e,
+          );
+        }
+      }
+
+      const result = eligible.map(({ pool, state }) => {
+        const balanceDestToken =
+          _destAddress === pool.token0 ? state.balance0 : state.balance1;
+        const poolKey = pool.name;
+
+        let unitResult: OutputResult | null = null;
+        let pricesResult: OutputResult | null = null;
+        let usedRust = false;
+
+        // Try batch results first
+        if (batchUnitResults && batchPriceResults) {
+          const ur = batchUnitResults.get(poolKey);
+          const pr = batchPriceResults.get(poolKey);
+          if (ur && ur.outputs.length > 0 && pr && pr.outputs.length > 0) {
+            unitResult = this._applyBalanceCap(
+              ur,
+              [unitAmount],
+              side,
+              balanceDestToken,
+            );
+            pricesResult = this._applyBalanceCap(
+              pr,
+              _amounts,
+              side,
+              balanceDestToken,
+            );
+            usedRust = true;
+          }
+        }
+
+        // Fallback to per-pool JS math
+        if (!unitResult || !pricesResult) {
+          unitResult = this._getOutputs(
             state,
             [unitAmount],
             zeroForOne,
             side,
             balanceDestToken,
           );
-          const pricesResult = this._getOutputs(
+          pricesResult = this._getOutputs(
             state,
             _amounts,
             zeroForOne,
             side,
             balanceDestToken,
           );
+        }
 
-          if (!pricesResult) {
-            this.logger.debug('Prices or unit is not calculated');
-            return null;
-          }
+        if (!unitResult || !pricesResult) {
+          this.logger.debug('Prices or unit is not calculated');
+          return null;
+        }
 
-          const prices = [0n, ...pricesResult.outputs];
-          const gasCost = [
-            0,
-            ...pricesResult.outputs.map((p, index) => {
-              if (p == 0n) {
-                return 0;
-              } else {
-                return (
-                  PANCAKESWAPV3_POOL_SEARCH_OVERHEAD +
-                  PANCAKESWAPV3_TICK_BASE_OVERHEAD +
-                  pricesResult.tickCounts[index] * PANCAKESWAPV3_TICK_GAS_COST
-                );
-              }
-            }),
-          ];
-          return {
-            unit: unitResult?.outputs[0] || 0n,
-            prices,
-            data: {
-              path: [
-                {
-                  tokenIn: _srcAddress,
-                  tokenOut: _destAddress,
-                  fee: pool.feeCode.toString(),
-                },
-              ],
-            },
-            poolIdentifiers: [
-              this.getPoolIdentifier(pool.token0, pool.token1, pool.feeCode),
+        const prices = [0n, ...pricesResult.outputs];
+        const gasCost = [
+          0,
+          ...pricesResult.outputs.map((p, index) => {
+            if (p == 0n) {
+              return 0;
+            } else {
+              return (
+                PANCAKESWAPV3_POOL_SEARCH_OVERHEAD +
+                PANCAKESWAPV3_TICK_BASE_OVERHEAD +
+                pricesResult.tickCounts[index] * PANCAKESWAPV3_TICK_GAS_COST
+              );
+            }
+          }),
+        ];
+        return {
+          unit: unitResult?.outputs[0] || 0n,
+          prices,
+          data: {
+            path: [
+              {
+                tokenIn: _srcAddress,
+                tokenOut: _destAddress,
+                fee: pool.feeCode.toString(),
+              },
             ],
-            exchange: this.dexKey,
-            gasCost: gasCost,
-            poolAddresses: [pool.poolAddress],
-          };
-        }),
-      );
+            useRust: usedRust,
+          } as any,
+          poolIdentifiers: [
+            this.getPoolIdentifier(pool.token0, pool.token1, pool.feeCode),
+          ],
+          exchange: this.dexKey,
+          gasCost: gasCost,
+          poolAddresses: [pool.poolAddress],
+        };
+      });
       const rpcResults = await rpcResultsPromise;
 
       const notNullResult = result.filter(
@@ -1179,20 +1265,64 @@ export class PancakeswapV3
     return newConfig;
   }
 
+  protected _applyBalanceCap(
+    result: OutputResult,
+    amounts: bigint[],
+    side: SwapSide,
+    destTokenBalance: bigint,
+  ): OutputResult | null {
+    const outputsResult = {
+      outputs: [...result.outputs],
+      tickCounts: [...result.tickCounts],
+    };
+
+    if (side === SwapSide.SELL) {
+      if (outputsResult.outputs[0] > destTokenBalance) {
+        return null;
+      }
+      for (let i = 0; i < outputsResult.outputs.length; i++) {
+        if (outputsResult.outputs[i] > destTokenBalance) {
+          outputsResult.outputs[i] = 0n;
+          outputsResult.tickCounts[i] = 0;
+        }
+      }
+    } else {
+      if (amounts[0] > destTokenBalance) {
+        return null;
+      }
+      for (let i = 0; i < amounts.length; i++) {
+        if (amounts[i] > destTokenBalance) {
+          outputsResult.outputs[i] = 0n;
+          outputsResult.tickCounts[i] = 0;
+        }
+      }
+    }
+
+    return outputsResult;
+  }
+
   private _getOutputs(
     state: DeepReadonly<PoolState>,
     amounts: bigint[],
     zeroForOne: boolean,
     side: SwapSide,
     destTokenBalance: bigint,
+    rustHandle?: {
+      queryOutputs(
+        amounts: bigint[],
+        zeroForOne: boolean,
+        side: number,
+      ): { outputs: bigint[]; tickCounts: number[] };
+    } | null,
   ): OutputResult | null {
     try {
-      const outputsResult = pancakeswapV3Math.queryOutputs(
-        state,
-        amounts,
-        zeroForOne,
-        side,
-      );
+      const outputsResult = rustHandle
+        ? rustHandle.queryOutputs(
+            amounts,
+            zeroForOne,
+            side === SwapSide.SELL ? 0 : 1,
+          )
+        : pancakeswapV3Math.queryOutputs(state, amounts, zeroForOne, side);
 
       if (side === SwapSide.SELL) {
         if (outputsResult.outputs[0] > destTokenBalance) {
