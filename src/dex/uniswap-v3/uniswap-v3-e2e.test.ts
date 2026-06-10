@@ -1033,6 +1033,30 @@ describe('UniswapV3 E2E', () => {
         );
       });
     });
+
+    describe('AerodromeSlipstreamFactory3', () => {
+      const dexKey = 'AerodromeSlipstreamFactory3';
+      describe('Base', () => {
+        const network = Network.BASE;
+
+        const tokenASymbol: string = 'USDC';
+        const tokenBSymbol: string = 'WETH';
+
+        const tokenAAmount: string = '11000000';
+        const tokenBAmount: string = '1100000000000000';
+        const nativeTokenAmount = '1100000000000000';
+
+        testForNetwork(
+          network,
+          dexKey,
+          tokenASymbol,
+          tokenBSymbol,
+          tokenAAmount,
+          tokenBAmount,
+          nativeTokenAmount,
+        );
+      });
+    });
   });
 
   describe('PharaohV3', () => {
