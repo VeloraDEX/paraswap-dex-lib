@@ -403,7 +403,7 @@ export function swapExactInputCalldata(
         : path.tokenOut,
       fee: BigInt(path.pool.key.fee),
       tickSpacing: BigInt(path.pool.key.tickSpacing),
-      hooks: NULL_ADDRESS,
+      hooks: path.pool.key.hooks,
       hookData: '0x',
     })),
   };
@@ -566,7 +566,7 @@ export function swapExactOutputCalldata(
         : path.tokenIn,
       fee: BigInt(path.pool.key.fee),
       tickSpacing: BigInt(path.pool.key.tickSpacing),
-      hooks: NULL_ADDRESS,
+      hooks: path.pool.key.hooks,
       hookData: '0x',
     })),
   };

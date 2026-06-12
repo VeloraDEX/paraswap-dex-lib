@@ -225,7 +225,16 @@ export class UniswapV4 extends SimpleExchange implements IDex<UniswapV4Data> {
       const poolState = (await eventPool?.getState(blockNumber)) || null;
 
       let prices: bigint[] | null;
-      if (poolState !== null && poolState.isValid) {
+      if (eventPool?.hook?.getPricesVolume) {
+        prices = await eventPool.hook.getPricesVolume({
+          pool,
+          amounts,
+          zeroForOne,
+          side,
+          blockNumber,
+          routerAddress: this.routerAddress,
+        });
+      } else if (poolState !== null && poolState.isValid) {
         prices = this._getOutputs(
           pool,
           poolState,
@@ -351,8 +360,24 @@ export class UniswapV4 extends SimpleExchange implements IDex<UniswapV4Data> {
     _tokenAddress: Address,
     limit: number,
   ): Promise<PoolLiquidity[]> {
+    const blockNumber = await this.dexHelper.provider.getBlockNumber();
     let tokenAddress = _tokenAddress.toLowerCase();
     if (isETHAddress(tokenAddress)) tokenAddress = NULL_ADDRESS;
+
+    const hookLiquidityPools = (
+      await Promise.all(
+        this.supportedHooks.map(hook =>
+          hook.getTopPoolsForToken
+            ? hook.getTopPoolsForToken(
+                _tokenAddress.toLowerCase(),
+                limit,
+                blockNumber,
+                this.dexKey,
+              )
+            : [],
+        ),
+      )
+    ).flat();
 
     const poolIds = UniswapV4PoolsList[this.network]?.map(p => p.id);
 
@@ -360,29 +385,42 @@ export class UniswapV4 extends SimpleExchange implements IDex<UniswapV4Data> {
       .map(hook => hook.address.toLowerCase())
       .concat(NULL_ADDRESS);
 
-    const { pools0, pools1 } = await queryAvailablePoolsForToken(
-      this.dexHelper,
-      this.logger,
-      this.dexKey,
-      UniswapV4Config[this.dexKey][this.network].subgraphURL,
-      tokenAddress,
-      limit,
-      poolIds,
-      hooksToQuery,
-    );
+    let pools0: Awaited<
+      ReturnType<typeof queryAvailablePoolsForToken>
+    >['pools0'];
+    let pools1: Awaited<
+      ReturnType<typeof queryAvailablePoolsForToken>
+    >['pools1'];
+
+    try {
+      ({ pools0, pools1 } = await queryAvailablePoolsForToken(
+        this.dexHelper,
+        this.logger,
+        this.dexKey,
+        UniswapV4Config[this.dexKey][this.network].subgraphURL,
+        tokenAddress,
+        limit,
+        poolIds,
+        hooksToQuery,
+      ));
+    } catch (e) {
+      this.logger.error(
+        `Error_${this.dexKey}_Subgraph: couldn't fetch the pools from the subgraph`,
+        e,
+      );
+      return hookLiquidityPools.slice(0, limit);
+    }
 
     if (!(pools0 || pools1)) {
       this.logger.error(
         `Error_${this.dexKey}_Subgraph: couldn't fetch the pools from the subgraph`,
       );
-      return [];
+      return hookLiquidityPools.slice(0, limit);
     }
 
     if (pools0.length === 0 && pools1.length === 0) {
-      return [];
+      return hookLiquidityPools.slice(0, limit);
     }
-
-    const blockNumber = await this.dexHelper.provider.getBlockNumber();
 
     const pools = pools0.concat(pools1);
     const poolStates = await this.poolManager.generateMultiplePoolStates(
@@ -441,9 +479,16 @@ export class UniswapV4 extends SimpleExchange implements IDex<UniswapV4Data> {
       });
     }
 
-    liquidityPools.sort((a, b) => b.liquidityUSD - a.liquidityUSD);
+    liquidityPools.push(...hookLiquidityPools);
 
-    return liquidityPools.slice(0, limit);
+    const uniqueLiquidityPools = _.uniqBy(
+      liquidityPools,
+      pool => pool.poolIdentifier ?? pool.address,
+    );
+
+    uniqueLiquidityPools.sort((a, b) => b.liquidityUSD - a.liquidityUSD);
+
+    return uniqueLiquidityPools.slice(0, limit);
   }
 
   async queryPriceFromRpc(
