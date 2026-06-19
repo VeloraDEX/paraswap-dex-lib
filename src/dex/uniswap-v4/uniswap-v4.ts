@@ -260,6 +260,14 @@ export class UniswapV4 extends SimpleExchange implements IDex<UniswapV4Data> {
         return null;
       }
 
+      if (
+        side === SwapSide.BUY &&
+        prices.length > 0 &&
+        prices[prices.length - 1] === 0n
+      ) {
+        return null;
+      }
+
       if (prices?.every(price => price === 0n || price === 1n)) {
         return null;
       }
@@ -479,10 +487,8 @@ export class UniswapV4 extends SimpleExchange implements IDex<UniswapV4Data> {
       });
     }
 
-    liquidityPools.push(...hookLiquidityPools);
-
     const uniqueLiquidityPools = _.uniqBy(
-      liquidityPools,
+      hookLiquidityPools.concat(liquidityPools),
       pool => pool.poolIdentifier ?? pool.address,
     );
 
