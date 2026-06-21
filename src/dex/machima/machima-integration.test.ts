@@ -27,7 +27,7 @@ import { MachimaConfig } from './config';
 */
 
 const network = Network.BASE;
-const dexKey = 'Machima';
+const dexKey = 'Elixir';
 const quoterAddress = MachimaConfig[dexKey][network].aggregatorQuoter;
 const quoterIface = new Interface(AGGREGATOR_QUOTER_ABI);
 
@@ -115,7 +115,7 @@ async function testPricingOnNetwork(
   );
 }
 
-describe('Machima', function () {
+describe('Elixir', function () {
   let blockNumber: number;
   let machima: Machima;
   const dexHelper = new DummyDexHelper(network);

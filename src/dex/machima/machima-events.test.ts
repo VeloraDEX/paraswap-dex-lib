@@ -21,7 +21,7 @@ import { MACHIMA_POOL_FEE } from './constants';
 
 describe('Machima pool state (Base)', function () {
   const network = Network.BASE;
-  const dexKey = 'Machima';
+  const dexKey = 'Elixir';
   const dexHelper = new DummyDexHelper(network);
   const tokens = Tokens[network];
 

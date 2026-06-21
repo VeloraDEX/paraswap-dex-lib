@@ -14,7 +14,7 @@ import { MachimaDexParams } from './types';
 // getFullStateWithRelativeBitmaps takes the factory as a runtime argument, so
 // the same helper works against the Machima factory.
 export const MachimaConfig: DexConfigMap<MachimaDexParams> = {
-  Machima: {
+  Elixir: {
     [Network.BASE]: {
       // Uniswap V3 fork core (dex-contracts)
       factory: '0xADd30837a707cCE4567eEa2C27d0617270d54C75',

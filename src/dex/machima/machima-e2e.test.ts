@@ -103,7 +103,7 @@ function testForNetwork(
 }
 
 describe('Machima E2E', () => {
-  const dexKey = 'Machima';
+  const dexKey = 'Elixir';
 
   describe('Base', () => {
     const network = Network.BASE;

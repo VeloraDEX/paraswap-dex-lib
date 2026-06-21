@@ -41,7 +41,7 @@ import { AGGREGATOR_ROUTER_ABI, AGGREGATOR_QUOTER_ABI } from './abi';
 */
 
 const network = Network.BASE;
-const dexKey = 'Machima';
+const dexKey = 'Elixir';
 const cfg = MachimaConfig[dexKey][network];
 
 const FORK_RPC =
