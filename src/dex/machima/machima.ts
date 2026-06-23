@@ -105,6 +105,7 @@ export class Machima extends UniswapV3 {
   protected readonly machimaTokenIface = new Interface(MACHIMA_TOKEN_ABI);
 
   private tokenInfoCache: Record<string, MachimaTokenInfo> = {};
+  private blockTimestampCache: Record<number, number> = {};
 
   public static dexKeysWithNetwork: { key: string; networks: Network[] }[] =
     getDexKeysWithNetwork(MachimaConfig);
@@ -179,10 +180,26 @@ export class Machima extends UniswapV3 {
 
   // ---- Per-token tax + anti-sniper state ----
 
-  private isInAntiSniperWindow(info: MachimaTokenInfo): boolean {
+  // The anti-sniper gate is evaluated on-chain against block.timestamp, so it
+  // must be compared to the timestamp of the block we are pricing at — not the
+  // wall clock — otherwise historical/lagging quotes mis-classify the window.
+  private isInAntiSniperWindow(
+    info: MachimaTokenInfo,
+    blockTimestamp: number,
+  ): boolean {
     if (!info.poolDeploymentTime) return false;
-    const now = Math.floor(Date.now() / 1000);
-    return now < info.poolDeploymentTime + MACHIMA_ANTI_SNIPER_WINDOW_S;
+    return (
+      blockTimestamp < info.poolDeploymentTime + MACHIMA_ANTI_SNIPER_WINDOW_S
+    );
+  }
+
+  private async getBlockTimestamp(blockNumber: number): Promise<number> {
+    const cached = this.blockTimestampCache[blockNumber];
+    if (cached !== undefined) return cached;
+    const block = await this.dexHelper.web3Provider.eth.getBlock(blockNumber);
+    const ts = Number(block.timestamp);
+    this.blockTimestampCache[blockNumber] = ts;
+    return ts;
   }
 
   protected async getMachimaTokenInfo(
@@ -273,7 +290,10 @@ export class Machima extends UniswapV3 {
       if (!cls) return null;
 
       const info = await this.getMachimaTokenInfo(cls.token, blockNumber);
-      if (this.isInAntiSniperWindow(info)) return null;
+      if (info.poolDeploymentTime) {
+        const blockTimestamp = await this.getBlockTimestamp(blockNumber);
+        if (this.isInAntiSniperWindow(info, blockTimestamp)) return null;
+      }
 
       // XMA sells hit the on-chain sell price floor (xmaSellSqrtPriceLimit),
       // which the local tick math does not model. Route XMA sells through the
@@ -291,24 +311,38 @@ export class Machima extends UniswapV3 {
       if (cls.isBuy) {
         // Buy: tax is deducted from the input before it reaches the pool.
         // Feed the post-tax amounts into the V3 math so the resulting token
-        // outputs already account for the buy tax.
+        // outputs already account for the buy tax. The `unit` price is the
+        // output for one whole unit of tokenIn; because the pool sees the taxed
+        // input, the correct unit is V3((1 - tax) * 1 unit), not a linear
+        // V3(1 unit) * (1 - tax). Append the taxed one-unit input as an extra
+        // query amount and read its exact pool output back as the unit.
         const buyTax = BigInt(info.hasTax ? info.buyTaxBps : 0);
+        const unitVolume = getBigIntPow(_src.decimals);
+        const scaledUnit = unitVolume - (unitVolume * buyTax) / BPS_DENOMINATOR;
         const scaled = amounts.map(a => a - (a * buyTax) / BPS_DENOMINATOR);
         const res = await super.getPricesVolume(
           _src,
           _dst,
-          scaled,
+          [...scaled, scaledUnit],
           side,
           blockNumber,
           limitPools,
         );
         if (!res) return res;
-        return res.map(pp => ({
-          ...pp,
-          unit: pp.unit - (pp.unit * buyTax) / BPS_DENOMINATOR,
-          gasCost: this.withMachimaGas(pp.gasCost),
-          exchange: this.dexKey,
-        }));
+        return res.map(pp => {
+          const unit = pp.prices[pp.prices.length - 1];
+          const prices = pp.prices.slice(0, amounts.length);
+          const gasCost = Array.isArray(pp.gasCost)
+            ? pp.gasCost.slice(0, amounts.length)
+            : pp.gasCost;
+          return {
+            ...pp,
+            unit,
+            prices,
+            gasCost: this.withMachimaGas(gasCost),
+            exchange: this.dexKey,
+          };
+        });
       }
 
       // Sell (non-XMA token -> counter): tax is applied to the pool output.
