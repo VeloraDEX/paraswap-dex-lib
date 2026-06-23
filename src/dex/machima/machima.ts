@@ -208,7 +208,13 @@ export class Machima extends UniswapV3 {
   ): Promise<MachimaTokenInfo> {
     const key = token.toLowerCase();
     const cached = this.tokenInfoCache[key];
-    if (cached && Date.now() - cached.fetchedAtMs < MACHIMA_TOKEN_INFO_TTL_MS) {
+    // Reuse only within the same pricing block (tax/deploy data is block state),
+    // bounded by a wall-clock TTL so stale entries are eventually refreshed.
+    if (
+      cached &&
+      cached.blockNumber === blockNumber &&
+      Date.now() - cached.fetchedAtMs < MACHIMA_TOKEN_INFO_TTL_MS
+    ) {
       return cached;
     }
 
@@ -261,6 +267,7 @@ export class Machima extends UniswapV3 {
       hasTax,
       poolDeploymentTime,
       fetchedAtMs: Date.now(),
+      blockNumber,
     };
     this.tokenInfoCache[key] = info;
     return info;
@@ -424,14 +431,20 @@ export class Machima extends UniswapV3 {
       blockNumber,
     );
 
-    const outs = results.map(r => (r.success ? r.returnData : 0n));
+    // The quoter caps XMA sells at the floor via partial fill (it returns a
+    // value, it does not revert mid-array), and reverts for *every* amount only
+    // when the floor is already binding. So a single failed call is a transient
+    // multicall error, not a real zero — dropping the whole route avoids
+    // exposing a pool with a valid unit but spurious zero prices that misstate
+    // liquidity for those sizes.
+    if (results.some(r => !r.success)) return null;
+
+    const outs = results.map(r => r.returnData);
     const unit = outs[0];
     const prices = [0n, ...outs.slice(1)];
 
-    // When the XMA sell-price floor (xmaSellSqrtPriceLimit) is binding, the
-    // on-chain quote reverts (SPL) for every amount and the real swap would
-    // revert too. Surface a clean no-route rather than a zero-liquidity pool so
-    // the router never builds a reverting XMA-sell transaction.
+    // Defensive: if the quoter returned a real zero for every amount, there is
+    // no routable liquidity — surface a clean no-route.
     if (unit === 0n && prices.every(p => p === 0n)) return null;
     const gasCost = prices.map(p =>
       p === 0n ? 0 : MACHIMA_BASE_GAS + MACHIMA_CROSS_TICK_GAS,

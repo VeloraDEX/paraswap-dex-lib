@@ -33,4 +33,5 @@ export interface MachimaTokenInfo {
   hasTax: boolean;
   poolDeploymentTime: number; // unix seconds
   fetchedAtMs: number;
+  blockNumber: number; // block the tax/deploy data was read at
 }
