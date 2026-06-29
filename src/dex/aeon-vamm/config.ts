@@ -1,25 +1,24 @@
-import { DexConfigMap } from '../../dex-helper/index';
-import { Network } from '../../../constants';
-import { AeonVAMMData } from './types';
+import { DexParams } from '../uniswap-v2/types';
+import { DexConfigMap } from '../../types';
+import { Network, SwapSide } from '../../constants';
 
-export const AeonVAMMConfig: DexConfigMap<AeonVAMMData> = {
+export const AeonVAMMConfig: DexConfigMap<DexParams> = {
   AeonVAMM: {
     [Network.AVALANCHE]: {
-      subgraphURL: '',
       factoryAddress: '0x3ECf287990A2365d48C6681620393aC1cdF3D268',
       initCode:
         '0x0000000000000000000000000000000000000000000000000000000000000000',
-      feeCode: 30,         // default 0.3%; per-pool fee read from feeBps()
+      feeCode: 10,  // 0.1% default; actual per-pool fee is read on-chain
       poolGasCost: 80_000,
     },
   },
 };
 
-export const Adapters = {
+export const Adapters: {
+  [chainId: number]: { [side: string]: { name: string; index: number }[] };
+} = {
   [Network.AVALANCHE]: {
-    [SwapSide.SELL]: [{ name: 'AvalancheAdapter02', index: 5 }],
+    [SwapSide.SELL]: [{ name: 'AvalancheAdapter01', index: 2 }],
+    [SwapSide.BUY]: [{ name: 'AvalancheBuyAdapter', index: 1 }],
   },
 };
-
-// Lazy import to avoid circular deps
-import { SwapSide } from '../../../constants';
