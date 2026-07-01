@@ -12,6 +12,7 @@ import { StablePool } from './stable-pool/stable-pool';
 import { Weth } from './weth/weth';
 import { PolygonMigrator } from './polygon-migrator/polygon-migrator';
 import { UniswapV3 } from './uniswap-v3/uniswap-v3';
+import { Baseline } from './baseline/baseline';
 import { BalancerV2 } from './balancer-v2/balancer-v2';
 import { balancerV2Merge } from './balancer-v2/optimizer';
 import { UniswapV2 } from './uniswap-v2/uniswap-v2';
@@ -137,6 +138,7 @@ const Dexes = [
   UniswapV4,
   Algebra,
   AlgebraIntegral,
+  Baseline,
   PancakeSwapV2,
   PancakeswapV3,
   VelodromeSlipstream,
