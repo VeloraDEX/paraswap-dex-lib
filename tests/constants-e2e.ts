@@ -219,6 +219,14 @@ export const Tokens: {
       address: '0xae7ab96520de3a18e5e111b5eaab095312d7fe84',
       decimals: 18,
     },
+    tGBP: {
+      address: '0x27f6c8289550fCE67f6B50BeD1F519966aFE5287',
+      decimals: 18,
+    },
+    wstGBP: {
+      address: '0x57C3571f10767E49C9d7b60feb6c67804783B7aE',
+      decimals: 18,
+    },
     SDEX: {
       address: '0x5DE8ab7E27f6E7A1fFf3E5B337584Aa43961BEeF',
       decimals: 18,
@@ -2071,6 +2079,8 @@ export const Holders: {
     STETH: '0x6663613FbD927cE78abBF7F5Ca7e2c3FE0d96d18',
     SUSHI: '0x8a108e4761386c94b8d2f98A5fFe13E472cFE76a',
     wstETH: '0x3c22ec75ea5D745c78fc84762F7F1E6D82a2c5BF',
+    tGBP: '0x3361b8223d8463354AC9a8d7c650C55477F9965b',
+    wstGBP: '0x7500c95cC6f6c9eDe82d4043F9337715360D6B6a',
     WETH: '0x6B44ba0a126a2A1a8aa6cD1AdeeD002e141Bcd44',
     USDT: '0xAf64555DDD61FcF7D094824dd9B4eBea165aFc5b',
     XAUT: '0xc4e161e8d8a4bc4ac762ab33a28bbac5474203d7',
