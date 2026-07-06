@@ -1,9 +1,8 @@
 import { Address } from '../../types';
 
 export type BaselineData = {
-  // Relay address — the target exchange the swap call is routed through.
-  exchange: Address;
   // Baseline token being bought/sold; the reserve token is the counter-asset.
+  // Swaps are always routed through the relay fixed in the DEX config.
   bToken: Address;
 };
 
@@ -44,9 +43,8 @@ export type QuoteState = {
 };
 
 // A single quote: `amount` is the priced value (output for a sell, input for a
-// buy), `fee` the protocol fee, `reserveDelta` the curve's reserve change.
+// buy), `fee` the protocol fee.
 export type QuoteResult = {
   amount: bigint;
   fee: bigint;
-  reserveDelta: bigint;
 };

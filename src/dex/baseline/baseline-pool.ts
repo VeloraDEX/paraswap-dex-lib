@@ -1,5 +1,6 @@
 import { Contract } from '@ethersproject/contracts';
 import { Interface } from '@ethersproject/abi';
+import { Provider } from '@ethersproject/providers';
 import { DeepReadonly } from 'ts-essentials';
 import { StatefulEventSubscriber } from '../../stateful-event-subscriber';
 import { IDexHelper } from '../../dex-helper/index';
@@ -17,6 +18,15 @@ const SWAP_IFACE = new Interface([
 ]);
 const SWAP_TOPIC = SWAP_IFACE.getEventTopic('Swap');
 
+// Every pool reads the same relay: the Baseline class creates one Contract and
+// shares it across its pools (tests build their own through this helper).
+export function createRelayContract(
+  relay: Address,
+  provider: Provider,
+): Contract {
+  return new Contract(relay, RELAY_IFACE, provider);
+}
+
 function cloneState(state: DeepReadonly<QuoteState>): QuoteState {
   return {
     ...state,
@@ -24,8 +34,19 @@ function cloneState(state: DeepReadonly<QuoteState>): QuoteState {
   };
 }
 
+// The curve functions throw to signal "the chain would revert this"; for a
+// boundary roll-forward that means the fresh snapshot cannot be derived
+// locally, which callers handle exactly like advanceSnapshot's own null.
+function tryAdvanceSnapshot(state: QuoteState): QuoteState | null {
+  try {
+    return advanceSnapshot(state);
+  } catch {
+    return null;
+  }
+}
+
 // Map the getQuoteState struct returned by the relay into a QuoteState.
-export function parseQuoteState(raw: any): QuoteState {
+function parseQuoteState(raw: any): QuoteState {
   const curve = raw.snapshotCurveParams;
   return {
     snapshotCurveParams: {
@@ -54,23 +75,24 @@ export function parseQuoteState(raw: any): QuoteState {
 
 // One pool = one bToken. State is the full pricing snapshot from getQuoteState.
 export class BaselineEventPool extends StatefulEventSubscriber<QuoteState> {
-  private readonly relayContract: Contract;
   // The bToken as it appears in a Swap log's first data word.
   private readonly bTokenWord: string;
   // Guards a single in-flight authoritative refetch.
   private refetching = false;
+  // Bumped whenever the block manager breaks state continuity (restart or
+  // rollback): a refetch started before the break must be discarded, or a
+  // pre-break state would land with the gap's events already declared skipped.
+  private stateGeneration = 0;
 
   constructor(
     parentName: string,
-    protected relay: Address,
+    private readonly relayContract: Contract,
     public readonly bToken: Address,
-    public readonly reserveToken: Address,
     dexHelper: IDexHelper,
     logger: Logger,
   ) {
     super(parentName, bToken, dexHelper, logger);
-    this.addressesSubscribed = [relay];
-    this.relayContract = new Contract(relay, RELAY_IFACE, dexHelper.provider);
+    this.addressesSubscribed = [relayContract.address];
     this.bTokenWord = bToken.toLowerCase().slice(2);
   }
 
@@ -99,7 +121,7 @@ export class BaselineEventPool extends StatefulEventSubscriber<QuoteState> {
       return null;
     }
     if (blockNumber <= this.getStateBlockNumber()) return state;
-    const advanced = advanceSnapshot(cloneState(state));
+    const advanced = tryAdvanceSnapshot(cloneState(state));
     if (!advanced) {
       this.refetchState(blockNumber);
       return null;
@@ -111,8 +133,12 @@ export class BaselineEventPool extends StatefulEventSubscriber<QuoteState> {
   private refetchState(blockNumber: number): void {
     if (this.refetching) return;
     this.refetching = true;
+    const generation = this.stateGeneration;
     this.generateState(blockNumber)
-      .then(state => this.setState(state, blockNumber))
+      .then(state => {
+        if (generation === this.stateGeneration)
+          this.setState(state, blockNumber);
+      })
       .catch(e =>
         this.logger.error(`${this.parentName}: refetch ${this.bToken}`, e),
       )
@@ -121,11 +147,29 @@ export class BaselineEventPool extends StatefulEventSubscriber<QuoteState> {
       });
   }
 
+  restart(blockNumber: number): void {
+    this.stateGeneration += 1;
+    super.restart(blockNumber);
+  }
+
+  rollback(blockNumber: number): void {
+    this.stateGeneration += 1;
+    super.rollback(blockNumber);
+  }
+
   protected async processBlockLogs(
     state: DeepReadonly<QuoteState>,
     logs: Readonly<Log>[],
     _blockHeader: Readonly<BlockHeader>,
   ): Promise<DeepReadonly<QuoteState> | null> {
+    // The relay's non-swap operations (claims, deposits, borrows) verifiably
+    // leave getQuoteState untouched, but a parameter update or future module
+    // might not; any non-Swap relay log referencing this bToken defensively
+    // refetches the authoritative state rather than trusting that invariant.
+    if (logs.some(log => this.isNonSwapPoolLog(log))) {
+      return this.fetchBlockState(logs[0].blockNumber);
+    }
+
     // The relay emits every pool's events; the bToken is the first data word,
     // so this pool's Swaps are selected without decoding the rest.
     const swaps = logs
@@ -138,22 +182,10 @@ export class BaselineEventPool extends StatefulEventSubscriber<QuoteState> {
     if (swaps.length === 0) return null;
 
     // Roll the previous block's flow into the snapshot, then apply this block's
-    // swaps locally. If the boundary needs data we do not hold (safety regime or a
-    // relaxing convexity), fall back to refetching the authoritative state. A
-    // failed refetch keeps the prior state rather than rejecting the block
-    // manager's whole log batch; pricing declines until a later refetch lands.
-    const advanced = advanceSnapshot(cloneState(state));
-    if (!advanced) {
-      try {
-        return await this.generateState(logs[0].blockNumber);
-      } catch (e) {
-        this.logger.error(
-          `${this.parentName}: boundary refetch ${this.bToken}`,
-          e,
-        );
-        return null;
-      }
-    }
+    // swaps locally. If the boundary needs data we do not hold (safety regime or
+    // a relaxing convexity), fall back to refetching the authoritative state.
+    const advanced = tryAdvanceSnapshot(cloneState(state));
+    if (!advanced) return this.fetchBlockState(logs[0].blockNumber);
 
     for (const swap of swaps) {
       applyQuoteState(
@@ -166,10 +198,33 @@ export class BaselineEventPool extends StatefulEventSubscriber<QuoteState> {
     return advanced;
   }
 
-  // Unused: processBlockLogs handles logs at the block level.
-  protected processLog(
-    state: DeepReadonly<QuoteState>,
-  ): DeepReadonly<QuoteState> | null {
-    return state;
+  // Authoritative state for the block being processed. A failed fetch keeps the
+  // prior state rather than rejecting the block manager's whole log batch;
+  // pricing declines until a later refetch lands.
+  private async fetchBlockState(
+    blockNumber: number,
+  ): Promise<DeepReadonly<QuoteState> | null> {
+    try {
+      return await this.generateState(blockNumber);
+    } catch (e) {
+      this.logger.error(`${this.parentName}: block refetch ${this.bToken}`, e);
+      return null;
+    }
+  }
+
+  // A non-Swap relay log that references this pool's bToken anywhere in its
+  // payload; a false positive only costs one refetch.
+  private isNonSwapPoolLog(log: Readonly<Log>): boolean {
+    if (log.topics[0] === SWAP_TOPIC) return false;
+    return (
+      log.data.includes(this.bTokenWord) ||
+      log.topics.some(topic => topic.endsWith(this.bTokenWord))
+    );
+  }
+
+  // Unused: processBlockLogs handles logs at the block level. Null tells the
+  // base class the log did not change the state.
+  protected processLog(): DeepReadonly<QuoteState> | null {
+    return null;
   }
 }

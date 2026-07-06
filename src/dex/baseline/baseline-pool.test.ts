@@ -6,7 +6,7 @@ import { DummyDexHelper } from '../../dex-helper/index';
 import { Network } from '../../constants';
 import { Tokens } from '../../../tests/constants-e2e';
 import { BaselineConfig } from './config';
-import { BaselineEventPool } from './baseline-pool';
+import { BaselineEventPool, createRelayContract } from './baseline-pool';
 import {
   advanceSnapshot,
   applyQuoteState,
@@ -18,7 +18,6 @@ const network = Network.BASE;
 const dexKey = 'Baseline';
 const RELAY = BaselineConfig[dexKey][network].relay;
 const REPPO = Tokens[network].REPPO;
-const VIRTUAL = Tokens[network].VIRTUAL;
 
 const SWAP_IFACE = new Interface([
   'event Swap(address bToken, address user, uint256 activePrice, uint256 blvPrice, int256 bTokenDelta, int256 reserveDelta, uint256 totalFee, uint256 liquidityFee)',
@@ -33,9 +32,8 @@ describe('BaselineEventPool', () => {
   const dexHelper = new DummyDexHelper(network);
   const pool = new BaselineEventPool(
     dexKey,
-    RELAY,
+    createRelayContract(RELAY, dexHelper.provider),
     REPPO.address,
-    VIRTUAL.address,
     dexHelper,
     dexHelper.getLogger(dexKey),
   );

@@ -265,7 +265,7 @@ function quoteCumulativeFromSnapshot(
 }
 
 // A single swap priced against the frozen snapshot plus same-block flow.
-export function quoteSwap(
+function quoteSwap(
   state: QuoteState,
   deltaCircNative: bigint,
 ): { deltaUserReserves: bigint; fees: bigint } {
@@ -370,7 +370,7 @@ function ensureDeltaDirection(
 function solveBuy(
   state: QuoteState,
   target: bigint,
-): { delta: bigint; accountingFee: bigint; reserveDelta: bigint } {
+): { delta: bigint; accountingFee: bigint } {
   const p = state.snapshotCurveParams;
   const priceWithFee = mulWad(computeActivePrice(p), WAD + p.swapFee * 2n);
   if (priceWithFee === 0n) throw new Error('solveBuy: zero price');
@@ -395,25 +395,44 @@ function solveBuy(
     break;
   }
 
-  let lo = solverLowerBound(p);
+  const lo = solverLowerBound(p);
+  // In floor-regime pools the lower bound can exceed every safe upper bound;
+  // the bisection below would then be skipped and delta = lo would escape the
+  // inventory/convexity caps entirely.
+  if (lo > hi) throw new Error('solveBuy: no capacity');
   const tolerance = solverTolerance(target);
   let delta = lo;
-  while (hi - lo > 1n) {
-    const mid = (lo + hi) / 2n;
-    const cost = buyCost(state, mid);
-    if (cost !== null && cost <= target) {
-      lo = mid;
-      delta = mid;
-      if (target - cost <= tolerance) break;
-    } else {
-      hi = mid;
+
+  // When the entire capacity is affordable and further from the target than
+  // the ppm tolerance, every bisection probe succeeds without triggering the
+  // early break (cost is monotone in delta), deterministically converging on
+  // hi - 1; skip the ~80 redundant powWad probes and go straight there.
+  const costAtCapacity = hi === maxDelta && hi > lo ? buyCost(state, hi) : null;
+  if (
+    costAtCapacity !== null &&
+    costAtCapacity <= target &&
+    target - costAtCapacity > tolerance
+  ) {
+    delta = hi - 1n;
+  } else {
+    let lower = lo;
+    while (hi - lower > 1n) {
+      const mid = (lower + hi) / 2n;
+      const cost = buyCost(state, mid);
+      if (cost !== null && cost <= target) {
+        lower = mid;
+        delta = mid;
+        if (target - cost <= tolerance) break;
+      } else {
+        hi = mid;
+      }
     }
   }
 
   const { deltaUserReserves, fees } = quoteSwap(state, delta);
   const cost = abs(deltaUserReserves);
   if (cost === 0n || cost > target) throw new Error('solveBuy: no fit');
-  return { delta, accountingFee: fees, reserveDelta: -cost };
+  return { delta, accountingFee: fees };
 }
 
 function buyCost(state: QuoteState, delta: bigint): bigint | null {
@@ -432,11 +451,7 @@ export function quoteSellExactIn(
   if (tokensIn <= 0n) throw new Error('sellExactIn: non-positive');
   const { deltaUserReserves, fees } = quoteSwap(state, -tokensIn);
   if (deltaUserReserves <= 0n) throw new Error('sellExactIn: no rate');
-  return {
-    amount: deltaUserReserves,
-    fee: fees,
-    reserveDelta: deltaUserReserves,
-  };
+  return { amount: deltaUserReserves, fee: fees };
 }
 
 // Spend exact reserves in, receive bTokens out.
@@ -445,9 +460,9 @@ export function quoteBuyExactIn(
   reservesIn: bigint,
 ): QuoteResult {
   if (reservesIn <= 0n) throw new Error('buyExactIn: non-positive');
-  const { delta, accountingFee, reserveDelta } = solveBuy(state, reservesIn);
+  const { delta, accountingFee } = solveBuy(state, reservesIn);
   if (delta <= 0n) throw new Error('buyExactIn: no rate');
-  return { amount: delta, fee: accountingFee, reserveDelta };
+  return { amount: delta, fee: accountingFee };
 }
 
 // Buy exact bTokens out, pay reserves in.
@@ -459,7 +474,7 @@ export function quoteBuyExactOut(
   const { deltaUserReserves, fees } = quoteSwap(state, tokensOut);
   const cost = abs(deltaUserReserves);
   if (cost <= 0n) throw new Error('buyExactOut: no rate');
-  return { amount: cost, fee: fees, reserveDelta: -cost };
+  return { amount: cost, fee: fees };
 }
 
 // Advance the state by an executed swap: settle surplus, move totals, accrue fees.
@@ -516,7 +531,7 @@ export function computeInvariant(params: CurveParams): bigint {
 
 // The floor value (BLV) for the next block, ratcheted up as the pool grows.
 // Defined only at TARGET_CONVEXITY.
-export function computeNextBLV(
+function computeNextBLV(
   params: CurveParams,
   prevSupply: bigint,
   prevReserves: bigint,

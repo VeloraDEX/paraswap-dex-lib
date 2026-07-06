@@ -2,7 +2,7 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 import { testE2E } from '../../../tests/utils-e2e';
-import { Holders, Tokens } from '../../../tests/constants-e2e';
+import { Tokens } from '../../../tests/constants-e2e';
 import { ContractMethod, Network, SwapSide } from '../../constants';
 import { StaticJsonRpcProvider } from '@ethersproject/providers';
 import { generateConfig } from '../../config';
@@ -26,7 +26,9 @@ function testForNetwork(
     network,
   );
   const tokens = Tokens[network];
-  const holders = Holders[network];
+  // testE2E ignores its senderAddress argument (funding comes from the
+  // storage-slot overrides in token-storage-slots.json); any address works.
+  const sender = tokens[reserveSymbol].address;
 
   const sideToContractMethods = new Map([
     [SwapSide.SELL, [ContractMethod.swapExactAmountIn]],
@@ -42,7 +44,7 @@ function testForNetwork(
               await testE2E(
                 tokens[reserveSymbol],
                 tokens[bTokenSymbol],
-                holders[reserveSymbol],
+                sender,
                 side === SwapSide.SELL ? reserveAmount : bTokenAmount,
                 side,
                 dexKey,
@@ -63,7 +65,7 @@ function testForNetwork(
                 await testE2E(
                   tokens[bTokenSymbol],
                   tokens[reserveSymbol],
-                  holders[bTokenSymbol],
+                  sender,
                   bTokenAmount,
                   side,
                   dexKey,
@@ -95,6 +97,6 @@ describe('Baseline E2E', () => {
     'VIRTUAL',
     '1000000000000000000000', // 1000 REPPO
     '10000000000000000000', // 10 VIRTUAL
-    1, // 1% slippage — thin pool / convexity headroom
+    1, // 1 bps slippage: local quotes are wei-exact, so ~zero headroom is needed
   );
 });

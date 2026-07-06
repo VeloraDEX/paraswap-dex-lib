@@ -6,7 +6,7 @@ import { Network } from '../../constants';
 import { Tokens } from '../../../tests/constants-e2e';
 import { testEventSubscriber } from '../../../tests/utils-events';
 import { BaselineConfig } from './config';
-import { BaselineEventPool } from './baseline-pool';
+import { BaselineEventPool, createRelayContract } from './baseline-pool';
 import { QuoteState } from './types';
 
 /*
@@ -21,7 +21,6 @@ const dexKey = 'Baseline';
 
 const RELAY = BaselineConfig[dexKey][network].relay;
 const REPPO = Tokens[network].REPPO;
-const VIRTUAL = Tokens[network].VIRTUAL;
 
 // Blocks the pool traded in, each immediately following another traded block.
 const blockNumbers: { [eventName: string]: number[] } = {
@@ -37,9 +36,8 @@ describe('Baseline events', () => {
       it(`${event}:${blockNumber}`, async () => {
         const pool = new BaselineEventPool(
           dexKey,
-          RELAY,
+          createRelayContract(RELAY, dexHelper.provider),
           REPPO.address,
-          VIRTUAL.address,
           dexHelper,
           logger,
         );

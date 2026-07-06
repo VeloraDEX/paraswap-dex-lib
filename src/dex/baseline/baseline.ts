@@ -1,5 +1,6 @@
 import { AsyncOrSync, DeepReadonly } from 'ts-essentials';
 import { Interface } from '@ethersproject/abi';
+import { Contract } from '@ethersproject/contracts';
 import {
   Token,
   Address,
@@ -26,7 +27,7 @@ import { extractReturnAmountPosition } from '../../executor/utils';
 import { BaselineData, QuoteResult, QuoteState } from './types';
 import { SimpleExchange } from '../simple-exchange';
 import { BaselineConfig } from './config';
-import { BaselineEventPool } from './baseline-pool';
+import { BaselineEventPool, createRelayContract } from './baseline-pool';
 import {
   quoteBuyExactIn,
   quoteBuyExactOut,
@@ -44,6 +45,11 @@ const BUY_EXACT_OUT_GAS_COST = 210_000;
 // Discovery pulls the full bToken set from the subgraph, paginated.
 const DISCOVERY_TIMEOUT = 5000;
 const DISCOVERY_PAGE_SIZE = 500;
+// Hard stop for a misbehaving endpoint (one that ignores offset/limit would
+// otherwise page forever); generous next to the tens of live pools.
+const DISCOVERY_MAX_PAGES = 40;
+// Cooldown before a failed discovery pass is retried on the pricing path.
+const DISCOVERY_RETRY_MS = 60_000;
 
 type QuoteFn = (state: QuoteState, amount: bigint) => QuoteResult;
 
@@ -96,6 +102,14 @@ export class Baseline extends SimpleExchange implements IDex<BaselineData> {
   > = {};
   // Guards a single registry load shared across concurrent callers.
   private registryPromise?: Promise<void>;
+  // Discovery bookkeeping: a failed subgraph pass is retried with a cooldown so
+  // a startup outage does not hide discovered pools for the process lifetime.
+  private discoverySucceeded = false;
+  private discoveryRetryAfterMs = 0;
+  private discoveryPromise?: Promise<boolean>;
+
+  // One relay Contract shared by every pool subscriber of this instance.
+  private readonly relayContract: Contract;
 
   // Shared interface instances, reused across calls.
   readonly relayIface = new Interface([
@@ -119,6 +133,7 @@ export class Baseline extends SimpleExchange implements IDex<BaselineData> {
     this.logger = dexHelper.getLogger(dexKey);
     this.relay = BaselineConfig[dexKey][network].relay;
     this.subgraphURL = BaselineConfig[dexKey][network].subgraphURL;
+    this.relayContract = createRelayContract(this.relay, dexHelper.provider);
   }
 
   // Discover the chain's pools so pricing can resolve any of them.
@@ -126,24 +141,25 @@ export class Baseline extends SimpleExchange implements IDex<BaselineData> {
     await this.ensureRegistry();
   }
 
-  // Populate the pool registry once, shared across concurrent callers. Discovery
+  // Populate the pool registry, shared across concurrent callers. Discovery
   // comes from the subgraph; configured priority pools are resolved on-chain so
-  // they remain tracked even when the subgraph is unavailable.
+  // they remain tracked even when the subgraph is unavailable. A discovery pass
+  // that failed while the preload succeeded is retried here with a cooldown —
+  // otherwise a subgraph outage at startup would hide every non-configured pool
+  // for the process lifetime.
   private async ensureRegistry(): Promise<void> {
     if (!this.registryPromise) this.registryPromise = this.loadRegistry();
-    return this.registryPromise;
+    await this.registryPromise;
+    if (!this.discoverySucceeded && Date.now() >= this.discoveryRetryAfterMs) {
+      // Not awaited: the current request prices with what is known, and the
+      // retried pass (runDiscovery never rejects) lands for later requests.
+      this.runDiscovery();
+    }
   }
 
   private async loadRegistry(): Promise<void> {
-    let discovered = false;
-    try {
-      for (const p of await this.discoverPools()) {
-        this.register(p);
-      }
-      discovered = true;
-    } catch (e) {
-      this.logger.error(`${this.dexKey}: pool discovery failed`, e);
-    }
+    // On-chain resolution first: registration is first-wins, so the configured
+    // priority pools keep their on-chain data even if discovery disagrees.
     let preloaded = false;
     try {
       await this.preloadConfigured();
@@ -151,6 +167,7 @@ export class Baseline extends SimpleExchange implements IDex<BaselineData> {
     } catch (e) {
       this.logger.error(`${this.dexKey}: pool preload failed`, e);
     }
+    const discovered = await this.runDiscovery();
     // With both sources down the registry is empty for the process lifetime
     // unless retried: clear the cached promise so the next caller reloads, and
     // throw so the framework's initializePricing retry timer fires.
@@ -160,11 +177,42 @@ export class Baseline extends SimpleExchange implements IDex<BaselineData> {
     }
   }
 
+  // One shared subgraph discovery pass, registering any pools not yet known.
+  private runDiscovery(): Promise<boolean> {
+    if (!this.discoveryPromise) {
+      this.discoveryPromise = (async () => {
+        try {
+          for (const p of await this.discoverPools()) {
+            this.register(p);
+          }
+          this.discoverySucceeded = true;
+          return true;
+        } catch (e) {
+          this.logger.error(`${this.dexKey}: pool discovery failed`, e);
+          return false;
+        } finally {
+          this.discoveryRetryAfterMs = Date.now() + DISCOVERY_RETRY_MS;
+          this.discoveryPromise = undefined;
+        }
+      })();
+    }
+    return this.discoveryPromise;
+  }
+
+  // Invoked periodically on the pool-tracker service: re-runs discovery so
+  // pools deployed after process start become routable. (dexHelper.blockManager
+  // is unavailable here; discovery does not need it.)
+  async updatePoolState(): Promise<void> {
+    await this.ensureRegistry();
+    await this.runDiscovery();
+  }
+
   // Every bToken and its reserve for this chain, paged out of the subgraph.
   private async discoverPools(): Promise<PoolInfo[]> {
     if (!this.subgraphURL) return [];
     const found: PoolInfo[] = [];
-    for (let offset = 0; ; offset += DISCOVERY_PAGE_SIZE) {
+    for (let page = 0; page < DISCOVERY_MAX_PAGES; page++) {
+      const offset = page * DISCOVERY_PAGE_SIZE;
       const query = `{ bTokens(filter: { chainId: "${this.network}" } sortBy: { field: DEPLOYED_AT, direction: ASC } limit: ${DISCOVERY_PAGE_SIZE} offset: ${offset}) { items { address decimals reserve { address decimals } } } }`;
       const res = await this.dexHelper.httpRequest.post<{
         data?: { bTokens?: { items?: BTokenItem[] } };
@@ -179,9 +227,11 @@ export class Baseline extends SimpleExchange implements IDex<BaselineData> {
           reserveDecimals: Number(item.reserve.decimals),
         });
       }
-      if (items.length < DISCOVERY_PAGE_SIZE) break;
+      if (items.length < DISCOVERY_PAGE_SIZE) return found;
     }
-    return found;
+    throw new Error(
+      `${this.dexKey}: pool discovery exceeded ${DISCOVERY_MAX_PAGES} pages`,
+    );
   }
 
   // Resolve the configured priority pools on-chain and register any not already
@@ -289,9 +339,8 @@ export class Baseline extends SimpleExchange implements IDex<BaselineData> {
       this.poolInitPromises[key] = (async () => {
         const pool = new BaselineEventPool(
           this.dexKey,
-          this.relay,
+          this.relayContract,
           info.bToken,
-          info.reserve,
           this.dexHelper,
           this.logger,
         );
@@ -354,7 +403,7 @@ export class Baseline extends SimpleExchange implements IDex<BaselineData> {
       {
         prices: amounts.map(amount => this.priceOne(state, quote, amount)),
         unit: this.priceOne(state, quote, unitAmount),
-        data: { exchange: this.relay, bToken: info.bToken },
+        data: { bToken: info.bToken },
         exchange: this.dexKey,
         poolIdentifiers: [poolIdentifier],
         poolAddresses: [info.bToken],
@@ -410,7 +459,7 @@ export class Baseline extends SimpleExchange implements IDex<BaselineData> {
     data: BaselineData,
     side: SwapSide,
   ): AdapterExchangeParam {
-    return { targetExchange: data.exchange, payload: '', networkFee: '0' };
+    return { targetExchange: this.relay, payload: '', networkFee: '0' };
   }
 
   // Augustus V6 encoding. The relay pulls the input via approval (spender
@@ -444,7 +493,9 @@ export class Baseline extends SimpleExchange implements IDex<BaselineData> {
       needWrapNative: this.needWrapNative,
       dexFuncHasRecipient: false,
       exchangeData,
-      targetExchange: data.exchange,
+      // The constructor-fixed relay, never route data: the executor approves
+      // the source token to and calls this address.
+      targetExchange: this.relay,
       returnAmountPos: isSell
         ? extractReturnAmountPosition(
             this.relaySwapIface,

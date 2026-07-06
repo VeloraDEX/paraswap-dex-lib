@@ -12,16 +12,16 @@ import { Tokens } from '../../../tests/constants-e2e';
 import { BaselineConfig } from './config';
 
 /*
-  Baseline (Mercury) is a power-law AMM with block-batched pricing. The relay
-  exposes on-chain quote views (quoteSellExactIn / quoteBuyExactOut /
-  quoteBuyExactIn / quoteSellExactOut) that resolve the frozen-snapshot +
-  in-block-delta pricing, so this integration prices statelessly by calling those
-  views via Multicall. There is no event-replicated pool state, so no events test.
+  Baseline (Mercury) is a power-law AMM with block-batched pricing. The
+  integration replicates each pool's getQuoteState snapshot into an event
+  subscriber and prices locally (baseline-curve.ts); the relay's own on-chain
+  quote views (quoteSellExactIn / quoteBuyExactIn / quoteBuyExactOut /
+  quoteSellExactOut) serve here as an independent differential oracle.
 
-  Prices are checked for shape and marginal monotonicity (checkPoolPrices) and for
-  exact per-amount equality against the relay's own quote views, rebuilt
-  independently below. Spread and round-trip invariants and pinned-block fixtures
-  guard against dispatch and direction errors.
+  Prices are checked for shape and marginal monotonicity (checkPoolPrices) and
+  for exact per-amount equality against those views, rebuilt independently
+  below. Spread and round-trip invariants and pinned-block fixtures guard
+  against dispatch and direction errors.
 */
 
 const network = Network.BASE;
@@ -297,7 +297,8 @@ describe('Baseline', () => {
     });
 
     it('getTopPoolsForToken', async () => {
-      // Only a bToken query resolves a pool; the reserve (VIRTUAL) returns [].
+      // Queried from the bToken side; the reserve side is covered by the
+      // discovery suite below ('enumerates pools from the reserve side').
       const fresh = new Baseline(network, dexKey, dexHelper);
       const poolLiquidity = await fresh.getTopPoolsForToken(REPPO.address, 10);
       checkPoolsLiquidity(poolLiquidity, REPPO.address, dexKey);
