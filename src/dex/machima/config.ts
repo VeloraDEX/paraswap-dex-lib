@@ -21,7 +21,7 @@ export const MachimaConfig: DexConfigMap<MachimaDexParams> = {
       quoter: '0x2Df9BdA8bb50cE05B548B9AAAf1B23437732a498', // QuoterV2 (raw, pre-tax)
       // `router` is unused for execution (we route via aggregatorRouter) but the
       // base class requires it; point it at the aggregator router.
-      router: '0x566250347E1401615B3e043918fc290B98448578',
+      router: '0xa25D1158B7Cf373DC3787793A52933dB0A0CaD89',
       supportedFees: [MACHIMA_POOL_FEE],
       stateMulticall: '0x7160f736c52e1e78e92FD4eE4D73e21A7Cf4F950',
       uniswapMulticall: '0x091e99cb1C49331a94dD62755D168E941AbD0693',
@@ -45,8 +45,12 @@ export const MachimaConfig: DexConfigMap<MachimaDexParams> = {
       xma: '0xA4985Faeb1e64Ba215282255dBb78ff59C63d7A9',
       clankNow: '0x44FefF82302D231dcC30f97280D1c9843F308D1a',
       swapAdapter: '0x9FFB6a12d14b0F86AC122486081e3B86728E65F9',
-      aggregatorRouter: '0x566250347E1401615B3e043918fc290B98448578',
-      aggregatorQuoter: '0x9dA94300DEC6ac282880f71df3270a922Bcbd034',
+      // Aggregator v1.1.0 (2026-07-07): residual refund to recipient on
+      // partial fills, per-token sell floors in the quoter, native ETH entry
+      // points, swapAvailability(token) anti-sniper view. Same swap()/quote()
+      // signatures as v1.0 — drop-in address change.
+      aggregatorRouter: '0xa25D1158B7Cf373DC3787793A52933dB0A0CaD89',
+      aggregatorQuoter: '0xafB47806e61c9888Eb4A1047BfBf59C29680B8e4',
     },
   },
 };
