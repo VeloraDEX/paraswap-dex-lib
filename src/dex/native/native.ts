@@ -23,6 +23,7 @@ import {
   getDexKeysWithNetwork,
   isETHAddress,
   corruptHexTail,
+  overwriteAddressWord,
 } from '../../utils';
 import { RateFetcher } from './rate-fetcher';
 import { NativeConfig } from './config';
@@ -399,7 +400,7 @@ export class Native
     _destToken: Address,
     srcAmount: NumberAsString,
     destAmount: NumberAsString,
-    _recipient: Address,
+    recipient: Address,
     data: NativeData,
     _side: SwapSide,
     _executorAddress?: Address,
@@ -412,12 +413,6 @@ export class Native
     );
 
     let { calldata, target } = this.normalizeTxRequest(txRequest);
-    if (options?.forceRfqRevert) {
-      // TEST-ONLY: the maker signature sits at the tail of the RFQ calldata;
-      // everything but taker-amount slots is maker-signed, so inverting the
-      // last 32 bytes guarantees the on-chain signature check reverts.
-      calldata = corruptHexTail(calldata);
-    }
 
     const selector = calldata.slice(0, 10); // 0x + 4 bytes of function selector
 
@@ -426,6 +421,20 @@ export class Native
     // function selectof for tradeRFQT
     if (selector === '0x0947c2d9') {
       insertFromAmountPos = 36; // position of actualSellerAmount in calldata
+
+      if (options?.rewriteRfqRecipient) {
+        // TEST-ONLY: recipient is an unsigned arg (word 5) of tradeRFQT.
+        // Rewrite it to the executor this build targets so a quote priced for
+        // a different executor still delivers correctly on replay.
+        calldata = overwriteAddressWord(calldata, 4 + 5 * 32, recipient);
+      }
+    }
+
+    if (options?.forceRfqRevert) {
+      // TEST-ONLY: the maker signature sits at the tail of the RFQ calldata;
+      // everything but taker-amount slots is maker-signed, so inverting the
+      // last 32 bytes guarantees the on-chain signature check reverts.
+      calldata = corruptHexTail(calldata);
     }
 
     return {

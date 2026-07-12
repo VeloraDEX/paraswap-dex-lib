@@ -166,6 +166,11 @@ export type GetDexParamOptions = {
   // Only forwarded to primaries that carry a `fallback` alternative — never to
   // the fallback build, and AMM dexes ignore it entirely.
   forceRfqRevert?: boolean;
+  // TEST-ONLY (staging fallback campaign): RFQ venues whose firm quote bakes an
+  // (unsigned) recipient into a pre-formed tx blob rewrite it to the executor
+  // this build targets, so a prod route priced for a different executor still
+  // delivers correctly on replay. No-op for venues that pass `recipient` live.
+  rewriteRfqRecipient?: boolean;
 };
 
 export type DexExchangeParam = {
