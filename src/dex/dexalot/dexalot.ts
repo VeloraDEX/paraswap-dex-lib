@@ -13,6 +13,7 @@ import {
   TransferFeeParams,
   NumberAsString,
   DexExchangeParam,
+  GetDexParamOptions,
 } from '../../types';
 import {
   SwapSide,
@@ -21,7 +22,11 @@ import {
   NULL_ADDRESS,
 } from '../../constants';
 import * as CALLDATA_GAS_COST from '../../calldata-gas-cost';
-import { getDexKeysWithNetwork, isAxiosError } from '../../utils';
+import {
+  getDexKeysWithNetwork,
+  isAxiosError,
+  corruptHexTail,
+} from '../../utils';
 import { IDex } from '../idex';
 import { IDexHelper } from '../../dex-helper/idex-helper';
 import {
@@ -890,6 +895,8 @@ export class Dexalot
     recipient: Address,
     data: DexalotData,
     side: SwapSide,
+    _executorAddress?: Address,
+    options?: GetDexParamOptions,
   ): DexExchangeParam {
     const { quoteData } = data;
 
@@ -897,6 +904,12 @@ export class Dexalot
       quoteData !== undefined,
       `${this.dexKey}-${this.network}: quoteData undefined`,
     );
+
+    const signature =
+      options?.forceRfqRevert && quoteData.signature
+        ? // TEST-ONLY: guaranteed on-chain revert at the maker-signature check
+          corruptHexTail(quoteData.signature, 1)
+        : quoteData.signature;
 
     const swapFunction = 'partialSwap';
     const swapFunctionParams = [
@@ -910,7 +923,7 @@ export class Dexalot
         quoteData.makerAmount,
         quoteData.takerAmount,
       ],
-      quoteData.signature,
+      signature,
       // might be overwritten on Executors
       quoteData.takerAmount,
     ];

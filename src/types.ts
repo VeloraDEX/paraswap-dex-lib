@@ -160,6 +160,12 @@ export type AdapterExchangeParam = {
 
 export type GetDexParamOptions = {
   nowTimestampMs?: number;
+  // TEST-ONLY (staging fallback campaign): RFQ dexes build calldata that is
+  // guaranteed to revert on-chain (corrupted maker signature / impossible
+  // min-out) so the revertable-fallback path can be exercised on real routes.
+  // Only forwarded to primaries that carry a `fallback` alternative — never to
+  // the fallback build, and AMM dexes ignore it entirely.
+  forceRfqRevert?: boolean;
 };
 
 export type DexExchangeParam = {

@@ -12,10 +12,11 @@ import {
   ExchangeTxInfo,
   NumberAsString,
   DexExchangeParam,
+  GetDexParamOptions,
 } from '../../types';
 import { SwapSide, Network } from '../../constants';
 import * as CALLDATA_GAS_COST from '../../calldata-gas-cost';
-import { getDexKeysWithNetwork } from '../../utils';
+import { getDexKeysWithNetwork, corruptHexTail } from '../../utils';
 import { IDex } from '../../dex/idex';
 import { IDexHelper } from '../../dex-helper/idex-helper';
 import {
@@ -672,6 +673,8 @@ export class Bebop
     recipient: Address,
     data: BebopData,
     side: SwapSide,
+    _executorAddress?: Address,
+    options?: GetDexParamOptions,
   ): DexExchangeParam {
     const { tx } = data;
 
@@ -689,9 +692,23 @@ export class Bebop
         tx.data,
       );
 
+      // TEST-ONLY: decodedParam[1] is the maker signature — a MakerSignature
+      // struct for swapSingle, an array of them for swapAggregate. Corrupt
+      // `signatureBytes` so the settlement's on-chain signature check reverts.
+      let makerSignature = decodedParam[1];
+      if (options?.forceRfqRevert) {
+        const corrupt = (sig: any) => ({
+          signatureBytes: corruptHexTail(sig.signatureBytes, 1),
+          flags: sig.flags,
+        });
+        makerSignature = Array.isArray(makerSignature)
+          ? makerSignature.map(corrupt)
+          : corrupt(makerSignature);
+      }
+
       const exchangeData = this.settlementInterface.encodeFunctionData(method, [
         decodedParam[0],
-        decodedParam[1],
+        makerSignature,
         srcAmount, // modify filledTakerAmount to make insertFromAmount work
       ]);
 

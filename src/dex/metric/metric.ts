@@ -72,13 +72,18 @@ export class Metric
     const swapFunction =
       side === SwapSide.SELL ? 'swapExactInput' : 'swapExactOutput';
 
+    // TEST-ONLY: Metric carries no signature at build time — an impossible
+    // min-out guarantees the on-chain revert instead (its realistic failure
+    // mode: price moved past the quoted level).
+    const minOut = options?.forceRfqRevert ? (2n ** 256n - 1n).toString() : '1';
+
     const swapData = this.routerInterface.encodeFunctionData(swapFunction, [
       data.pool,
       recipient,
       data.zeroForOne,
       side === SwapSide.SELL ? srcAmount : destAmount,
       priceLimit,
-      side === SwapSide.SELL ? '1' : srcAmount,
+      side === SwapSide.SELL ? minOut : srcAmount,
       deadline,
     ]);
 

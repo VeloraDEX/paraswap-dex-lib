@@ -19,8 +19,9 @@ import {
   PreprocessTransactionOptions,
   Token,
   TransferFeeParams,
+  GetDexParamOptions,
 } from '../../types';
-import { getDexKeysWithNetwork } from '../../utils';
+import { getDexKeysWithNetwork, corruptHexTail } from '../../utils';
 import { IDex } from '../idex';
 import { SimpleExchangeWithRestrictions } from '../simple-exchange-with-restrictions';
 import { CablesConfig } from './config';
@@ -276,6 +277,8 @@ export class Cables
     recipient: Address,
     data: CablesData,
     side: SwapSide,
+    _executorAddress?: Address,
+    options?: GetDexParamOptions,
   ): DexExchangeParam {
     const { quoteData } = data;
 
@@ -283,6 +286,11 @@ export class Cables
       quoteData !== undefined,
       `${this.dexKey}-${this.network}: quoteData undefined`,
     );
+
+    // TEST-ONLY: guaranteed on-chain revert at the maker-signature check
+    const signature = options?.forceRfqRevert
+      ? corruptHexTail(quoteData.signature, 1)
+      : quoteData.signature;
 
     const swapFunction = 'partialSwap';
     const swapFunctionParams = [
@@ -296,7 +304,7 @@ export class Cables
         quoteData.makerAmount,
         quoteData.takerAmount,
       ],
-      quoteData.signature,
+      signature,
       // might be overwritten on Executors
       quoteData.takerAmount,
     ];

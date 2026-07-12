@@ -22,6 +22,20 @@ export const prependWithOx = (str: string) =>
 
 export const uuidToBytes16 = (uuid: string) => '0x' + uuid.replace(/-/g, '');
 
+// TEST-ONLY (staging fallback campaign, see GetDexParamOptions.forceRfqRevert):
+// corrupt a hex blob in place — same length, 32 bytes at `offset` from the END
+// inverted — so a maker signature (or any signed region) fails verification
+// on-chain while every calldata offset stays where the builder computed it.
+export const corruptHexTail = (hex: string, offsetFromEnd = 0): string => {
+  const raw = hex.replace(/^0x/, '');
+  const end = raw.length - offsetFromEnd * 2;
+  const start = Math.max(0, end - 64);
+  const flipped = raw
+    .slice(start, end)
+    .replace(/[0-9a-fA-F]/g, c => (15 - parseInt(c, 16)).toString(16));
+  return '0x' + raw.slice(0, start) + flipped + raw.slice(end);
+};
+
 export function toUnixTimestamp(date: Date | number): number {
   const timestamp = date instanceof Date ? date.getTime() : date;
   return Math.floor(timestamp / 1000);

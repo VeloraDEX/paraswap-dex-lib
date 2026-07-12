@@ -889,6 +889,17 @@ export class GenericSwapTransactionBuilder {
     const newDex = this.findNewDex(se.exchange);
     const executorAddress = bytecodeBuilder.getAddress();
 
+    // TEST-ONLY safety: forceRfqRevert may only reach primaries that carry a
+    // fallback alternative. Never the fallback build itself, and never an RFQ
+    // hop without a fallback (its revert would fail the whole route for
+    // nothing). AMM dexes ignore the flag either way.
+    if (
+      getDexParamOptions?.forceRfqRevert &&
+      (isGroupFallback || !se.fallback)
+    ) {
+      getDexParamOptions = { ...getDexParamOptions, forceRfqRevert: false };
+    }
+
     let dexNeedWrapNative: boolean;
     let dex: IDexTxBuilder<any, any> | undefined;
     if (newDex) {

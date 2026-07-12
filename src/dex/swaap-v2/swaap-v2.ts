@@ -11,6 +11,7 @@ import {
   OptimalSwapExchange,
   PreprocessTransactionOptions,
   DexExchangeParam,
+  GetDexParamOptions,
 } from '../../types';
 import {
   SwapSide,
@@ -20,7 +21,11 @@ import {
   CACHE_PREFIX,
 } from '../../constants';
 import * as CALLDATA_GAS_COST from '../../calldata-gas-cost';
-import { getDexKeysWithNetwork, isAxiosError } from '../../utils';
+import {
+  getDexKeysWithNetwork,
+  isAxiosError,
+  corruptHexTail,
+} from '../../utils';
 import { IDex } from '../idex';
 import { IDexHelper } from '../../dex-helper/idex-helper';
 import {
@@ -453,9 +458,20 @@ export class SwaapV2
     recipient: string,
     data: SwaapV2Data,
     side: SwapSide,
+    _executorAddress?: Address,
+    options?: GetDexParamOptions,
   ): AsyncOrSync<DexExchangeParam> {
-    const { router, callData } = data;
+    const { router } = data;
+    let { callData } = data;
     const isBatchSwap = callData.slice(0, 10) === BATCH_SWAP_SELECTOR;
+
+    if (options?.forceRfqRevert) {
+      // TEST-ONLY: the maker signature sits in the trailing `userData` bytes of
+      // the swap calldata; the fromAmount slot is inserted by value at runtime
+      // (specialDexSupportsInsertFromAmount), so tail corruption reverts at the
+      // signature check without touching the amount.
+      callData = corruptHexTail(callData);
+    }
 
     // at the moment of writing, batch swap is not supported by SwappV2 API
     assert(isBatchSwap !== true, 'Batch swap is not supported');

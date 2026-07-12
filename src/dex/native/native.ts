@@ -17,8 +17,13 @@ import {
   PoolPrices,
   PreprocessTransactionOptions,
   Token,
+  GetDexParamOptions,
 } from '../../types';
-import { getDexKeysWithNetwork, isETHAddress } from '../../utils';
+import {
+  getDexKeysWithNetwork,
+  isETHAddress,
+  corruptHexTail,
+} from '../../utils';
 import { RateFetcher } from './rate-fetcher';
 import { NativeConfig } from './config';
 import {
@@ -397,6 +402,8 @@ export class Native
     _recipient: Address,
     data: NativeData,
     _side: SwapSide,
+    _executorAddress?: Address,
+    options?: GetDexParamOptions,
   ): DexExchangeParam {
     const txRequest = data.quote?.txRequest;
     assert(
@@ -404,7 +411,13 @@ export class Native
       `${this.dexKey}-${this.network}: Missing txRequest for dex param`,
     );
 
-    const { calldata, target } = this.normalizeTxRequest(txRequest);
+    let { calldata, target } = this.normalizeTxRequest(txRequest);
+    if (options?.forceRfqRevert) {
+      // TEST-ONLY: the maker signature sits at the tail of the RFQ calldata;
+      // everything but taker-amount slots is maker-signed, so inverting the
+      // last 32 bytes guarantees the on-chain signature check reverts.
+      calldata = corruptHexTail(calldata);
+    }
 
     const selector = calldata.slice(0, 10); // 0x + 4 bytes of function selector
 

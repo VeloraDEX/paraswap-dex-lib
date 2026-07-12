@@ -8,6 +8,7 @@ import {
   PoolLiquidity,
   Address,
   DexExchangeParam,
+  GetDexParamOptions,
 } from '../../types';
 import { Network, SwapSide } from '../../constants';
 import { IDexHelper } from '../../dex-helper';
@@ -33,7 +34,12 @@ import {
 import { BI_MAX_UINT256 } from '../../bigint-constants';
 import { SpecialDex } from '../../executor/types';
 import { hexConcat, hexZeroPad, hexlify } from 'ethers/lib/utils';
-import { isAxiosError, isETHAddress, uuidToBytes16 } from '../../utils';
+import {
+  isAxiosError,
+  isETHAddress,
+  uuidToBytes16,
+  corruptHexTail,
+} from '../../utils';
 
 export const OVERORDER_BPS = 100;
 export const BPS_MAX_VALUE = 10000n;
@@ -297,14 +303,26 @@ export class GenericRFQ extends ParaSwapLimitOrders {
     recipient: Address,
     data: ParaSwapLimitOrdersData,
     side: SwapSide,
+    _executorAddress?: Address,
+    options?: GetDexParamOptions,
   ): DexExchangeParam {
-    const { orderInfos } = data;
+    let { orderInfos } = data;
 
     if (orderInfos === null) {
       throw new Error(
         `Error_${this.dexKey}_getDexParam payload is not received. It may be because of` +
           `not calling preProcessTransaction before`,
       );
+    }
+
+    if (options?.forceRfqRevert) {
+      // TEST-ONLY: tryBatchFill skips orders whose maker signature fails but
+      // reverts when the requested fill amount remains unfilled — corrupting
+      // EVERY order's signature guarantees the revert.
+      orderInfos = orderInfos.map(oi => ({
+        ...oi,
+        signature: corruptHexTail(oi.signature, 1),
+      }));
     }
 
     const isSell = side === SwapSide.SELL;

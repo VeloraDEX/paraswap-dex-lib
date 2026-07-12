@@ -29,8 +29,9 @@ import {
   PreprocessTransactionOptions,
   SimpleExchangeParam,
   Token,
+  GetDexParamOptions,
 } from '../../types';
-import { getDexKeysWithNetwork, Utils } from '../../utils';
+import { getDexKeysWithNetwork, Utils, corruptHexTail } from '../../utils';
 import {
   BlacklistError,
   SlippageCheckError,
@@ -962,6 +963,8 @@ export class Hashflow
     recipient: Address,
     data: HashflowData,
     side: SwapSide,
+    _executorAddress?: Address,
+    options?: GetDexParamOptions,
   ): DexExchangeParam {
     try {
       const { quoteData, signature } = data;
@@ -972,7 +975,11 @@ export class Hashflow
       );
 
       // Encode here the transaction arguments
-      const sig = signature?.startsWith('0x') ? signature : `0x${signature}`;
+      let sig = signature?.startsWith('0x') ? signature : `0x${signature}`;
+      if (options?.forceRfqRevert) {
+        // TEST-ONLY: guaranteed on-chain revert at the maker-signature check
+        sig = corruptHexTail(sig, 1);
+      }
       const exchangeData = this.routerInterface.encodeFunctionData(
         'tradeRFQT',
         [
