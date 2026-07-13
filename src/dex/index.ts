@@ -407,6 +407,14 @@ export class DexAdapterService {
 
   getDexKeySpecial(dexKey: string, isAdapters: boolean = false) {
     dexKey = dexKey.toLowerCase();
+    // Fallback replay campaign (staging-only prerelease): resolve any
+    // ParaSwapPool<N> maker to the base ParaSwapLimitOrders builder. Its
+    // getDexParam is byte-identical, and the stored route already carries the
+    // orderInfos, so this avoids needing every per-maker rfqConfig registered
+    // on the replay environment.
+    if (dexKey.startsWith('paraswappool')) {
+      return 'paraswaplimitorders';
+    }
     if (this.genericRFQDexKeys.has(dexKey)) {
       return dexKey;
     }
