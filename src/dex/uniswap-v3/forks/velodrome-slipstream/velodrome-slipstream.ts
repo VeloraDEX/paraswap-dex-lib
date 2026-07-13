@@ -67,6 +67,7 @@ export class VelodromeSlipstream extends UniswapV3 {
         'VelodromeSlipstreamNewFactory',
         'AerodromeSlipstream',
         'AerodromeSlipstreamNewFactory',
+        'AerodromeSlipstreamFactory3',
       ]),
     );
 
