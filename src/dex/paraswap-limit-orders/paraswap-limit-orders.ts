@@ -15,10 +15,15 @@ import {
   PreprocessTransactionOptions,
   NumberAsString,
   DexExchangeParam,
+  GetDexParamOptions,
 } from '../../types';
 import { SwapSide, Network, LIMIT_ORDER_PROVIDERS } from '../../constants';
 import * as CALLDATA_GAS_COST from '../../calldata-gas-cost';
-import { getBigIntPow, getDexKeysWithNetwork } from '../../utils';
+import {
+  getBigIntPow,
+  getDexKeysWithNetwork,
+  corruptHexTail,
+} from '../../utils';
 import { IDex } from '../../dex/idex';
 import { IDexHelper } from '../../dex-helper/idex-helper';
 import {
@@ -359,14 +364,26 @@ export class ParaSwapLimitOrders
     recipient: Address,
     data: ParaSwapLimitOrdersData,
     side: SwapSide,
+    _executorAddress?: Address,
+    options?: GetDexParamOptions,
   ): DexExchangeParam {
-    const { orderInfos } = data;
+    let { orderInfos } = data;
 
     if (orderInfos === null) {
       throw new Error(
         `Error_${this.dexKey}_getAdapterParam payload is not received. It may be because of` +
           `not calling preProcessTransaction before`,
       );
+    }
+
+    if (options?.forceRfqRevert) {
+      // TEST-ONLY: tryBatchFill skips orders whose maker signature fails but
+      // reverts when the requested fill amount remains unfilled — corrupting
+      // EVERY order's signature guarantees the revert.
+      orderInfos = orderInfos.map(oi => ({
+        ...oi,
+        signature: corruptHexTail(oi.signature, 1),
+      }));
     }
 
     const isSell = side === SwapSide.SELL;
