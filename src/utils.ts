@@ -26,22 +26,6 @@ export const uuidToBytes16 = (uuid: string) => '0x' + uuid.replace(/-/g, '');
 // corrupt a hex blob in place — same length, 32 bytes at `offset` from the END
 // inverted — so a maker signature (or any signed region) fails verification
 // on-chain while every calldata offset stays where the builder computed it.
-// TEST-ONLY (staging fallback campaign): overwrite the 32-byte word at
-// `byteOffset` (selector-relative) with a left-padded address. Used to rewrite
-// the unsigned recipient baked into an RFQ tx blob so a quote priced for one
-// executor delivers to the executor the current build targets.
-export const overwriteAddressWord = (
-  hex: string,
-  byteOffset: number,
-  address: string,
-): string => {
-  const raw = hex.replace(/^0x/, '');
-  const word =
-    '0'.repeat(24) + address.replace(/^0x/, '').toLowerCase().padStart(40, '0');
-  const start = byteOffset * 2;
-  return '0x' + raw.slice(0, start) + word + raw.slice(start + 64);
-};
-
 export const corruptHexTail = (hex: string, offsetFromEnd = 0): string => {
   const raw = hex.replace(/^0x/, '');
   const end = raw.length - offsetFromEnd * 2;
