@@ -1,0 +1,125 @@
+{
+  "priceRoute": {
+    "blockNumber": 482345797,
+    "network": 42161,
+    "srcToken": "0xcbb7c0000ab88b473b1f5afd9ef808440eed33bf",
+    "srcDecimals": 8,
+    "srcAmount": "4970000",
+    "destToken": "0xaf88d065e77c8cc2239327c5edb3a432268e5831",
+    "destDecimals": 6,
+    "destAmount": "3203617763",
+    "bestRoute": [
+      {
+        "percent": 100,
+        "swaps": [
+          {
+            "srcToken": "0xcbb7c0000ab88b473b1f5afd9ef808440eed33bf",
+            "srcDecimals": 8,
+            "destToken": "0x82af49447d8a07e3bd95bd0d56f35241523fbab1",
+            "destDecimals": 18,
+            "swapExchanges": [
+              {
+                "exchange": "metric",
+                "srcAmount": "4970000",
+                "destAmount": "1785013879177540157",
+                "percent": 100,
+                "poolAddresses": ["0x40b185c99f8fa1def7ca77c5b40a372c8b244d14"],
+                "poolIdentifiers": [
+                  "metric_0x40b185c99f8fa1def7ca77c5b40a372c8b244d14"
+                ],
+                "data": {
+                  "apiGo": true,
+                  "blockNumber": 0,
+                  "source": "L1",
+                  "askPriceX64": "513515111968145123",
+                  "bidPriceX64": "513372518636455347",
+                  "onchainToken0": "0x82af49447d8a07e3bd95bd0d56f35241523fbab1",
+                  "pool": "0x40b185c99f8fa1def7ca77c5b40a372c8b244d14",
+                  "zeroForOne": false,
+                  "gasUSD": "0.005388"
+                },
+                "fallback": {
+                  "exchange": "uniswapv3",
+                  "srcAmount": "4970000",
+                  "destAmount": "1743333303489771228",
+                  "percent": 100,
+                  "poolAddresses": [
+                    "0x15811145e3f1ab23b28582556fcba20df5642876"
+                  ],
+                  "poolIdentifiers": [
+                    "uniswapv3_0x15811145e3f1ab23b28582556fcba20df5642876"
+                  ],
+                  "data": {
+                    "apiGo": true,
+                    "blockNumber": 482336040,
+                    "source": "L1",
+                    "path": [
+                      {
+                        "tokenIn": "0xcbb7c0000ab88b473b1f5afd9ef808440eed33bf",
+                        "tokenOut": "0x82af49447d8a07e3bd95bd0d56f35241523fbab1",
+                        "fee": "3000",
+                        "currentFee": "3000"
+                      }
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "srcToken": "0x82af49447d8a07e3bd95bd0d56f35241523fbab1",
+            "srcDecimals": 18,
+            "destToken": "0xaf88d065e77c8cc2239327c5edb3a432268e5831",
+            "destDecimals": 6,
+            "swapExchanges": [
+              {
+                "exchange": "CurveV1StableNg",
+                "srcAmount": "1785013879177540157",
+                "destAmount": "3203617763",
+                "percent": 100,
+                "poolAddresses": ["0x2ecae55b1fcff7a241175c0042ddad1796fa2c2f"],
+                "poolIdentifiers": [
+                  "CurveV1StableNg_0x2ecae55b1fcff7a241175c0042ddad1796fa2c2f_false"
+                ],
+                "data": {
+                  "path": [
+                    {
+                      "tokenIn": "0x82af49447d8a07e3bd95bd0d56f35241523fbab1",
+                      "tokenOut": "0xaf88d065e77c8cc2239327c5edb3a432268e5831",
+                      "exchange": "0x2ecae55b1fcff7a241175c0042ddad1796fa2c2f",
+                      "i": 0,
+                      "j": 1,
+                      "underlyingSwap": false,
+                      "n_coins": 2
+                    }
+                  ],
+                  "gasUSD": "0.007591"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "gasCostUSD": "0.016257",
+    "gasCost": "399740",
+    "side": "SELL",
+    "version": "6.2",
+    "contractAddress": "0x6a000f20005980200259b80c5102003040001068",
+    "tokenTransferProxy": "0x6a000f20005980200259b80c5102003040001068",
+    "contractMethod": "swapExactAmountIn",
+    "partnerFee": 0.01,
+    "srcUSD": "3198.8908000000",
+    "destUSD": "3202.8520983546",
+    "maxImpact": 100,
+    "destAmountAfterFee": "3203297401",
+    "partner": "anon",
+    "maxImpactReached": false,
+    "hmac": "b88bdfc12bd7164e6ac8665e71b637edcf9dec8d"
+  },
+  "minMaxAmount": "3203297401",
+  "userAddress": "0xD0d08887E8a5B16049534A7F3FC1De92848F5BeA",
+  "partnerAddress": "0xD0d08887E8a5B16049534A7F3FC1De92848F5BeA",
+  "deadline": "1783699104",
+  "uuid": "6aeb374f-046d-4b52-add7-f14fcc690c5e"
+}
