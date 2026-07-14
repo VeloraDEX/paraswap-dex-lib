@@ -22,6 +22,12 @@ export const ParaSwapLimitOrdersConfig: DexConfigMap<DexParams> = {
     [Network.OPTIMISM]: {
       rfqAddress: '0x0927FD43a7a87E3E8b81Df2c44B03C4756849F6D',
     },
+    // TEST-ONLY (fallback replay campaign): lets ParaSwapPool* makers resolve
+    // to the AugustusRFQ builder on Base (prod resolves them via rfqConfigs,
+    // which the staging campaign branch doesn't carry).
+    [Network.BASE]: {
+      rfqAddress: '0xa003dFBA51C9e1e56C67ae445b852bdEd7aC5EEd',
+    },
   },
 };
 
