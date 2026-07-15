@@ -331,7 +331,16 @@ export async function testE2E(
 const extractAllDexsFromRoute = (bestRoute: OptimalRoute[]) => {
   return _.flattenDeep(
     bestRoute.map(r =>
-      r.swaps.map(s => s.swapExchanges.map(se => se.exchange)),
+      r.swaps.map(s =>
+        s.swapExchanges.map(se => [
+          se.exchange,
+          // revertable-fallback alternatives are built (and need pricing
+          // state) just like primaries; Native is a stateless data-carrier
+          ...((se as any).fallback && (se as any).fallback.exchange !== 'Native'
+            ? [(se as any).fallback.exchange]
+            : []),
+        ]),
+      ),
     ),
   );
 };
