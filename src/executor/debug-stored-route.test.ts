@@ -126,12 +126,28 @@ function maybeInjectRemote(sdk: LocalParaswapSDK) {
         '0x2e1a7d4d': 'WETH.withdraw',
         '0xd0e30db0': 'WETH.deposit',
       };
+      const traceAddr = (process.env.TRACE_ADDR || '').toLowerCase();
       const walk = (n: any, d: number) => {
         if (!n) return;
         const sel = (n.input || '').slice(0, 10);
         const val =
           n.value && n.value !== '0x0' && n.value !== '0' ? n.value : null;
         const tag = WETH_SELECTORS[sel];
+        const addrHit =
+          traceAddr &&
+          ((n.to || '').toLowerCase() === traceAddr ||
+            (n.from || '').toLowerCase() === traceAddr);
+        if (addrHit) {
+          // full detail for the traced address
+          // eslint-disable-next-line no-console
+          console.log(
+            `${'  '.repeat(Math.min(d, 12))}TRACE ${n.call_type || ''} from=${
+              n.from
+            } to=${n.to} input=${(n.input || '').slice(0, 138)}${
+              n.error ? '  ERROR: ' + n.error : ''
+            } output=${(n.output || '').slice(0, 66)}`,
+          );
+        }
         if (tag || val || n.error) {
           // eslint-disable-next-line no-console
           console.log(
