@@ -66,7 +66,17 @@ describe('FlowState (unit)', () => {
       expect(ids).toEqual([]);
     });
 
-    it('getPoolIdentifiers is empty when dest is ETH (TOKEN -> ETH, the sell side we do NOT serve)', async () => {
+    it('getPoolIdentifiers is empty for TOKEN -> ETH (the sell side we do NOT serve)', async () => {
+      const ids = await flowState.getPoolIdentifiers(
+        TOKEN,
+        ETH,
+        SwapSide.SELL,
+        blockNumber,
+      );
+      expect(ids).toEqual([]);
+    });
+
+    it('getPoolIdentifiers is empty for ETH -> ETH (dest must be an ERC20)', async () => {
       const ids = await flowState.getPoolIdentifiers(
         ETH,
         ETH,
