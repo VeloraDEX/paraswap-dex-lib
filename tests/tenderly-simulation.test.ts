@@ -139,6 +139,15 @@ describe('Tenderly', () => {
         '0x80e2c59593a5a6fe42f7c49220f7a42e30f105ad',
       );
     });
+
+    it('should find Base BRIAN (B20 native token) `balanceOf` storage slot', async () => {
+      const foundSlot = await tenderly.findTokenBalanceOfSlot(
+        8453,
+        '0xb2000000000000000000007bf6d5cbb0e24cb301', // Coinbase Man (BRIAN), B20 Rust precompile
+      );
+      // assert
+      expect(foundSlot.slot).toEqual(TenderlySimulator.B20_BALANCES_SLOT);
+    });
   });
 
   describe('findTokenAllowanceSlot', () => {
@@ -216,6 +225,15 @@ describe('Tenderly', () => {
       expect(foundSlot.stateProxy).toEqual(
         '0x4844d11c51e6e85c1ed419dc77455894cdc5808e',
       );
+    });
+
+    it('should find Base BRIAN (B20 native token) `allowance` storage slot', async () => {
+      const foundSlot = await tenderly.findTokenAllowanceSlot(
+        8453,
+        '0xb2000000000000000000007bf6d5cbb0e24cb301', // Coinbase Man (BRIAN), B20 Rust precompile
+      );
+      // assert
+      expect(foundSlot.slot).toEqual(TenderlySimulator.B20_ALLOWANCES_SLOT);
     });
   });
 });

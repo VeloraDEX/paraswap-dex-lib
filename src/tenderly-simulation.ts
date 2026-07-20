@@ -270,6 +270,14 @@ export class TenderlySimulator {
   // https://github.com/Vectorized/solady/blob/main/src/tokens/ERC20.sol
   static readonly SOLADY_BALANCE_SLOT_SEED = '0x87a211a2';
   static readonly SOLADY_ALLOWANCE_SLOT_SEED = '0x7f5e9f20';
+  // B20 native tokens (Base Beryl upgrade) are Rust precompiles reading
+  // regular Solidity mappings under the ERC-7201 `base.b20` namespace
+  // (root 0x…434000): balances at offset 4, allowances at offset 5
+  // https://github.com/base/base crates/common/precompiles/src/common/core_storage.rs
+  static readonly B20_BALANCES_SLOT =
+    '0xc78b71fee795ddd74aff64ea9b2474194c938c3196430e10bb5f01ed48434004';
+  static readonly B20_ALLOWANCES_SLOT =
+    '0xc78b71fee795ddd74aff64ea9b2474194c938c3196430e10bb5f01ed48434005';
 
   // singleton
   private static instance: TenderlySimulator;
@@ -1064,6 +1072,23 @@ export class TenderlySimulator {
       }
     }
 
+    // B20 native tokens serve `balanceOf` from a Rust precompile that reads
+    // the token's storage directly, so no SLOADs appear in the trace — try
+    // the known B20 layout blindly and let verification decide
+    const b20Candidate: FoundSlot = {
+      slot: TenderlySimulator.B20_BALANCES_SLOT,
+    };
+    if (
+      await this.verifyTokenBalanceSlot(
+        chainId,
+        token,
+        b20Candidate,
+        baselineValue,
+      )
+    ) {
+      return b20Candidate;
+    }
+
     throw new Error(
       `Could not find a verified 'balanceOf' mapping slot for token ${token} on chain ${chainId}`,
     );
@@ -1277,6 +1302,23 @@ export class TenderlySimulator {
           `Candidate 'allowance' slot ${candidateSlot} (partition ${p}) for token ${token} on chain ${chainId} failed verification, continuing search`,
         );
       }
+    }
+
+    // B20 native tokens serve `allowance` from a Rust precompile that reads
+    // the token's storage directly, so no SLOADs appear in the trace — try
+    // the known B20 layout blindly and let verification decide
+    const b20Candidate: FoundSlot = {
+      slot: TenderlySimulator.B20_ALLOWANCES_SLOT,
+    };
+    if (
+      await this.verifyTokenAllowanceSlot(
+        chainId,
+        token,
+        b20Candidate,
+        baselineValue,
+      )
+    ) {
+      return b20Candidate;
     }
 
     throw new Error(

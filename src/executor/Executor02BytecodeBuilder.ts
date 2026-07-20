@@ -753,15 +753,11 @@ export class Executor02BytecodeBuilder extends ExecutorBytecodeBuilder<
       }
     }
 
-    // Raw-native primary + wrap-needing fallback on a native-src hop: the
-    // executor holds the raw slice (the primary would have sent it as value),
-    // and no wrap exists anywhere on the primary path. The fallback unit can
-    // wrongly skip its own deposit here: root-wrap detection runs on the
-    // SUBSTITUTED params, where the wrap-needing fallback can make every
-    // first-swap dex look wrap-needing (doesRouteNeedsRootWrapEth) even
-    // though the real route emitted no root wrap. If the unit didn't wrap,
-    // prepend the approve+deposit (amount = the threaded slice; rolls back
-    // with the block).
+    // Raw-native primary + wrap-needing fallback on a native-src hop: no wrap
+    // exists on the primary path, and the fallback unit can wrongly skip its
+    // own deposit — root-wrap detection runs on the SUBSTITUTED params
+    // (doesRouteNeedsRootWrapEth), not the real route. If the unit didn't
+    // wrap, prepend the approve+deposit.
     if (
       isETHAddress(swap.srcToken) &&
       !exchangeParams[exchangeParamIndex].needWrapNative &&
@@ -789,16 +785,11 @@ export class Executor02BytecodeBuilder extends ExecutorBytecodeBuilder<
       ]);
     }
 
-    // Normalize the fallback block's OUTPUT on an ETH-dest final hop. The
-    // machinery after the group was computed from the primary's params, so the
-    // fallback must leave its output in the same place the try block would:
-    // - fallback already delivered to Augustus ('sent'): terminal and
-    //   total-preserving — the executor threads only what it still holds and
-    //   Augustus' received-amount check sees the sum; nothing to append.
-    // - try ends in WETH, fallback holds raw ETH: wrap it (the running amount
-    //   is the fallback's output at this point).
-    // - try ends in raw ETH or delivered: unwrap a WETH-holding fallback
-    //   (amount inserted at runtime), then send if the try would have.
+    // Normalize the fallback block's OUTPUT on an ETH-dest final hop: the
+    // post-group machinery was shaped by the primary, so the fallback must
+    // end where the try block would — wrap raw ETH when the try ends in WETH,
+    // unwrap a WETH-holding fallback (and send if the try would have)
+    // otherwise; already-delivered ('sent') is terminal.
     const isLastSwap =
       swapIndex === priceRoute.bestRoute[routeIndex].swaps.length - 1;
     if (isETHAddress(swap.destToken) && isLastSwap) {
@@ -843,31 +834,6 @@ export class Executor02BytecodeBuilder extends ExecutorBytecodeBuilder<
           }
         }
       }
-    }
-
-    // Normalize the fallback block's OUTPUT on a WETH-dest final hop when the
-    // fallback was re-encoded to deliver on the executor (needUnwrapNative
-    // raw-ETH dex — see buildSingleExchangeParam): after its wrap-after step
-    // the executor holds the WETH, but the try branch (recipient-capable
-    // primary) delivered straight to Augustus and shaped no forward — append
-    // one inside the block, amount inserted from the threaded output.
-    if (
-      isLastSwap &&
-      fallbackParam.deliversToExecutor &&
-      !isETHAddress(swap.destToken) &&
-      priceRoute.destToken === swap.destToken &&
-      exchangeParams[exchangeParamIndex].dexFuncHasRecipient
-    ) {
-      fallbackBlock = hexConcat([
-        fallbackBlock,
-        this.buildTransferCallData(
-          this.erc20Interface.encodeFunctionData('transfer', [
-            this.dexHelper.config.data.augustusV6Address,
-            swapExchange.destAmount,
-          ]),
-          swap.destToken,
-        ),
-      ]);
     }
 
     // payload = [padding(28)][tryLen(4)][fallbackLen(4)][try][fallback]
