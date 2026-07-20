@@ -111,6 +111,34 @@ describe('Tenderly', () => {
       // assert
       expect(foundSlot.slot).toEqual(expectedSlot);
     });
+
+    it('should find Base SOL (Solady) `balanceOf` storage slot seed', async () => {
+      const foundSlot = await tenderly.findTokenBalanceOfSlot(
+        8453,
+        '0x311935cd80b76769bf2ecc9d8ab7635b2139cf82', // Solana (SOL) on Base, Solady ERC20 behind a beacon proxy
+      );
+      // assert
+      expect(foundSlot.slot).toEqual(
+        TenderlySimulator.SOLADY_BALANCE_SLOT_SEED,
+      );
+      expect(foundSlot.isSolady).toEqual(true);
+    });
+
+    it('should find Arbitrum VCNT (partitioned) `balanceOf` storage slot', async () => {
+      const expectedSlot = ethers.utils.defaultAbiCoder.encode(['uint'], [108]);
+      const foundSlot = await tenderly.findTokenBalanceOfSlot(
+        42161,
+        '0x60bf4e7cf16ff34513514b968483b54beff42a81', // ViciCoin, `balances[1][owner]` on an external state contract
+      );
+      // assert
+      expect(foundSlot.slot).toEqual(expectedSlot);
+      expect(foundSlot.partition).toEqual(
+        ethers.utils.defaultAbiCoder.encode(['uint'], [1]),
+      );
+      expect(foundSlot.stateProxy).toEqual(
+        '0x80e2c59593a5a6fe42f7c49220f7a42e30f105ad',
+      );
+    });
   });
 
   describe('findTokenAllowanceSlot', () => {
@@ -159,6 +187,34 @@ describe('Tenderly', () => {
       expect(foundSlot.slot).toEqual(expectedSlot);
       expect(foundSlot.stateProxy).toEqual(
         '0x5b1b5fea1b99d83ad479df0c222f0492385381dd',
+      );
+    });
+
+    it('should find Base SOL (Solady) `allowance` storage slot seed', async () => {
+      const foundSlot = await tenderly.findTokenAllowanceSlot(
+        8453,
+        '0x311935cd80b76769bf2ecc9d8ab7635b2139cf82', // Solana (SOL) on Base, Solady ERC20 behind a beacon proxy
+      );
+      // assert
+      expect(foundSlot.slot).toEqual(
+        TenderlySimulator.SOLADY_ALLOWANCE_SLOT_SEED,
+      );
+      expect(foundSlot.isSolady).toEqual(true);
+    });
+
+    it('should find Base VCNT (partitioned) `allowance` storage slot', async () => {
+      const expectedSlot = ethers.utils.defaultAbiCoder.encode(['uint'], [110]);
+      const foundSlot = await tenderly.findTokenAllowanceSlot(
+        8453,
+        '0xdcf5130274753c8050ab061b1a1dcbf583f5bfd0', // ViciCoin, `allowances[owner][1][spender]` on an external state contract
+      );
+      // assert
+      expect(foundSlot.slot).toEqual(expectedSlot);
+      expect(foundSlot.partition).toEqual(
+        ethers.utils.defaultAbiCoder.encode(['uint'], [1]),
+      );
+      expect(foundSlot.stateProxy).toEqual(
+        '0x4844d11c51e6e85c1ed419dc77455894cdc5808e',
       );
     });
   });

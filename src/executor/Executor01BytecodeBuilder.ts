@@ -107,8 +107,14 @@ export class Executor01BytecodeBuilder extends ExecutorBytecodeBuilder<
     // check WETH src balance (should be 0) after. Some DEXes don't have a 1:1
     // ETH -> custom_ETH rate.
     if (isWETHSrc) {
+      // Also insert the runtime fromAmount into the dex calldata when the dex
+      // supports it: value is always the threaded amount, and split slicing can
+      // drift a wei from the quoted amount — dexes that require
+      // msg.value == amountIn (e.g. FluidDex) revert on the mismatch otherwise.
       dexFlag =
-        Flag.SEND_ETH_EQUAL_TO_FROM_AMOUNT_CHECK_SRC_TOKEN_BALANCE_AFTER_SWAP;
+        sendEthButSupportsInsertFromAmount && !forcePreventInsertFromAmount
+          ? Flag.SEND_ETH_EQUAL_TO_FROM_AMOUNT_PLUS_INSERT_FROM_AMOUNT_CHECK_SRC_TOKEN_BALANCE_AFTER_SWAP // 14
+          : Flag.SEND_ETH_EQUAL_TO_FROM_AMOUNT_CHECK_SRC_TOKEN_BALANCE_AFTER_SWAP; // 5
     } else if (isWETHDest) {
       // DEX returns native ETH; wrap after. Check ETH balance post-swap so the
       // wrap amount can be picked up from it.
@@ -227,8 +233,14 @@ export class Executor01BytecodeBuilder extends ExecutorBytecodeBuilder<
     }
 
     if (isWETHSrc) {
+      // Also insert the runtime fromAmount into the dex calldata when the dex
+      // supports it: value is always the threaded amount, and split slicing can
+      // drift a wei from the quoted amount — dexes that require
+      // msg.value == amountIn (e.g. FluidDex) revert on the mismatch otherwise.
       dexFlag =
-        Flag.SEND_ETH_EQUAL_TO_FROM_AMOUNT_CHECK_SRC_TOKEN_BALANCE_AFTER_SWAP;
+        sendEthButSupportsInsertFromAmount && !forcePreventInsertFromAmount
+          ? Flag.SEND_ETH_EQUAL_TO_FROM_AMOUNT_PLUS_INSERT_FROM_AMOUNT_CHECK_SRC_TOKEN_BALANCE_AFTER_SWAP // 14
+          : Flag.SEND_ETH_EQUAL_TO_FROM_AMOUNT_CHECK_SRC_TOKEN_BALANCE_AFTER_SWAP; // 5
     } else if (isWETHDest) {
       dexFlag = forcePreventInsertFromAmount
         ? Flag.DONT_INSERT_FROM_AMOUNT_CHECK_ETH_BALANCE_AFTER_SWAP

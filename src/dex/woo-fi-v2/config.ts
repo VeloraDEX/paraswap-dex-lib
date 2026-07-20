@@ -70,7 +70,7 @@ export const WooFiV2Config: DexConfigMap<DexParams> = {
       wooPPV2Address: '0x5520385bFcf07Ec87C4c53A7d8d65595Dff69FA4',
       wooOracleV2Address: WOO_ORACLE_V2_ADDRESS,
       integrationHelperAddress: '0xC4E9B633685461E7B7A807D12a246C81f96F31B8',
-      // USDbC
+      // USDC (native)
       quoteToken: {
         address: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
         decimals: 6,

@@ -190,11 +190,15 @@ describe('WooFiV2 E2E', () => {
     const network = Network.BASE;
 
     const baseATokenSymbol = 'WETH';
-    const baseBTokenSymbol = 'USDbC';
+    // USDbC was delisted from the Base WooPP (reserve 0); cbBTC and WETH are
+    // the live base tokens (integration helper allBaseTokens).
+    const baseBTokenSymbol = 'cbBTC';
     const quoteTokenSymbol = 'USDC';
 
     const tokenBaseAAmount = '1000000000000000000';
-    const tokenBaseBAmount = '100000000';
+    // 0.01 cbBTC (8 decimals) — keeps the notional under the pool's maxGamma
+    // swap-size cap (~$10k at coeff 1e10).
+    const tokenBaseBAmount = '1000000';
 
     testForNetwork(
       network,

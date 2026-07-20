@@ -29,8 +29,22 @@ interface TokenStorageSlots {
   balanceSlot: string;
   allowanceSlot: string;
   isVyper?: boolean;
+  // Solady ERC20 layout: `balanceSlot`/`allowanceSlot` hold the Solady slot
+  // seeds instead of mapping slots
+  isSolady?: boolean;
+  // partitioned layout (e.g. ViciERC20): mappings are keyed by a partition
+  // (item/token id) in addition to the account, see calculatePartitioned* methods
+  partition?: string;
   stateProxy?: string;
   additionalOverrides?: StateOverride;
+}
+
+interface FoundSlot {
+  slot: string;
+  isVyper?: boolean;
+  isSolady?: boolean;
+  partition?: string;
+  stateProxy?: string;
 }
 
 interface SimulateTransactionRequest {
@@ -248,6 +262,14 @@ export class TenderlySimulator {
   static readonly DEFAULT_OWNER = '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
   static readonly DEFAULT_SPENDER =
     '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
+  // distinctive value written into a candidate slot during verification,
+  // unlikely to collide with any pre-existing balance/allowance
+  static readonly SLOT_VERIFICATION_AMOUNT = 123456789012345678901234567n;
+  // Solady ERC20 doesn't use Solidity mappings — balances/allowances live at
+  // slots derived from these fixed library constants
+  // https://github.com/Vectorized/solady/blob/main/src/tokens/ERC20.sol
+  static readonly SOLADY_BALANCE_SLOT_SEED = '0x87a211a2';
+  static readonly SOLADY_ALLOWANCE_SLOT_SEED = '0x7f5e9f20';
 
   // singleton
   private static instance: TenderlySimulator;
@@ -406,15 +428,29 @@ export class TenderlySimulator {
 
   /**
    *
-   * @param balanceOfSlot storage slot of `balanceOf` mapping
+   * @param balanceOfSlot storage slot of `balanceOf` mapping (Solady slot seed if `isSolady`)
    * @param owner account's address
    * @param isVyper `true` if contract is written in Vyper
+   * @param isSolady `true` if contract uses Solady ERC20 storage layout
+   * @param partition partition key if contract uses partitioned storage layout
    */
   calculateAddressBalanceSlot(
     balanceOfSlot: string,
     owner: string,
     isVyper = false,
+    isSolady = false,
+    partition?: string,
   ) {
+    if (partition) {
+      return this.calculatePartitionedAddressBalanceSlot(
+        balanceOfSlot,
+        owner,
+        partition,
+      );
+    }
+    if (isSolady) {
+      return this.calculateSoladyAddressBalanceSlot(balanceOfSlot, owner);
+    }
     return isVyper
       ? this.calculateVyperAddressBalanceSlot(balanceOfSlot, owner)
       : this.calculateSolidityAddressBalanceSlot(balanceOfSlot, owner);
@@ -443,18 +479,75 @@ export class TenderlySimulator {
   }
 
   /**
+   * Solady ERC20 stores balances at `keccak256(owner ++ seed)` where the seed
+   * is the 12-byte-padded `_BALANCE_SLOT_SEED` library constant
+   * @param balanceSlotSeed Solady balance slot seed
+   * @param owner account's address
+   */
+  calculateSoladyAddressBalanceSlot(balanceSlotSeed: string, owner: string) {
+    return ethers.utils.keccak256(
+      ethers.utils.concat([
+        ethers.utils.hexZeroPad(owner, 20),
+        ethers.utils.hexZeroPad(balanceSlotSeed, 12),
+      ]),
+    );
+  }
+
+  /**
+   * Partitioned layout (e.g. ViciERC20's `balances[partition][owner]`):
+   * balance is stored at `keccak256(owner ++ keccak256(partition ++ slot))`
+   * @param balanceOfSlot storage slot of the partitioned balances mapping
+   * @param owner account's address
+   * @param partition partition key (item/token id) as a 32-byte value
+   */
+  calculatePartitionedAddressBalanceSlot(
+    balanceOfSlot: string,
+    owner: string,
+    partition: string,
+  ) {
+    return this.calculateSolidityAddressBalanceSlot(
+      ethers.utils.keccak256(
+        ethers.utils.concat([
+          ethers.utils.hexZeroPad(partition, 32),
+          balanceOfSlot,
+        ]),
+      ),
+      owner,
+    );
+  }
+
+  /**
    *
-   * @param allowanceSlot storage slot of `allowance` mapping
+   * @param allowanceSlot storage slot of `allowance` mapping (Solady slot seed if `isSolady`)
    * @param owner account's address
    * @param spender spender's address
    * @param isVyper `true` if contract is written in Vyper
+   * @param isSolady `true` if contract uses Solady ERC20 storage layout
+   * @param partition partition key if contract uses partitioned storage layout
    */
   calculateAddressAllowanceSlot(
     allowanceSlot: string,
     owner: string,
     spender: string,
     isVyper = false,
+    isSolady = false,
+    partition?: string,
   ) {
+    if (partition) {
+      return this.calculatePartitionedAddressAllowanceSlot(
+        allowanceSlot,
+        owner,
+        spender,
+        partition,
+      );
+    }
+    if (isSolady) {
+      return this.calculateSoladyAddressAllowanceSlot(
+        allowanceSlot,
+        owner,
+        spender,
+      );
+    }
     return isVyper
       ? this.calculateVyperAddressAllowanceSlot(allowanceSlot, owner, spender)
       : this.calculateSolidityAddressAllowanceSlot(
@@ -510,6 +603,56 @@ export class TenderlySimulator {
     );
   }
 
+  /**
+   * Solady ERC20 stores allowances at `keccak256(owner ++ seed ++ spender)`
+   * where the seed is the 12-byte-padded `_ALLOWANCE_SLOT_SEED` library constant
+   * @param allowanceSlotSeed Solady allowance slot seed
+   * @param owner account's address
+   * @param spender spender's address
+   */
+  calculateSoladyAddressAllowanceSlot(
+    allowanceSlotSeed: string,
+    owner: string,
+    spender: string,
+  ) {
+    return ethers.utils.keccak256(
+      ethers.utils.concat([
+        ethers.utils.hexZeroPad(owner, 20),
+        ethers.utils.hexZeroPad(allowanceSlotSeed, 12),
+        ethers.utils.hexZeroPad(spender, 20),
+      ]),
+    );
+  }
+
+  /**
+   * Partitioned layout (e.g. ViciERC20's `allowances[owner][partition][spender]`):
+   * allowance is stored at
+   * `keccak256(spender ++ keccak256(partition ++ keccak256(owner ++ slot)))`
+   * @param allowanceSlot storage slot of the partitioned allowances mapping
+   * @param owner account's address
+   * @param spender spender's address
+   * @param partition partition key (item/token id) as a 32-byte value
+   */
+  calculatePartitionedAddressAllowanceSlot(
+    allowanceSlot: string,
+    owner: string,
+    spender: string,
+    partition: string,
+  ) {
+    const ownerHash = ethers.utils.keccak256(
+      ethers.utils.concat([ethers.utils.hexZeroPad(owner, 32), allowanceSlot]),
+    );
+    const partitionHash = ethers.utils.keccak256(
+      ethers.utils.concat([ethers.utils.hexZeroPad(partition, 32), ownerHash]),
+    );
+    return ethers.utils.keccak256(
+      ethers.utils.concat([
+        ethers.utils.hexZeroPad(spender, 32),
+        partitionHash,
+      ]),
+    );
+  }
+
   buildBalanceOfSimulationRequest(
     chainId: number,
     token: string,
@@ -545,16 +688,194 @@ export class TenderlySimulator {
     };
   }
 
+  private decodeUintOutput(output: string | undefined): bigint | null {
+    if (!output || output === '0x') {
+      return null;
+    }
+
+    try {
+      const [decoded] = ethers.utils.defaultAbiCoder.decode(
+        ['uint256'],
+        output,
+      );
+      return decoded.toBigInt();
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /**
+   * Simulates the given read call with the state override applied and checks
+   * that the override actually controls the returned value: the call must
+   * succeed and return a non-zero value different from the baseline.
+   * With `allowScaled` an exact match with `writtenValue` is not required —
+   * tokens with derived balances (e.g. stETH shares, aToken scaled balances)
+   * return a scaled value. Without it, only an exact match passes
+   */
+  private async simulateAndCheckOutput(
+    request: SimulateTransactionRequest,
+    writtenValue: bigint,
+    baselineValue: bigint,
+    allowScaled: boolean,
+  ): Promise<boolean> {
+    try {
+      const { transaction, simulation } = await this.simulateTransaction(
+        request,
+        true, // force Tenderly simulation API
+      );
+
+      if (!simulation.status) {
+        return false;
+      }
+
+      const decoded = this.decodeUintOutput(
+        transaction.transaction_info.call_trace.output,
+      );
+
+      if (decoded === null || decoded === 0n || decoded === baselineValue) {
+        return false;
+      }
+
+      if (decoded !== writtenValue) {
+        if (!allowScaled) {
+          return false;
+        }
+
+        console.warn(
+          `Slot override verification for token ${request.to}: written value ${writtenValue} but call returned ${decoded} (derived/scaled value), accepting slot`,
+        );
+      }
+
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /**
+   * Verifies a candidate `balanceOf` mapping slot by overriding the derived
+   * slot with a distinctive value and checking that `balanceOf` reflects it
+   * @param chainId token chain id
+   * @param token token address
+   * @param foundSlot candidate slot to verify
+   * @param baselineValue `balanceOf` result without the override applied
+   */
+  async verifyTokenBalanceSlot(
+    chainId: number,
+    token: string,
+    foundSlot: FoundSlot,
+    baselineValue = 0n,
+  ): Promise<boolean> {
+    const owner = TenderlySimulator.DEFAULT_OWNER;
+    const amount = TenderlySimulator.SLOT_VERIFICATION_AMOUNT;
+
+    const slotToOverride = this.calculateAddressBalanceSlot(
+      foundSlot.slot,
+      owner,
+      foundSlot.isVyper,
+      foundSlot.isSolady,
+      foundSlot.partition,
+    );
+
+    const address = foundSlot.stateProxy ?? token;
+    const stateOverride: StateOverride = {
+      [address]: {
+        storage: {
+          [slotToOverride]: ethers.utils.defaultAbiCoder.encode(
+            ['uint'],
+            [amount],
+          ),
+        },
+      },
+    };
+
+    return this.simulateAndCheckOutput(
+      {
+        ...this.buildBalanceOfSimulationRequest(chainId, token, owner),
+        stateOverride,
+      },
+      amount,
+      baselineValue,
+      true, // balances can be derived from the stored value (stETH, aTokens)
+    );
+  }
+
+  /**
+   * Verifies a candidate `allowance` mapping slot by overriding the derived
+   * slot with a distinctive value and checking that `allowance` reflects it
+   * @param chainId token chain id
+   * @param token token address
+   * @param foundSlot candidate slot to verify
+   * @param baselineValue `allowance` result without the override applied
+   */
+  async verifyTokenAllowanceSlot(
+    chainId: number,
+    token: string,
+    foundSlot: FoundSlot,
+    baselineValue = 0n,
+  ): Promise<boolean> {
+    const owner = TenderlySimulator.DEFAULT_OWNER;
+    const spender = TenderlySimulator.DEFAULT_SPENDER;
+    const amount = TenderlySimulator.SLOT_VERIFICATION_AMOUNT;
+
+    const slotToOverride = this.calculateAddressAllowanceSlot(
+      foundSlot.slot,
+      owner,
+      spender,
+      foundSlot.isVyper,
+      foundSlot.isSolady,
+      foundSlot.partition,
+    );
+
+    const address = foundSlot.stateProxy ?? token;
+    const stateOverride: StateOverride = {
+      [address]: {
+        storage: {
+          [slotToOverride]: ethers.utils.defaultAbiCoder.encode(
+            ['uint'],
+            [amount],
+          ),
+        },
+      },
+    };
+
+    return this.simulateAndCheckOutput(
+      {
+        ...this.buildAllowanceSimulationRequest(chainId, token, owner, spender),
+        stateOverride,
+      },
+      amount,
+      baselineValue,
+      false, // allowances are stored raw, require an exact match
+    );
+  }
+
+  /**
+   * Builds a `FoundSlot` from a matched SLOAD. `storage_address` is where the
+   * read actually happened: if it differs from the token, the state lives on
+   * an external contract (state proxy) and overrides must target it
+   */
+  private buildFoundSlot(
+    token: string,
+    readSlotAddress: string,
+    base: Omit<FoundSlot, 'stateProxy'>,
+  ): FoundSlot {
+    return readSlotAddress !== token.toLowerCase()
+      ? { ...base, stateProxy: readSlotAddress }
+      : { ...base };
+  }
+
   /**
    * Finds the slot of the `balanceOf` mapping in given token contract's storage.
-   * Supports `Solidity` and `Vyper` contracts
+   * Supports `Solidity` and `Vyper` contracts.
+   * Found slots are verified with an additional simulation before being returned
    * @param chainId token chain id
    * @param token token address
    */
   async findTokenBalanceOfSlot(
     chainId: number,
     token: string,
-  ): Promise<{ slot: string; isVyper?: boolean; stateProxy?: string }> {
+  ): Promise<FoundSlot> {
     const account = TenderlySimulator.DEFAULT_OWNER;
 
     const balanceOfSimulationRequest = this.buildBalanceOfSimulationRequest(
@@ -580,15 +901,47 @@ export class TenderlySimulator {
 
     const callTrace = simulationDetails.transaction.transaction_info.call_trace;
 
+    // `balanceOf` result without any overrides, used as verification baseline
+    const baselineValue = this.decodeUintOutput(callTrace.output) ?? 0n;
+
     const sloadCalls = this.getSLOADCalls(callTrace);
     // token's storage slots that were read during the `balanceOf` call
     const readSlots = sloadCalls
       .map(call => ({
         slot: call.storage_slot?.[0],
         address: call.storage_address,
-        parentCallType: call.parentCall ? call.parentCall.call_type : null,
       }))
       .filter(({ slot }) => !!slot);
+
+    // try Solady layout: balance slot is derived from a fixed seed, not a mapping
+    const soladyBalanceOfSlot = this.calculateSoladyAddressBalanceSlot(
+      TenderlySimulator.SOLADY_BALANCE_SLOT_SEED,
+      account,
+    );
+    const foundSoladySlot = readSlots.find(
+      ({ slot }) => slot === soladyBalanceOfSlot,
+    );
+    if (foundSoladySlot) {
+      const candidate = this.buildFoundSlot(token, foundSoladySlot.address, {
+        slot: TenderlySimulator.SOLADY_BALANCE_SLOT_SEED,
+        isSolady: true,
+      });
+
+      if (
+        await this.verifyTokenBalanceSlot(
+          chainId,
+          token,
+          candidate,
+          baselineValue,
+        )
+      ) {
+        return candidate;
+      }
+
+      console.warn(
+        `Candidate 'balanceOf' slot seed (solady) for token ${token} on chain ${chainId} failed verification, continuing search`,
+      );
+    }
 
     const startingPoints = [
       // regular contract
@@ -614,10 +967,26 @@ export class TenderlySimulator {
           ({ slot }) => slot === solitidyBalanceOfSlot,
         );
         if (foundSoliditySlot) {
-          return foundSoliditySlot.address !== token.toLowerCase() &&
-            foundSoliditySlot.parentCallType !== 'DELEGATECALL'
-            ? { slot: candidateSlot, stateProxy: foundSoliditySlot.address }
-            : { slot: candidateSlot };
+          const candidate = this.buildFoundSlot(
+            token,
+            foundSoliditySlot.address,
+            { slot: candidateSlot },
+          );
+
+          if (
+            await this.verifyTokenBalanceSlot(
+              chainId,
+              token,
+              candidate,
+              baselineValue,
+            )
+          ) {
+            return candidate;
+          }
+
+          console.warn(
+            `Candidate 'balanceOf' slot ${candidateSlot} for token ${token} on chain ${chainId} failed verification, continuing search`,
+          );
         }
         // try vyper slot
         const vyperBalanceOfSlot = this.calculateVyperAddressBalanceSlot(
@@ -629,33 +998,88 @@ export class TenderlySimulator {
         );
 
         if (foundVyperSlot) {
-          return foundVyperSlot.address === token.toLowerCase() &&
-            foundVyperSlot.parentCallType !== 'DELEGATECALL'
-            ? {
-                slot: candidateSlot,
-                isVyper: true,
-                stateProxy: foundVyperSlot.address,
-              }
-            : { slot: candidateSlot, isVyper: true };
+          const candidate = this.buildFoundSlot(token, foundVyperSlot.address, {
+            slot: candidateSlot,
+            isVyper: true,
+          });
+
+          if (
+            await this.verifyTokenBalanceSlot(
+              chainId,
+              token,
+              candidate,
+              baselineValue,
+            )
+          ) {
+            return candidate;
+          }
+
+          console.warn(
+            `Candidate 'balanceOf' slot ${candidateSlot} (vyper) for token ${token} on chain ${chainId} failed verification, continuing search`,
+          );
         }
       }
     }
 
+    // try partitioned layout (e.g. ViciERC20's `balances[partition][owner]`),
+    // often held on an external state contract
+    for (let p = 0n; p < 4n; p += 1n) {
+      const partition = ethers.utils.defaultAbiCoder.encode(['uint'], [p]);
+      for (let i = 0n; i < 1_000n; i += 1n) {
+        const candidateSlot = ethers.utils.defaultAbiCoder.encode(
+          ['uint'],
+          [i],
+        );
+        const partitionedBalanceOfSlot =
+          this.calculatePartitionedAddressBalanceSlot(
+            candidateSlot,
+            account,
+            partition,
+          );
+        const foundPartitionedSlot = readSlots.find(
+          ({ slot }) => slot === partitionedBalanceOfSlot,
+        );
+        if (!foundPartitionedSlot) continue;
+
+        const candidate = this.buildFoundSlot(
+          token,
+          foundPartitionedSlot.address,
+          { slot: candidateSlot, partition },
+        );
+
+        if (
+          await this.verifyTokenBalanceSlot(
+            chainId,
+            token,
+            candidate,
+            baselineValue,
+          )
+        ) {
+          return candidate;
+        }
+
+        console.warn(
+          `Candidate 'balanceOf' slot ${candidateSlot} (partition ${p}) for token ${token} on chain ${chainId} failed verification, continuing search`,
+        );
+      }
+    }
+
     throw new Error(
-      `Could not find a 'balanceOf' mapping slot for token ${token} on chain ${chainId}`,
+      `Could not find a verified 'balanceOf' mapping slot for token ${token} on chain ${chainId}`,
     );
   }
 
   /**
-   * Finds the slot of the `allowance` mapping in given token contract's storage
-   * Supports `Solidity` and `Vyper` contracts
+   * Finds the slot of the `allowance` mapping in given token contract's storage.
+   * Supports `Solidity` and `Vyper` contracts.
+   * Found slots are verified with an additional simulation before being returned
    * @param chainId token chain id
    * @param token token address
    */
   async findTokenAllowanceSlot(
     chainId: number,
     token: string,
-  ): Promise<{ slot: string; isVyper?: boolean; stateProxy?: string }> {
+  ): Promise<FoundSlot> {
     const account = TenderlySimulator.DEFAULT_OWNER;
     const spender = TenderlySimulator.DEFAULT_SPENDER;
 
@@ -683,7 +1107,8 @@ export class TenderlySimulator {
 
     const callTrace = simulationDetails.transaction.transaction_info.call_trace;
 
-    // console.log(callTrace);
+    // `allowance` result without any overrides, used as verification baseline
+    const baselineValue = this.decodeUintOutput(callTrace.output) ?? 0n;
 
     const sloadCalls = this.getSLOADCalls(callTrace);
     // token's storage slots that were read during the `allowance` call
@@ -691,11 +1116,39 @@ export class TenderlySimulator {
       .map(call => ({
         slot: call.storage_slot?.[0],
         address: call.storage_address,
-        parentCallType: call.parentCall ? call.parentCall.call_type : null,
       }))
       .filter(({ slot }) => !!slot);
 
-    console.log(readSlots);
+    // try Solady layout: allowance slot is derived from a fixed seed, not a mapping
+    const soladyAllowanceSlot = this.calculateSoladyAddressAllowanceSlot(
+      TenderlySimulator.SOLADY_ALLOWANCE_SLOT_SEED,
+      account,
+      spender,
+    );
+    const foundSoladySlot = readSlots.find(
+      ({ slot }) => slot === soladyAllowanceSlot,
+    );
+    if (foundSoladySlot) {
+      const candidate = this.buildFoundSlot(token, foundSoladySlot.address, {
+        slot: TenderlySimulator.SOLADY_ALLOWANCE_SLOT_SEED,
+        isSolady: true,
+      });
+
+      if (
+        await this.verifyTokenAllowanceSlot(
+          chainId,
+          token,
+          candidate,
+          baselineValue,
+        )
+      ) {
+        return candidate;
+      }
+
+      console.warn(
+        `Candidate 'allowance' slot seed (solady) for token ${token} on chain ${chainId} failed verification, continuing search`,
+      );
+    }
 
     const startingPoints = [
       // regular contract
@@ -725,15 +1178,26 @@ export class TenderlySimulator {
         );
 
         if (foundSoliditySlot) {
-          return token.toLowerCase() !== foundSoliditySlot.address &&
-            foundSoliditySlot.parentCallType !== 'DELEGATECALL'
-            ? {
-                slot: candidateSlot,
-                stateProxy: foundSoliditySlot.address,
-              }
-            : {
-                slot: candidateSlot,
-              };
+          const candidate = this.buildFoundSlot(
+            token,
+            foundSoliditySlot.address,
+            { slot: candidateSlot },
+          );
+
+          if (
+            await this.verifyTokenAllowanceSlot(
+              chainId,
+              token,
+              candidate,
+              baselineValue,
+            )
+          ) {
+            return candidate;
+          }
+
+          console.warn(
+            `Candidate 'allowance' slot ${candidateSlot} for token ${token} on chain ${chainId} failed verification, continuing search`,
+          );
         }
 
         // try vyper
@@ -748,21 +1212,75 @@ export class TenderlySimulator {
         );
 
         if (foundVyperSlot) {
-          return token.toLowerCase() !== foundVyperSlot.address &&
-            foundVyperSlot.parentCallType !== 'DELEGATECALL'
-            ? {
-                slot: candidateSlot,
-                stateProxy: foundVyperSlot.address,
-              }
-            : {
-                slot: candidateSlot,
-              };
+          const candidate = this.buildFoundSlot(token, foundVyperSlot.address, {
+            slot: candidateSlot,
+            isVyper: true,
+          });
+
+          if (
+            await this.verifyTokenAllowanceSlot(
+              chainId,
+              token,
+              candidate,
+              baselineValue,
+            )
+          ) {
+            return candidate;
+          }
+
+          console.warn(
+            `Candidate 'allowance' slot ${candidateSlot} (vyper) for token ${token} on chain ${chainId} failed verification, continuing search`,
+          );
         }
       }
     }
 
+    // try partitioned layout (e.g. ViciERC20's `allowances[owner][partition][spender]`),
+    // often held on an external state contract
+    for (let p = 0n; p < 4n; p += 1n) {
+      const partition = ethers.utils.defaultAbiCoder.encode(['uint'], [p]);
+      for (let i = 0n; i < 1_000n; i += 1n) {
+        const candidateSlot = ethers.utils.defaultAbiCoder.encode(
+          ['uint'],
+          [i],
+        );
+        const partitionedAllowanceSlot =
+          this.calculatePartitionedAddressAllowanceSlot(
+            candidateSlot,
+            account,
+            spender,
+            partition,
+          );
+        const foundPartitionedSlot = readSlots.find(
+          ({ slot }) => slot === partitionedAllowanceSlot,
+        );
+        if (!foundPartitionedSlot) continue;
+
+        const candidate = this.buildFoundSlot(
+          token,
+          foundPartitionedSlot.address,
+          { slot: candidateSlot, partition },
+        );
+
+        if (
+          await this.verifyTokenAllowanceSlot(
+            chainId,
+            token,
+            candidate,
+            baselineValue,
+          )
+        ) {
+          return candidate;
+        }
+
+        console.warn(
+          `Candidate 'allowance' slot ${candidateSlot} (partition ${p}) for token ${token} on chain ${chainId} failed verification, continuing search`,
+        );
+      }
+    }
+
     throw new Error(
-      `Could not find a 'allowance' mapping slot for token ${token} on chain ${chainId}`,
+      `Could not find a verified 'allowance' mapping slot for token ${token} on chain ${chainId}`,
     );
   }
 
@@ -803,6 +1321,8 @@ export class TenderlySimulator {
       balanceSlot: balanceSlot.slot,
       allowanceSlot: allowanceSlot.slot,
       isVyper: balanceSlot.isVyper,
+      isSolady: balanceSlot.isSolady,
+      partition: balanceSlot.partition,
       stateProxy: balanceSlot.stateProxy,
     };
 
@@ -850,6 +1370,8 @@ export class TenderlySimulator {
       tokenSlots.balanceSlot,
       account,
       tokenSlots.isVyper,
+      tokenSlots.isSolady,
+      tokenSlots.partition,
     );
     // add the balance override
     const address = tokenSlots.stateProxy ? tokenSlots.stateProxy : token;
@@ -888,6 +1410,8 @@ export class TenderlySimulator {
       account,
       spender,
       tokenSlots.isVyper,
+      tokenSlots.isSolady,
+      tokenSlots.partition,
     );
     // add the allowance override
     const address = tokenSlots.stateProxy ? tokenSlots.stateProxy : token;

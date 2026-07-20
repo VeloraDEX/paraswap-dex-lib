@@ -9,7 +9,7 @@ import {
   DexExchangeParam,
   Logger,
 } from '../../types';
-import { SwapSide, Network } from '../../constants';
+import { SwapSide, Network, ETHER_ADDRESS } from '../../constants';
 import * as CALLDATA_GAS_COST from '../../calldata-gas-cost';
 import { IDex } from '../idex';
 import { IDexHelper } from '../../dex-helper';
@@ -131,7 +131,8 @@ export class FluidDex extends SimpleExchange implements IDex<FluidDexData> {
     );
 
     if (!this.dexHelper.config.isSlave) {
-      void this.updateReserves();
+      // Await the first fetch so pricing is usable as soon as init returns.
+      await this.updateReserves();
 
       if (!this.reserveUpdateIntervalTask) {
         this.reserveUpdateIntervalTask = setInterval(
@@ -172,13 +173,33 @@ export class FluidDex extends SimpleExchange implements IDex<FluidDexData> {
     side: SwapSide,
     blockNumber: number,
   ): Promise<string[]> {
+    if (this.isUnsupportedWethBuy(srcToken.address, side)) return [];
+
     const pools = this.getPoolsByTokenPair(srcToken.address, destToken.address);
     return pools.map(pool => pool.id);
   }
 
+  // Exact-out swaps send the slippage-scaled max input as msg.value and the
+  // pool refunds the unused ETH to the executor — with a WETH-paying user
+  // there is no path returning that raw-ETH refund, so the user would be
+  // silently overcharged. Keep WETH-src BUY unpriced until the executor
+  // supports rewrapping the refund.
+  private isUnsupportedWethBuy(srcToken: Address, side: SwapSide): boolean {
+    return side === SwapSide.BUY && this.dexHelper.config.isWETH(srcToken);
+  }
+
+  // Fluid pools hold native ETH, never WETH. Map WETH to the native address so
+  // WETH-denominated routes price against the native pools; the executor
+  // unwraps/wraps around the swap (see needUnwrapNative in getDexParam).
+  private normalizeTokenAddress(tokenAddress: Address): Address {
+    return this.dexHelper.config.isWETH(tokenAddress)
+      ? ETHER_ADDRESS
+      : tokenAddress.toLowerCase();
+  }
+
   getPoolsByTokenPair(srcToken: Address, destToken: Address): FluidDexPool[] {
-    const srcAddress = srcToken.toLowerCase();
-    const destAddress = destToken.toLowerCase();
+    const srcAddress = this.normalizeTokenAddress(srcToken);
+    const destAddress = this.normalizeTokenAddress(destToken);
 
     // A pair must have 2 different tokens.
     if (srcAddress === destAddress) return [];
@@ -203,8 +224,12 @@ export class FluidDex extends SimpleExchange implements IDex<FluidDexData> {
     limitPools?: string[],
   ): Promise<null | ExchangePrices<FluidDexData>> {
     try {
-      if (srcToken.address.toLowerCase() === destToken.address.toLowerCase())
-        return null;
+      if (this.isUnsupportedWethBuy(srcToken.address, side)) return null;
+
+      const srcTokenAddress = this.normalizeTokenAddress(srcToken.address);
+      const destTokenAddress = this.normalizeTokenAddress(destToken.address);
+
+      if (srcTokenAddress === destTokenAddress) return null;
 
       // Get the pools to use.
       let pools = this.getPoolsByTokenPair(srcToken.address, destToken.address);
@@ -253,7 +278,7 @@ export class FluidDex extends SimpleExchange implements IDex<FluidDexData> {
           const prices = amounts.map(amount => {
             if (side === SwapSide.SELL) {
               return this.swapIn(
-                srcToken.address.toLowerCase() === pool.token0.toLowerCase(),
+                srcTokenAddress === pool.token0.toLowerCase(),
                 amount,
                 currentPoolReserves.collateralReserves,
                 currentPoolReserves.debtReserves,
@@ -266,7 +291,7 @@ export class FluidDex extends SimpleExchange implements IDex<FluidDexData> {
               );
             } else {
               return this.swapOut(
-                srcToken.address.toLowerCase() === pool.token0.toLowerCase(),
+                srcTokenAddress === pool.token0.toLowerCase(),
                 amount,
                 currentPoolReserves.collateralReserves,
                 currentPoolReserves.debtReserves,
@@ -362,7 +387,7 @@ export class FluidDex extends SimpleExchange implements IDex<FluidDexData> {
     limit: number,
   ): Promise<PoolLiquidity[]> {
     try {
-      const normalizedTokenAddress = tokenAddress.toLowerCase();
+      const normalizedTokenAddress = this.normalizeTokenAddress(tokenAddress);
 
       const relevantPools = this.pools.filter(
         pool =>
@@ -442,10 +467,21 @@ export class FluidDex extends SimpleExchange implements IDex<FluidDexData> {
                   token1LiquidityUSD,
                 ];
 
+          const connectorTokens = [connectorToken];
+          // Native-ETH pools are also reachable with WETH (see
+          // normalizeTokenAddress), so advertise the wrapped connector too.
+          if (connectorToken.address === ETHER_ADDRESS) {
+            connectorTokens.push({
+              ...connectorToken,
+              address:
+                this.dexHelper.config.data.wrappedNativeTokenAddress.toLowerCase(),
+            });
+          }
+
           poolLiquidity.push({
             exchange: this.dexKey,
             address: pool.address,
-            connectorTokens: [connectorToken],
+            connectorTokens,
             liquidityUSD,
           });
         } catch (error) {
@@ -493,33 +529,30 @@ export class FluidDex extends SimpleExchange implements IDex<FluidDexData> {
         `${this.dexKey}-${this.network}: Pool with id: ${data.poolId} was not found`,
       );
 
+    const swap0To1 =
+      pool.token0.toLowerCase() === this.normalizeTokenAddress(srcToken);
+    const isWethDest = this.dexHelper.config.isWETH(destToken);
+
+    // WETH dest: the pool pays out native ETH; deliver it to the executor so
+    // its wrap-after step can pick it up, and report no recipient support so
+    // the wrapped output is forwarded like any executor-held result.
+    const swapRecipient = isWethDest ? executorAddress : recipient;
+
     if (side === SwapSide.SELL) {
-      if (pool!.token0.toLowerCase() !== srcToken.toLowerCase()) {
-        args = [false, BigInt(srcAmount), BigInt(destAmount), recipient];
-      } else {
-        args = [true, BigInt(srcAmount), BigInt(destAmount), recipient];
-      }
+      args = [swap0To1, BigInt(srcAmount), BigInt(destAmount), swapRecipient];
     } else {
-      if (pool!.token0.toLowerCase() !== srcToken.toLowerCase()) {
-        args = [
-          false,
-          (BigInt(destAmount) * 1000001n) / 1000000n, // 0.0001% increase target out amount when calling Fluid Dex as it is not 100% exact. Guarantees meeting reaching exact out amount condition
-          BigInt(srcAmount),
-          recipient,
-        ];
-      } else {
-        args = [
-          true,
-          (BigInt(destAmount) * 1000001n) / 1000000n, // 0.0001% increase target out amount when calling Fluid Dex as it is not 100% exact. Guarantees meeting reaching exact out amount condition
-          BigInt(srcAmount),
-          recipient,
-        ];
-      }
+      args = [
+        swap0To1,
+        (BigInt(destAmount) * 1000001n) / 1000000n, // 0.0001% increase target out amount when calling Fluid Dex as it is not 100% exact. Guarantees meeting reaching exact out amount condition
+        BigInt(srcAmount),
+        swapRecipient,
+      ];
     }
     const swapData = this.fluidDexPoolIface.encodeFunctionData(method, args);
     return {
       needWrapNative: this.needWrapNative,
-      dexFuncHasRecipient: true,
+      needUnwrapNative: true,
+      dexFuncHasRecipient: !isWethDest,
       exchangeData: swapData,
       targetExchange: pool!.address,
       returnAmountPos,
