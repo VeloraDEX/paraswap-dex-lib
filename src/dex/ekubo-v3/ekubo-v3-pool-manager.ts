@@ -209,7 +209,11 @@ export class EkuboV3PoolManager implements EventSubscriber {
         [
           ve33Iface.getEventTopic('VoteWeightApplied'),
           data =>
-            BigInt(ve33Iface.decodeEventLog('VoteWeightApplied', data).poolId),
+            BigInt(
+              ve33Iface.decodeEventLog('VoteWeightApplied', data, [
+                ve33Iface.getEventTopic('VoteWeightApplied'),
+              ]).poolId,
+            ),
         ],
       ]),
     };
