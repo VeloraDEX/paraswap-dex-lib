@@ -33,7 +33,6 @@ export type EkuboData = {
 };
 
 export type DexParams = {
-  apiUrl: string;
   core: string;
   oracle: string;
   twamm: string;
@@ -55,9 +54,4 @@ export type AbiPoolKey = {
   token0: string;
   token1: string;
   config: string;
-};
-
-export type VanillaPoolParameters = {
-  fee: bigint;
-  tickSpacing: number;
 };
