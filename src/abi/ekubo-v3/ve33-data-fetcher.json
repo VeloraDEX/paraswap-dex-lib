@@ -1,0 +1,9 @@
+[
+  {
+    "type": "function",
+    "name": "getPoolSwapFees",
+    "inputs": [{ "name": "poolIds", "type": "bytes32[]" }],
+    "outputs": [{ "name": "swapFees", "type": "uint64[]" }],
+    "stateMutability": "view"
+  }
+]

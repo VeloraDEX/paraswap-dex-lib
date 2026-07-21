@@ -3,7 +3,7 @@ import { Result } from '@ethersproject/abi';
 import { IDexHelper } from '../../../dex-helper/idex-helper';
 import { Logger } from '../../../types';
 import { EkuboContracts } from '../types';
-import { EkuboPool, Quote } from './pool';
+import { EkuboPool, NamedEventHandlers, Quote } from './pool';
 import { computeStep, isPriceIncreasing } from './math/swap';
 import {
   MAX_SQRT_RATIO,
@@ -32,6 +32,7 @@ export abstract class StableswapPoolBase<
     contracts: EkuboContracts,
     initBlockNumber: number,
     key: PoolKey<StableswapPoolTypeConfig>,
+    extraNamedEventHandlers: Record<string, NamedEventHandlers<S>> = {},
   ) {
     const {
       contract: { address },
@@ -39,7 +40,16 @@ export abstract class StableswapPoolBase<
       quoteDataFetcher,
     } = contracts.core;
 
-    super(parentName, dexHelper, logger, initBlockNumber, key, address, iface);
+    super(
+      parentName,
+      dexHelper,
+      logger,
+      initBlockNumber,
+      key,
+      address,
+      iface,
+      extraNamedEventHandlers,
+    );
 
     this.quoteDataFetcher = quoteDataFetcher;
 

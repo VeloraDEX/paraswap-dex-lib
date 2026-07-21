@@ -5,6 +5,7 @@ import { EkuboSupportedNetwork } from '../config';
 const SLOT_DURATION_SECS_BY_CHAIN_ID: Record<EkuboSupportedNetwork, bigint> = {
   [Network.MAINNET]: 12n,
   [Network.ARBITRUM]: 1n,
+  [Network.ROBINHOOD]: 1n,
 };
 
 export type RateDeltaBoundary = readonly [

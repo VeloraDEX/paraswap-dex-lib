@@ -35,6 +35,7 @@ export type EkuboData = {
 
 export type DexParams = {
   subgraphId: string;
+  router: string;
 };
 
 export type EkuboContract = {
@@ -44,9 +45,13 @@ export type EkuboContract = {
 };
 
 export type EkuboContracts = Record<
-  'core' | 'twamm' | 'boostedFees',
+  'core' | 'twamm' | 'boostedFees' | 've33',
   EkuboContract
 >;
+
+export type Ve33QuoteData = {
+  swapFee: BigNumber;
+};
 
 export type BoostedFeesQuoteData = {
   sqrtRatio: BigNumber;

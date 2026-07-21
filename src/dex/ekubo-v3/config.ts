@@ -17,16 +17,33 @@ export const TWAMM_DATA_FETCHER_ADDRESS =
 export const BOOSTED_FEES_DATA_FETCHER_ADDRESS =
   '0x7A2fF5819Dc71Bb99133a97c38dA512E60c30475';
 export const ROUTER_ADDRESS = '0xd26f20001a72a18C002b00e6710000d68700ce00';
+// TODO(robinhood-deployment): replace these placeholders after deployment.
+// 0xd1 is the Ve33 extension's registered call-point prefix.
+export const VE33_ADDRESS = '0xd100000000000000000000000000000000000000';
+export const VE33_DATA_FETCHER_ADDRESS =
+  '0x0000000000000000000000000000000000000001';
+export const ROBINHOOD_ROUTER_ADDRESS =
+  '0x0000000000000000000000000000000000000002';
 
-export type EkuboSupportedNetwork = Network.MAINNET | Network.ARBITRUM;
+export type EkuboSupportedNetwork =
+  | Network.MAINNET
+  | Network.ARBITRUM
+  | Network.ROBINHOOD;
 
 export const EKUBO_V3_CONFIG: DexConfigMap<DexParams> = {
   [DEX_KEY]: {
     [Network.MAINNET]: {
       subgraphId: '6MLKVikss1iYdhhggAR1w6Vqw2Z386AqNLMZYr8qaeG9',
+      router: ROUTER_ADDRESS,
     },
     [Network.ARBITRUM]: {
       subgraphId: 'FdPuN6GM73kviG7XfLG72yHKqFczeSd4yzEXeBxESvtG',
+      router: ROUTER_ADDRESS,
+    },
+    [Network.ROBINHOOD]: {
+      // TODO(robinhood-deployment): replace with the Robinhood Ekubo subgraph ID.
+      subgraphId: '',
+      router: ROBINHOOD_ROUTER_ADDRESS,
     },
   },
 } satisfies Record<typeof DEX_KEY, Record<EkuboSupportedNetwork, unknown>>;
