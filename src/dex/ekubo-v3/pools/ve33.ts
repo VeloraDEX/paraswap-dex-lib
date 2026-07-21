@@ -4,7 +4,7 @@ import { hexDataSlice } from 'ethers/lib/utils';
 import { DeepReadonly } from 'ts-essentials';
 import { IDexHelper } from '../../../dex-helper/idex-helper';
 import { Logger } from '../../../types';
-import { BasicQuoteData, EkuboContracts } from '../types';
+import { BasicQuoteData, EkuboContracts, Ve33QuoteData } from '../types';
 import {
   ConcentratedPoolBase,
   ConcentratedPoolState,
@@ -79,16 +79,15 @@ async function fetchVe33State(
   tickSpacings: number,
   blockNumber?: number | 'latest',
 ): Promise<[BasicQuoteData, bigint]> {
-  const [quoteData, swapFees] = await Promise.all([
-    contracts.core.quoteDataFetcher.getQuoteData([key.toAbi()], tickSpacings, {
+  const results = (await contracts.ve33.quoteDataFetcher.getVe33QuoteData(
+    [key.toAbi()],
+    tickSpacings,
+    {
       blockTag: blockNumber,
-    }) as Promise<BasicQuoteData[]>,
-    contracts.ve33.quoteDataFetcher.getPoolSwapFees([key.numId], {
-      blockTag: blockNumber,
-    }) as Promise<BigNumber[]>,
-  ]);
+    },
+  )) as Ve33QuoteData[];
 
-  return [quoteData[0], swapFees[0].toBigInt()];
+  return [results[0].quoteData, results[0].swapFee.toBigInt()];
 }
 
 export class Ve33FullRangePool extends FullRangePoolBase<

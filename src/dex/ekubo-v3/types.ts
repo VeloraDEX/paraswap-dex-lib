@@ -50,6 +50,7 @@ export type EkuboContracts = Record<
 >;
 
 export type Ve33QuoteData = {
+  quoteData: BasicQuoteData;
   swapFee: BigNumber;
 };
 

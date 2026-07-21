@@ -1,5 +1,10 @@
 import { Result } from '@ethersproject/abi';
-import { BasicQuoteData, BoostedFeesQuoteData, EkuboContracts } from './types';
+import {
+  BasicQuoteData,
+  BoostedFeesQuoteData,
+  EkuboContracts,
+  Ve33QuoteData,
+} from './types';
 import { DeepReadonly } from 'ts-essentials';
 import { BlockHeader } from 'web3-eth';
 import { Log, Logger, Token } from '../../types';
@@ -36,7 +41,6 @@ import { ExtensionType, extensionType } from './extension-type';
 import {
   Ve33ConcentratedPool,
   Ve33FullRangePool,
-  Ve33PoolState,
   Ve33StableswapPool,
 } from './pools/ve33';
 
@@ -93,6 +97,7 @@ const SUBGRAPH_QUERY = `query ($lastId: Bytes!) {
 }`;
 
 const MIN_BITMAPS_SEARCHED = 2;
+const VE33_MIN_BITMAPS_SEARCHED = 10;
 const MAX_BATCH_SIZE = 100;
 
 const MAX_SUBGRAPH_RETRIES = 10;
@@ -203,7 +208,8 @@ export class EkuboV3PoolManager implements EventSubscriber {
       [ve33Contract.address]: new Map([
         [
           ve33Iface.getEventTopic('VoteWeightApplied'),
-          parsePoolIdByLogDataOffsetFn(64),
+          data =>
+            BigInt(ve33Iface.decodeEventLog('VoteWeightApplied', data).poolId),
         ],
       ]),
     };
@@ -723,37 +729,69 @@ export class EkuboV3PoolManager implements EventSubscriber {
       }),
     );
 
-    promises.push(
-      ...ve33PoolKeys.map(async ({ key, initBlockNumber }) => {
-        try {
-          if (isStableswapKey(key)) {
-            if (key.config.poolTypeConfig.isFullRange()) {
-              await addPool<
-                StableswapPoolTypeConfig,
-                Ve33PoolState<FullRangePoolState.Object>,
-                Ve33FullRangePool
-              >(Ve33FullRangePool, undefined, initBlockNumber, key);
-            } else {
-              await addPool<
-                StableswapPoolTypeConfig,
-                Ve33PoolState<FullRangePoolState.Object>,
-                Ve33StableswapPool
-              >(Ve33StableswapPool, undefined, initBlockNumber, key);
-            }
-          } else if (isConcentratedKey(key)) {
-            await addPool<
-              ConcentratedPoolTypeConfig,
-              Ve33PoolState<ConcentratedPoolState.Object>,
-              Ve33ConcentratedPool
-            >(Ve33ConcentratedPool, undefined, initBlockNumber, key);
-          }
-        } catch (err) {
-          this.logger.error(
-            `Failed to construct Ve33 pool ${key.stringId}: ${err}`,
-          );
-        }
-      }),
-    );
+    for (
+      let batchStart = 0;
+      batchStart < ve33PoolKeys.length;
+      batchStart += MAX_BATCH_SIZE
+    ) {
+      const batch = ve33PoolKeys.slice(batchStart, batchStart + MAX_BATCH_SIZE);
+
+      promises.push(
+        (
+          this.contracts.ve33.quoteDataFetcher.getVe33QuoteData(
+            batch.map(({ key }) => key.toAbi()),
+            VE33_MIN_BITMAPS_SEARCHED,
+            { blockTag: blockNumber },
+          ) as Promise<Ve33QuoteData[]>
+        )
+          .then(async fetchedData => {
+            await Promise.all(
+              fetchedData.map(async (data, i) => {
+                const { key, initBlockNumber } = batch[i];
+                const swapFee = data.swapFee.toBigInt();
+
+                try {
+                  if (isStableswapKey(key)) {
+                    const state = {
+                      ...FullRangePoolState.fromQuoter(data.quoteData),
+                      swapFee,
+                    };
+                    await (key.config.poolTypeConfig.isFullRange()
+                      ? addPool(Ve33FullRangePool, state, initBlockNumber, key)
+                      : addPool(
+                          Ve33StableswapPool,
+                          state,
+                          initBlockNumber,
+                          key,
+                        ));
+                  } else if (isConcentratedKey(key)) {
+                    await addPool(
+                      Ve33ConcentratedPool,
+                      {
+                        ...ConcentratedPoolState.fromQuoter(data.quoteData),
+                        swapFee,
+                      },
+                      initBlockNumber,
+                      key,
+                    );
+                  }
+                } catch (err) {
+                  this.logger.error(
+                    `Failed to construct Ve33 pool ${key.stringId}: ${err}`,
+                  );
+                }
+              }),
+            );
+          })
+          .catch((err: any) => {
+            this.logger.error(
+              `Fetching Ve33 batch failed. Pool keys: ${batch.map(
+                ({ key }) => key.stringId,
+              )}. Error: ${err}`,
+            );
+          }),
+      );
+    }
 
     const boostedFeesDataFetcher = this.contracts.boostedFees.quoteDataFetcher;
     const coreQuoteDataFetcher = this.contracts.core.quoteDataFetcher;
