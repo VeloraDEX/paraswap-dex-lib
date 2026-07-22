@@ -11,6 +11,8 @@ When making fixes based on code review comments or feedback, add a concise descr
 <!-- Add new fixes at the top of this list -->
 <!-- Format: - **[Date] Issue**: Brief description of fix -->
 
+- **[2026-07] Sub-second block timestamps**: Do not force `block.timestamp` to advance by one second on Robinhood, where multiple 100ms blocks can share the same EVM timestamp second. Estimate from the greater of wall-clock time and the last observed timestamp.
+
 - **[2026-07] Ve33 state consistency**: Use `Ve33DataFetcher.getVe33QuoteData` to fetch Core quote state and the extension-managed fee atomically at one block. Decode `VoteWeightApplied` with its ABI and signature topic instead of fixed byte offsets.
 
 - **[2025-01] Block manager unavailable in certain methods**: `dexHelper.blockManager` is not available in `getTopPoolsForToken()` and `updatePoolState()` methods since these are called on a service that does not have it implemented. Use direct RPC calls (e.g., `dexHelper.provider.getBlock('latest')`) instead when block data is needed in these methods.
