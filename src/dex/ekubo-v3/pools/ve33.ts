@@ -30,6 +30,7 @@ import {
 } from './utils';
 
 const EXTRA_BASE_GAS_COST_OF_ONE_VE33_SWAP = 30_000;
+export const VE33_MIN_BITMAPS_SEARCHED = 10;
 
 export type Ve33PoolState<S> = S & { swapFee: bigint };
 
@@ -121,7 +122,7 @@ export class Ve33FullRangePool extends FullRangePoolBase<
     const [data, swapFee] = await fetchVe33State(
       this.ve33Contracts,
       this.key,
-      0,
+      VE33_MIN_BITMAPS_SEARCHED,
       blockNumber,
     );
     return { ...FullRangePoolState.fromQuoter(data), swapFee };
@@ -191,7 +192,7 @@ export class Ve33StableswapPool extends StableswapPoolBase<
     const [data, swapFee] = await fetchVe33State(
       this.ve33Contracts,
       this.key,
-      0,
+      VE33_MIN_BITMAPS_SEARCHED,
       blockNumber,
     );
     return { ...FullRangePoolState.fromQuoter(data), swapFee };
@@ -268,7 +269,7 @@ export class Ve33ConcentratedPool extends ConcentratedPoolBase<
     const [data, swapFee] = await fetchVe33State(
       this.ve33Contracts,
       this.key,
-      10,
+      VE33_MIN_BITMAPS_SEARCHED,
       blockNumber,
     );
     return { ...ConcentratedPoolState.fromQuoter(data), swapFee };

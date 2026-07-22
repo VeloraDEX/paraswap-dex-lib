@@ -39,6 +39,7 @@ import { TwammPool, TwammPoolState } from './pools/twamm';
 import { BoostedFeesPool, BoostedFeesPoolState } from './pools/boosted-fees';
 import { ExtensionType, extensionType } from './extension-type';
 import {
+  VE33_MIN_BITMAPS_SEARCHED,
   Ve33ConcentratedPool,
   Ve33FullRangePool,
   Ve33StableswapPool,
@@ -97,7 +98,6 @@ const SUBGRAPH_QUERY = `query ($lastId: Bytes!) {
 }`;
 
 const MIN_BITMAPS_SEARCHED = 2;
-const VE33_MIN_BITMAPS_SEARCHED = 10;
 const MAX_BATCH_SIZE = 100;
 
 const MAX_SUBGRAPH_RETRIES = 10;
@@ -271,7 +271,7 @@ export class EkuboV3PoolManager implements EventSubscriber {
         }
 
         try {
-          this.handlePoolInitialized(
+          await this.handlePoolInitialized(
             this.contracts.core.interface.decodeEventLog(
               this.poolInitializedFragment,
               log.data,
@@ -933,10 +933,10 @@ export class EkuboV3PoolManager implements EventSubscriber {
     this.poolsByString.clear();
   }
 
-  private handlePoolInitialized(
+  private async handlePoolInitialized(
     ev: Result,
     blockHeader: Readonly<BlockHeader>,
-  ) {
+  ): Promise<void> {
     const poolKey = PoolKey.fromAbi(ev.poolKey);
     const { extension } = poolKey.config;
     const blockNumber = blockHeader.number;
@@ -965,6 +965,18 @@ export class EkuboV3PoolManager implements EventSubscriber {
       this.setPool(pool);
     };
 
+    const fetchAndAddPool = async <C extends PoolTypeConfig>(
+      constructor: {
+        new (...args: [...typeof commonArgs, PoolKey<C>]): IEkuboPool<C>;
+      },
+      poolKey: PoolKey<C>,
+    ): Promise<void> => {
+      const pool = new constructor(...commonArgs, poolKey);
+      pool.isTracking = this.isTracking;
+      await pool.updateState(blockNumber);
+      this.setPool(pool);
+    };
+
     if (isStableswapKey(poolKey)) {
       switch (extensionType(extension)) {
         case ExtensionType.NoSwapCallPoints:
@@ -986,13 +998,9 @@ export class EkuboV3PoolManager implements EventSubscriber {
             TwammPoolState.fromPoolInitialization(state),
           );
         case ExtensionType.Ve33:
-          const ve33State = {
-            ...FullRangePoolState.fromPoolInitialization(state),
-            swapFee: 0n,
-          };
           return poolKey.config.poolTypeConfig.isFullRange()
-            ? addPool(Ve33FullRangePool, poolKey, ve33State)
-            : addPool(Ve33StableswapPool, poolKey, ve33State);
+            ? fetchAndAddPool(Ve33FullRangePool, poolKey)
+            : fetchAndAddPool(Ve33StableswapPool, poolKey);
         default:
           this.logger.debug(
             `Ignoring unknown pool extension ${hexZeroPad(
@@ -1017,10 +1025,7 @@ export class EkuboV3PoolManager implements EventSubscriber {
             BoostedFeesPoolState.fromPoolInitialization(state),
           );
         case ExtensionType.Ve33:
-          return addPool(Ve33ConcentratedPool, poolKey, {
-            ...concentratedPoolState,
-            swapFee: 0n,
-          });
+          return fetchAndAddPool(Ve33ConcentratedPool, poolKey);
         default:
           this.logger.debug(
             `Ignoring unknown pool extension ${hexZeroPad(

@@ -1,13 +1,16 @@
 import { StaticJsonRpcProvider } from '@ethersproject/providers';
+import { BigNumber } from 'ethers';
 import { Network } from '../../constants';
 import {
   EkuboV3PoolManager,
   PoolInitialization,
   SubgraphData,
 } from './ekubo-v3-pool-manager';
-import { DEX_KEY, EKUBO_V3_CONFIG } from './config';
+import { DEX_KEY, EKUBO_V3_CONFIG, VE33_ADDRESS } from './config';
 import { ekuboContracts } from './utils';
 import { IDexHelper } from '../../dex-helper';
+import { PoolConfig, PoolKey, StableswapPoolTypeConfig } from './pools/utils';
+import { VE33_MIN_BITMAPS_SEARCHED } from './pools/ve33';
 
 const hex16 = (n: number) => `0x${n.toString(16).padStart(32, '0')}`;
 
@@ -40,6 +43,7 @@ const makeTestCtx = () => {
 
   const dexHelper = {
     provider,
+    config: { isSlave: true },
     httpRequest: { querySubgraph },
     blockManager: { subscribeToLogs },
   } as unknown as IDexHelper;
@@ -166,5 +170,78 @@ describe('EkuboV3PoolManager subgraph pagination', () => {
     expect((res.poolKeysRes as Error).message).toBe(
       'Subgraph pool key retrieval failed',
     );
+  });
+});
+
+describe('EkuboV3PoolManager Ve33 initialization', () => {
+  test('fetches the dynamic fee and uses consistent bitmap depth on regeneration', async () => {
+    const { dexHelper, contracts, logger } = makeTestCtx();
+    const manager = new EkuboV3PoolManager(
+      DEX_KEY,
+      logger,
+      dexHelper,
+      contracts,
+      EKUBO_V3_CONFIG[DEX_KEY][Network.ROBINHOOD].subgraphId,
+    );
+    const getVe33QuoteData = jest.fn().mockResolvedValue([
+      {
+        quoteData: {
+          tick: 0,
+          sqrtRatio: BigNumber.from(0),
+          liquidity: BigNumber.from(1_000_000),
+          minTick: 0,
+          maxTick: 0,
+          ticks: [],
+        },
+        swapFee: BigNumber.from(123),
+      },
+    ]);
+    contracts.ve33.quoteDataFetcher = {
+      getVe33QuoteData,
+    } as any;
+
+    const poolKeys = [
+      new PoolKey(
+        1n,
+        2n,
+        new PoolConfig(
+          BigInt(VE33_ADDRESS),
+          0n,
+          StableswapPoolTypeConfig.fullRangeConfig(),
+        ),
+      ),
+      new PoolKey(
+        1n,
+        3n,
+        new PoolConfig(
+          BigInt(VE33_ADDRESS),
+          0n,
+          new StableswapPoolTypeConfig(0, 1),
+        ),
+      ),
+    ];
+
+    for (const poolKey of poolKeys) {
+      await (manager as any).handlePoolInitialized(
+        { poolKey: poolKey.toAbi(), sqrtRatio: 0n, tick: 0 },
+        { number: 123 },
+      );
+
+      const pool = manager.poolsByBI.get(poolKey.numId);
+      expect(pool).toBeDefined();
+      expect((pool as any).getState(123).swapFee).toBe(123n);
+      await pool!.updateState(124);
+    }
+
+    expect(getVe33QuoteData).toHaveBeenCalledTimes(4);
+    for (const call of getVe33QuoteData.mock.calls) {
+      expect(call[1]).toBe(VE33_MIN_BITMAPS_SEARCHED);
+    }
+    expect(getVe33QuoteData.mock.calls.map(call => call[2])).toEqual([
+      { blockTag: 123 },
+      { blockTag: 124 },
+      { blockTag: 123 },
+      { blockTag: 124 },
+    ]);
   });
 });
