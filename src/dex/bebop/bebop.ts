@@ -23,6 +23,7 @@ import {
   BebopLevel,
   BebopPair,
   BebopPricingResponse,
+  BebopTokenAmount,
   RestrictData,
   RoutingInstruction,
   TokenDataMap,
@@ -138,6 +139,62 @@ export class Bebop extends SimpleExchange implements IDex<BebopData> {
         },
       },
     );
+  }
+
+  private getTokenAmount(
+    amounts: { [address: string]: BebopTokenAmount },
+    tokenAddress: Address,
+  ): BebopTokenAmount {
+    const checksumAddress = utils.getAddress(tokenAddress);
+    const tokenAmount =
+      amounts[checksumAddress] ||
+      Object.entries(amounts).find(
+        ([address]) => address.toLowerCase() === checksumAddress.toLowerCase(),
+      )?.[1];
+
+    assert(
+      tokenAmount !== undefined,
+      `${this.dexKey}-${this.network}: token amount missing for ${checksumAddress}`,
+    );
+
+    return tokenAmount;
+  }
+
+  private getQuoteSlippage(side: SwapSide, slippageFactor: BigNumber): string {
+    const slippage =
+      side === SwapSide.SELL
+        ? new BigNumber(1).minus(slippageFactor)
+        : slippageFactor.minus(1);
+
+    return slippage.gt(0) ? slippage.multipliedBy(100).toFixed() : '0';
+  }
+
+  private getTransactionTarget(data: BebopData): Address {
+    assert(data.tx?.to, `${this.dexKey}-${this.network}: tx.to undefined`);
+
+    return utils.getAddress(data.tx.to);
+  }
+
+  private getApprovalTarget(data: BebopData): Address {
+    assert(
+      data.approvalTarget,
+      `${this.dexKey}-${this.network}: approvalTarget undefined`,
+    );
+
+    return utils.getAddress(data.approvalTarget);
+  }
+
+  private getPartialFillAmountPos(data: BebopData): number | undefined {
+    if (data.partialFillOffset === undefined || data.partialFillOffset === null) {
+      return undefined;
+    }
+
+    assert(
+      Number.isInteger(data.partialFillOffset) && data.partialFillOffset >= 0,
+      `${this.dexKey}-${this.network}: invalid partialFillOffset ${data.partialFillOffset}`,
+    );
+
+    return 4 + data.partialFillOffset * 32;
   }
 
   async initializePricing(blockNumber: number) {
@@ -559,7 +616,7 @@ export class Bebop extends SimpleExchange implements IDex<BebopData> {
     const payload = tx.data;
 
     return {
-      targetExchange: this.settlementAddress,
+      targetExchange: this.getTransactionTarget(data),
       payload,
       networkFee: '0',
     };
@@ -589,6 +646,8 @@ export class Bebop extends SimpleExchange implements IDex<BebopData> {
     tokenAddress: Address,
     limit: number,
   ): Promise<PoolLiquidity[]> {
+    const normalizedTokenAddress =
+      this.dexHelper.config.wrapETH(tokenAddress).toLowerCase();
     const prices = await this.getCachedPrices();
 
     if (!prices) {
@@ -603,8 +662,8 @@ export class Bebop extends SimpleExchange implements IDex<BebopData> {
       let token;
       const [base, quote] = pair.split('/');
 
-      const isBase = base.toLowerCase() == tokenAddress.toLowerCase();
-      const isQuote = quote.toLowerCase() == tokenAddress.toLowerCase();
+      const isBase = base.toLowerCase() == normalizedTokenAddress;
+      const isQuote = quote.toLowerCase() == normalizedTokenAddress;
 
       // There is pricing for token is not enabled at the moment
       if (
@@ -680,6 +739,10 @@ export class Bebop extends SimpleExchange implements IDex<BebopData> {
     const { tx } = data;
 
     assert(tx !== undefined, `${this.dexKey}-${this.network}: tx undefined`);
+    assert(tx.data, `${this.dexKey}-${this.network}: tx.data undefined`);
+
+    const targetExchange = this.getTransactionTarget(data);
+    const spender = this.getApprovalTarget(data);
 
     const isSwapSingle = tx.data.slice(0, 10) === SWAP_SINGLE_METHOD_SELECTOR;
     const isSwapAggregate =
@@ -717,14 +780,34 @@ export class Bebop extends SimpleExchange implements IDex<BebopData> {
         exchangeData: exchangeData,
         needWrapNative: this.needWrapNative,
         dexFuncHasRecipient: true,
-        targetExchange: this.settlementAddress,
+        targetExchange,
+        spender,
         returnAmountPos: undefined,
         sendEthButSupportsInsertFromAmount: true,
         insertFromAmountPos: filledTakerAmountPos,
       };
-    } else {
-      throw new Error('Not supported method');
     }
+
+    const partialFillAmountPos = this.getPartialFillAmountPos(data);
+    const canInsertPartialFillAmount =
+      side === SwapSide.SELL && partialFillAmountPos !== undefined;
+
+    return {
+      exchangeData: tx.data,
+      needWrapNative: this.needWrapNative,
+      dexFuncHasRecipient: true,
+      targetExchange,
+      spender,
+      returnAmountPos: undefined,
+      ...(canInsertPartialFillAmount
+        ? {
+            sendEthButSupportsInsertFromAmount: true,
+            insertFromAmountPos: partialFillAmountPos,
+          }
+        : {
+            swappedAmountNotPresentInExchangeData: true,
+          }),
+    };
   }
 
   async preProcessTransaction(
@@ -751,6 +834,7 @@ export class Bebop extends SimpleExchange implements IDex<BebopData> {
       gasless: false,
       skip_validation: true,
       source: this.bebopAuthName,
+      slippage: this.getQuoteSlippage(side, options.slippageFactor),
     };
 
     let requestId: string | undefined;
@@ -778,8 +862,11 @@ export class Bebop extends SimpleExchange implements IDex<BebopData> {
 
       if (
         !response.tx ||
+        !response.tx.to ||
+        !response.tx.data ||
         !response.buyTokens ||
         !response.sellTokens ||
+        !response.approvalTarget ||
         !response.expiry
       ) {
         const baseMessage = `Bebop quote failed on chain ${this.network} Sell: ${params.sell_tokens}. Buy: ${params.buy_tokens}.`;
@@ -796,8 +883,12 @@ export class Bebop extends SimpleExchange implements IDex<BebopData> {
 
       if (side === SwapSide.SELL) {
         const requiredAmount = optimalSwapExchange.destAmount;
+        const quoteTokenAmount = this.getTokenAmount(
+          response.buyTokens,
+          destToken.address,
+        );
         const quoteAmount =
-          response.buyTokens[utils.getAddress(destToken.address)].amount;
+          quoteTokenAmount.minimumAmount || quoteTokenAmount.amount;
 
         const requiredAmountWithSlippage = new BigNumber(requiredAmount)
           .times(options.slippageFactor)
@@ -815,8 +906,10 @@ export class Bebop extends SimpleExchange implements IDex<BebopData> {
         }
       } else {
         const requiredAmount = optimalSwapExchange.srcAmount;
-        const quoteAmount =
-          response.sellTokens[utils.getAddress(srcToken.address)].amount;
+        const quoteAmount = this.getTokenAmount(
+          response.sellTokens,
+          srcToken.address,
+        ).amount;
 
         const requiredAmountWithSlippage = new BigNumber(requiredAmount)
           .times(options.slippageFactor)

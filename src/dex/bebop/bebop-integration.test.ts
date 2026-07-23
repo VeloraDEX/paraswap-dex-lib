@@ -3,6 +3,8 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 import { Interface, Result } from '@ethersproject/abi';
+import BigNumber from 'bignumber.js';
+import { utils } from 'ethers';
 import { DummyDexHelper } from '../../dex-helper/index';
 import { Network, SwapSide } from '../../constants';
 import { BI_POWS } from '../../bigint-constants';
@@ -111,7 +113,7 @@ describe('Bebop', function () {
     });
 
     afterAll(async () => {
-      if (bebop.releaseResources) {
+      if (bebop?.releaseResources) {
         await bebop.releaseResources();
       }
     });
@@ -178,5 +180,156 @@ describe('Bebop', function () {
 
       expect(pools.length).toBe(0);
     });
+
+  });
+
+  describe('DexParam Generation', () => {
+    const network = Network.MAINNET;
+    const dexHelper = new DummyDexHelper(network);
+    const tokens = Tokens[network];
+    const bebop = new Bebop(network, dexKey, dexHelper);
+    const routerAddress = '0xBeb0009ACa35087ce7cCF11637E24dd1Aad3bf2A';
+    const settlementAddress = '0xbbbbbBB520d69a9775E85b458C58c648259FAD5F';
+    const userAddress = '0x5Bad996643a924De21b6b2875c85C33F3c5bBcB6';
+    const routerCalldata =
+      '0xa3ce737f' + '0'.repeat(64) + '1'.padStart(64, '0');
+
+    it('uses returned router tx target and approval target', () => {
+      const data = {
+        approvalTarget: settlementAddress,
+        partialFillOffset: 1,
+        tx: {
+          to: routerAddress,
+          value: '0x0',
+          data: routerCalldata,
+        },
+      };
+
+      const dexParam = bebop.getDexParam(
+        tokens['WETH'].address,
+        tokens['USDC'].address,
+        '1000000000000000000',
+        '1000000000',
+        userAddress,
+        data,
+        SwapSide.SELL,
+      );
+
+      expect(dexParam.targetExchange).toBe(utils.getAddress(routerAddress));
+      expect(dexParam.spender).toBe(utils.getAddress(settlementAddress));
+      expect(dexParam.exchangeData).toBe(routerCalldata);
+      expect(dexParam.insertFromAmountPos).toBe(36);
+    });
+
+    it('does not infer a dynamic amount position without partialFillOffset', () => {
+      const data = {
+        approvalTarget: routerAddress,
+        tx: {
+          to: routerAddress,
+          value: '0x0',
+          data: routerCalldata,
+        },
+      };
+
+      const dexParam = bebop.getDexParam(
+        tokens['WETH'].address,
+        tokens['USDC'].address,
+        '1000000000000000000',
+        '1000000000',
+        userAddress,
+        data,
+        SwapSide.SELL,
+      );
+
+      expect(dexParam.targetExchange).toBe(utils.getAddress(routerAddress));
+      expect(dexParam.spender).toBe(utils.getAddress(routerAddress));
+      expect(dexParam.swappedAmountNotPresentInExchangeData).toBe(true);
+      expect(dexParam.insertFromAmountPos).toBeUndefined();
+    });
+
+    it('does not insert sell amount into router buy calldata', () => {
+      const data = {
+        approvalTarget: routerAddress,
+        partialFillOffset: 1,
+        tx: {
+          to: routerAddress,
+          value: '0x0',
+          data: routerCalldata,
+        },
+      };
+
+      const dexParam = bebop.getDexParam(
+        tokens['WETH'].address,
+        tokens['USDC'].address,
+        '1000000000000000000',
+        '1000000000',
+        userAddress,
+        data,
+        SwapSide.BUY,
+      );
+
+      expect(dexParam.targetExchange).toBe(utils.getAddress(routerAddress));
+      expect(dexParam.spender).toBe(utils.getAddress(routerAddress));
+      expect(dexParam.swappedAmountNotPresentInExchangeData).toBe(true);
+      expect(dexParam.insertFromAmountPos).toBeUndefined();
+    });
+
+    it('passes slippage to quote request and validates minimum amount', async () => {
+      const localDexHelper = new DummyDexHelper(network);
+      const localBebop = new Bebop(network, dexKey, localDexHelper);
+      const wethAddress = utils.getAddress(tokens['WETH'].address);
+      const usdcAddress = utils.getAddress(tokens['USDC'].address);
+
+      const getMock = jest.fn(async (url: string) => {
+        expect(decodeURIComponent(url)).toContain('slippage=1');
+
+        return {
+          requestId: 'request-id',
+          quoteId: 'quote-id',
+          expiry: Math.floor(Date.now() / 1000) + 60,
+          approvalTarget: routerAddress,
+          buyTokens: {
+            [usdcAddress]: {
+              amount: '1000000000',
+              minimumAmount: '980000000',
+            },
+          },
+          sellTokens: {
+            [wethAddress]: {
+              amount: '1000000000000000000',
+            },
+          },
+          tx: {
+            to: routerAddress,
+            value: '0x0',
+            data: routerCalldata,
+          },
+        };
+      });
+
+      (localDexHelper.httpRequest.get as any) = getMock;
+
+      await expect(
+        localBebop.preProcessTransaction(
+          {
+            srcAmount: '1000000000000000000',
+            destAmount: '1000000000',
+          } as any,
+          tokens['WETH'],
+          tokens['USDC'],
+          SwapSide.SELL,
+          {
+            slippageFactor: new BigNumber('0.99'),
+            txOrigin: userAddress,
+            userAddress,
+            executionContractAddress: userAddress,
+            recipient: userAddress,
+          } as any,
+        ),
+      ).rejects.toThrow(/SlippageCheckError/);
+
+      expect(getMock).toHaveBeenCalledTimes(1);
+    });
+
   });
 });
