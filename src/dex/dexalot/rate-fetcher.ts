@@ -31,8 +31,6 @@ export class RateFetcher {
   private tokensCacheTTL: number;
 
   private blacklistFetcher: Fetcher<DexalotBlacklistResponse>;
-  private blacklistCacheKey: string;
-  private blacklistCacheTTL: number;
 
   constructor(
     private dexHelper: IDexHelper,
@@ -48,8 +46,6 @@ export class RateFetcher {
     this.tokensAddrCacheKey = config.rateConfig.tokensAddrCacheKey;
     this.tokensCacheKey = config.rateConfig.tokensCacheKey;
     this.tokensCacheTTL = config.rateConfig.tokensCacheTTLSecs;
-    this.blacklistCacheKey = config.rateConfig.blacklistCacheKey;
-    this.blacklistCacheTTL = config.rateConfig.blacklistCacheTTLSecs;
 
     this.pairsFetcher = new Fetcher<DexalotPairsResponse>(
       dexHelper.httpRequest,
@@ -99,7 +95,9 @@ export class RateFetcher {
             );
           },
         },
-        handler: this.handleBlacklistResponse.bind(this),
+        handler: this.buildBlacklistResponseHandler(
+          config.rateConfig.setBlacklist,
+        ),
       },
       config.rateConfig.blacklistIntervalMs,
       logger,
@@ -182,16 +180,13 @@ export class RateFetcher {
     );
   }
 
-  private async handleBlacklistResponse(
-    resp: DexalotBlacklistResponse,
-  ): Promise<void> {
-    const { blacklist } = resp;
-    this.dexHelper.cache.setex(
-      this.dexKey,
-      this.network,
-      this.blacklistCacheKey,
-      this.blacklistCacheTTL,
-      JSON.stringify(blacklist.map(item => item.toLowerCase())),
-    );
+  private buildBlacklistResponseHandler(
+    setBlacklist: (addresses: string[]) => Promise<void>,
+  ): (resp: DexalotBlacklistResponse) => Promise<void> {
+    return async (resp: DexalotBlacklistResponse) => {
+      const { blacklist } = resp;
+
+      await setBlacklist(blacklist);
+    };
   }
 }

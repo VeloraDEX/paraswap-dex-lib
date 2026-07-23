@@ -126,54 +126,6 @@ function testForNetwork(
 describe('QuickSwapV4 E2E', () => {
   const dexKey = 'QuickSwapV4';
 
-  describe('Polygon', () => {
-    const network = Network.POLYGON;
-
-    describe('USDCn -> WMATIC', () => {
-      const tokenASymbol: string = 'USDCn';
-      const tokenBSymbol: string = 'WMATIC';
-
-      const tokenAAmount: string = '1000000';
-      const tokenBAmount: string = '1000000000000000000';
-      const nativeTokenAmount = '1000000000000000000';
-
-      testForNetwork(
-        network,
-        dexKey,
-        tokenASymbol,
-        tokenBSymbol,
-        tokenAAmount,
-        tokenBAmount,
-        nativeTokenAmount,
-      );
-    });
-
-    describe('WOLF -> WMATIC', () => {
-      const tokenASymbol: string = 'WOLF';
-      const tokenBSymbol: string = 'WMATIC';
-
-      const tokenAAmount: string = '10000000000';
-      const tokenBAmount: string = '100000000000000000';
-      const nativeTokenAmount = '1000000000000000000';
-
-      testForNetwork(
-        network,
-        dexKey,
-        tokenASymbol,
-        tokenBSymbol,
-        tokenAAmount,
-        tokenBAmount,
-        nativeTokenAmount,
-        {
-          srcFee: 0,
-          destFee: 0,
-          srcDexFee: 200,
-          destDexFee: 0,
-        } as any,
-      );
-    });
-  });
-
   describe('Base', () => {
     const network = Network.BASE;
 
@@ -226,6 +178,52 @@ describe('BlackholeCL E2E', () => {
     describe('BTCb -> WAVAX', () => {
       const tokenASymbol: string = 'BTCb';
       const tokenBSymbol: string = 'WAVAX';
+
+      const tokenAAmount: string = '100000000';
+      const tokenBAmount: string = '1000000000000000000';
+      const nativeTokenAmount = '1000000000000000000';
+
+      testForNetwork(
+        network,
+        dexKey,
+        tokenASymbol,
+        tokenBSymbol,
+        tokenAAmount,
+        tokenBAmount,
+        nativeTokenAmount,
+      );
+    });
+  });
+});
+
+describe('Supernova E2E', () => {
+  const dexKey = 'Supernova';
+
+  describe('Mainnet', () => {
+    const network = Network.MAINNET;
+
+    describe('USDC -> WETH', () => {
+      const tokenASymbol: string = 'USDC';
+      const tokenBSymbol: string = 'WETH';
+
+      const tokenAAmount: string = '1000000';
+      const tokenBAmount: string = '1000000000000000000';
+      const nativeTokenAmount = '1000000000000000000';
+
+      testForNetwork(
+        network,
+        dexKey,
+        tokenASymbol,
+        tokenBSymbol,
+        tokenAAmount,
+        tokenBAmount,
+        nativeTokenAmount,
+      );
+    });
+
+    describe('USDT -> WETH', () => {
+      const tokenASymbol: string = 'USDT';
+      const tokenBSymbol: string = 'WETH';
 
       const tokenAAmount: string = '100000000';
       const tokenBAmount: string = '1000000000000000000';

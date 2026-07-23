@@ -128,7 +128,7 @@ async function testPricingForPair(
   if (wooFiV2.hasConstantPriceLargeAmounts) {
     checkConstantPoolPrices(poolPrices!, amounts, dexKey);
   } else {
-    checkPoolPrices(poolPrices!, amounts, side, dexKey);
+    checkPoolPrices(poolPrices!, amounts, side, dexKey, false);
   }
 
   // Check if onchain pricing equals to calculated ones
@@ -390,7 +390,7 @@ describe('WooFiV2', function () {
     });
 
     const baseATokenSymbol = 'WMATIC';
-    const quoteTokenSymbol = 'USDC';
+    const quoteTokenSymbol = 'USDCn';
     const baseBTokenSymbol = 'WETH';
     const untradableSymbol = 'POPS';
 
@@ -431,6 +431,7 @@ describe('WooFiV2', function () {
       baseBTokenSymbol,
       untradableSymbol,
       pricingCheckFuncName,
+      3,
     );
   });
 
@@ -460,6 +461,7 @@ describe('WooFiV2', function () {
       baseBTokenSymbol,
       untradableSymbol,
       pricingCheckFuncName,
+      4,
     );
   });
 
@@ -480,6 +482,36 @@ describe('WooFiV2', function () {
     const quoteTokenSymbol = 'USDC';
     const baseBTokenSymbol = 'BTCb';
     const untradableSymbol = 'POPS';
+
+    runTestsForChain(
+      dexHelper,
+      initProps,
+      baseATokenSymbol,
+      quoteTokenSymbol,
+      baseBTokenSymbol,
+      untradableSymbol,
+      pricingCheckFuncName,
+      3,
+    );
+  });
+
+  describe('Base', () => {
+    const network = Network.BASE;
+    const dexHelper = new DummyDexHelper(network);
+    const initProps: { dex: WooFiV2; blockNumber: number } = {
+      dex: new WooFiV2(network, dexKey, dexHelper),
+      blockNumber: 0,
+    };
+
+    beforeAll(async () => {
+      initProps.blockNumber = await dexHelper.web3Provider.eth.getBlockNumber();
+      await initProps.dex.initializePricing(initProps.blockNumber);
+    });
+
+    const baseATokenSymbol = 'WETH';
+    const quoteTokenSymbol = 'USDC';
+    const baseBTokenSymbol = 'cbBTC';
+    const untradableSymbol = 'DOG';
 
     runTestsForChain(
       dexHelper,

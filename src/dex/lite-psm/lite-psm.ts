@@ -327,10 +327,6 @@ export class LitePsm
     };
   }
 
-  getTokenFromAddress(address: Address): Token {
-    return { address, decimals: 0 };
-  }
-
   async preProcessTransaction?(
     optimalSwapExchange: OptimalSwapExchange<LitePsmData>,
     srcToken: Token,

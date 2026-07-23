@@ -100,10 +100,31 @@ export class ExecutorDetector {
       this.routeExecutionTypeToExecutorMap[priceRoute.side][routeExecutionType];
 
     if (executorName) {
+      // Revertable fallback groups are implemented in Executor01 and Executor02.
+      // Warn if a route carrying a fallback maps elsewhere (Executor03 buy-side
+      // is not ported yet) — the fallback will be ignored, not encoded.
+      if (
+        executorName !== Executors.ONE &&
+        executorName !== Executors.TWO &&
+        this.routeHasFallback(priceRoute)
+      ) {
+        this.dexHelper
+          .getLogger('ExecutorDetector')
+          .warn(
+            `Route carries a revertable fallback but maps to ${executorName}; ` +
+              `fallback groups are only supported on Executor01/02 and will be ignored.`,
+          );
+      }
       return executorName;
     }
 
     throw new Error(`${executorName} is not implemented`);
+  }
+
+  private routeHasFallback(priceRoute: OptimalRate): boolean {
+    return priceRoute.bestRoute.some(route =>
+      route.swaps.some(swap => swap.swapExchanges.some(se => !!se.fallback)),
+    );
   }
 
   getAddress(executorName: Executors): Address {

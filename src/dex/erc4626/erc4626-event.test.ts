@@ -15,51 +15,25 @@ import { Interface } from '@ethersproject/abi';
 import _ from 'lodash';
 
 jest.setTimeout(50 * 1000);
-const networks = [
-  Network.MAINNET,
-  Network.ARBITRUM,
-  Network.BASE,
-  Network.POLYGON,
-  Network.OPTIMISM,
-  Network.GNOSIS,
-];
 
 async function fetchPoolState(
-  wusdmPool: ERC4626EventPool,
+  pool: ERC4626EventPool,
   blockNumber: number,
 ): Promise<ERC4626PoolState> {
-  const eventState = wusdmPool.getState(blockNumber);
+  const eventState = pool.getState(blockNumber);
   if (eventState) return eventState;
-  const onChainState = await wusdmPool.generateState(blockNumber);
-  wusdmPool.setState(onChainState, blockNumber);
+  const onChainState = await pool.generateState(blockNumber);
+  pool.setState(onChainState, blockNumber);
   return onChainState;
 }
 
-describe('Wusdm', function () {
-  const dexKey = 'Wusdm';
-  const multichainBlockNumbers: {
-    [network: string]: { [eventName: string]: number[] };
-  } = {
-    [Network.MAINNET]: {
-      deposit: [20808811, 20692902, 20685702],
-      withdraw: [20873278, 20869272, 20862960],
-    },
-    [Network.ARBITRUM]: {
-      deposit: [259463653, 259456755, 259448821],
-      withdraw: [259421319, 259420791, 259419437],
-    },
-    [Network.BASE]: {
-      deposit: [20521934, 20460747, 20436449],
-      withdraw: [20492729, 20409282, 20274826],
-    },
-    [Network.POLYGON]: {
-      deposit: [62509681, 62359608, 62160587],
-      withdraw: [62505429, 62381506, 62125779],
-    },
-    [Network.OPTIMISM]: {
-      deposit: [126118678, 126116167, 126110439],
-      withdraw: [126113314, 126108196, 126107784],
-    },
+// Block numbers for testing specific to each integration
+const testBlockNumbers: {
+  [dexKey: string]: {
+    [network: number]: { [eventName: string]: number[] };
+  };
+} = {
+  sDAI: {
     [Network.GNOSIS]: {
       deposit: [
         38964215, 38964218, 38964219, 38964222, 38964224, 38964243, 38964244,
@@ -73,56 +47,97 @@ describe('Wusdm', function () {
         38964309, 38964314,
       ],
     },
-  };
+  },
+  wUSDL: {
+    [Network.MAINNET]: {
+      deposit: [20905821, 20898635, 20895019],
+      withdraw: [20905872, 20899123, 20895341],
+    },
+  },
+  sUSDe: {
+    [Network.MAINNET]: {
+      deposit: [19437256, 19448123, 19452892],
+      withdraw: [19437312, 19448298, 19453001],
+    },
+  },
+  yoETH: {
+    [Network.BASE]: {
+      deposit: [22521934, 22460747, 22436449],
+      withdraw: [],
+    },
+  },
+  yoUSD: {
+    [Network.BASE]: {
+      deposit: [22521934, 22460747, 22436449],
+      withdraw: [],
+    },
+  },
+  stcUSD: {
+    [Network.MAINNET]: {
+      deposit: [21205821, 21198635, 21195019],
+      withdraw: [21205872, 21199123, 21195341],
+    },
+  },
+};
 
-  networks.forEach(network => {
-    describe(`${network}`, function () {
-      const dexKey = network === Network.GNOSIS ? 'sDAI' : 'wUSDM';
+describe('ERC4626 Event Tests', function () {
+  for (const dexKey of Object.keys(ERC4626Config)) {
+    describe(`${dexKey}`, function () {
+      for (const net of Object.keys(ERC4626Config[dexKey])) {
+        const network = Number(net) as Network;
+        const { vault, asset } = ERC4626Config[dexKey][network];
 
-      const wUSDMAddress = ERC4626Config[dexKey][network].vault;
-      const USDMAddress = ERC4626Config[dexKey][network].asset;
+        // Skip if no test block numbers are defined for this integration
+        if (!testBlockNumbers[dexKey]?.[network]) {
+          it.skip(`No test block numbers defined for ${dexKey} on ${Network[network]}`, () => {});
+          continue;
+        }
 
-      const wUSDMIface: Interface = new Interface(ERC4626_ABI);
+        describe(`${Network[network]}`, function () {
+          const vaultAddress = vault;
+          const assetAddress = asset;
 
-      const blockNumbers = Array.from(
-        new Set(
-          Object.values(multichainBlockNumbers[network])
-            .flat()
-            .sort((a, b) => a - b),
-        ),
-      );
+          const vaultIface: Interface = new Interface(ERC4626_ABI);
 
-      blockNumbers.forEach((blockNumber: number) => {
-        it(`Should return the correct state after the ${blockNumber}`, async function () {
-          const dexHelper = new DummyDexHelper(network);
-          const logger = dexHelper.getLogger(dexKey);
-
-          const wusdmPool = new ERC4626EventPool(
-            dexKey,
-            network,
-            `wusdm-pool`,
-            dexHelper,
-            wUSDMAddress,
-            USDMAddress,
-            wUSDMIface,
-            logger,
-            DEPOSIT_TOPIC,
-            WITHDRAW_TOPIC,
-            TRANSFER_TOPIC,
+          const blockNumbers = Array.from(
+            new Set(
+              Object.values(testBlockNumbers[dexKey][network])
+                .flat()
+                .sort((a, b) => a - b),
+            ),
           );
 
-          // await wusdmPool.initialize(blockNumber - 1);
+          blockNumbers.forEach((blockNumber: number) => {
+            it(`Should return the correct state after the ${blockNumber}`, async function () {
+              const dexHelper = new DummyDexHelper(network);
+              const logger = dexHelper.getLogger(dexKey);
 
-          await testEventSubscriber(
-            wusdmPool,
-            wusdmPool.addressesSubscribed,
-            (_blockNumber: number) => fetchPoolState(wusdmPool, _blockNumber),
-            blockNumber,
-            `${dexKey}_${wUSDMAddress}`,
-            dexHelper.provider,
-          );
+              const pool = new ERC4626EventPool(
+                dexKey,
+                network,
+                `${dexKey}-pool`,
+                dexHelper,
+                vaultAddress,
+                assetAddress,
+                vaultIface,
+                logger,
+                DEPOSIT_TOPIC,
+                WITHDRAW_TOPIC,
+                TRANSFER_TOPIC,
+              );
+
+              await testEventSubscriber(
+                pool,
+                pool.addressesSubscribed,
+                (_blockNumber: number) => fetchPoolState(pool, _blockNumber),
+                blockNumber,
+                `${dexKey}_${vaultAddress}`,
+                dexHelper.provider,
+              );
+            });
+          });
         });
-      });
+      }
     });
-  });
+  }
 });

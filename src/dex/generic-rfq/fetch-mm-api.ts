@@ -55,7 +55,7 @@ const multiWrapper = new MultiWrapper(
 );
 
 const url = getEnv('GENERIC_RFQ_URL');
-const path = getEnv('GENERIC_RFQ_PATH_TO_OVERRIDE');
+const path = getEnv('GENERIC_RFQ_PATH_TO_OVERRIDE', true);
 
 const authHttp = genericRFQAuthHttp(path);
 

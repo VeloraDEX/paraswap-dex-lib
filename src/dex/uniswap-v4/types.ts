@@ -1,4 +1,5 @@
 import { Address, NumberAsString } from '../../types';
+import { HookConstructor } from './hooks/types';
 
 export type ModifyLiquidityParams = {
   liquidityDelta: bigint;
@@ -76,6 +77,9 @@ export type SubgraphConnectorPool = {
     address: string;
     decimals: string;
   };
+  fee: string;
+  tickSpacing: string;
+  hooks: string;
 };
 
 export type SubgraphTick = {
@@ -106,6 +110,7 @@ export type DexParams = {
   stateView: string;
   skipPoolsWithUnconventionalFees?: boolean;
   stateMulticall: string;
+  supportedHooks?: HookConstructor[];
 };
 
 export type PoolKey = {

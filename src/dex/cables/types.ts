@@ -93,17 +93,12 @@ export type CablesRateFetcherConfig = {
 
     pairsCacheKey: string;
     pricesCacheKey: string;
-    blacklistCacheKey: string;
     tokensCacheKey: string;
 
-    blacklistCacheTTLSecs: number;
     pairsCacheTTLSecs: number;
     pricesCacheTTLSecs: number;
     tokensCacheTTLSecs: number;
+
+    setBlacklist: (addresses: string[]) => Promise<void>;
   };
 };
-
-export type RestrictData = {
-  count: number;
-  addedDatetimeMs: number;
-} | null;

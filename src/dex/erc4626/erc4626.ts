@@ -18,7 +18,7 @@ import {
 } from '../../constants';
 import * as CALLDATA_GAS_COST from '../../calldata-gas-cost';
 import { getDexKeysWithNetwork } from '../../utils';
-import { IDex, Context } from '../idex';
+import { IDex } from '../idex';
 import { IDexHelper } from '../../dex-helper/idex-helper';
 import {
   ERC4626Data,
@@ -295,7 +295,6 @@ export class ERC4626
     recipient: Address,
     data: ERC4626Data,
     side: SwapSide,
-    _: Context,
     executorAddress: Address,
   ): DexExchangeParam {
     const isSell = side === SwapSide.SELL;

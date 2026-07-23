@@ -5,8 +5,16 @@ export const Tokens: {
   [network: number]: { [symbol: string]: Token };
 } = {
   [Network.MAINNET]: {
+    MPS: {
+      address: '0x96c645d3d3706f793ef52c19bbace441900ed47d',
+      decimals: 0,
+    },
     aEthLidowstETH: {
       address: '0xC035a7cf15375cE2706766804551791aD035E0C2',
+      decimals: 18,
+    },
+    dETH: {
+      address: '0x0a0d53b6684c7b32b4cbef5fe8483bfcc8406742',
       decimals: 18,
     },
     sUSDS: {
@@ -92,6 +100,22 @@ export const Tokens: {
     },
     USDE: {
       address: '0x4c9edd5852cd905f086c759e8383e09bff1e68b3',
+      decimals: 18,
+    },
+    OETH: {
+      address: '0x856c4efb76c1d1ae02e20ceb03a2a6a08b0b8dc3',
+      decimals: 18,
+    },
+    wOETH: {
+      address: '0xdcee70654261af21c44c093c300ed3bb97b78192',
+      decimals: 18,
+    },
+    OUSD: {
+      address: '0x2a8e1e676ec238d8a992307b495b45b3feaa5e86',
+      decimals: 18,
+    },
+    wOUSD: {
+      address: '0xd2af830e8cbdfed6cc11bab697bb25496ed6fa62',
       decimals: 18,
     },
     ebUSD: {
@@ -935,6 +959,14 @@ export const Tokens: {
       address: '0x2d0e0814e62d80056181f5cd932274405966e4f0',
       decimals: 18,
     },
+    OS: {
+      address: '0xb1e25689d55734fd3fffc939c4c3eb52dff8a794',
+      decimals: 18,
+    },
+    wOS: {
+      address: '0x9f0df7799f6fdad409300080cff680f5a23df4b1',
+      decimals: 18,
+    },
   },
   [Network.BSC]: {
     POPS: {
@@ -1214,6 +1246,10 @@ export const Tokens: {
     TRYB: {
       address: '0x564a341df6c126f90cf3ecb92120fd7190acb401',
       decimals: 6,
+    },
+    WLBOND: {
+      address: '0xd1cb926c6b917ecceda162a432a4d242e777bdc7',
+      decimals: 18,
     },
   },
   [Network.ARBITRUM]: {
@@ -1670,6 +1706,10 @@ export const Tokens: {
       address: '0x3a43aec53490cb9fa922847385d82fe25d0e9de7',
       decimals: 18,
     },
+    USDT: {
+      address: '0xfde4c96c8593536e31f229ea8f37b2ada2699bb2',
+      decimals: 6,
+    },
     yoUSD: {
       address: '0x0000000f2eb9f69274678c76222b35eec7588a65',
       decimals: 6,
@@ -1821,6 +1861,18 @@ export const Tokens: {
     EURC: {
       address: `0x60a3e35cc302bfa44cb288bc5a4f316fdb1adb42`,
       decimals: 6,
+    },
+    rETH: {
+      address: '0xB6fe221Fe9EeF5aBa221c348bA20A1Bf5e73624c',
+      decimals: 18,
+    },
+    superOETHb: {
+      address: '0xdbfefd2e8460a6ee4955a68582f85708baea60a3',
+      decimals: 18,
+    },
+    wsuperOETHb: {
+      address: '0x7fcd174e80f264448ebee8c88a7c4476aaf58ea6',
+      decimals: 18,
     },
   },
   [Network.PLASMA]: {
@@ -2007,6 +2059,7 @@ export const Holders: {
     ETH: '0x28C6c06298d514Db089934071355E5743bf21d60',
     USDC: '0x7713974908be4bed47172370115e8b1219f4a5f0',
     USDE: '0x8707f238936c12c309bfc2B9959C35828AcFc512',
+    SUSDE: '0x211Cc4DD073734dA055fbF44a2b4667d5E5fE5d2',
     AMPL: '0x223592a191ECfC7FDC38a9256c3BD96E771539A9',
     WBTC: '0x6daB3bCbFb336b29d06B9C793AEF7eaA57888922',
     tBTCv2: '0x84eA3907b9206427F45c7b2614925a2B86D12611',

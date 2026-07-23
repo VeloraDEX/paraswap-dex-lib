@@ -27,5 +27,5 @@ fi
 echo "🔍 Running git-secrets..."
 git-secrets --pre_commit_hook -- "$@"
 
-echo "🧶 Running yarn checks..."
-yarn checks
+echo "🧶 Running pnpm checks..."
+pnpm run checks

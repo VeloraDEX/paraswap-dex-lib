@@ -9,9 +9,9 @@ import {
   DexExchangeParam,
   Logger,
 } from '../../types';
-import { SwapSide, Network } from '../../constants';
+import { SwapSide, Network, ETHER_ADDRESS } from '../../constants';
 import * as CALLDATA_GAS_COST from '../../calldata-gas-cost';
-import { Context, IDex } from '../idex';
+import { IDex } from '../idex';
 import { IDexHelper } from '../../dex-helper';
 import {
   CollateralReserves,
@@ -28,16 +28,20 @@ import { FluidDexConfig, FLUID_DEX_GAS_COST } from './config';
 import { FluidDexFactory } from './fluid-dex-factory';
 import { getDexKeysWithNetwork, getBigIntPow } from '../../utils';
 import { extractReturnAmountPosition } from '../../executor/utils';
-import { BigNumber } from 'ethers';
 import { sqrt } from './utils';
 import { FluidDexLiquidityProxy } from './fluid-dex-liquidity-proxy';
 import { FluidDexEventPool } from './fluid-dex-pool';
-import { MIN_SWAP_LIQUIDITY } from './constants';
+import {
+  MIN_SWAP_LIQUIDITY,
+  ONE_E18,
+  RESERVE_REFRESH_INTERVAL_MS,
+} from './constants';
 
 export class FluidDex extends SimpleExchange implements IDex<FluidDexData> {
   readonly hasConstantPriceLargeAmounts = false;
   readonly needWrapNative = false;
   readonly isFeeOnTransferSupported = false;
+  readonly isStatePollingDex = true;
   public static dexKeysWithNetwork: { key: string; networks: Network[] }[] =
     getDexKeysWithNetwork(FluidDexConfig);
 
@@ -52,6 +56,8 @@ export class FluidDex extends SimpleExchange implements IDex<FluidDexData> {
   readonly liquidityProxy: FluidDexLiquidityProxy;
 
   readonly fluidDexPoolIface: Interface;
+
+  private reserveUpdateIntervalTask?: NodeJS.Timeout;
 
   constructor(
     readonly network: Network,
@@ -124,7 +130,26 @@ export class FluidDex extends SimpleExchange implements IDex<FluidDexData> {
       }),
     );
 
-    await this.liquidityProxy.initialize(blockNumber);
+    if (!this.dexHelper.config.isSlave) {
+      // Await the first fetch so pricing is usable as soon as init returns.
+      await this.updateReserves();
+
+      if (!this.reserveUpdateIntervalTask) {
+        this.reserveUpdateIntervalTask = setInterval(
+          this.updateReserves.bind(this),
+          RESERVE_REFRESH_INTERVAL_MS,
+        );
+      }
+    }
+  }
+
+  private async updateReserves(): Promise<void> {
+    try {
+      const blockNumber = await this.dexHelper.provider.getBlockNumber();
+      await this.liquidityProxy.fetchAndSetState(blockNumber);
+    } catch (error) {
+      this.logger.error(`${this.dexKey}: Error updating reserves:`, error);
+    }
   }
 
   getAdapters(side: SwapSide) {
@@ -148,13 +173,33 @@ export class FluidDex extends SimpleExchange implements IDex<FluidDexData> {
     side: SwapSide,
     blockNumber: number,
   ): Promise<string[]> {
+    if (this.isUnsupportedWethBuy(srcToken.address, side)) return [];
+
     const pools = this.getPoolsByTokenPair(srcToken.address, destToken.address);
     return pools.map(pool => pool.id);
   }
 
+  // Exact-out swaps send the slippage-scaled max input as msg.value and the
+  // pool refunds the unused ETH to the executor — with a WETH-paying user
+  // there is no path returning that raw-ETH refund, so the user would be
+  // silently overcharged. Keep WETH-src BUY unpriced until the executor
+  // supports rewrapping the refund.
+  private isUnsupportedWethBuy(srcToken: Address, side: SwapSide): boolean {
+    return side === SwapSide.BUY && this.dexHelper.config.isWETH(srcToken);
+  }
+
+  // Fluid pools hold native ETH, never WETH. Map WETH to the native address so
+  // WETH-denominated routes price against the native pools; the executor
+  // unwraps/wraps around the swap (see needUnwrapNative in getDexParam).
+  private normalizeTokenAddress(tokenAddress: Address): Address {
+    return this.dexHelper.config.isWETH(tokenAddress)
+      ? ETHER_ADDRESS
+      : tokenAddress.toLowerCase();
+  }
+
   getPoolsByTokenPair(srcToken: Address, destToken: Address): FluidDexPool[] {
-    const srcAddress = srcToken.toLowerCase();
-    const destAddress = destToken.toLowerCase();
+    const srcAddress = this.normalizeTokenAddress(srcToken);
+    const destAddress = this.normalizeTokenAddress(destToken);
 
     // A pair must have 2 different tokens.
     if (srcAddress === destAddress) return [];
@@ -179,8 +224,12 @@ export class FluidDex extends SimpleExchange implements IDex<FluidDexData> {
     limitPools?: string[],
   ): Promise<null | ExchangePrices<FluidDexData>> {
     try {
-      if (srcToken.address.toLowerCase() === destToken.address.toLowerCase())
-        return null;
+      if (this.isUnsupportedWethBuy(srcToken.address, side)) return null;
+
+      const srcTokenAddress = this.normalizeTokenAddress(srcToken.address);
+      const destTokenAddress = this.normalizeTokenAddress(destToken.address);
+
+      if (srcTokenAddress === destTokenAddress) return null;
 
       // Get the pools to use.
       let pools = this.getPoolsByTokenPair(srcToken.address, destToken.address);
@@ -191,9 +240,14 @@ export class FluidDex extends SimpleExchange implements IDex<FluidDexData> {
 
       if (!pools.length) return null;
 
-      const liquidityProxyState = await this.liquidityProxy.getStateOrGenerate(
-        blockNumber,
-      );
+      const liquidityProxyState = await this.liquidityProxy.getState();
+
+      if (!liquidityProxyState) {
+        this.logger.warn(
+          `${this.dexKey}-${this.network}: Liquidity proxy state is not available`,
+        );
+        return null;
+      }
 
       const poolsPrices = await Promise.all(
         pools.map(async pool => {
@@ -224,7 +278,7 @@ export class FluidDex extends SimpleExchange implements IDex<FluidDexData> {
           const prices = amounts.map(amount => {
             if (side === SwapSide.SELL) {
               return this.swapIn(
-                srcToken.address.toLowerCase() === pool.token0.toLowerCase(),
+                srcTokenAddress === pool.token0.toLowerCase(),
                 amount,
                 currentPoolReserves.collateralReserves,
                 currentPoolReserves.debtReserves,
@@ -237,7 +291,7 @@ export class FluidDex extends SimpleExchange implements IDex<FluidDexData> {
               );
             } else {
               return this.swapOut(
-                srcToken.address.toLowerCase() === pool.token0.toLowerCase(),
+                srcTokenAddress === pool.token0.toLowerCase(),
                 amount,
                 currentPoolReserves.collateralReserves,
                 currentPoolReserves.debtReserves,
@@ -324,8 +378,6 @@ export class FluidDex extends SimpleExchange implements IDex<FluidDexData> {
         return eventPool;
       }),
     );
-
-    await this.liquidityProxy.updatePoolState(blockNumber);
   }
 
   // Returns list of top pools based on liquidity. Max
@@ -335,7 +387,7 @@ export class FluidDex extends SimpleExchange implements IDex<FluidDexData> {
     limit: number,
   ): Promise<PoolLiquidity[]> {
     try {
-      const normalizedTokenAddress = tokenAddress.toLowerCase();
+      const normalizedTokenAddress = this.normalizeTokenAddress(tokenAddress);
 
       const relevantPools = this.pools.filter(
         pool =>
@@ -347,7 +399,7 @@ export class FluidDex extends SimpleExchange implements IDex<FluidDexData> {
         return [];
       }
 
-      const liquidityProxyState = this.liquidityProxy.getStaleState();
+      const liquidityProxyState = await this.liquidityProxy.getState();
 
       if (!liquidityProxyState) {
         return [];
@@ -415,10 +467,21 @@ export class FluidDex extends SimpleExchange implements IDex<FluidDexData> {
                   token1LiquidityUSD,
                 ];
 
+          const connectorTokens = [connectorToken];
+          // Native-ETH pools are also reachable with WETH (see
+          // normalizeTokenAddress), so advertise the wrapped connector too.
+          if (connectorToken.address === ETHER_ADDRESS) {
+            connectorTokens.push({
+              ...connectorToken,
+              address:
+                this.dexHelper.config.data.wrappedNativeTokenAddress.toLowerCase(),
+            });
+          }
+
           poolLiquidity.push({
             exchange: this.dexKey,
             address: pool.address,
-            connectorTokens: [connectorToken],
+            connectorTokens,
             liquidityUSD,
           });
         } catch (error) {
@@ -447,7 +510,6 @@ export class FluidDex extends SimpleExchange implements IDex<FluidDexData> {
     recipient: Address,
     data: FluidDexData,
     side: SwapSide,
-    context: Context,
     executorAddress: Address,
   ): Promise<DexExchangeParam> {
     let args: any;
@@ -467,33 +529,30 @@ export class FluidDex extends SimpleExchange implements IDex<FluidDexData> {
         `${this.dexKey}-${this.network}: Pool with id: ${data.poolId} was not found`,
       );
 
+    const swap0To1 =
+      pool.token0.toLowerCase() === this.normalizeTokenAddress(srcToken);
+    const isWethDest = this.dexHelper.config.isWETH(destToken);
+
+    // WETH dest: the pool pays out native ETH; deliver it to the executor so
+    // its wrap-after step can pick it up, and report no recipient support so
+    // the wrapped output is forwarded like any executor-held result.
+    const swapRecipient = isWethDest ? executorAddress : recipient;
+
     if (side === SwapSide.SELL) {
-      if (pool!.token0.toLowerCase() !== srcToken.toLowerCase()) {
-        args = [false, BigInt(srcAmount), BigInt(destAmount), recipient];
-      } else {
-        args = [true, BigInt(srcAmount), BigInt(destAmount), recipient];
-      }
+      args = [swap0To1, BigInt(srcAmount), BigInt(destAmount), swapRecipient];
     } else {
-      if (pool!.token0.toLowerCase() !== srcToken.toLowerCase()) {
-        args = [
-          false,
-          (BigInt(destAmount) * 1000001n) / 1000000n, // 0.0001% increase target out amount when calling Fluid Dex as it is not 100% exact. Guarantees meeting reaching exact out amount condition
-          BigInt(srcAmount),
-          recipient,
-        ];
-      } else {
-        args = [
-          true,
-          (BigInt(destAmount) * 1000001n) / 1000000n, // 0.0001% increase target out amount when calling Fluid Dex as it is not 100% exact. Guarantees meeting reaching exact out amount condition
-          BigInt(srcAmount),
-          recipient,
-        ];
-      }
+      args = [
+        swap0To1,
+        (BigInt(destAmount) * 1000001n) / 1000000n, // 0.0001% increase target out amount when calling Fluid Dex as it is not 100% exact. Guarantees meeting reaching exact out amount condition
+        BigInt(srcAmount),
+        swapRecipient,
+      ];
     }
     const swapData = this.fluidDexPoolIface.encodeFunctionData(method, args);
     return {
       needWrapNative: this.needWrapNative,
-      dexFuncHasRecipient: true,
+      needUnwrapNative: true,
+      dexFuncHasRecipient: !isWethDest,
       exchangeData: swapData,
       targetExchange: pool!.address,
       returnAmountPos,
@@ -921,10 +980,8 @@ export class FluidDex extends SimpleExchange implements IDex<FluidDexData> {
     y2: bigint,
   ): bigint {
     // Adding 1e18 precision
-    const xyRoot = sqrt(BigNumber.from(x).mul(y).mul(BigInt(1e18))).toBigInt();
-    const x2y2Root = sqrt(
-      BigNumber.from(x2).mul(y2).mul(BigInt(1e18)),
-    ).toBigInt();
+    const xyRoot = sqrt(x * y * ONE_E18);
+    const x2y2Root = sqrt(x2 * y2 * ONE_E18);
 
     // 1e18 precision gets cancelled out in division
     const numerator = t * xyRoot + y * x2y2Root - y2 * xyRoot;
@@ -956,11 +1013,8 @@ export class FluidDex extends SimpleExchange implements IDex<FluidDexData> {
     y2: bigint,
   ): bigint {
     // Adding 1e18 precision
-
-    const xyRoot = sqrt(BigNumber.from(x).mul(y).mul(BigInt(1e18))).toBigInt();
-    const x2y2Root = sqrt(
-      BigNumber.from(x2).mul(y2).mul(BigInt(1e18)),
-    ).toBigInt();
+    const xyRoot = sqrt(x * y * ONE_E18);
+    const x2y2Root = sqrt(x2 * y2 * ONE_E18);
 
     // Calculating 'a' using the given formula
     const a = (y2 * xyRoot + t * xyRoot - y * x2y2Root) / (xyRoot + x2y2Root);
@@ -1270,5 +1324,12 @@ export class FluidDex extends SimpleExchange implements IDex<FluidDexData> {
 
   private abs(value: bigint): bigint {
     return value < 0 ? -value : value;
+  }
+
+  releaseResources(): void {
+    if (this.reserveUpdateIntervalTask) {
+      clearInterval(this.reserveUpdateIntervalTask);
+      this.reserveUpdateIntervalTask = undefined;
+    }
   }
 }

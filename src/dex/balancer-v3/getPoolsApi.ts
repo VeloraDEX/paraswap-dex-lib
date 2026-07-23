@@ -45,9 +45,6 @@ function createQuery(
 ): string {
   const poolTypesString = poolTypes.map(type => `${type}`).join(', ');
   const networkString = BalancerV3Config.BalancerV3[networkId].apiNetworkName;
-  const disabledPoolIdsString = disabledPoolIds.BalancerV3[networkId]
-    ?.map(p => `"${p}"`)
-    .join(', ');
 
   // Build the where clause conditionally
   const whereClause = {
@@ -55,7 +52,6 @@ function createQuery(
     protocolVersionIn: 3,
     poolTypeIn: `[${poolTypesString}]`,
     ...(timestamp && { createTime: `{lt: ${timestamp}}` }),
-    ...(disabledPoolIdsString && { idNotIn: `[${disabledPoolIdsString}]` }),
     includeHooks: `[${hooks}]`,
   };
 
@@ -190,7 +186,11 @@ function getHookType(
   if (!hook) return undefined;
   else if (poolType === ReClammApiName || poolType === 'RECLAMM_V2')
     return undefined; // The hook is not used for pricing so we just treat as non-existent
-  else return hooksConfigMap[hook.address.toLowerCase()].type;
+  else {
+    const configs = hooksConfigMap[hook.address.toLowerCase()];
+    // Return the type from the first config (all configs for same hook address should have same type)
+    return configs && configs.length > 0 ? configs[0].type : undefined;
+  }
 }
 
 function getHookAddress(
@@ -230,7 +230,10 @@ export async function getPoolsApi(
       },
     );
 
-    const pools = response.data.data.aggregatorPools;
+    const disabled = disabledPoolIds.BalancerV3[network] ?? [];
+    const pools = response.data.data.aggregatorPools.filter(
+      pool => !disabled.includes(pool.id.toLowerCase()),
+    );
     return toImmutablePoolStateMap(pools, hooksConfigMap);
   } catch (error) {
     // console.error('Error executing GraphQL query:', error);

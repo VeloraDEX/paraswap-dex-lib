@@ -51,7 +51,7 @@ export class VelodromeV2 extends SolidlyRpcPoolTracker {
   public pools: Pool[] = [];
 
   public static dexKeysWithNetwork: { key: string; networks: Network[] }[] =
-    getDexKeysWithNetwork(_.pick(SolidlyConfig, ['VelodromeV2']));
+    getDexKeysWithNetwork(_.pick(SolidlyConfig, ['VelodromeV2', 'Aerodrome']));
 
   constructor(
     protected network: Network,

@@ -9,13 +9,13 @@
 3. Install the repository dependencies using:
 
 ```bash
-yarn install
+pnpm install
 ```
 
 4. Initialize the DEX integration. The DEX name should be in `param-case`:
 
 ```bash
-yarn init-integration <your-dex-name>
+pnpm init-integration <your-dex-name>
 ```
 
 You can find template code for newly integrated DEX in `src/dex/<your-dex-name>`
@@ -27,7 +27,7 @@ You can find template code for newly integrated DEX in `src/dex/<your-dex-name>`
 7. Complete the test templates (All files with `src/dex/<your-dex-name>/*.test.ts`). Each DEX implementation should have thorough testing. We have multiple kinds of tests each dex must have. You can refer to [Writing Tests](#writing-testing) for detailed explanation. You can run all the tests using
 
 ```bash
-yarn test-integration <your-dex-name>
+pnpm test-integration <your-dex-name>
 ```
 
 8. Create a PR(pull-request) from your feature branch to DexLib master. The PR must contain brief explanation about the DEX background, pricing logic, links to existing documentation, important contract addresses, and anything you think could help us review your code faster.

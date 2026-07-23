@@ -1,4 +1,11 @@
-import { Address } from '../../types';
+import { BigNumber } from 'ethers';
+import { Address, NumberAsString } from '../../types';
+import { TickInfo } from '../uniswap-v3/types';
+import {
+  TickBitMapMappingsWithBigNumber,
+  TickInfoMappingsWithBigNumber,
+} from '../algebra/types';
+import { Token } from '../../types';
 
 export type AlgebraIntegralData = {
   path: {
@@ -21,6 +28,31 @@ export type DexParams = {
   router: Address;
   subgraphURL: string;
   chunksCount: number;
+  stateMulticall: Address;
+};
+
+// Pool state compatible with PoolStateV1_1 shape for AlgebraMath reuse
+export type AlgebraIntegralPoolState = {
+  pool: string;
+  blockTimestamp: bigint;
+  tickSpacing: bigint;
+  globalState: {
+    price: bigint;
+    tick: bigint;
+    fee: bigint; // mapped from lastFee
+    communityFeeToken0: bigint; // mapped from communityFee
+    communityFeeToken1: bigint; // mapped from communityFee
+  };
+  liquidity: bigint;
+  maxLiquidityPerTick: bigint;
+  tickBitmap: Record<NumberAsString, bigint>;
+  ticks: Record<NumberAsString, TickInfo>;
+  isValid: boolean;
+  startTickBitmap: bigint;
+  balance0: bigint;
+  balance1: bigint;
+  areTicksCompressed: boolean;
+  communityVault: string;
 };
 
 export type Pool = {
@@ -31,10 +63,34 @@ export type Pool = {
   tvlUSD: number;
 };
 
-export type FactoryState = Record<string, never>;
+export type SubgraphPoolData = {
+  poolAddress: Address;
+  token0: Token;
+  token1: Token;
+  deployer: string;
+};
 
 export enum AlgebraIntegralFunctions {
   exactInput = 'exactInput',
   exactOutput = 'exactOutput',
   exactInputWithFeeToken = 'exactInputSingleSupportingFeeOnTransferTokens',
 }
+
+export type DecodedGlobalStateIntegral = {
+  price: BigNumber;
+  tick: number;
+  lastFee: number;
+  pluginConfig: number;
+  communityFee: number;
+};
+
+export type DecodedStateMultiCallResultIntegral = {
+  pool: Address;
+  blockTimestamp: BigNumber;
+  globalState: DecodedGlobalStateIntegral;
+  liquidity: BigNumber;
+  tickSpacing: number;
+  maxLiquidityPerTick: BigNumber;
+  tickBitmap: TickBitMapMappingsWithBigNumber[];
+  ticks: TickInfoMappingsWithBigNumber[];
+};

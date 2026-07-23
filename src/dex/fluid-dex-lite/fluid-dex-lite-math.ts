@@ -524,7 +524,7 @@ export function calculateSwap(
 }
 
 // Calculate swap for exact input (SELL side)
-function calculateSwapIn(
+export function calculateSwapIn(
   amountIn: bigint,
   swap0To1: boolean,
   unpackedVars: UnpackedDexVariables,
@@ -585,6 +585,19 @@ function calculateSwapIn(
     amountOut = numerator / denominator;
   }
 
+  // The pool can only pay out what it actually holds: imaginary reserves (the
+  // concentrated-curve extension) can vastly exceed the real adjusted
+  // supplies, and the contract rejects such swaps with
+  // TokenReservesTooLow(amountOut, tokenAdjustedSupply) — see fluid-contracts
+  // dexLite/core/coreInternals.sol. Mirror it so we never quote an unfillable
+  // swap (both amounts are in the adjusted precision here).
+  const outTotalSupplyAdjusted = swap0To1
+    ? unpackedVars.token1TotalSupplyAdjusted
+    : unpackedVars.token0TotalSupplyAdjusted;
+  if (amountOut > outTotalSupplyAdjusted) {
+    throw new FluidDexLiteMathError('Token reserves too low');
+  }
+
   // Apply decimal adjustments to output
   if (swap0To1) {
     const token1Decimals = unpackedVars.token1Decimals;
@@ -613,7 +626,7 @@ function calculateSwapIn(
 }
 
 // Calculate swap for exact output (BUY side)
-function calculateSwapOut(
+export function calculateSwapOut(
   amountOut: bigint,
   swap0To1: boolean,
   unpackedVars: UnpackedDexVariables,
@@ -654,6 +667,17 @@ function calculateSwapOut(
     : token0ImaginaryReserves;
   if (adjustedAmountOut > relevantReserves / 2n) {
     throw new FluidDexLiteMathError('Excessive swap amount');
+  }
+
+  // The pool can only pay out what it actually holds — matches the contract's
+  // TokenReservesTooLow(amountOut, tokenAdjustedSupply) check (fluid-contracts
+  // dexLite/core/coreInternals.sol); imaginary reserves can vastly exceed the
+  // real adjusted supplies.
+  const outTotalSupplyAdjusted = swap0To1
+    ? unpackedVars.token1TotalSupplyAdjusted
+    : unpackedVars.token0TotalSupplyAdjusted;
+  if (adjustedAmountOut > outTotalSupplyAdjusted) {
+    throw new FluidDexLiteMathError('Token reserves too low');
   }
 
   // Reverse constant product formula: amountIn = (amountOut * reserveIn) / (reserveOut - amountOut)

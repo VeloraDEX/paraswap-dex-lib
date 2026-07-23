@@ -161,12 +161,13 @@ export class EtherFi
     const is_eETH_dest = this.is_eETH(destToken);
     const isWETH_src = this.isWETH(srcToken);
 
-    const [Interface, swapCallee, swapFunction, swapFunctionParams] = ((): [
+    const [
       Interface,
-      Address,
-      EtherFiFunctions,
-      EtherFiParam,
-    ] => {
+      swapCallee,
+      swapFunction,
+      swapFunctionParams,
+      shouldExtractReturnAmountPos,
+    ] = ((): [Interface, Address, EtherFiFunctions, EtherFiParam, boolean] => {
       if (this.is_weETH(destToken)) {
         assert(this.is_eETH(srcToken), 'srcToken should be eETH');
         return [
@@ -174,6 +175,7 @@ export class EtherFi
           this.weETH,
           EtherFiFunctions.wrap,
           [srcAmount],
+          true,
         ];
       }
 
@@ -184,6 +186,7 @@ export class EtherFi
           this.weETH,
           EtherFiFunctions.unwrap,
           [srcAmount],
+          true,
         ];
       }
 
@@ -197,6 +200,7 @@ export class EtherFi
           this.eETHPool,
           EtherFiFunctions.deposit,
           [],
+          false,
         ];
       }
 
@@ -212,17 +216,15 @@ export class EtherFi
 
     return {
       needWrapNative: this.needWrapNative,
+      needUnwrapNative: true,
       dexFuncHasRecipient: false,
       exchangeData: swapData,
       targetExchange: swapCallee,
       spender: swapCallee,
       swappedAmountNotPresentInExchangeData: is_eETH_dest,
-      preSwapUnwrapCalldata: isWETH_src
-        ? this.erc20Interface.encodeFunctionData(WethFunctions.withdraw, [
-            srcAmount,
-          ])
+      returnAmountPos: shouldExtractReturnAmountPos
+        ? extractReturnAmountPosition(Interface, swapFunction)
         : undefined,
-      returnAmountPos: extractReturnAmountPosition(Interface, swapFunction),
       skipApproval,
     };
   }

@@ -1,5 +1,5 @@
 // If you receive `cannot end with a '.ts' extension` error
-// consider running `yarn install`
+// consider running `pnpm install`
 export { lens } from 'lens.ts';
 import { LensImpl } from 'lens.ts';
 

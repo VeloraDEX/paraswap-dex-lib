@@ -15,15 +15,11 @@ import {
   PreprocessTransactionOptions,
   TransferFeeParams,
   Config,
+  GetDexParamOptions,
 } from '../types';
 import { SwapSide, Network } from '../constants';
 import { IDexHelper } from '../dex-helper/idex-helper';
 import { OptimalRate, OptimalSwap } from '@paraswap/core';
-
-export type Context = {
-  isGlobalSrcToken: boolean;
-  isGlobalDestToken: boolean;
-};
 
 export type NeedWrapNativeFunc = (
   priceRoute: OptimalRate,
@@ -88,8 +84,8 @@ export interface IDexTxBuilderV6<ExchangeData, DirectParam = null> {
     recipient: Address,
     data: ExchangeData,
     side: SwapSide,
-    context: Context,
     executorAddress: Address,
+    options?: GetDexParamOptions,
   ): AsyncOrSync<DexExchangeParam>;
 
   // Returns params for direct method
@@ -136,9 +132,24 @@ export interface IDexTxBuilder<ExchangeData, DirectParam = null>
     side: SwapSide,
     options: PreprocessTransactionOptions,
   ): AsyncOrSync<[OptimalSwapExchange<ExchangeData>, ExchangeTxInfo]>;
+}
 
-  // This is helper a function to support testing if preProcessTransaction is implemented
-  getTokenFromAddress?(address: Address): Token;
+export interface IDexWithBlacklist {
+  hasBlacklist(): this is IDexWithBlacklist;
+  isBlacklisted(address: string): Promise<boolean>;
+  getBlacklistedCacheKey(address: string): string;
+}
+
+export interface IDexWithRestriction {
+  hasDexRestriction(): this is IDexWithRestriction;
+  isRestricted(): Promise<boolean>;
+  getRestrictedCacheKey(): string;
+}
+
+export interface IDexWithPairRestriction {
+  hasPairRestriction(): this is IDexWithPairRestriction;
+  isRestrictedPair(token0: string, token1: string): Promise<boolean>;
+  getRestrictedPairCacheKey(token0: string, token1: string): string;
 }
 
 export interface IDexPricing<ExchangeData> {
@@ -210,12 +221,15 @@ export interface IDexPricing<ExchangeData> {
   // Build an event based pool with all the info to create inside
   // a cache key name poolKey
   addMasterPool?(poolKey: string, blockNumber: number): AsyncOrSync<boolean>;
-  // return true if the userAddress is is blacklisted from the exchange
-  // useful for RFQ system
-  isBlacklisted?(userAddress?: Address): AsyncOrSync<boolean>;
 
-  // blacklist a specific userAddress from exchange
-  setBlacklist?(userAddress?: Address): AsyncOrSync<boolean>;
+  hasDexRestriction?(): this is IDexWithRestriction;
+  hasPairRestriction?(): this is IDexWithPairRestriction;
+  hasBlacklist?(): this is IDexWithBlacklist;
+
+  // can be used to define what min usd value can be traded (e.g. on RFQ)
+  // null means usd check should be skipped
+  // `0` or any number means only tokens with usd price can be traded
+  minUsdTradeValue?(): number | null;
 }
 
 export interface IDexPooltracker {

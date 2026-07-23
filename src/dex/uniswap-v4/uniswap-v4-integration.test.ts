@@ -2640,6 +2640,304 @@ describe('UniswapV4 integration tests', () => {
     });
   });
 
+  describe('Avalanche', () => {
+    const network = Network.AVALANCHE;
+    const dexHelper = new DummyDexHelper(network);
+
+    let blockNumber: number;
+    let uniswapV4: UniswapV4;
+
+    describe('WAVAX -> WLBOND', () => {
+      const TokenASymbol = 'WAVAX';
+      const TokenA = Tokens[network][TokenASymbol];
+
+      const TokenBSymbol = 'WLBOND';
+      const TokenB = Tokens[network][TokenBSymbol];
+
+      beforeEach(async () => {
+        blockNumber = await dexHelper.web3Provider.eth.getBlockNumber();
+        uniswapV4 = new UniswapV4(network, dexKey, dexHelper);
+        await uniswapV4.initializePricing(blockNumber);
+      });
+
+      it('WAVAX -> WLBOND getPoolIdentifiers and getPricesVolume SELL', async () => {
+        console.log('BLOCK: ', blockNumber);
+
+        const amounts = [
+          0n,
+          1n * BI_POWS[8],
+          2n * BI_POWS[8],
+          3n * BI_POWS[8],
+          4n * BI_POWS[8],
+          5n * BI_POWS[8],
+          6n * BI_POWS[8],
+          7n * BI_POWS[8],
+          8n * BI_POWS[8],
+          9n * BI_POWS[8],
+          10n * BI_POWS[8],
+        ];
+
+        const pools = await uniswapV4.getPoolIdentifiers(
+          TokenA,
+          TokenB,
+          SwapSide.SELL,
+          blockNumber,
+        );
+        console.log(
+          `${TokenASymbol} <> ${TokenBSymbol} Pool Identifiers: `,
+          pools,
+        );
+
+        expect(pools.length).toBeGreaterThan(0);
+
+        const poolPrices = await uniswapV4.getPricesVolume(
+          TokenA,
+          TokenB,
+          amounts,
+          SwapSide.SELL,
+          blockNumber,
+          pools,
+        );
+
+        console.log(
+          `${TokenASymbol} <> ${TokenBSymbol} Pool Prices: `,
+          util.inspect(poolPrices, false, null, true),
+        );
+
+        expect(poolPrices).not.toBeNull();
+
+        let falseChecksCounter = 0;
+        await Promise.all(
+          poolPrices!.map(async price => {
+            const res = await checkOnChainPricing(
+              dexHelper,
+              'quoteExactInputSingle',
+              blockNumber,
+              '0xbe40675bb704506a3c2ccfb762dcfd1e979845c2',
+              price.prices,
+              price.data.path[0].pool.key,
+              price.data.path[0].zeroForOne,
+              amounts,
+            );
+            if (res === false) falseChecksCounter++;
+          }),
+        );
+
+        expect(falseChecksCounter).toBeLessThan(poolPrices!.length);
+      });
+
+      it('WAVAX -> WLBOND getPoolIdentifiers and getPricesVolume BUY', async () => {
+        console.log('BLOCK: ', blockNumber);
+
+        const amounts = [
+          0n,
+          1n * BI_POWS[18],
+          2n * BI_POWS[18],
+          3n * BI_POWS[18],
+          4n * BI_POWS[18],
+          5n * BI_POWS[18],
+          6n * BI_POWS[18],
+          7n * BI_POWS[18],
+          8n * BI_POWS[18],
+          9n * BI_POWS[18],
+          10n * BI_POWS[18],
+        ];
+
+        const pools = await uniswapV4.getPoolIdentifiers(
+          TokenA,
+          TokenB,
+          SwapSide.BUY,
+          blockNumber,
+        );
+        console.log(
+          `${TokenASymbol} <> ${TokenBSymbol} Pool Identifiers: `,
+          pools,
+        );
+
+        expect(pools.length).toBeGreaterThan(0);
+
+        const poolPrices = await uniswapV4.getPricesVolume(
+          TokenA,
+          TokenB,
+          amounts,
+          SwapSide.BUY,
+          blockNumber,
+          pools,
+        );
+
+        console.log(
+          `${TokenASymbol} <> ${TokenBSymbol} Pool Prices: `,
+          util.inspect(poolPrices, false, null, true),
+        );
+
+        expect(poolPrices).not.toBeNull();
+
+        let falseChecksCounter = 0;
+        await Promise.all(
+          poolPrices!.map(async price => {
+            const res = await checkOnChainPricing(
+              dexHelper,
+              'quoteExactOutputSingle',
+              blockNumber,
+              '0xbe40675bb704506a3c2ccfb762dcfd1e979845c2',
+              price.prices,
+              price.data.path[0].pool.key,
+              price.data.path[0].zeroForOne,
+              amounts,
+            );
+            if (res === false) falseChecksCounter++;
+          }),
+        );
+
+        expect(falseChecksCounter).toBeLessThan(poolPrices!.length);
+      });
+
+      it('WLBOND -> WAVAX getPoolIdentifiers and getPricesVolume SELL', async () => {
+        console.log('BLOCK: ', blockNumber);
+
+        const amounts = [
+          0n,
+          1n * BI_POWS[18],
+          2n * BI_POWS[18],
+          3n * BI_POWS[18],
+          4n * BI_POWS[18],
+          5n * BI_POWS[18],
+          6n * BI_POWS[18],
+          7n * BI_POWS[18],
+          8n * BI_POWS[18],
+          9n * BI_POWS[18],
+          10n * BI_POWS[18],
+        ];
+
+        const pools = await uniswapV4.getPoolIdentifiers(
+          TokenB,
+          TokenA,
+          SwapSide.SELL,
+          blockNumber,
+        );
+        console.log(
+          `${TokenBSymbol} <> ${TokenASymbol} Pool Identifiers: `,
+          pools,
+        );
+
+        expect(pools.length).toBeGreaterThan(0);
+
+        const poolPrices = await uniswapV4.getPricesVolume(
+          TokenB,
+          TokenA,
+          amounts,
+          SwapSide.SELL,
+          blockNumber,
+          pools,
+        );
+
+        console.log(
+          `${TokenBSymbol} <> ${TokenASymbol} Pool Prices: `,
+          util.inspect(poolPrices, false, null, true),
+        );
+
+        expect(poolPrices).not.toBeNull();
+
+        let falseChecksCounter = 0;
+        await Promise.all(
+          poolPrices!.map(async price => {
+            const res = await checkOnChainPricing(
+              dexHelper,
+              'quoteExactInputSingle',
+              blockNumber,
+              '0xbe40675bb704506a3c2ccfb762dcfd1e979845c2',
+              price.prices,
+              price.data.path[0].pool.key,
+              price.data.path[0].zeroForOne,
+              amounts,
+            );
+            if (res === false) falseChecksCounter++;
+          }),
+        );
+
+        expect(falseChecksCounter).toBeLessThan(poolPrices!.length);
+      });
+
+      it('WLBOND -> WAVAX getPoolIdentifiers and getPricesVolume BUY', async () => {
+        console.log('BLOCK: ', blockNumber);
+
+        const amounts = [
+          0n,
+          1n * BI_POWS[8],
+          2n * BI_POWS[8],
+          3n * BI_POWS[8],
+          4n * BI_POWS[8],
+          5n * BI_POWS[8],
+          6n * BI_POWS[8],
+          7n * BI_POWS[8],
+          8n * BI_POWS[8],
+          9n * BI_POWS[8],
+          10n * BI_POWS[8],
+        ];
+
+        const pools = await uniswapV4.getPoolIdentifiers(
+          TokenB,
+          TokenA,
+          SwapSide.BUY,
+          blockNumber,
+        );
+        console.log(
+          `${TokenBSymbol} <> ${TokenASymbol} Pool Identifiers: `,
+          pools,
+        );
+
+        expect(pools.length).toBeGreaterThan(0);
+
+        const poolPrices = await uniswapV4.getPricesVolume(
+          TokenB,
+          TokenA,
+          amounts,
+          SwapSide.BUY,
+          blockNumber,
+          pools,
+        );
+
+        console.log(
+          `${TokenBSymbol} <> ${TokenASymbol} Pool Prices: `,
+          util.inspect(poolPrices, false, null, true),
+        );
+
+        expect(poolPrices).not.toBeNull();
+
+        let falseChecksCounter = 0;
+        await Promise.all(
+          poolPrices!.map(async price => {
+            const res = await checkOnChainPricing(
+              dexHelper,
+              'quoteExactOutputSingle',
+              blockNumber,
+              '0xbe40675bb704506a3c2ccfb762dcfd1e979845c2',
+              price.prices,
+              price.data.path[0].pool.key,
+              price.data.path[0].zeroForOne,
+              amounts,
+            );
+            if (res === false) falseChecksCounter++;
+          }),
+        );
+
+        expect(falseChecksCounter).toBeLessThan(poolPrices!.length);
+      });
+
+      it('WLBOND getTopPoolsForToken', async () => {
+        const poolLiquidity = await uniswapV4.getTopPoolsForToken(
+          TokenB.address,
+          10,
+        );
+        console.log(`${TokenBSymbol} Top Pools:`, poolLiquidity);
+
+        if (!uniswapV4.hasConstantPriceLargeAmounts) {
+          checkPoolsLiquidity(poolLiquidity, TokenB.address, dexKey);
+        }
+      });
+    });
+  });
+
   describe('Polygon', () => {
     const network = Network.POLYGON;
     const dexHelper = new DummyDexHelper(network);

@@ -115,6 +115,9 @@ export class TwammPool extends EkuboPool<TwammPoolState.Object> {
   public async generateState(
     blockNumber?: number | 'latest',
   ): Promise<DeepReadonly<TwammPoolState.Object>> {
+    this.logger.info(
+      `Fetching TwammPool quote data for pool ${this.key.stringId}`,
+    );
     const quoteData = await this.dataFetcher.getPoolState(this.key.toAbi(), {
       blockTag: blockNumber,
     });

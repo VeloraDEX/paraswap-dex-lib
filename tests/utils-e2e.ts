@@ -8,7 +8,7 @@ import {
   IParaSwapSDK,
   LocalParaswapSDK,
 } from '../src/implementations/local-paraswap-sdk';
-import { TenderlySimulator, StateOverride } from './tenderly-simulation';
+import { TenderlySimulator, StateOverride } from '../src/tenderly-simulation';
 import {
   SwapSide,
   ETHER_ADDRESS,
@@ -76,6 +76,10 @@ class APIParaswapSDK implements IParaSwapSDK {
     );
     this.transactionBuilder = new GenericSwapTransactionBuilder(
       this.dexAdapterService,
+      undefined,
+      undefined,
+      undefined,
+      true,
     );
     this.pricingHelper = new PricingHelper(
       this.dexAdapterService,
@@ -99,10 +103,14 @@ class APIParaswapSDK implements IParaSwapSDK {
     transferFees?: TransferFeeParams,
     forceRoute?: AddressOrSymbol[],
   ): Promise<OptimalRate> {
-    if (_poolIdentifiers)
-      throw new Error('PoolIdentifiers is not supported by the API');
-
     let priceRoute;
+
+    const includePools = _poolIdentifiers
+      ? _poolIdentifiers[this.dexKeys[0]]
+        ? _poolIdentifiers[this.dexKeys[0]]!.join(',')
+        : undefined
+      : undefined;
+
     if (forceRoute && forceRoute.length > 0) {
       const options = {
         route: forceRoute,
@@ -112,6 +120,7 @@ class APIParaswapSDK implements IParaSwapSDK {
         destDecimals: to.decimals,
         options: {
           includeDEXS: this.dexKeys,
+          ...(includePools && { includePools }),
           includeContractMethods: [contractMethod],
           partner: 'any',
           maxImpact: 100,
@@ -127,6 +136,7 @@ class APIParaswapSDK implements IParaSwapSDK {
         amount: amount.toString(),
         options: {
           includeDEXS: this.dexKeys,
+          ...(includePools && { includePools }),
           includeContractMethods: [contractMethod],
           partner: 'any',
           maxImpact: 100,
@@ -172,6 +182,7 @@ type TestE2EOptions = {
 export async function testE2E(
   srcToken: Token,
   destToken: Token,
+  // unused, left for backwards compatibility
   senderAddress: Address,
   _amount: string,
   swapSide = SwapSide.SELL,
@@ -190,7 +201,7 @@ export async function testE2E(
   forceRoute?: AddressOrSymbol[],
   options?: TestE2EOptions,
 ) {
-  const useAPI = testingEndpoint && !poolIdentifiers;
+  const useAPI = !!testingEndpoint;
   // The API currently doesn't allow for specifying poolIdentifiers
   const sdk: IParaSwapSDK = useAPI
     ? new APIParaswapSDK(network, dexKeys, '')

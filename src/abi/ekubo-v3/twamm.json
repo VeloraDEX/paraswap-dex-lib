@@ -1,0 +1,50 @@
+[
+  {
+    "type": "event",
+    "name": "OrderUpdated",
+    "inputs": [
+      {
+        "name": "owner",
+        "type": "address",
+        "indexed": false,
+        "internalType": "address"
+      },
+      {
+        "name": "salt",
+        "type": "bytes32",
+        "indexed": false,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "orderKey",
+        "type": "tuple",
+        "indexed": false,
+        "internalType": "struct OrderKey",
+        "components": [
+          {
+            "name": "token0",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "token1",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "config",
+            "type": "bytes32",
+            "internalType": "OrderConfig"
+          }
+        ]
+      },
+      {
+        "name": "saleRateDelta",
+        "type": "int112",
+        "indexed": false,
+        "internalType": "int112"
+      }
+    ],
+    "anonymous": false
+  }
+]

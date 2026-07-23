@@ -62,6 +62,10 @@ export class LocalParaswapSDK implements IParaSwapSDK {
   dexKeys: string[];
   transactionBuilder: GenericSwapTransactionBuilder;
   transactionBuilderV5: TransactionBuilder;
+  // When true, buildTransaction skips per-dex preProcessTransaction hooks.
+  // Lets tests hand-craft swapExchange data (e.g. a fabricated firm quote)
+  // without it being overwritten by a live quote fetch.
+  skipPreProcess = false;
 
   constructor(
     protected network: number,
@@ -80,6 +84,10 @@ export class LocalParaswapSDK implements IParaSwapSDK {
     );
     this.transactionBuilder = new GenericSwapTransactionBuilder(
       this.dexAdapterService,
+      undefined,
+      undefined,
+      undefined,
+      true,
     );
     this.transactionBuilderV5 = new TransactionBuilder(this.dexAdapterService);
 
@@ -189,6 +197,7 @@ export class LocalParaswapSDK implements IParaSwapSDK {
                   percent: 100,
                   data: finalPrice.data,
                   poolAddresses: finalPrice.poolAddresses,
+                  poolIdentifiers: finalPrice.poolIdentifiers,
                 },
               ],
             },
@@ -255,13 +264,15 @@ export class LocalParaswapSDK implements IParaSwapSDK {
                     se.exchange,
                   );
 
-                  if (dexLibExchange && dexLibExchange.preProcessTransaction) {
-                    if (!dexLibExchange.getTokenFromAddress) {
-                      throw new Error(
-                        'If you want to test preProcessTransaction, first need to implement getTokenFromAddress function',
-                      );
-                    }
-
+                  if (
+                    !this.skipPreProcess &&
+                    dexLibExchange &&
+                    dexLibExchange.preProcessTransaction
+                  ) {
+                    const dexNeedWrapNative =
+                      typeof dex.needWrapNative === 'function'
+                        ? dex.needWrapNative(priceRoute, swap, se)
+                        : dex.needWrapNative;
                     const { recipient } =
                       priceRoute.version === ParaSwapVersion.V5
                         ? this.transactionBuilderV5.getDexCallsParams(
@@ -271,7 +282,7 @@ export class LocalParaswapSDK implements IParaSwapSDK {
                             swapIndex,
                             se,
                             minMaxAmount.toString(),
-                            dex,
+                            dexNeedWrapNative,
                             executionContractAddress,
                           )
                         : this.transactionBuilder.getDexCallsParams(
@@ -281,15 +292,24 @@ export class LocalParaswapSDK implements IParaSwapSDK {
                             swapIndex,
                             se,
                             minMaxAmount.toString(),
-                            dex,
+                            dexNeedWrapNative,
                             executionContractAddress,
                           );
+
+                    const srcToken: Token = {
+                      address: swap.srcToken,
+                      decimals: swap.srcDecimals,
+                    };
+                    const destToken: Token = {
+                      address: swap.destToken,
+                      decimals: swap.destDecimals,
+                    };
 
                     const [preprocessedRoute, txInfo] =
                       await dexLibExchange.preProcessTransaction(
                         se,
-                        dexLibExchange.getTokenFromAddress(swap.srcToken),
-                        dexLibExchange.getTokenFromAddress(swap.destToken),
+                        srcToken,
+                        destToken,
                         priceRoute.side,
                         {
                           slippageFactor,

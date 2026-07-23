@@ -1,5 +1,5 @@
 import { SimpleExchange } from '../simple-exchange';
-import { Context, IDex } from '../idex';
+import { IDex } from '../idex';
 import { SparkParams, SparkData, SparkSDaiPoolState } from './types';
 import { Network, SwapSide, UNLIMITED_USD_LIQUIDITY } from '../../constants';
 import { getDexKeysWithNetwork } from '../../utils';
@@ -239,7 +239,6 @@ export class Spark
     recipient: Address,
     data: SparkData,
     side: SwapSide,
-    _: Context,
     executorAddress: Address,
   ): DexExchangeParam {
     const isSell = side === SwapSide.SELL;

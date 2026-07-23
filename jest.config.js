@@ -1,5 +1,5 @@
 module.exports = {
-  transform: { '^.+\\.ts?$': 'ts-jest' },
+  transform: { '^.+\\.(ts|js)$': 'ts-jest' },
   testEnvironment: 'node',
   testRegex: [
     '/tests/.*\\.(test|spec)\\.(ts)$',
@@ -7,4 +7,5 @@ module.exports = {
   ],
   moduleFileExtensions: ['ts', 'js', 'json', 'node'],
   testTimeout: 30 * 1000,
+  transformIgnorePatterns: ['node_modules/(?!.*uuid)'],
 };

@@ -10,7 +10,6 @@ import MaverickV2PoolLensABI from '../../abi/maverick-v2/MaverickV2PoolLens.json
 import { AbiItem } from 'web3-utils';
 import { Contract } from 'web3-eth-contract';
 import { MaverickPoolMath } from './maverick-math/maverick-pool-math';
-import _ from 'lodash';
 import { MultiResult } from '../../lib/multi-wrapper';
 import { BytesLike } from 'ethers';
 import { extractSuccessAndValue } from '../../lib/decoders';
@@ -307,11 +306,15 @@ export class MaverickV2EventPool extends StatefulEventSubscriber<PoolState> {
     exactOutput: boolean,
   ): [bigint, bigint] {
     try {
-      const tempState = _.cloneDeep(this.state!);
+      const s = this.state!;
+      const tempState: PoolState = {
+        ...s,
+        ticks: { ...s.ticks },
+      };
 
       const preActiveTick = tempState.activeTick;
 
-      const output = this.poolMath.estimateSwap(
+      const [amountIn, amountOut] = this.poolMath.estimateSwap(
         tempState,
         amount,
         from.address.toLowerCase() === this.tokenA.address.toLowerCase(),
@@ -321,7 +324,11 @@ export class MaverickV2EventPool extends StatefulEventSubscriber<PoolState> {
           : tempState.activeTick - 100n,
       );
 
-      if (output[0] === 0n && output[1] === 0n) {
+      if (exactOutput && amountOut < amount) {
+        return [0n, 0n];
+      }
+
+      if (amountIn === 0n && amountOut === 0n) {
         this.logger.trace(
           `Reached max swap iteration calculation for address=${this.address} amount=${amount}, from=${from.address}, to=${to.address}, exactOutput=${exactOutput}`,
         );
@@ -332,7 +339,7 @@ export class MaverickV2EventPool extends StatefulEventSubscriber<PoolState> {
       const tickDiff = Math.abs(Number(postActiveTick) - Number(preActiveTick));
 
       return [
-        exactOutput ? output[0] : output[1],
+        exactOutput ? amountIn : amountOut,
         // Tick calculation must be started from 1 to account at least one tick
         BigInt(tickDiff + 1),
       ];

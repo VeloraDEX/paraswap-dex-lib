@@ -18,6 +18,8 @@ import {
 } from '../constants';
 import { LPFeeLibrary } from './LPFeeLibrary';
 import { Logger } from 'log4js';
+import { IBaseHook } from '../hooks/types';
+import { NULL_ADDRESS } from '../../../constants';
 
 type StepComputations = {
   sqrtPriceStartX96: bigint;
@@ -45,7 +47,8 @@ class UniswapV4PoolMath {
     amounts: bigint[],
     zeroForOne: boolean,
     side: SwapSide,
-  ): bigint[] | null {
+    hook?: IBaseHook,
+  ): bigint[] {
     const isSell = side === SwapSide.SELL;
 
     if (isSell) {
@@ -54,14 +57,16 @@ class UniswapV4PoolMath {
           return 0n;
         }
 
+        const sqrtPriceLimitX96 = zeroForOne
+          ? TickMath.MIN_SQRT_PRICE + 1n
+          : TickMath.MAX_SQRT_PRICE - 1n;
+
         const amountSpecified = -amount;
         const [amount0, amount1] = this._swap(poolState, {
           zeroForOne,
           amountSpecified,
           tickSpacing: BigInt(pool.key.tickSpacing),
-          sqrtPriceLimitX96: zeroForOne
-            ? TickMath.MIN_SQRT_PRICE + 1n
-            : TickMath.MAX_SQRT_PRICE - 1n,
+          sqrtPriceLimitX96,
           lpFeeOverride: 0n,
         } as SwapParams);
 
@@ -72,7 +77,23 @@ class UniswapV4PoolMath {
           return 0n;
         }
 
-        return zeroForOne ? amount1 : amount0;
+        let output = zeroForOne ? amount1 : amount0;
+
+        if (hook?.getHookPermissions().afterSwap) {
+          output = hook.afterSwap!(
+            NULL_ADDRESS,
+            pool.key,
+            {
+              zeroForOne,
+              amountSpecified: amountSpecified.toString(),
+              sqrtPriceLimitX96: sqrtPriceLimitX96.toString(),
+            },
+            { amount0, amount1 },
+            '0x',
+          );
+        }
+
+        return output;
       });
     } else {
       return amounts.map(amount => {
@@ -80,15 +101,16 @@ class UniswapV4PoolMath {
           return 0n;
         }
 
-        const amountSpecified = amount;
+        const sqrtPriceLimitX96 = zeroForOne
+          ? TickMath.MIN_SQRT_PRICE + 1n
+          : TickMath.MAX_SQRT_PRICE - 1n;
 
+        const amountSpecified = amount;
         const [amount0, amount1] = this._swap(poolState, {
           zeroForOne,
           amountSpecified: amount,
           tickSpacing: BigInt(pool.key.tickSpacing),
-          sqrtPriceLimitX96: zeroForOne
-            ? TickMath.MIN_SQRT_PRICE + 1n
-            : TickMath.MAX_SQRT_PRICE - 1n,
+          sqrtPriceLimitX96,
           lpFeeOverride: 0n,
         } as SwapParams);
 
@@ -99,7 +121,23 @@ class UniswapV4PoolMath {
           return 0n;
         }
 
-        return zeroForOne ? -amount0 : -amount1;
+        let output = zeroForOne ? -amount0 : -amount1;
+
+        if (hook?.getHookPermissions().afterSwap) {
+          output = hook.afterSwap!(
+            NULL_ADDRESS,
+            pool.key,
+            {
+              zeroForOne,
+              amountSpecified: amountSpecified.toString(),
+              sqrtPriceLimitX96: sqrtPriceLimitX96.toString(),
+            },
+            { amount0, amount1 },
+            '0x',
+          );
+        }
+
+        return output;
       });
     }
   }

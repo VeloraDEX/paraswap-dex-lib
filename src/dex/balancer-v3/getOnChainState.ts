@@ -16,6 +16,7 @@ import {
   encodeReClammOnChainData,
   decodeReClammOnChainData,
 } from './reClammPool';
+import { Logger } from 'log4js';
 
 // Encoding & Decoding for onchain calls to fetch mutable pool data
 // Each supported pool type should have its own specific calls if needed
@@ -90,7 +91,11 @@ const poolOnChain: Record<
       startIndex: number,
     ): Omit<
       CommonMutableState,
-      'erc4626Rates' | 'erc4626MaxDeposit' | 'erc4626MaxMint'
+      | 'erc4626Rates'
+      | 'erc4626MaxDeposit'
+      | 'erc4626MaxMint'
+      | 'erc4626MaxWithdraw'
+      | 'erc4626MaxRedeem'
     > => {
       const resultTokenRates = decodeThrowError(
         contractInterface,
@@ -392,9 +397,14 @@ export function decodeThrowError(
   );
 }
 
+// Number of ERC4626 calls per wrapper token in the multicall batch.
+// Order: convertToAssets, maxDeposit, maxMint, maxWithdraw, maxRedeem.
+const ERC4626_CALLS_PER_TOKEN = 5;
+
 export function getErc4626MultiCallData(
   erc4626Interface: Interface,
   immutablePoolStateMap: ImmutablePoolStateMap,
+  vaultAddress: string,
 ): callData[] {
   // We want to query rate for each unique ERC4626 token
   const uniqueErc4626Tokens = Array.from(
@@ -406,6 +416,9 @@ export function getErc4626MultiCallData(
   );
 
   // query result for 1e18 (this maintains correct scaling for different token decimals in maths)
+  // maxWithdraw/maxRedeem are queried with the Vault as owner since the Vault
+  // is the party that calls withdraw/redeem when unwrapping via buffers, and
+  // ERC4626 caps those calls against the owner's position.
   const erc4626MultiCallData: callData[] = uniqueErc4626Tokens.flatMap(
     token => {
       return [
@@ -427,6 +440,18 @@ export function getErc4626MultiCallData(
             '0x0000000000000000000000000000000000000000',
           ]),
         },
+        {
+          target: token,
+          callData: erc4626Interface.encodeFunctionData('maxWithdraw', [
+            vaultAddress,
+          ]),
+        },
+        {
+          target: token,
+          callData: erc4626Interface.encodeFunctionData('maxRedeem', [
+            vaultAddress,
+          ]),
+        },
       ];
     },
   );
@@ -438,15 +463,18 @@ export function decodeErc4626MultiCallData(
   erc4626MultiCallData: callData[],
   dataResultErc4626: any[],
 ) {
-  // We only need to process third of the erc4626MultiCallData entries
-  // since each entry corresponds to three results
-  const thirdLength = Math.floor(erc4626MultiCallData.length / 3);
+  const tokenCount = Math.floor(
+    erc4626MultiCallData.length / ERC4626_CALLS_PER_TOKEN,
+  );
 
   return Object.fromEntries(
-    Array.from({ length: thirdLength }).map((_, i) => {
-      const rateIndex = i * 3;
-      const maxDepositIndex = i * 3 + 1;
-      const maxMintIndex = i * 3 + 2;
+    Array.from({ length: tokenCount }).map((_, i) => {
+      const base = i * ERC4626_CALLS_PER_TOKEN;
+      const rateIndex = base;
+      const maxDepositIndex = base + 1;
+      const maxMintIndex = base + 2;
+      const maxWithdrawIndex = base + 3;
+      const maxRedeemIndex = base + 4;
       const multiCallData = erc4626MultiCallData[rateIndex];
 
       // Decode convertToAssets
@@ -485,12 +513,38 @@ export function decodeErc4626MultiCallData(
           `Failed to get result for maxMint for ${multiCallData.target}`,
         );
 
+      // Decode maxWithdraw
+      const maxWithdraw = decodeThrowError(
+        erc4626Interface,
+        'maxWithdraw',
+        dataResultErc4626[maxWithdrawIndex],
+        multiCallData.target,
+      );
+      if (!maxWithdraw)
+        throw new Error(
+          `Failed to get result for maxWithdraw for ${multiCallData.target}`,
+        );
+
+      // Decode maxRedeem
+      const maxRedeem = decodeThrowError(
+        erc4626Interface,
+        'maxRedeem',
+        dataResultErc4626[maxRedeemIndex],
+        multiCallData.target,
+      );
+      if (!maxRedeem)
+        throw new Error(
+          `Failed to get result for maxRedeem for ${multiCallData.target}`,
+        );
+
       return [
         multiCallData.target,
         {
           rate: BigInt(rate[0]),
           maxDeposit: BigInt(maxDeposit[0]),
           maxMint: BigInt(maxMint[0]),
+          maxWithdraw: BigInt(maxWithdraw[0]),
+          maxRedeem: BigInt(maxRedeem[0]),
         },
       ];
     }),
@@ -505,10 +559,12 @@ export async function getOnChainState(
     [name: string]: Interface;
   },
   blockNumber?: number,
+  logger?: Logger,
 ): Promise<PoolStateMap> {
   const erc4626MultiCallData = getErc4626MultiCallData(
     interfaces['ERC4626'],
     immutablePoolStateMap,
+    BalancerV3Config.BalancerV3[network].vaultAddress,
   );
 
   // query pool specific onchain data, e.g. totalSupply, etc
@@ -557,42 +613,69 @@ export async function getOnChainState(
 
   let i = 0;
   const poolStateMap = Object.fromEntries(
-    Object.entries(immutablePoolStateMap).map(([address, pool]) => {
-      const commonMutableData = poolOnChain['COMMON'].decode(
-        interfaces['VAULT'],
-        address,
-        dataResultPools,
-        i,
-      ) as CommonMutableState;
-      i = i + poolOnChain['COMMON'].count;
-      const poolMutableData = poolOnChain[pool.poolType].decode(
-        interfaces[pool.poolType],
-        address,
-        dataResultPools,
-        i,
-      );
-      i = i + poolOnChain[pool.poolType].count;
-      return [
-        address,
-        {
-          ...pool,
-          ...commonMutableData,
-          ...poolMutableData,
-          erc4626Rates: pool.tokens.map(t => {
-            if (!tokensWithRates[t]) return null;
-            return tokensWithRates[t].rate;
-          }),
-          erc4626MaxDeposit: pool.tokens.map(t => {
-            if (!tokensWithRates[t]) return null;
-            return tokensWithRates[t].maxDeposit;
-          }),
-          erc4626MaxMint: pool.tokens.map(t => {
-            if (!tokensWithRates[t]) return null;
-            return tokensWithRates[t].maxMint;
-          }),
-        },
-      ];
-    }),
+    Object.entries(immutablePoolStateMap)
+      .map(([address, pool]) => {
+        const startIndex = i;
+        try {
+          const commonMutableData = poolOnChain['COMMON'].decode(
+            interfaces['VAULT'],
+            address,
+            dataResultPools,
+            i,
+          ) as CommonMutableState;
+          i = i + poolOnChain['COMMON'].count;
+          const poolMutableData = poolOnChain[pool.poolType].decode(
+            interfaces[pool.poolType],
+            address,
+            dataResultPools,
+            i,
+          );
+          i = i + poolOnChain[pool.poolType].count;
+          return [
+            address,
+            {
+              ...pool,
+              ...commonMutableData,
+              ...poolMutableData,
+              erc4626Rates: pool.tokens.map(t => {
+                if (!tokensWithRates[t]) return null;
+                return tokensWithRates[t].rate;
+              }),
+              erc4626MaxDeposit: pool.tokens.map(t => {
+                if (!tokensWithRates[t]) return null;
+                return tokensWithRates[t].maxDeposit;
+              }),
+              erc4626MaxMint: pool.tokens.map(t => {
+                if (!tokensWithRates[t]) return null;
+                return tokensWithRates[t].maxMint;
+              }),
+              erc4626MaxWithdraw: pool.tokens.map(t => {
+                if (!tokensWithRates[t]) return null;
+                return tokensWithRates[t].maxWithdraw;
+              }),
+              erc4626MaxRedeem: pool.tokens.map(t => {
+                if (!tokensWithRates[t]) return null;
+                return tokensWithRates[t].maxRedeem;
+              }),
+            },
+          ];
+        } catch (error) {
+          logger?.error(
+            `Error decoding onchain data for pool ${address}: ${
+              (error as Error).message
+            }`,
+          );
+
+          // Ensure index is set to skip all data for this pool
+          i =
+            startIndex +
+            poolOnChain['COMMON'].count +
+            poolOnChain[pool.poolType].count;
+
+          return null;
+        }
+      })
+      .filter(t => t !== null),
   );
   return poolStateMap;
 }

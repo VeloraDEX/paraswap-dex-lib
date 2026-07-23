@@ -12,7 +12,7 @@ import {
   SimpleExchangeParam,
   Token,
 } from '../../types';
-import { Network, SUBGRAPH_TIMEOUT } from '../../constants';
+import { MAX_UINT, Network, SUBGRAPH_TIMEOUT } from '../../constants';
 import * as CALLDATA_GAS_COST from '../../calldata-gas-cost';
 import { getBigIntPow, getDexKeysWithNetwork, isETHAddress } from '../../utils';
 import { IDex } from '../../dex/idex';
@@ -20,6 +20,7 @@ import { IDexHelper } from '../../dex-helper/idex-helper';
 import {
   BalancerFunctions,
   BalancerParam,
+  BalancerSwap,
   BalancerV1Data,
   DexParams,
   FractionAsString,
@@ -334,10 +335,24 @@ export class BalancerV1
     srcAmount: NumberAsString,
     destAmount: NumberAsString,
     recipient: Address,
-    data: OptimizedBalancerV1Data,
+    data: OptimizedBalancerV1Data | BalancerV1Data,
     side: SwapSide,
   ): DexExchangeParam {
-    const { swaps } = data;
+    // Routes normally reach the builder after the pricing-side optimizer
+    // (balancerV1Merge) rewrote { poolId } into { swaps }. Revertable-fallback
+    // quotes are attached after that pass, so synthesize the single-pool swap
+    // the optimizer would have built.
+    const swaps: BalancerSwap[] =
+      'swaps' in data
+        ? data.swaps
+        : [
+            {
+              pool: data.poolId,
+              tokenInParam: srcAmount,
+              tokenOutParam: side === SwapSide.SELL ? '0' : destAmount,
+              maxPrice: MAX_UINT,
+            },
+          ];
 
     if (side === SwapSide.BUY) {
       // Need to adjust the swap input params to match the adjusted srcAmount

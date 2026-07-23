@@ -45,6 +45,17 @@ export type Executor02DexCallDataParams = {
   swapExchange: OptimalSwapExchange<any>;
 };
 
+// ETH-dest ending steps a per-exchange unit appended (see wrapInRevertableGroup:
+// a group's fallback block must end in the same state as its try block).
+type GroupBranchEndState = {
+  unwrapped: boolean;
+  sentNative: boolean;
+};
+
+// Where an ETH-dest branch's output ends up: held as WETH on the executor,
+// held as raw ETH on the executor, or already delivered to Augustus.
+type EthDestOutcome = 'weth' | 'eth' | 'sent';
+
 /**
  * Class to build bytecode for Executor02 - simpleSwap with N DEXs (VERTICAL_BRANCH), multiSwaps (VERTICAL_BRANCH_HORIZONTAL_SEQUENCE) and megaswaps (NESTED_VERTICAL_BRANCH_HORIZONTAL_SEQUENCE)
  */
@@ -84,12 +95,17 @@ export class Executor02BytecodeBuilder extends ExecutorBytecodeBuilder<
     const {
       dexFuncHasRecipient,
       needWrapNative,
+      needUnwrapNative,
       specialDexFlag,
       specialDexSupportsInsertFromAmount,
       swappedAmountNotPresentInExchangeData,
-      preSwapUnwrapCalldata,
       sendEthButSupportsInsertFromAmount,
     } = exchangeParam;
+
+    const isWETHSrc =
+      !!needUnwrapNative && this.dexHelper.config.isWETH(srcToken);
+    const isWETHDest =
+      !!needUnwrapNative && this.dexHelper.config.isWETH(destToken);
 
     const needWrap = needWrapNative && isEthSrc && maybeWethCallData?.deposit;
     const needUnwrap =
@@ -114,7 +130,7 @@ export class Executor02BytecodeBuilder extends ExecutorBytecodeBuilder<
           : Flag.SEND_ETH_EQUAL_TO_FROM_AMOUNT_PLUS_INSERT_FROM_AMOUNT_DONT_CHECK_BALANCE_AFTER_SWAP // 18
         : !sendEthButSupportsInsertFromAmount
         ? Flag.SEND_ETH_EQUAL_TO_FROM_AMOUNT_CHECK_SRC_TOKEN_BALANCE_AFTER_SWAP // 5
-        : Flag.SEND_ETH_EQUAL_TO_FROM_AMOUNT_PLUS_INSERT_FROM_AMOUNT_DONT_CHECK_BALANCE_AFTER_SWAP; // 18
+        : Flag.SEND_ETH_EQUAL_TO_FROM_AMOUNT_PLUS_INSERT_FROM_AMOUNT_CHECK_SRC_TOKEN_BALANCE_AFTER_SWAP; // 14
     } else if (isEthDest && !needUnwrap) {
       dexFlag = forcePreventInsertFromAmount
         ? Flag.DONT_INSERT_FROM_AMOUNT_CHECK_ETH_BALANCE_AFTER_SWAP
@@ -125,11 +141,22 @@ export class Executor02BytecodeBuilder extends ExecutorBytecodeBuilder<
         : Flag.INSERT_FROM_AMOUNT_CHECK_SRC_TOKEN_BALANCE_AFTER_SWAP; // 8 or 11
     }
 
-    // Actual srcToken is eth, because we'll unwrap weth before swap.
-    // Need to check balance, some dexes don't have 1:1 ETH -> custom_ETH rate
-    if (preSwapUnwrapCalldata) {
+    // DEX operates on native ETH; we unwrap WETH to ETH before the call, then
+    // check WETH src balance (should be 0) after. Some DEXes don't have a 1:1
+    // ETH -> custom_ETH rate.
+    if (isWETHSrc) {
+      // Also insert the runtime fromAmount into the dex calldata when the dex
+      // supports it: value is always the threaded amount, and split slicing can
+      // drift a wei from the quoted amount — dexes that require
+      // msg.value == amountIn (e.g. FluidDex) revert on the mismatch otherwise.
       dexFlag =
-        Flag.SEND_ETH_EQUAL_TO_FROM_AMOUNT_CHECK_SRC_TOKEN_BALANCE_AFTER_SWAP;
+        sendEthButSupportsInsertFromAmount && !forcePreventInsertFromAmount
+          ? Flag.SEND_ETH_EQUAL_TO_FROM_AMOUNT_PLUS_INSERT_FROM_AMOUNT_CHECK_SRC_TOKEN_BALANCE_AFTER_SWAP // 14
+          : Flag.SEND_ETH_EQUAL_TO_FROM_AMOUNT_CHECK_SRC_TOKEN_BALANCE_AFTER_SWAP; // 5
+    } else if (isWETHDest) {
+      dexFlag = forcePreventInsertFromAmount
+        ? Flag.DONT_INSERT_FROM_AMOUNT_CHECK_ETH_BALANCE_AFTER_SWAP
+        : Flag.INSERT_FROM_AMOUNT_CHECK_ETH_BALANCE_AFTER_SWAP;
     }
 
     return {
@@ -179,12 +206,12 @@ export class Executor02BytecodeBuilder extends ExecutorBytecodeBuilder<
     const {
       dexFuncHasRecipient,
       needWrapNative,
+      needUnwrapNative,
       specialDexFlag,
       specialDexSupportsInsertFromAmount,
       swappedAmountNotPresentInExchangeData,
       wethAddress,
       sendEthButSupportsInsertFromAmount,
-      preSwapUnwrapCalldata,
     } = exchangeParam;
 
     const isEthSrc = isETHAddress(srcToken);
@@ -192,6 +219,10 @@ export class Executor02BytecodeBuilder extends ExecutorBytecodeBuilder<
     const isWethDest =
       (wethAddress && destToken.toLowerCase() === wethAddress.toLowerCase()) ||
       this.dexHelper.config.isWETH(destToken);
+    const isWETHSrcUnwrap =
+      !!needUnwrapNative && this.dexHelper.config.isWETH(srcToken);
+    const isWETHDestWrap =
+      !!needUnwrapNative && this.dexHelper.config.isWETH(destToken);
 
     const isSpecialDex =
       specialDexFlag !== undefined && specialDexFlag !== SpecialDex.DEFAULT;
@@ -251,7 +282,7 @@ export class Executor02BytecodeBuilder extends ExecutorBytecodeBuilder<
             : Flag.SEND_ETH_EQUAL_TO_FROM_AMOUNT_PLUS_INSERT_FROM_AMOUNT_DONT_CHECK_BALANCE_AFTER_SWAP // 18
           : preventInsertForSendEth
           ? Flag.SEND_ETH_EQUAL_TO_FROM_AMOUNT_CHECK_SRC_TOKEN_BALANCE_AFTER_SWAP // 5
-          : Flag.SEND_ETH_EQUAL_TO_FROM_AMOUNT_PLUS_INSERT_FROM_AMOUNT_DONT_CHECK_BALANCE_AFTER_SWAP; // 18
+          : Flag.SEND_ETH_EQUAL_TO_FROM_AMOUNT_PLUS_INSERT_FROM_AMOUNT_CHECK_SRC_TOKEN_BALANCE_AFTER_SWAP; // 14
     } else if (needCheckEthBalance) {
       dexFlag =
         needCheckSrcTokenBalanceOf || forceBalanceOfCheck
@@ -272,11 +303,22 @@ export class Executor02BytecodeBuilder extends ExecutorBytecodeBuilder<
           : Flag.INSERT_FROM_AMOUNT_DONT_CHECK_BALANCE_AFTER_SWAP; // 3
     }
 
-    // Actual srcToken is eth, because we'll unwrap weth before swap.
-    // Need to check balance, some dexes don't have 1:1 ETH -> custom_ETH rate
-    if (preSwapUnwrapCalldata) {
+    // DEX operates on native ETH; we unwrap WETH to ETH before the call, then
+    // check WETH src balance (should be 0) after. Some DEXes don't have a 1:1
+    // ETH -> custom_ETH rate.
+    if (isWETHSrcUnwrap) {
+      // Also insert the runtime fromAmount into the dex calldata when the dex
+      // supports it: value is always the threaded amount, and split slicing can
+      // drift a wei from the quoted amount — dexes that require
+      // msg.value == amountIn (e.g. FluidDex) revert on the mismatch otherwise.
       dexFlag =
-        Flag.SEND_ETH_EQUAL_TO_FROM_AMOUNT_CHECK_SRC_TOKEN_BALANCE_AFTER_SWAP;
+        sendEthButSupportsInsertFromAmount && !forcePreventInsertFromAmount
+          ? Flag.SEND_ETH_EQUAL_TO_FROM_AMOUNT_PLUS_INSERT_FROM_AMOUNT_CHECK_SRC_TOKEN_BALANCE_AFTER_SWAP // 14
+          : Flag.SEND_ETH_EQUAL_TO_FROM_AMOUNT_CHECK_SRC_TOKEN_BALANCE_AFTER_SWAP; // 5
+    } else if (isWETHDestWrap) {
+      dexFlag = forcePreventInsertFromAmount
+        ? Flag.DONT_INSERT_FROM_AMOUNT_CHECK_ETH_BALANCE_AFTER_SWAP
+        : Flag.INSERT_FROM_AMOUNT_CHECK_ETH_BALANCE_AFTER_SWAP;
     }
 
     return {
@@ -300,8 +342,13 @@ export class Executor02BytecodeBuilder extends ExecutorBytecodeBuilder<
 
     const swap = priceRoute.bestRoute[routeIndex].swaps[swapIndex];
     const exchangeParam = exchangeParams[exchangeParamIndex];
-    let { exchangeData, specialDexFlag, targetExchange, needWrapNative } =
-      exchangeParam;
+    let {
+      exchangeData,
+      specialDexFlag,
+      targetExchange,
+      needWrapNative,
+      amountsPacked128 = false,
+    } = exchangeParam;
 
     const routeNeedsRootUnwrapEth = this.doesRouteNeedsRootUnwrapEth(
       priceRoute,
@@ -376,18 +423,15 @@ export class Executor02BytecodeBuilder extends ExecutorBytecodeBuilder<
       if (exchangeParam.insertFromAmountPos) {
         fromAmountPos = exchangeParam.insertFromAmountPos;
       } else {
-        const fromAmount = ethers.utils.defaultAbiCoder.encode(
-          ['uint256'],
-          [swapExchange.srcAmount],
+        fromAmountPos = this.findAmountPosWithFallback(
+          exchangeData,
+          swapExchange.srcAmount,
+          amountsPacked128,
         );
-        const fromAmountIndex = exchangeData
-          .replace('0x', '')
-          .indexOf(fromAmount.replace('0x', ''));
-
-        fromAmountPos =
-          (fromAmountIndex !== -1 ? fromAmountIndex : exchangeData.length) / 2;
       }
     }
+
+    const finalFlag = amountsPacked128 ? this.applyIs128(flag) : flag;
 
     return this.buildCallData(
       targetExchange,
@@ -395,7 +439,7 @@ export class Executor02BytecodeBuilder extends ExecutorBytecodeBuilder<
       fromAmountPos,
       destTokenPos,
       specialDexFlag || SpecialDex.DEFAULT,
-      flag,
+      finalFlag as Flag,
       undefined,
       returnAmountPos,
     );
@@ -584,6 +628,272 @@ export class Executor02BytecodeBuilder extends ExecutorBytecodeBuilder<
     );
   }
 
+  /**
+   * Where an ETH-dest final-hop branch leaves its output. Everything outside a
+   * revertable group (root unwrap/send, threading flags, sibling accounting)
+   * is computed from the primary's params, so the fallback block must end in
+   * the same place the try block would.
+   */
+  private ethDestOutcome(
+    param: DexExchangeBuildParam,
+    endState: GroupBranchEndState,
+    // Primary raw-ETH last-hop params are built with recipient = Augustus, so
+    // a recipient-capable dex delivers itself. Fallback params are always
+    // built with recipient = executor (see getDexCallsParams) — their output
+    // stays on the executor no matter what the dex supports.
+    deliversViaRecipient: boolean,
+  ): EthDestOutcome {
+    if (endState.sentNative) return 'sent';
+    if (param.needWrapNative) return endState.unwrapped ? 'eth' : 'weth';
+    return deliversViaRecipient && param.dexFuncHasRecipient ? 'sent' : 'eth';
+  }
+
+  /**
+   * Wrap an already-assembled per-exchange unit in a revertable fallback group
+   * (specialDex 0xFF). The step's calldata payload is [28-byte padding]
+   * [tryLen(4)][fallbackLen(4)][try-block][fallback-block]; the try-block is the
+   * unit as it would have run inline, the fallback-block is the alternative's
+   * unit. On-chain, Executor02 runs the try-block in a self-call and, on revert,
+   * runs the fallback-block from the same input.
+   *
+   * Threading: when the group sits directly in a horizontal sequence
+   * (insidePath = false) it must thread the running amount to the next step, so
+   * it uses the vertical-branching wrapper's flag/destTokenPos semantics. When
+   * it is a member of a split (insidePath = true), the vertical-branching
+   * wrapper above it does the threading, so the group skips the balance check.
+   */
+  private wrapInRevertableGroup(
+    priceRoute: OptimalRate,
+    routeIndex: number,
+    swapIndex: number,
+    swapExchangeIndex: number,
+    exchangeParams: DexExchangeBuildParam[],
+    exchangeParamIndex: number,
+    tryBlock: string,
+    allowToAddWrap: boolean,
+    prevBranchWasWrapped: boolean,
+    insidePath: boolean,
+    wrapAddedInsideTry: boolean,
+    tryEndState: GroupBranchEndState,
+    maybeWethCallData?: DepositWithdrawReturn,
+    applyVerticalBranching?: boolean,
+  ): string {
+    const swap = priceRoute.bestRoute[routeIndex].swaps[swapIndex];
+    const swapExchange = swap.swapExchanges[swapExchangeIndex];
+    const fallbackParam = exchangeParams[exchangeParamIndex].fallbackParam!;
+
+    // fallback-block: substitute the fallback param at this hop and recompute
+    // flags for it. Fresh wrap maps: the fallback is an independent alternative
+    // whose own wrap/approve must be encoded inside its block.
+    const fallbackExchangeParams = exchangeParams.slice();
+    fallbackExchangeParams[exchangeParamIndex] = fallbackParam;
+    const fallbackFlags = this.buildFlags(
+      priceRoute,
+      fallbackExchangeParams,
+      maybeWethCallData,
+    );
+    const fallbackEndState: GroupBranchEndState = {
+      unwrapped: false,
+      sentNative: false,
+    };
+    const fallbackWrapMap: { [key: string]: boolean } = {};
+    let fallbackBlock = this.buildSingleSwapExchangeCallData(
+      priceRoute,
+      routeIndex,
+      swapIndex,
+      swapExchangeIndex,
+      fallbackExchangeParams,
+      fallbackFlags,
+      fallbackWrapMap,
+      allowToAddWrap,
+      prevBranchWasWrapped,
+      {},
+      maybeWethCallData,
+      false, // addMultiSwapMetadata — the path metadata wraps the group, not the block
+      applyVerticalBranching,
+      fallbackEndState,
+    );
+
+    // Normalize the fallback block's INPUT. When the primary's wrap lives outside
+    // the try block (root/shared wrap), it persists after a try revert, so the
+    // branch holds its slice as WETH — unlike a try-internal wrap, which rolls
+    // back leaving raw ETH (that case the fallback unit already handles by
+    // adding its own approve+deposit).
+    if (
+      isETHAddress(swap.srcToken) &&
+      Boolean(exchangeParams[exchangeParamIndex].needWrapNative) &&
+      !wrapAddedInsideTry
+    ) {
+      if (!fallbackParam.needWrapNative) {
+        // WETH in hand, fallback consumes raw ETH: unwrap the slice first (the
+        // running amount is inserted at runtime; rolls back with the block).
+        fallbackBlock = hexConcat([
+          this.buildUnwrapEthCallData(
+            this.getWETHAddress(fallbackParam),
+            this.erc20Interface.encodeFunctionData('withdraw', [
+              swapExchange.srcAmount,
+            ]),
+          ),
+          fallbackBlock,
+        ]);
+      } else if (fallbackParam.approveData && !fallbackParam.skipApproval) {
+        // WETH in hand, fallback also consumes WETH: no deposit needed, but the
+        // unit skipped its approve (it only rides with the deposit branch,
+        // which the external wrap suppresses) — prepend it.
+        fallbackBlock = hexConcat([
+          this.buildApproveCallData(
+            fallbackParam.approveData.target,
+            fallbackParam.approveData.token,
+            fallbackFlags.approves[exchangeParamIndex],
+            fallbackParam.permit2Approval,
+          ),
+          fallbackBlock,
+        ]);
+      }
+    }
+
+    // Raw-native primary + wrap-needing fallback on a native-src hop: no wrap
+    // exists on the primary path, and the fallback unit can wrongly skip its
+    // own deposit — root-wrap detection runs on the SUBSTITUTED params
+    // (doesRouteNeedsRootWrapEth), not the real route. If the unit didn't
+    // wrap, prepend the approve+deposit.
+    if (
+      isETHAddress(swap.srcToken) &&
+      !exchangeParams[exchangeParamIndex].needWrapNative &&
+      Boolean(fallbackParam.needWrapNative) &&
+      !!maybeWethCallData?.deposit &&
+      !fallbackWrapMap[`${routeIndex}_${swapIndex}_${swapExchangeIndex}`]
+    ) {
+      const approveCallData =
+        fallbackParam.approveData && !fallbackParam.skipApproval
+          ? this.buildApproveCallData(
+              fallbackParam.approveData.target,
+              fallbackParam.approveData.token,
+              fallbackFlags.approves[exchangeParamIndex],
+              fallbackParam.permit2Approval,
+            )
+          : '0x';
+      fallbackBlock = hexConcat([
+        approveCallData,
+        this.buildWrapEthCallData(
+          this.getWETHAddress(fallbackParam),
+          this.erc20Interface.encodeFunctionData('deposit'),
+          Flag.SEND_ETH_EQUAL_TO_FROM_AMOUNT_DONT_CHECK_BALANCE_AFTER_SWAP, // 9
+        ),
+        fallbackBlock,
+      ]);
+    }
+
+    // Normalize the fallback block's OUTPUT on an ETH-dest final hop: the
+    // post-group machinery was shaped by the primary, so the fallback must
+    // end where the try block would — wrap raw ETH when the try ends in WETH,
+    // unwrap a WETH-holding fallback (and send if the try would have)
+    // otherwise; already-delivered ('sent') is terminal.
+    const isLastSwap =
+      swapIndex === priceRoute.bestRoute[routeIndex].swaps.length - 1;
+    if (isETHAddress(swap.destToken) && isLastSwap) {
+      const tryOutcome = this.ethDestOutcome(
+        exchangeParams[exchangeParamIndex],
+        tryEndState,
+        true,
+      );
+      const fallbackOutcome = this.ethDestOutcome(
+        fallbackParam,
+        fallbackEndState,
+        false,
+      );
+
+      if (fallbackOutcome !== tryOutcome && fallbackOutcome !== 'sent') {
+        if (tryOutcome === 'weth') {
+          fallbackBlock = hexConcat([
+            fallbackBlock,
+            this.buildWrapEthCallData(
+              this.getWETHAddress(fallbackParam),
+              this.erc20Interface.encodeFunctionData('deposit'),
+              Flag.SEND_ETH_EQUAL_TO_FROM_AMOUNT_DONT_CHECK_BALANCE_AFTER_SWAP, // 9
+            ),
+          ]);
+        } else {
+          if (fallbackOutcome === 'weth') {
+            fallbackBlock = hexConcat([
+              fallbackBlock,
+              this.buildUnwrapEthCallData(
+                this.getWETHAddress(fallbackParam),
+                this.erc20Interface.encodeFunctionData('withdraw', [
+                  swapExchange.destAmount,
+                ]),
+              ),
+            ]);
+          }
+          if (tryOutcome === 'sent') {
+            fallbackBlock = hexConcat([
+              fallbackBlock,
+              this.buildFinalSpecialFlagCalldata(),
+            ]);
+          }
+        }
+      }
+    }
+
+    // payload = [padding(28)][tryLen(4)][fallbackLen(4)][try][fallback]
+    let payload = hexConcat([
+      ZEROS_28_BYTES,
+      hexZeroPad(hexlify(hexDataLength(tryBlock)), 4),
+      hexZeroPad(hexlify(hexDataLength(fallbackBlock)), 4),
+      tryBlock,
+      fallbackBlock,
+    ]);
+
+    const flag = insidePath
+      ? Flag.DONT_INSERT_FROM_AMOUNT_DONT_CHECK_BALANCE_AFTER_SWAP // 0
+      : this.buildVerticalBranchingFlag(
+          priceRoute,
+          swap,
+          exchangeParams,
+          routeIndex,
+          swapIndex,
+        );
+
+    // Locate the dest token in the payload for the post-group balance check
+    // (append it if absent — trailing bytes after the blocks are ignored on-chain).
+    let destTokenPos = 0;
+    if (flag % 3 === 2) {
+      const destTokenAddr = isETHAddress(swap.destToken)
+        ? this.dexHelper.config.data.wrappedNativeTokenAddress.toLowerCase()
+        : swap.destToken.toLowerCase();
+
+      payload = this.addTokenAddressToCallData(payload, destTokenAddr);
+      const destTokenAddrIndex = payload
+        .replace('0x', '')
+        .indexOf(destTokenAddr.replace('0x', ''));
+      destTokenPos = destTokenAddrIndex / 2 - 40;
+      if (destTokenPos < 0) destTokenPos = 0;
+    }
+
+    return solidityPack(
+      [
+        'bytes20',
+        'bytes4',
+        'bytes2',
+        'bytes2',
+        'bytes1',
+        'bytes1',
+        'bytes2',
+        'bytes',
+      ],
+      [
+        ZEROS_20_BYTES, // no call target for a group
+        hexZeroPad(hexlify(hexDataLength(payload)), 4), // payload length (incl. padding)
+        hexZeroPad(hexlify(0), 2), // fromAmountPos (unused by the group branch)
+        hexZeroPad(hexlify(destTokenPos), 2), // destTokenPos
+        hexZeroPad(hexlify(0), 1), // returnAmountPos (contract forces 0xFF)
+        hexZeroPad(hexlify(SpecialDex.REVERTABLE_FALLBACK_GROUP), 1), // 0xFF
+        hexZeroPad(hexlify(flag), 2), // flag (balance-check threading)
+        payload,
+      ],
+    );
+  }
+
   private buildSingleSwapExchangeCallData(
     priceRoute: OptimalRate,
     routeIndex: number,
@@ -598,6 +908,7 @@ export class Executor02BytecodeBuilder extends ExecutorBytecodeBuilder<
     maybeWethCallData?: DepositWithdrawReturn,
     addMultiSwapMetadata?: boolean,
     applyVerticalBranching?: boolean,
+    endStateOut?: GroupBranchEndState,
   ): string {
     const isSimpleSwap =
       priceRoute.bestRoute.length === 1 &&
@@ -605,6 +916,13 @@ export class Executor02BytecodeBuilder extends ExecutorBytecodeBuilder<
     let swapExchangeCallData = '';
     const swap = priceRoute.bestRoute[routeIndex].swaps[swapIndex];
     const swapExchange = swap.swapExchanges[swapExchangeIndex];
+    // What this unit appends for ETH-dest endings — a revertable group's
+    // fallback block must end in the same state as its try block, so both
+    // sides report what they did (see wrapInRevertableGroup).
+    const endState: GroupBranchEndState = {
+      unwrapped: false,
+      sentNative: false,
+    };
 
     let exchangeParamIndex = 0;
     let tempExchangeParamIndex = 0;
@@ -634,14 +952,32 @@ export class Executor02BytecodeBuilder extends ExecutorBytecodeBuilder<
       swapExchange,
     });
 
-    if (curExchangeParam.preSwapUnwrapCalldata) {
+    const isWETHSrcUnwrap =
+      !!curExchangeParam.needUnwrapNative &&
+      this.dexHelper.config.isWETH(swap.srcToken);
+    const isWETHDestWrap =
+      !!curExchangeParam.needUnwrapNative &&
+      this.dexHelper.config.isWETH(swap.destToken);
+
+    if (isWETHSrcUnwrap) {
       const withdrawCallData = this.buildUnwrapEthCallData(
         this.getWETHAddress(curExchangeParam),
-        curExchangeParam.preSwapUnwrapCalldata,
+        this.erc20Interface.encodeFunctionData('withdraw', [
+          swapExchange.srcAmount,
+        ]),
       );
       swapExchangeCallData = hexConcat([withdrawCallData, dexCallData]);
     } else {
       swapExchangeCallData = hexConcat([dexCallData]);
+    }
+
+    if (isWETHDestWrap) {
+      const depositCallData = this.buildWrapEthCallData(
+        this.getWETHAddress(curExchangeParam),
+        this.erc20Interface.encodeFunctionData('deposit'),
+        Flag.SEND_ETH_EQUAL_TO_FROM_AMOUNT_DONT_CHECK_BALANCE_AFTER_SWAP, // 9
+      );
+      swapExchangeCallData = hexConcat([swapExchangeCallData, depositCallData]);
     }
 
     const isLastSwap =
@@ -783,6 +1119,7 @@ export class Executor02BytecodeBuilder extends ExecutorBytecodeBuilder<
 
         if (customWethAddress || needUnwrap) {
           unwrapToSwapMap[swapIndex] = true;
+          endState.unwrapped = true;
           withdrawCallData = this.buildUnwrapEthCallData(
             this.getWETHAddress(curExchangeParam),
             maybeWethCallData.withdraw.calldata,
@@ -795,6 +1132,7 @@ export class Executor02BytecodeBuilder extends ExecutorBytecodeBuilder<
         ]);
 
         if (isSimpleSwap && (needUnwrap || customWethAddress)) {
+          endState.sentNative = true;
           const finalSpecialFlagCalldata = this.buildFinalSpecialFlagCalldata();
           swapExchangeCallData = hexConcat([
             swapExchangeCallData,
@@ -864,11 +1202,55 @@ export class Executor02BytecodeBuilder extends ExecutorBytecodeBuilder<
       // don't need to send eth without unwrapping, handling unwrap and sendEth in the end of root branch
       !this.doesRouteNeedsRootUnwrapEth(priceRoute, exchangeParams)
     ) {
+      endState.sentNative = true;
       const finalSpecialFlagCalldata = this.buildFinalSpecialFlagCalldata();
       swapExchangeCallData = hexConcat([
         swapExchangeCallData,
         finalSpecialFlagCalldata,
       ]);
+    }
+
+    if (endStateOut) {
+      endStateOut.unwrapped = endState.unwrapped;
+      endStateOut.sentNative = endState.sentNative;
+    }
+
+    // In a fallback-block build the substituted param carries no fallback of
+    // its own, so the recursion from wrapInRevertableGroup can't close here.
+    const fallbackParam = curExchangeParam.fallbackParam;
+    if (
+      fallbackParam &&
+      // Mixed wrap-ness on a MID-ROUTE ETH-dest hop is not normalized (raw ETH
+      // as an intermediate threading token is flag-7 territory the group's
+      // balance check doesn't model) — run plain. Final-hop mismatches are
+      // normalized inside wrapInRevertableGroup (input and output side).
+      !(
+        isETHAddress(swap.destToken) &&
+        !isLastSwap &&
+        Boolean(curExchangeParam.needWrapNative) !==
+          Boolean(fallbackParam.needWrapNative)
+      )
+    ) {
+      swapExchangeCallData = this.wrapInRevertableGroup(
+        priceRoute,
+        routeIndex,
+        swapIndex,
+        swapExchangeIndex,
+        exchangeParams,
+        exchangeParamIndex,
+        swapExchangeCallData,
+        allowToAddWrap,
+        prevBranchWasWrapped,
+        !!addMultiSwapMetadata,
+        // Whether the primary's wrap sits INSIDE the try block (rolls back with
+        // it) or outside (root/shared — persists after a try revert).
+        !!addedWrapToSwapExchangeMap[
+          `${routeIndex}_${swapIndex}_${swapExchangeIndex}`
+        ],
+        endState,
+        maybeWethCallData,
+        applyVerticalBranching,
+      );
     }
 
     if (addMultiSwapMetadata) {

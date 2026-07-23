@@ -2,7 +2,7 @@ import { Interface } from '@ethersproject/abi';
 import { IDexHelper } from '../dex-helper';
 import ERC20ABI from '../abi/erc20.json';
 import Permit2Abi from '../abi/permit2.json';
-import { ethers } from 'ethers';
+import { BigNumber, ethers } from 'ethers';
 import {
   Address,
   OptimalRate,
@@ -22,6 +22,8 @@ import {
   ZEROS_28_BYTES,
   ZEROS_4_BYTES,
   DISABLED_MAX_UNIT_APPROVAL_TOKENS,
+  BYTES_64_LENGTH,
+  FUNCTION_SELECTOR_LENGTH,
 } from './constants';
 import { Executors, Flag, SpecialDex } from './types';
 import { MAX_UINT, Network, PERMIT2_ADDRESS } from '../constants';
@@ -249,6 +251,107 @@ export abstract class ExecutorBytecodeBuilder<S = {}, D = {}> {
     return hexConcat([approvalCalldata, permit2Calldata]);
   }
 
+  protected findAmountPosInCalldata(
+    exchangeData: string,
+    encodedAmount: string,
+  ): number {
+    const rawCalldata = exchangeData.replace('0x', '');
+    const rawAmount = encodedAmount.replace('0x', '');
+
+    let amountIndex = -1;
+    for (
+      let idx = rawCalldata.indexOf(rawAmount);
+      idx !== -1;
+      idx = rawCalldata.indexOf(rawAmount, idx + 1)
+    ) {
+      if ((idx - FUNCTION_SELECTOR_LENGTH) % BYTES_64_LENGTH === 0) {
+        amountIndex = idx;
+        break;
+      }
+      if (idx % 2 === 0) {
+        this.dexHelper
+          .getLogger(`ExecutorBytecodeBuilder`)
+          .warn(
+            `findAmountPosInCalldata: amount found at idx=${idx} (byte-aligned) but not on ABI word boundary. rawCalldata=${rawCalldata}, rawAmount=${rawAmount}`,
+          );
+      }
+    }
+
+    return (amountIndex !== -1 ? amountIndex : exchangeData.length) / 2;
+  }
+
+  protected applyIs128(flag: number): number {
+    return flag | 0x8000;
+  }
+
+  protected findAmountPosWithFallback(
+    exchangeData: string,
+    amount: string,
+    is128: boolean,
+  ): number {
+    if (is128) {
+      return this.findAmount128PosInCalldata(exchangeData, amount);
+    }
+
+    const positiveEncoded = ethers.utils.defaultAbiCoder.encode(
+      ['uint256'],
+      [amount],
+    );
+    let pos = this.findAmountPosInCalldata(exchangeData, positiveEncoded);
+
+    if (pos >= exchangeData.length / 2) {
+      const negativeEncoded = ethers.utils.defaultAbiCoder.encode(
+        ['int256'],
+        [BigNumber.from(amount).mul(-1)],
+      );
+      pos = this.findAmountPosInCalldata(exchangeData, negativeEncoded);
+    }
+
+    return pos;
+  }
+
+  private findAmount128PosInCalldata(
+    exchangeData: string,
+    amount: string,
+  ): number {
+    const rawCalldata = exchangeData.replace('0x', '');
+    const amountBN = BigNumber.from(amount);
+
+    const positiveHex = hexZeroPad(
+      amountBN.toTwos(128).toHexString(),
+      16,
+    ).replace('0x', '');
+    let idx = this.findByteAligned(rawCalldata, positiveHex);
+
+    if (idx === -1) {
+      const negativeHex = hexZeroPad(
+        amountBN.mul(-1).toTwos(128).toHexString(),
+        16,
+      ).replace('0x', '');
+      idx = this.findByteAligned(rawCalldata, negativeHex);
+    }
+
+    if (idx !== -1) {
+      const slotPos = idx / 2 - 16;
+      if (slotPos >= 0) {
+        return slotPos;
+      }
+    }
+
+    return exchangeData.length / 2;
+  }
+
+  private findByteAligned(rawCalldata: string, pattern: string): number {
+    for (
+      let idx = rawCalldata.indexOf(pattern);
+      idx !== -1;
+      idx = rawCalldata.indexOf(pattern, idx + 1)
+    ) {
+      if (idx % 2 === 0) return idx;
+    }
+    return -1;
+  }
+
   protected buildWrapEthCallData(
     wethAddress: string,
     depositCallData: string,
@@ -446,6 +549,14 @@ export abstract class ExecutorBytecodeBuilder<S = {}, D = {}> {
     if (exchangeParam.skipApproval) return null;
 
     const target = exchangeParam.spender || exchangeParam.targetExchange;
+
+    // WETH src gets unwrapped to ETH before the DEX call; nothing to approve.
+    if (
+      exchangeParam.needUnwrapNative &&
+      this.dexHelper.config.isWETH(swap.srcToken)
+    ) {
+      return null;
+    }
 
     if (
       !isETHAddress(swap.srcToken) &&

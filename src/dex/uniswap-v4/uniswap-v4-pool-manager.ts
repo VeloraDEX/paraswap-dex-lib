@@ -2,7 +2,14 @@ import {
   InitializeStateOptions,
   StatefulEventSubscriber,
 } from '../../stateful-event-subscriber';
-import { DexParams, Pool, PoolManagerState, SubgraphPool } from './types';
+import {
+  DexParams,
+  Pool,
+  PoolManagerState,
+  SubgraphConnectorPool,
+  SubgraphPool,
+  PoolKey,
+} from './types';
 import { Address, Log, Logger } from '../../types';
 import UniswapV4StateViewABI from '../../abi/uniswap-v4/state-view.abi.json';
 import UniswapV4PoolManagerABI from '../../abi/uniswap-v4/pool-manager.abi.json';
@@ -20,6 +27,19 @@ import {
 import { FactoryState } from '../uniswap-v3/types';
 import { UniswapV4Pool } from './uniswap-v4-pool';
 import { UniswapV4PoolsList } from './config';
+import { PoolState, TickInfo } from './types';
+import { BytesLike } from 'ethers/lib/utils';
+import { MultiResult } from '../../lib/multi-wrapper';
+import { extractSuccessAndValue } from '../../lib/decoders';
+import { NumberAsString } from '@paraswap/core';
+import UniswapV4StateMulticallABI from '../../abi/uniswap-v4/state-multicall.abi.json';
+import {
+  TICK_BITMAP_BUFFER,
+  TICK_BITMAP_BUFFER_BY_CHAIN,
+  TICK_BITMAP_TO_USE,
+  TICK_BITMAP_TO_USE_BY_CHAIN,
+} from './constants';
+import { IBaseHook } from './hooks/types';
 
 export class UniswapV4PoolManager extends StatefulEventSubscriber<PoolManagerState> {
   handlers: {
@@ -30,21 +50,31 @@ export class UniswapV4PoolManager extends StatefulEventSubscriber<PoolManagerSta
 
   private eventPools: Record<string, UniswapV4Pool | null> = {};
 
+  // Guards against concurrent getEventPool() calls for the same pool id.
+  // Stores in-flight initialization promises so duplicate callers await
+  // the same work instead of creating duplicate pool instances.
+  private poolInitPromises: Record<string, Promise<UniswapV4Pool | null>> = {};
+
   logDecoder: (log: Log) => any;
 
   stateViewIface: Interface;
 
   poolManagerIface: Interface;
 
+  stateMulticallIface: Interface;
+
   private wethAddress: string;
 
   private poolsCacheKey = 'pools_cache';
+  private supportedHookAddresses: string[];
+  private hookInstancesByAddress: Record<string, IBaseHook>;
 
   constructor(
     readonly dexHelper: IDexHelper,
     parentName: string,
     private readonly network: number,
     private readonly config: DexParams,
+    supportedHooks: IBaseHook[],
     protected logger: Logger,
     mapKey: string = '',
   ) {
@@ -59,12 +89,22 @@ export class UniswapV4PoolManager extends StatefulEventSubscriber<PoolManagerSta
 
     this.stateViewIface = new Interface(UniswapV4StateViewABI);
     this.poolManagerIface = new Interface(UniswapV4PoolManagerABI);
+    this.stateMulticallIface = new Interface(UniswapV4StateMulticallABI);
     this.addressesSubscribed = [this.config.poolManager];
 
     this.wethAddress =
       this.dexHelper.config.data.wrappedNativeTokenAddress.toLowerCase();
 
     this.logDecoder = (log: Log) => this.poolManagerIface.parseLog(log);
+
+    this.hookInstancesByAddress = Object.fromEntries(
+      supportedHooks.map(hook => [hook.address.toLowerCase(), hook]),
+    );
+
+    this.supportedHookAddresses = [
+      NULL_ADDRESS, // always include pools without hooks
+      ...Object.keys(this.hookInstancesByAddress),
+    ];
 
     // Add handlers
     this.handlers['Initialize'] = this.handleInitializeEvent.bind(this);
@@ -99,7 +139,7 @@ export class UniswapV4PoolManager extends StatefulEventSubscriber<PoolManagerSta
     blockNumber: number,
   ): Promise<UniswapV4Pool | null> {
     const _poolId = poolId.toLowerCase();
-    let eventPool = this.eventPools[_poolId];
+    const eventPool = this.eventPools[_poolId];
 
     if (eventPool === null) return null; // non existing pool
 
@@ -107,34 +147,63 @@ export class UniswapV4PoolManager extends StatefulEventSubscriber<PoolManagerSta
       return eventPool;
     }
 
+    // If another caller is already initializing this pool, await the same promise
+    const existingPromise = this.poolInitPromises[_poolId];
+    if (existingPromise) {
+      return existingPromise;
+    }
+
+    const initPromise = this._initEventPool(_poolId, blockNumber);
+    this.poolInitPromises[_poolId] = initPromise;
+
+    try {
+      return await initPromise;
+    } finally {
+      delete this.poolInitPromises[_poolId];
+    }
+  }
+
+  private async _initEventPool(
+    poolId: string,
+    blockNumber: number,
+  ): Promise<UniswapV4Pool | null> {
     const subgraphPool = this.pools.find(
-      pool => pool.id.toLowerCase() === _poolId,
+      pool => pool.id.toLowerCase() === poolId,
     );
 
     if (!subgraphPool) {
-      this.eventPools[_poolId] = null;
+      this.eventPools[poolId] = null;
       return null;
     }
 
-    eventPool = new UniswapV4Pool(
+    const poolKey: PoolKey = {
+      currency0: subgraphPool.token0.address.toLowerCase(),
+      currency1: subgraphPool.token1.address.toLowerCase(),
+      fee: subgraphPool.fee,
+      tickSpacing: parseInt(subgraphPool.tickSpacing),
+      hooks: subgraphPool.hooks,
+    };
+
+    const eventPool = new UniswapV4Pool(
       this.dexHelper,
       this.parentName,
       this.network,
       this.config,
       this.logger,
       this.mapKey,
-      _poolId,
-      subgraphPool.token0.address.toLowerCase(),
-      subgraphPool.token1.address.toLowerCase(),
-      subgraphPool.fee,
-      subgraphPool.hooks,
-      subgraphPool.tickSpacing,
+      poolId,
+      poolKey.currency0,
+      poolKey.currency1,
+      poolKey.fee,
+      poolKey.hooks,
+      poolKey.tickSpacing.toString(),
+      this.getHook(poolId, poolKey),
     );
 
     await eventPool.initialize(blockNumber);
-    this.eventPools[_poolId] = eventPool;
+    this.eventPools[poolId] = eventPool;
 
-    return this.eventPools[_poolId];
+    return eventPool;
   }
 
   public async getAvailablePoolsForPair(
@@ -199,7 +268,9 @@ export class UniswapV4PoolManager extends StatefulEventSubscriber<PoolManagerSta
     const staticPoolsList = UniswapV4PoolsList[this.network];
 
     if (staticPoolsList) {
-      return staticPoolsList;
+      return staticPoolsList.filter(pool =>
+        this.isHookSupported(pool.hooks.toLowerCase()),
+      );
     }
 
     const cachedPoolsRaw = await this.dexHelper.cache.getAndCacheLocally(
@@ -224,6 +295,7 @@ export class UniswapV4PoolManager extends StatefulEventSubscriber<PoolManagerSta
         cachedPools.length &&
         poolsTTL > POOL_CACHE_STORE_INTERVAL - POOL_CACHE_REFRESH_INTERVAL
       ) {
+        this.registerHookPools(cachedPools);
         return cachedPools;
       }
 
@@ -234,6 +306,7 @@ export class UniswapV4PoolManager extends StatefulEventSubscriber<PoolManagerSta
 
     try {
       const defaultPerPageLimit = 1000;
+      const hooksToQuery = this.supportedHookAddresses;
       let curPage = 0;
 
       let currentSubgraphPools: SubgraphPool[] =
@@ -245,6 +318,7 @@ export class UniswapV4PoolManager extends StatefulEventSubscriber<PoolManagerSta
           blockNumber,
           curPage * defaultPerPageLimit,
           defaultPerPageLimit,
+          hooksToQuery,
         );
       pools = pools.concat(currentSubgraphPools);
 
@@ -259,6 +333,7 @@ export class UniswapV4PoolManager extends StatefulEventSubscriber<PoolManagerSta
             blockNumber,
             curPage * defaultPerPageLimit,
             defaultPerPageLimit,
+            hooksToQuery,
           );
 
         pools = pools.concat(currentSubgraphPools);
@@ -290,6 +365,8 @@ export class UniswapV4PoolManager extends StatefulEventSubscriber<PoolManagerSta
       JSON.stringify(pools),
     );
 
+    this.registerHookPools(pools);
+
     return pools;
   }
 
@@ -303,10 +380,8 @@ export class UniswapV4PoolManager extends StatefulEventSubscriber<PoolManagerSta
     const fee = event.args.fee;
     const tickSpacing = parseInt(event.args.tickSpacing);
     const hooks = event.args.hooks;
-    const sqrtPriceX96 = BigInt(event.args.sqrtPriceX96);
-    const tick = parseInt(event.args.tick);
 
-    if (hooks !== NULL_ADDRESS) {
+    if (!this.isHookSupported(hooks.toLowerCase())) {
       this.logger.warn(
         `Pool ${id} has hooks ${hooks}, which is not supported yet. Skipping.`,
       );
@@ -346,6 +421,14 @@ export class UniswapV4PoolManager extends StatefulEventSubscriber<PoolManagerSta
       tickSpacing: tickSpacing.toString(),
     });
 
+    const poolKey: PoolKey = {
+      currency0: currency0.toLowerCase(),
+      currency1: currency1.toLowerCase(),
+      fee: fee.toString(),
+      tickSpacing,
+      hooks,
+    };
+
     const eventPool = new UniswapV4Pool(
       this.dexHelper,
       this.parentName,
@@ -354,11 +437,12 @@ export class UniswapV4PoolManager extends StatefulEventSubscriber<PoolManagerSta
       this.logger,
       this.mapKey,
       id,
-      currency0.toLowerCase(),
-      currency1.toLowerCase(),
-      fee,
-      hooks,
-      tickSpacing.toString(),
+      poolKey.currency0,
+      poolKey.currency1,
+      poolKey.fee,
+      poolKey.hooks,
+      poolKey.tickSpacing.toString(),
+      this.getHook(id, poolKey),
     );
     await eventPool.initialize(log.blockNumber);
 
@@ -369,5 +453,147 @@ export class UniswapV4PoolManager extends StatefulEventSubscriber<PoolManagerSta
 
   private isPoolWithUnconventionalFees(fee: string | number): boolean {
     return +fee % 100 !== 0;
+  }
+
+  private registerHookPools(pools: SubgraphPool[]) {
+    for (const pool of pools) {
+      const poolKey: PoolKey = {
+        currency0: pool.token0.address.toLowerCase(),
+        currency1: pool.token1.address.toLowerCase(),
+        fee: pool.fee,
+        tickSpacing: parseInt(pool.tickSpacing),
+        hooks: pool.hooks,
+      };
+
+      this.getHook(pool.id, poolKey);
+    }
+  }
+
+  private getHook(poolId: string, poolKey: PoolKey): IBaseHook | undefined {
+    const hook = this.hookInstancesByAddress[poolKey.hooks.toLowerCase()];
+    if (!hook) {
+      return undefined;
+    }
+
+    hook.registerPool(poolId, poolKey);
+    return hook;
+  }
+
+  private getBitmapRange() {
+    const networkId = this.dexHelper.config.data.network;
+
+    const tickBitMapToUse =
+      TICK_BITMAP_TO_USE_BY_CHAIN[networkId] ?? TICK_BITMAP_TO_USE;
+    const tickBitMapBuffer =
+      TICK_BITMAP_BUFFER_BY_CHAIN[networkId] ?? TICK_BITMAP_BUFFER;
+
+    return tickBitMapToUse + tickBitMapBuffer;
+  }
+
+  async generateMultiplePoolStates(
+    pools: SubgraphConnectorPool[],
+    blockNumber: number,
+  ): Promise<(PoolState | null)[]> {
+    const poolStates: (PoolState | null)[] = [];
+
+    if (pools.length === 0) {
+      return [];
+    }
+
+    const multicallTargets = pools.map(pool => {
+      const poolKey = {
+        currency0: pool.token0.address,
+        currency1: pool.token1.address,
+        fee: pool.fee,
+        tickSpacing: parseInt(pool.tickSpacing),
+        hooks: pool.hooks,
+      };
+
+      const callData = this.stateMulticallIface.encodeFunctionData(
+        'getFullStateWithRelativeBitmaps',
+        [
+          this.config.poolManager,
+          poolKey,
+          this.getBitmapRange(),
+          this.getBitmapRange(),
+        ],
+      );
+
+      return {
+        target: this.config.stateMulticall,
+        callData,
+        decodeFunction: (result: MultiResult<BytesLike> | BytesLike) => {
+          const [, toDecode] = extractSuccessAndValue(result);
+          return this.stateMulticallIface.decodeFunctionResult(
+            'getFullStateWithRelativeBitmaps',
+            toDecode,
+          );
+        },
+      };
+    });
+
+    const results = await this.dexHelper.multiWrapper.tryAggregate<any>(
+      false,
+      multicallTargets,
+      blockNumber,
+      50, // state multicall is heavy, use smaller batches
+      false,
+    );
+
+    pools.forEach((pool, index) => {
+      try {
+        const stateResult = results[index].returnData[0];
+
+        const ticksResults: Record<NumberAsString, TickInfo> = {};
+        stateResult.ticks.forEach((tick: any) => {
+          if (tick.value.liquidityGross > 0n) {
+            ticksResults[tick.index.toString()] = {
+              liquidityGross: BigInt(tick.value.liquidityGross),
+              liquidityNet: BigInt(tick.value.liquidityNet),
+            };
+          }
+        });
+
+        const tickBitMapResults: Record<NumberAsString, bigint> = {};
+        stateResult.tickBitmap.forEach((bitmap: any) => {
+          tickBitMapResults[bitmap.index.toString()] = BigInt(bitmap.value);
+        });
+
+        const poolState: PoolState = {
+          id: pool.id,
+          token0: pool.token0.address.toLowerCase(),
+          token1: pool.token1.address.toLowerCase(),
+          fee: pool.fee,
+          hooks: pool.hooks,
+          feeGrowthGlobal0X128: BigInt(stateResult.feeGrowthGlobal0X128),
+          feeGrowthGlobal1X128: BigInt(stateResult.feeGrowthGlobal1X128),
+          liquidity: BigInt(stateResult.liquidity),
+          slot0: {
+            sqrtPriceX96: BigInt(stateResult.slot0.sqrtPriceX96),
+            tick: BigInt(stateResult.slot0.tick),
+            protocolFee: BigInt(stateResult.slot0.protocolFee),
+            lpFee: BigInt(stateResult.slot0.lpFee),
+          },
+          tickSpacing: parseInt(pool.tickSpacing),
+          ticks: ticksResults,
+          tickBitmap: tickBitMapResults,
+          isValid: true,
+        };
+
+        poolStates.push(poolState);
+      } catch (error) {
+        this.logger.error(
+          `Failed to generate state for pool ${pool.id}: ${error}`,
+        );
+
+        poolStates.push(null);
+      }
+    });
+
+    return poolStates;
+  }
+
+  private isHookSupported(hook: string): boolean {
+    return this.supportedHookAddresses.includes(hook.toLowerCase());
   }
 }

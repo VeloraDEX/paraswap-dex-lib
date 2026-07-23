@@ -1,0 +1,98 @@
+import { StatefulEventSubscriber } from '../../stateful-event-subscriber';
+import { Address, Log, Logger, Token } from '../../types';
+import { IDexHelper } from '../../dex-helper';
+import { Interface } from '@ethersproject/abi';
+import { AsyncOrSync, DeepReadonly } from 'ts-essentials';
+import ERC20_ABI from '../../abi/ERC20.abi.json';
+import { ethers } from 'ethers';
+
+const ERC20_INTERFACE = new Interface(ERC20_ABI);
+const TRANSFER_TOPIC =
+  '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef';
+
+export type FewWrappedToken = Token & {
+  underlying: Address;
+};
+
+interface FewWrappedTokenState {
+  balance: bigint;
+}
+
+export class FewWrappedTokenEventPool extends StatefulEventSubscriber<FewWrappedTokenState> {
+  constructor(
+    parentName: string,
+    protected dexHelper: IDexHelper,
+    private fwToken: FewWrappedToken,
+    logger: Logger,
+  ) {
+    super(parentName, `${fwToken.address}`, dexHelper, logger);
+
+    this.addressesSubscribed = [this.fwToken.underlying];
+  }
+
+  protected processLog(
+    state: DeepReadonly<FewWrappedTokenState>,
+    log: Readonly<Log>,
+  ): AsyncOrSync<DeepReadonly<FewWrappedTokenState> | null> {
+    if (log.topics[0] !== TRANSFER_TOPIC) {
+      return null;
+    }
+
+    const event = ERC20_INTERFACE.parseLog(log);
+    const from = event.args.from.toLowerCase();
+    const to = event.args.to.toLowerCase();
+
+    if (to === from) {
+      return null;
+    }
+
+    if (to === this.fwToken.address.toLowerCase()) {
+      return {
+        balance: state.balance + BigInt(event.args.value),
+      };
+    }
+
+    if (from === this.fwToken.address.toLowerCase()) {
+      return {
+        balance: state.balance - BigInt(event.args.value),
+      };
+    }
+
+    return null;
+  }
+
+  async generateState(
+    blockNumber: number | 'latest' = 'latest',
+  ): Promise<DeepReadonly<FewWrappedTokenState>> {
+    let calldata = [
+      {
+        target: this.fwToken.underlying,
+        callData: ERC20_INTERFACE.encodeFunctionData('balanceOf', [
+          this.fwToken.address,
+        ]),
+      },
+    ];
+
+    const data: { returnData: any[] } =
+      await this.dexHelper.multiContract.methods
+        .aggregate(calldata)
+        .call({}, blockNumber);
+
+    const balance = ethers.utils.defaultAbiCoder
+      .decode(['uint'], data.returnData[0])[0]
+      .toString();
+
+    return {
+      balance: BigInt(balance),
+    };
+  }
+
+  async getOrGenerateState(blockNumber: number): Promise<FewWrappedTokenState> {
+    let state = this.getState(blockNumber);
+    if (!state) {
+      state = await this.generateState(blockNumber);
+      this.setState(state, blockNumber);
+    }
+    return state;
+  }
+}

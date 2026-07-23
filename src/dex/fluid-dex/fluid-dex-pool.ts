@@ -37,7 +37,7 @@ export class FluidDexEventPool extends StatefulEventSubscriber<PoolState> {
     protected dexHelper: IDexHelper,
     logger: Logger,
   ) {
-    super(parentName, 'pool', dexHelper, logger);
+    super(parentName, poolAddress, dexHelper, logger);
 
     this.logDecoder = (log: Log) => this.poolIface.parseLog(log);
     this.addressesSubscribed = [poolAddress];

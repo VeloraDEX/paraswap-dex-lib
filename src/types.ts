@@ -158,8 +158,17 @@ export type AdapterExchangeParam = {
   networkFee: string;
 };
 
+export type GetDexParamOptions = {
+  nowTimestampMs?: number;
+};
+
 export type DexExchangeParam = {
   needWrapNative: boolean | NeedWrapNativeFunc;
+  // When true, the executor unwraps WETH -> ETH before calling the DEX (if src
+  // is WETH) and wraps ETH -> WETH after the DEX call (if dest is WETH). The
+  // DEX itself operates on native ETH. Mirror of needWrapNative for protocols
+  // that only expose a native-ETH interface.
+  needUnwrapNative?: boolean;
   skipApproval?: boolean;
   wethAddress?: string;
   exchangeData: string;
@@ -171,10 +180,17 @@ export type DexExchangeParam = {
   sendEthButSupportsInsertFromAmount?: boolean;
   specialDexSupportsInsertFromAmount?: boolean;
   swappedAmountNotPresentInExchangeData?: boolean;
-  preSwapUnwrapCalldata?: string;
   returnAmountPos?: number;
   insertFromAmountPos?: number;
+  amountsPacked128?: boolean;
   permit2Approval?: boolean;
+  // Build-time only, set by the transaction builder (never returned by
+  // getDexParam): true when this swap was built with the executor as its
+  // recipient. Only ever set on revertable-group FALLBACK params, where the
+  // Executor01 flag builders use it to force the last-hop dest-balance check
+  // (so the group threads the fallback's real output to the route-level
+  // executor->Augustus forward that the false-recipient primary shaped).
+  executorIsDestReceiver?: boolean;
 };
 
 export type DexExchangeParamWithBooleanNeedWrapNative = DexExchangeParam & {
@@ -187,6 +203,10 @@ export type DexExchangeBuildParam =
       target: Address;
       token: Address;
     };
+    // When set, this exchange is encoded as a revertable fallback group: the
+    // primary swap runs in a self-call and, if it reverts, this fallback param's
+    // swap runs instead (from the original pre-group input).
+    fallbackParam?: DexExchangeBuildParam;
   };
 
 export type AdapterMappings = {
@@ -229,6 +249,10 @@ export type PoolPrices<T> = {
   calldataGasCost?: number | number[];
   poolAddresses?: Array<Address>;
   poolIdentifiers?: Array<string>;
+  // The contract the swap call targets (router/settlement) — lets analytics
+  // attribute on-chain reverts to a venue. Optional; populated by firm-quote
+  // dexes whose target is known at pricing time.
+  targetExchange?: Address;
 };
 
 export type ConnectorToken = Token & { liquidityUSD?: number };
@@ -322,6 +346,7 @@ export type Config = {
   dexalotAuthToken?: string;
   bebopAuthName?: string;
   bebopAuthToken?: string;
+  nativeApiKey?: string;
   forceRpcFallbackDexs: string[];
   apiKeyTheGraph: string;
   lidoReferralAddress?: Address;

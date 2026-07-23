@@ -33,6 +33,8 @@ export interface CommonMutableState {
   erc4626Rates: (bigint | null)[];
   erc4626MaxDeposit: (bigint | null)[];
   erc4626MaxMint: (bigint | null)[];
+  erc4626MaxWithdraw: (bigint | null)[];
+  erc4626MaxRedeem: (bigint | null)[];
   balancesLiveScaled18: bigint[];
   swapFee: bigint;
   aggregateSwapFee: bigint;
@@ -68,6 +70,15 @@ export type ImmutablePoolStateMap = {
   [address: string]: CommonImmutablePoolState;
 };
 
+// Buffer state extended with ERC4626 unwrap limits. The underlying maths
+// package (BufferState) doesn't model maxWithdraw/maxRedeem; we check them
+// ourselves in getSwapResult so unwrap amounts that would revert on-chain
+// produce a 0 price instead.
+export type BufferStateExt = BufferState & {
+  maxWithdraw: bigint;
+  maxRedeem: bigint;
+};
+
 export type Step = {
   pool: Address;
   isBuffer: boolean;
@@ -75,7 +86,7 @@ export type Step = {
     tokenIn: Address;
     tokenOut: Address;
   };
-  poolState: PoolState | BufferState;
+  poolState: PoolState | BufferStateExt;
 };
 
 export type BalancerV3Data = {
@@ -102,4 +113,6 @@ export type TokenInfo = {
   rate: bigint;
   maxDeposit: bigint;
   maxMint: bigint;
+  maxWithdraw: bigint;
+  maxRedeem: bigint;
 };

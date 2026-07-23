@@ -143,27 +143,27 @@ export const CurveV1Config: DexConfigMap<DexParams> = {
           isMetapool: false,
           baseToken: '0x5d3a536e4d6dbd6114cc1ead35777bab948e3643',
         },
-        iEarn: {
-          underlying: [
-            '0x6b175474e89094c44da98b954eedeac495271d0f',
-            '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
-            '0xdac17f958d2ee523a2206206994597c13d831ec7',
-            '0x0000000000085d4780b73119b644ae5ecd22b376',
-          ],
-          coins: [
-            '0x16de59092dae5ccf4a1e6439d611fd0653f0bd01',
-            '0xd6ad7a6750a7593e092a9b218d66c0a814a3436e',
-            '0x83f798e925bcd4017eb265844fddabb448f1707d',
-            '0x73a052500105205d34daf004eab301916da8190f',
-          ],
-          address: '0x45f783cce6b7ff23b2ab2d70e416cdb7d6055f51',
-          name: 'iEarn',
-          type: 1,
-          version: 2,
-          isLending: true,
-          isMetapool: false,
-          baseToken: '0x6b175474e89094c44da98b954eedeac495271d0f',
-        },
+        // iEarn: {
+        //   underlying: [
+        //     '0x6b175474e89094c44da98b954eedeac495271d0f',
+        //     '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
+        //     '0xdac17f958d2ee523a2206206994597c13d831ec7',
+        //     '0x0000000000085d4780b73119b644ae5ecd22b376',
+        //   ],
+        //   coins: [
+        //     '0x16de59092dae5ccf4a1e6439d611fd0653f0bd01',
+        //     '0xd6ad7a6750a7593e092a9b218d66c0a814a3436e',
+        //     '0x83f798e925bcd4017eb265844fddabb448f1707d',
+        //     '0x73a052500105205d34daf004eab301916da8190f',
+        //   ],
+        //   address: '0x45f783cce6b7ff23b2ab2d70e416cdb7d6055f51',
+        //   name: 'iEarn',
+        //   type: 1,
+        //   version: 2,
+        //   isLending: true,
+        //   isMetapool: false,
+        //   baseToken: '0x6b175474e89094c44da98b954eedeac495271d0f',
+        // },
         // sUSD: {
         //   underlying: [
         //     '0x6b175474e89094c44da98b954eedeac495271d0f',

@@ -21,8 +21,7 @@ export const CONVERGENCE_ERROR_PREFIX = 'didnt_converge';
 
 // Pooltracker relevant variables
 export const CURVE_API_URL = 'https://api.curve.finance/v1/getPools';
-export const CURVE_CORE_API_URL =
-  'https://api-core.curve.finance/v1/getPools';
+export const CURVE_CORE_API_URL = 'https://api-core.curve.finance/v1/getPools';
 export const CURVE_API_BY_NETWORK: Record<number, string> = {
   [Network.PLASMA]: CURVE_CORE_API_URL,
 };

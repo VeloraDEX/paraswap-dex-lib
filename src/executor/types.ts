@@ -27,6 +27,10 @@ export enum SpecialDex {
   BUY_ON_SOLIDLY_V3 = 11,
   SWAP_ON_DEXALOT = 12,
   SWAP_ON_HASHFLOW = 13,
+  // Marks a revertable fallback group: the step's calldata payload is
+  // [tryLen(4)][fallbackLen(4)][try-block][fallback-block]. Executor01 runs the
+  // try-block in a self-call and, on revert, runs the fallback-block.
+  REVERTABLE_FALLBACK_GROUP = 0xff,
 }
 
 export enum Executors {

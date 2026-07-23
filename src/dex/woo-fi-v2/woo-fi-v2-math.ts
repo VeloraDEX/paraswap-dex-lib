@@ -194,14 +194,23 @@ export class WooFiV2Math {
     state: TokenState,
   ): bigint[] {
     let { priceDec, quoteDec, baseDec } = this.state.decimals[baseToken];
+    const { maxGamma, maxNotionalSwap } = this.state.tokenInfos[baseToken];
 
     return baseAmounts.map(baseAmount => {
       if (baseAmount === 0n) return 0n;
 
-      const coef: bigint =
-        BI_POWS[18] -
-        (state.coeff * baseAmount * state.price) / baseDec / priceDec -
-        state.spread;
+      // Mirror WooPPV2._calcQuoteAmountSellBase's swap-size caps: the contract
+      // reverts with "WooPPV2: !maxNotionalValue" / "WooPPV2: !gamma" above
+      // them, so bigger amounts must not be quoted.
+      const notionalSwap =
+        (baseAmount * state.price * quoteDec) / baseDec / priceDec;
+      if (notionalSwap > maxNotionalSwap) return 0n;
+
+      const gamma =
+        (baseAmount * state.price * state.coeff) / priceDec / baseDec;
+      if (gamma > maxGamma) return 0n;
+
+      const coef: bigint = BI_POWS[18] - gamma - state.spread;
 
       return (
         (((baseAmount * quoteDec * state.price) / priceDec) * coef) /
@@ -217,12 +226,18 @@ export class WooFiV2Math {
     state: TokenState,
   ): bigint[] {
     let { priceDec, quoteDec, baseDec } = this.state.decimals[baseToken];
+    const { maxGamma, maxNotionalSwap } = this.state.tokenInfos[baseToken];
 
     return quoteAmounts.map(quoteAmount => {
       if (quoteAmount === 0n) return 0n;
 
-      const coef: bigint =
-        BI_POWS[18] - (quoteAmount * state.coeff) / quoteDec - state.spread;
+      // Mirror WooPPV2._calcBaseAmountSellQuote's swap-size caps (see above).
+      if (quoteAmount > maxNotionalSwap) return 0n;
+
+      const gamma = (quoteAmount * state.coeff) / quoteDec;
+      if (gamma > maxGamma) return 0n;
+
+      const coef: bigint = BI_POWS[18] - gamma - state.spread;
 
       return (
         (((quoteAmount * baseDec * priceDec) / state.price) * coef) /

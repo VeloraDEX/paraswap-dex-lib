@@ -4,6 +4,7 @@ import { IDexHelper } from '../../dex-helper';
 import { StatefulEventSubscriber } from '../../stateful-event-subscriber';
 import { Address, Log, Logger } from '../../types';
 import { AsyncOrSync, DeepReadonly } from 'ts-essentials';
+import { catchParseLogError } from '../../utils';
 import { PoolState } from './types';
 import { getOnChainState } from './utils';
 
@@ -25,11 +26,15 @@ export class UsualPool extends StatefulEventSubscriber<PoolState> {
     state: DeepReadonly<PoolState>,
     log: Readonly<Log>,
   ): AsyncOrSync<DeepReadonly<PoolState> | null> {
-    const event = this.decoder(log);
-    const _state: PoolState = _.cloneDeep(state);
-    if (event.name === 'FloorPriceUpdated') {
-      _state.price = BigInt(event.args.newFloorPrice);
-      return _state;
+    try {
+      const event = this.decoder(log);
+      if (event.name === 'FloorPriceUpdated') {
+        return {
+          price: BigInt(event.args.newFloorPrice),
+        };
+      }
+    } catch (e) {
+      catchParseLogError(e, this.logger);
     }
     return null;
   }

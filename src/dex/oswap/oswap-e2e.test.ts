@@ -88,4 +88,61 @@ describe('Oswap E2E', () => {
       tokenBAmount,
     );
   });
+
+  describe('Mainnet - USDe/sUSDe', () => {
+    const network = Network.MAINNET;
+
+    const tokenASymbol: string = 'USDE';
+    const tokenBSymbol: string = 'SUSDE';
+
+    const tokenAAmount: string = '1000000000000000000';
+    const tokenBAmount: string = '1000000000000000000';
+
+    testForNetwork(
+      network,
+      dexKey,
+      tokenASymbol,
+      tokenBSymbol,
+      tokenAAmount,
+      tokenBAmount,
+    );
+  });
+
+  describe('Mainnet - WETH/eETH', () => {
+    const network = Network.MAINNET;
+
+    const tokenASymbol: string = 'WETH';
+    const tokenBSymbol: string = 'eETH';
+
+    const tokenAAmount: string = '10000000000000000';
+    const tokenBAmount: string = '10000000000000000';
+
+    testForNetwork(
+      network,
+      dexKey,
+      tokenASymbol,
+      tokenBSymbol,
+      tokenAAmount,
+      tokenBAmount,
+    );
+  });
+
+  describe('Sonic', () => {
+    const network = Network.SONIC;
+
+    const tokenASymbol: string = 'WS';
+    const tokenBSymbol: string = 'OS';
+
+    const tokenAAmount: string = '1000000000000000000';
+    const tokenBAmount: string = '1000000000000000000';
+
+    testForNetwork(
+      network,
+      dexKey,
+      tokenASymbol,
+      tokenBSymbol,
+      tokenAAmount,
+      tokenBAmount,
+    );
+  });
 });

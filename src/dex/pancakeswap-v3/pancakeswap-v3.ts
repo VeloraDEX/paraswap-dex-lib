@@ -85,6 +85,17 @@ export class PancakeswapV3
   readonly isFeeOnTransferSupported: boolean = false;
   readonly eventPools: Record<string, PancakeSwapV3EventPool | null> = {};
 
+  // Guards against concurrent getPool() calls for the same identifier.
+  // Stores in-flight initialization promises so duplicate callers await
+  // the same work instead of creating duplicate pool instances.
+  private poolInitPromises: Record<
+    string,
+    Promise<PancakeSwapV3EventPool | null>
+  > = {};
+
+  protected totalPoolsCount = 0;
+  protected nonNullPoolsCount = 0;
+
   readonly hasConstantPriceLargeAmounts = false;
   readonly needWrapNative = true;
 
@@ -225,11 +236,20 @@ export class PancakeswapV3
     fee: bigint,
     blockNumber: number,
   ): Promise<PancakeSwapV3EventPool | null> {
-    let pool = this.eventPools[
-      this.getPoolIdentifier(srcAddress, destAddress, fee)
-    ] as PancakeSwapV3EventPool | null | undefined;
+    const poolIdentifier = this.getPoolIdentifier(srcAddress, destAddress, fee);
+
+    let pool = this.eventPools[poolIdentifier] as
+      | PancakeSwapV3EventPool
+      | null
+      | undefined;
 
     if (pool === null) return null;
+
+    // If another caller is already initializing this pool, await the same promise
+    const existingPromise = this.poolInitPromises[poolIdentifier];
+    if (existingPromise) {
+      return existingPromise;
+    }
 
     if (pool) {
       if (pool.isInactive()) {
@@ -248,12 +268,42 @@ export class PancakeswapV3
       }
     }
 
+    const initPromise = this._initPool(
+      srcAddress,
+      destAddress,
+      fee,
+      blockNumber,
+      poolIdentifier,
+      pool,
+    );
+
+    this.poolInitPromises[poolIdentifier] = initPromise;
+
+    try {
+      return await initPromise;
+    } finally {
+      delete this.poolInitPromises[poolIdentifier];
+    }
+  }
+
+  private async _initPool(
+    srcAddress: Address,
+    destAddress: Address,
+    fee: bigint,
+    blockNumber: number,
+    poolIdentifier: string,
+    existingPool: PancakeSwapV3EventPool | undefined,
+  ): Promise<PancakeSwapV3EventPool | null> {
+    if (!existingPool) {
+      this.totalPoolsCount++;
+    }
+
     const [token0, token1] = this._sortTokens(srcAddress, destAddress);
 
     const key = `${token0}_${token1}_${fee}`.toLowerCase();
 
     // no need to run this logic on retry initialisation scenario
-    if (!pool) {
+    if (!existingPool) {
       const notExistingPoolScore = await this.dexHelper.cache.zscore(
         this.notExistingPoolSetKey,
         key,
@@ -262,15 +312,14 @@ export class PancakeswapV3
       const poolDoesNotExist = notExistingPoolScore !== null;
 
       if (poolDoesNotExist) {
-        this.eventPools[this.getPoolIdentifier(srcAddress, destAddress, fee)] =
-          null;
+        this.eventPools[poolIdentifier] = null;
         return null;
       }
     }
 
     this.logger.trace(`starting to listen to new pool: ${key}`);
-    pool =
-      pool ||
+    const pool =
+      existingPool ||
       new PancakeSwapV3EventPool(
         this.dexHelper,
         this.dexKey,
@@ -286,14 +335,16 @@ export class PancakeswapV3
         this.config.deployer,
       );
 
+    let result: PancakeSwapV3EventPool | null = pool;
+
     try {
       await pool.initialize(blockNumber, {
         initCallback: (state: DeepReadonly<PoolState>) => {
           //really hacky, we need to push poolAddress so that we subscribeToLogs in StatefulEventSubscriber
-          pool!.addressesSubscribed[0] = state.pool;
-          pool!.poolAddress = state.pool;
-          pool!.initFailed = false;
-          pool!.initRetryAttemptCount = 0;
+          pool.addressesSubscribed[0] = state.pool;
+          pool.poolAddress = state.pool;
+          pool.initFailed = false;
+          pool.initRetryAttemptCount = 0;
         },
       });
     } catch (e) {
@@ -315,13 +366,13 @@ export class PancakeswapV3
         );
 
         // prevent more requests for this pool
-        pool = null;
+        result = null;
         this.logger.trace(
           `${this.dexHelper}: ${e.message}: srcAddress=${srcAddress}, destAddress=${destAddress}, fee=${fee}`,
           e,
         );
       } else {
-        // on unkown error mark as failed and increase retryCount for retry init strategy
+        // on unknown error mark as failed and increase retryCount for retry init strategy
         // note: state would be null by default which allows to fallback
         this.logger.warn(
           `${this.dexKey}: Can not generate pool state for srcAddress=${srcAddress}, destAddress=${destAddress}, fee=${fee} pool fallback to rpc and retry every ${this.config.initRetryFrequency} times, initRetryAttemptCount=${pool.initRetryAttemptCount}`,
@@ -331,25 +382,21 @@ export class PancakeswapV3
       }
     }
 
-    if (pool !== null) {
-      const allEventPools = Object.values(this.eventPools);
+    if (result !== null) {
       // if pool was created, delete pool record from non existing set
       this.dexHelper.cache
         .zrem(this.notExistingPoolSetKey, [key])
         .catch(() => {});
-      this.logger.info(
-        `starting to listen to new non-null pool: ${key}. Already following ${allEventPools
-          // Not that I like this reduce, but since it is done only on initialization, expect this to be ok
-          .reduce(
-            (acc, curr) => (curr !== null ? ++acc : acc),
-            0,
-          )} non-null pools or ${allEventPools.length} total pools`,
-      );
+      if (!result.initFailed) {
+        this.nonNullPoolsCount++;
+        this.logger.info(
+          `starting to listen to new non-null pool: ${key}. Already following ${this.nonNullPoolsCount} non-null pools or ${this.totalPoolsCount} total pools`,
+        );
+      }
     }
 
-    this.eventPools[this.getPoolIdentifier(srcAddress, destAddress, fee)] =
-      pool;
-    return pool;
+    this.eventPools[poolIdentifier] = result;
+    return result;
   }
 
   async addMasterPool(poolKey: string, blockNumber: number): Promise<boolean> {
@@ -421,7 +468,9 @@ export class PancakeswapV3
     if (pools.length === 0) {
       return null;
     }
-    this.logger.warn(`fallback to rpc for ${pools.length} pool(s)`);
+    this.logger.warn(
+      `fallback to rpc for ${pools.length} pool(s) for tokens ${from.address}/${to.address}`,
+    );
 
     const requests = pools.map<BalanceRequest>(
       pool => ({

@@ -30,14 +30,7 @@ function testForNetwork(
 
   // TODO: Add any direct swap contractMethod name if it exists
   const sideToContractMethods = new Map([
-    [
-      SwapSide.SELL,
-      [
-        ContractMethod.simpleSwap,
-        ContractMethod.multiSwap,
-        ContractMethod.megaSwap,
-      ],
-    ],
+    [SwapSide.SELL, [ContractMethod.swapExactAmountIn]],
   ]);
 
   describe(`${network}`, () => {

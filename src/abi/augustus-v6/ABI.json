@@ -1568,5 +1568,114 @@
     ],
     "stateMutability": "nonpayable",
     "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "address", "name": "executor", "type": "address" },
+      {
+        "components": [
+          {
+            "internalType": "contract IERC20",
+            "name": "srcToken",
+            "type": "address"
+          },
+          {
+            "internalType": "contract IERC20",
+            "name": "destToken",
+            "type": "address"
+          },
+          {
+            "internalType": "uint256",
+            "name": "fromAmount",
+            "type": "uint256"
+          },
+          { "internalType": "uint256", "name": "toAmount", "type": "uint256" },
+          {
+            "internalType": "uint256",
+            "name": "quotedAmount",
+            "type": "uint256"
+          },
+          { "internalType": "bytes32", "name": "metadata", "type": "bytes32" },
+          {
+            "internalType": "address payable",
+            "name": "beneficiary",
+            "type": "address"
+          }
+        ],
+        "internalType": "struct GenericData",
+        "name": "swapData",
+        "type": "tuple"
+      },
+      { "internalType": "uint256", "name": "partnerAndFee", "type": "uint256" },
+      { "internalType": "bytes", "name": "permit", "type": "bytes" },
+      { "internalType": "bytes", "name": "executorData", "type": "bytes" }
+    ],
+    "name": "swapExactAmountInPro",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "receivedAmount",
+        "type": "uint256"
+      },
+      { "internalType": "uint256", "name": "paraswapShare", "type": "uint256" },
+      { "internalType": "uint256", "name": "partnerShare", "type": "uint256" }
+    ],
+    "stateMutability": "payable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "address", "name": "executor", "type": "address" },
+      {
+        "components": [
+          {
+            "internalType": "contract IERC20",
+            "name": "srcToken",
+            "type": "address"
+          },
+          {
+            "internalType": "contract IERC20",
+            "name": "destToken",
+            "type": "address"
+          },
+          {
+            "internalType": "uint256",
+            "name": "fromAmount",
+            "type": "uint256"
+          },
+          { "internalType": "uint256", "name": "toAmount", "type": "uint256" },
+          {
+            "internalType": "uint256",
+            "name": "quotedAmount",
+            "type": "uint256"
+          },
+          { "internalType": "bytes32", "name": "metadata", "type": "bytes32" },
+          {
+            "internalType": "address payable",
+            "name": "beneficiary",
+            "type": "address"
+          }
+        ],
+        "internalType": "struct GenericData",
+        "name": "swapData",
+        "type": "tuple"
+      },
+      { "internalType": "uint256", "name": "partnerAndFee", "type": "uint256" },
+      { "internalType": "bytes", "name": "permit", "type": "bytes" },
+      { "internalType": "bytes", "name": "executorData", "type": "bytes" }
+    ],
+    "name": "swapExactAmountOutPro",
+    "outputs": [
+      { "internalType": "uint256", "name": "spentAmount", "type": "uint256" },
+      {
+        "internalType": "uint256",
+        "name": "receivedAmount",
+        "type": "uint256"
+      },
+      { "internalType": "uint256", "name": "paraswapShare", "type": "uint256" },
+      { "internalType": "uint256", "name": "partnerShare", "type": "uint256" }
+    ],
+    "stateMutability": "payable",
+    "type": "function"
   }
 ]

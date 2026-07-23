@@ -65,22 +65,6 @@ export const PancakeswapV3Config: DexConfigMap<DexParams> = {
       subgraphURL: 'BHWNsedAHtmTCzXxCCDfhPmm6iN9rxUhoRHdHKyujic3',
     },
   },
-  DackieSwapV3: {
-    [Network.BASE]: {
-      factory: '0x3D237AC6D2f425D2E890Cc99198818cc1FA48870',
-      quoter: '0x4fDBD73aD4B1DDde594BF05497C15f76308eFfb9',
-      deployer: '0x4f205D69834f9B101b9289F7AFFAc9B77B3fF9b7',
-      router: '0x4030ebafeb76e5fc848891076dfe315993800ba5',
-      supportedFees: [10000n, 2500n, 500n, 100n],
-      stateMulticall: '0xeBF40A40CA3D4310Bf53048F48e860656e1D7C81',
-      uniswapMulticall: '0x091e99cb1C49331a94dD62755D168E941AbD0693',
-      chunksCount: 10,
-      initRetryFrequency: 10,
-      initHash: `0x6ce8eb472fa82df5469c6ab6d485f17c3ad13c8cd7af59b3d4a8026c5ce0f7e2`,
-      subgraphURL:
-        'https://api.studio.thegraph.com/query/50473/v3-base/version/latest',
-    },
-  },
   SwapBasedV3: {
     [Network.BASE]: {
       factory: '0xb5620f90e803c7f957a9ef351b8db3c746021bea',

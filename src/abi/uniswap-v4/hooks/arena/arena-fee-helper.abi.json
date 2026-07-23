@@ -1,0 +1,476 @@
+[
+  {
+    "inputs": [
+      { "internalType": "address", "name": "_owner", "type": "address" },
+      {
+        "internalType": "address",
+        "name": "_referralRegistry",
+        "type": "address"
+      },
+      { "internalType": "uint16", "name": "_protocolFeePpm", "type": "uint16" },
+      {
+        "internalType": "address",
+        "name": "_protocolFeeRecipient",
+        "type": "address"
+      },
+      { "internalType": "uint16", "name": "_referralFeePpm", "type": "uint16" }
+    ],
+    "stateMutability": "nonpayable",
+    "type": "constructor"
+  },
+  {
+    "inputs": [],
+    "name": "FeeArrayLengthExceedsMaxFeeArrayLength",
+    "type": "error"
+  },
+  { "inputs": [], "name": "FeeRecipientNotFound", "type": "error" },
+  { "inputs": [], "name": "FeeSetterOnly", "type": "error" },
+  { "inputs": [], "name": "FeesAlreadyInitialized", "type": "error" },
+  {
+    "inputs": [
+      { "internalType": "address", "name": "owner", "type": "address" }
+    ],
+    "name": "OwnableInvalidOwner",
+    "type": "error"
+  },
+  {
+    "inputs": [
+      { "internalType": "address", "name": "account", "type": "address" }
+    ],
+    "name": "OwnableUnauthorizedAccount",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "ProtocolFeePpmMustBeGreaterThanReferralFeePpm",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "ProtocolFeePpmMustBeGreaterThanZero",
+    "type": "error"
+  },
+  { "inputs": [], "name": "RecipientCantBeZeroAddress", "type": "error" },
+  {
+    "inputs": [],
+    "name": "RecipientIndexDoesNotMatchRecipient",
+    "type": "error"
+  },
+  { "inputs": [], "name": "RecipientIndexOutOfBounds", "type": "error" },
+  { "inputs": [], "name": "TotalFeePpmBelowMinFeePpm", "type": "error" },
+  { "inputs": [], "name": "TotalFeePpmExceedsMaxFeePpm", "type": "error" },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "PoolId",
+        "name": "poolId",
+        "type": "bytes32"
+      },
+      {
+        "components": [
+          { "internalType": "address", "name": "recipient", "type": "address" },
+          { "internalType": "uint16", "name": "feePpm", "type": "uint16" }
+        ],
+        "indexed": false,
+        "internalType": "struct IArenaFeeHelperMinimal.Fee[]",
+        "name": "fees",
+        "type": "tuple[]"
+      }
+    ],
+    "name": "FeeArraySet",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "feeSetter",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "bool",
+        "name": "isFeeSetter",
+        "type": "bool"
+      }
+    ],
+    "name": "FeeSetterSet",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "previousOwner",
+        "type": "address"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "newOwner",
+        "type": "address"
+      }
+    ],
+    "name": "OwnershipTransferStarted",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "previousOwner",
+        "type": "address"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "newOwner",
+        "type": "address"
+      }
+    ],
+    "name": "OwnershipTransferred",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "components": [
+          { "internalType": "address", "name": "recipient", "type": "address" },
+          {
+            "internalType": "uint16",
+            "name": "protocolFeePpm",
+            "type": "uint16"
+          },
+          {
+            "internalType": "uint16",
+            "name": "referralFeePpm",
+            "type": "uint16"
+          }
+        ],
+        "indexed": false,
+        "internalType": "struct ArenaFeeHelper.ProtocolFeeSettings",
+        "name": "settings",
+        "type": "tuple"
+      }
+    ],
+    "name": "ProtocolFeeSettingsSet",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "address",
+        "name": "referralRegistry",
+        "type": "address"
+      }
+    ],
+    "name": "ReferralRegistrySet",
+    "type": "event"
+  },
+  {
+    "inputs": [],
+    "name": "MAX_FEE_ARRAY_LENGTH",
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "MAX_POOL_FEE_PPM",
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "MAX_PROTOCOL_FEE_PPM",
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "acceptOwnership",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "PoolId", "name": "poolId", "type": "bytes32" },
+      { "internalType": "address", "name": "_recipient", "type": "address" },
+      { "internalType": "uint16", "name": "_feePpm", "type": "uint16" }
+    ],
+    "name": "addFeeRecipient",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "PoolId", "name": "poolId", "type": "bytes32" }
+    ],
+    "name": "getFeesForPool",
+    "outputs": [
+      {
+        "components": [
+          { "internalType": "address", "name": "recipient", "type": "address" },
+          { "internalType": "uint16", "name": "feePpm", "type": "uint16" }
+        ],
+        "internalType": "struct IArenaFeeHelperMinimal.Fee[]",
+        "name": "feeRecipients",
+        "type": "tuple[]"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "getProtocolFeeSettings",
+    "outputs": [
+      {
+        "components": [
+          { "internalType": "address", "name": "recipient", "type": "address" },
+          {
+            "internalType": "uint16",
+            "name": "protocolFeePpm",
+            "type": "uint16"
+          },
+          {
+            "internalType": "uint16",
+            "name": "referralFeePpm",
+            "type": "uint16"
+          }
+        ],
+        "internalType": "struct ArenaFeeHelper.ProtocolFeeSettings",
+        "name": "",
+        "type": "tuple"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "PoolId", "name": "poolId", "type": "bytes32" }
+    ],
+    "name": "getTotalFeePpm",
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "PoolId", "name": "poolId", "type": "bytes32" },
+      {
+        "components": [
+          { "internalType": "address", "name": "recipient", "type": "address" },
+          { "internalType": "uint16", "name": "feePpm", "type": "uint16" }
+        ],
+        "internalType": "struct IArenaFeeHelperMinimal.Fee[]",
+        "name": "_fees",
+        "type": "tuple[]"
+      }
+    ],
+    "name": "initializeFeesForPool",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [{ "internalType": "address", "name": "", "type": "address" }],
+    "name": "isFeeSetter",
+    "outputs": [{ "internalType": "bool", "name": "", "type": "bool" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "owner",
+    "outputs": [{ "internalType": "address", "name": "", "type": "address" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "pendingOwner",
+    "outputs": [{ "internalType": "address", "name": "", "type": "address" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "PoolId", "name": "", "type": "bytes32" },
+      { "internalType": "uint256", "name": "", "type": "uint256" }
+    ],
+    "name": "poolIdToFees",
+    "outputs": [
+      { "internalType": "address", "name": "recipient", "type": "address" },
+      { "internalType": "uint16", "name": "feePpm", "type": "uint16" }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [{ "internalType": "PoolId", "name": "", "type": "bytes32" }],
+    "name": "poolIdToTotalFeePpm",
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "protocolFeeSettings",
+    "outputs": [
+      { "internalType": "address", "name": "recipient", "type": "address" },
+      { "internalType": "uint16", "name": "protocolFeePpm", "type": "uint16" },
+      { "internalType": "uint16", "name": "referralFeePpm", "type": "uint16" }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "referralRegistry",
+    "outputs": [
+      {
+        "internalType": "contract IArenaReferralRegistry",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "PoolId", "name": "poolId", "type": "bytes32" },
+      { "internalType": "address", "name": "_recipient", "type": "address" },
+      {
+        "internalType": "uint256",
+        "name": "_recipientIndex",
+        "type": "uint256"
+      }
+    ],
+    "name": "removeFeeRecipient",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "renounceOwnership",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "address", "name": "_feeSetter", "type": "address" },
+      { "internalType": "bool", "name": "_isFeeSetter", "type": "bool" }
+    ],
+    "name": "setFeeSetter",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "address", "name": "_recipient", "type": "address" },
+      { "internalType": "uint16", "name": "_protocolFeePpm", "type": "uint16" },
+      { "internalType": "uint16", "name": "_referralFeePpm", "type": "uint16" }
+    ],
+    "name": "setProtocolFeeSettings",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "_referralRegistry",
+        "type": "address"
+      }
+    ],
+    "name": "setReferralRegistry",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "address", "name": "newOwner", "type": "address" }
+    ],
+    "name": "transferOwnership",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "PoolId", "name": "poolId", "type": "bytes32" },
+      {
+        "components": [
+          { "internalType": "address", "name": "recipient", "type": "address" },
+          { "internalType": "uint16", "name": "feePpm", "type": "uint16" }
+        ],
+        "internalType": "struct IArenaFeeHelperMinimal.Fee[]",
+        "name": "_fees",
+        "type": "tuple[]"
+      }
+    ],
+    "name": "updateFeesForPool",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "PoolId", "name": "poolId", "type": "bytes32" },
+      {
+        "internalType": "address",
+        "name": "_recipientToReplace",
+        "type": "address"
+      },
+      { "internalType": "address", "name": "_newRecipient", "type": "address" },
+      {
+        "internalType": "uint256",
+        "name": "_recipientIndex",
+        "type": "uint256"
+      }
+    ],
+    "name": "updateRecipientAddress",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "PoolId", "name": "poolId", "type": "bytes32" },
+      { "internalType": "address", "name": "_recipient", "type": "address" },
+      { "internalType": "uint16", "name": "_feePpm", "type": "uint16" },
+      {
+        "internalType": "uint256",
+        "name": "_recipientIndex",
+        "type": "uint256"
+      }
+    ],
+    "name": "updateRecipientFeePpm",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  }
+]

@@ -13,7 +13,7 @@ import {
 import { SwapSide, Network, UNLIMITED_USD_LIQUIDITY } from '../../constants';
 import * as CALLDATA_GAS_COST from '../../calldata-gas-cost';
 import { getDexKeysWithNetwork } from '../../utils';
-import { Context, IDex } from '../../dex/idex';
+import { IDex } from '../../dex/idex';
 import { IDexHelper } from '../../dex-helper/idex-helper';
 import { AngleTransmuterData, DexParams } from './types';
 import { SimpleExchange } from '../simple-exchange';
@@ -223,7 +223,6 @@ export class AngleTransmuter
     recipient: Address,
     data: AngleTransmuterData,
     side: SwapSide,
-    _: Context,
     executorAddress: Address,
   ): DexExchangeParam {
     const { exchange } = data;
