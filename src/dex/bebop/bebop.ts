@@ -160,6 +160,20 @@ export class Bebop
     return tokenAmount;
   }
 
+  private getTokenMinimumAmount(
+    tokenAmount: BebopTokenAmount,
+    tokenAddress: Address,
+  ): string {
+    assert(
+      tokenAmount.minimumAmount !== undefined,
+      `${this.dexKey}-${
+        this.network
+      }: minimum amount missing for ${utils.getAddress(tokenAddress)}`,
+    );
+
+    return tokenAmount.minimumAmount;
+  }
+
   private getQuoteSlippage(side: SwapSide, slippageFactor: BigNumber): string {
     const slippage =
       side === SwapSide.SELL
@@ -918,19 +932,22 @@ export class Bebop
           response.buyTokens,
           destToken.address,
         );
-        const quoteAmount = quoteTokenAmount.amount;
+        const quoteMinimumAmount = this.getTokenMinimumAmount(
+          quoteTokenAmount,
+          destToken.address,
+        );
 
         const requiredAmountWithSlippage = new BigNumber(requiredAmount)
           .times(options.slippageFactor)
           .toFixed(0);
 
-        if (BigInt(quoteAmount) < BigInt(requiredAmountWithSlippage)) {
+        if (BigInt(quoteMinimumAmount) < BigInt(requiredAmountWithSlippage)) {
           throw new SlippageCheckError(
             this.dexKey,
             this.network,
             side,
             requiredAmountWithSlippage,
-            quoteAmount,
+            quoteMinimumAmount,
             options.slippageFactor,
           );
         }

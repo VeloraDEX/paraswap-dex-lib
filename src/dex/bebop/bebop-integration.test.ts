@@ -291,8 +291,8 @@ describe('Bebop', function () {
           approvalTarget: routerAddress,
           buyTokens: {
             [usdcAddress]: {
-              amount: requestCount === 1 ? '1000000000' : '980000000',
-              minimumAmount: '980000000',
+              amount: '1000000000',
+              minimumAmount: requestCount === 1 ? '990000000' : '980000000',
             },
           },
           sellTokens: {
