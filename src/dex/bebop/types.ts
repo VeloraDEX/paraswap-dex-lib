@@ -47,16 +47,19 @@ export type BebopPricingResponse = {
 };
 
 export interface BebopTx {
+  chainId?: number;
   to: string;
   value: string;
   data: string;
-  from: string;
-  gas: number;
+  from?: string | null;
+  gas?: number | null;
+  gasPrice?: number | null;
 }
 
 export type BebopTokenAmount = {
   amount: string;
-  priceUsd: number;
+  minimumAmount?: string;
+  priceUsd?: number | null;
 };
 
 export type BebopError = {
@@ -69,10 +72,14 @@ export type BebopData = {
   expiry?: number;
   buyTokens?: { [address: string]: BebopTokenAmount };
   sellTokens?: { [address: string]: BebopTokenAmount };
+  settlementAddress?: string;
+  approvalTarget?: string;
   tx?: BebopTx;
   error?: BebopError;
   quoteId?: string;
   requestId?: string;
+  chainId?: number;
+  partialFillOffset?: number | null;
 };
 
 export type DexParams = {

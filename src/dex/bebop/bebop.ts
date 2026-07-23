@@ -23,6 +23,7 @@ import {
   BebopLevel,
   BebopPair,
   BebopPricingResponse,
+  BebopTokenAmount,
   RoutingInstruction,
   TokenDataMap,
 } from './types';
@@ -140,10 +141,90 @@ export class Bebop
     );
   }
 
+  private getTokenAmount(
+    amounts: { [address: string]: BebopTokenAmount },
+    tokenAddress: Address,
+  ): BebopTokenAmount {
+    const checksumAddress = utils.getAddress(tokenAddress);
+    const tokenAmount =
+      amounts[checksumAddress] ||
+      Object.entries(amounts).find(
+        ([address]) => address.toLowerCase() === checksumAddress.toLowerCase(),
+      )?.[1];
+
+    assert(
+      tokenAmount !== undefined,
+      `${this.dexKey}-${this.network}: token amount missing for ${checksumAddress}`,
+    );
+
+    return tokenAmount;
+  }
+
+  private getQuoteSlippage(side: SwapSide, slippageFactor: BigNumber): string {
+    const slippage =
+      side === SwapSide.SELL
+        ? new BigNumber(1).minus(slippageFactor)
+        : slippageFactor.minus(1);
+
+    return slippage.gt(0) ? slippage.multipliedBy(100).toFixed() : '0';
+  }
+
+  private getTransactionTarget(data: BebopData): Address {
+    assert(data.tx?.to, `${this.dexKey}-${this.network}: tx.to undefined`);
+
+    return utils.getAddress(data.tx.to);
+  }
+
+  private getApprovalTarget(data: BebopData): Address {
+    assert(
+      data.approvalTarget,
+      `${this.dexKey}-${this.network}: approvalTarget undefined`,
+    );
+
+    return utils.getAddress(data.approvalTarget);
+  }
+
+  private getPartialFillAmountPos(data: BebopData): number | undefined {
+    if (
+      data.partialFillOffset === undefined ||
+      data.partialFillOffset === null
+    ) {
+      return undefined;
+    }
+
+    assert(
+      Number.isInteger(data.partialFillOffset) && data.partialFillOffset >= 0,
+      `${this.dexKey}-${this.network}: invalid partialFillOffset ${data.partialFillOffset}`,
+    );
+
+    return 4 + data.partialFillOffset * 32;
+  }
+
+  private async waitForInitialState(timeoutMs: number): Promise<void> {
+    const deadline = Date.now() + timeoutMs;
+
+    while (Date.now() < deadline) {
+      const [prices, tokens] = await Promise.all([
+        this.getCachedPrices(),
+        this.getCachedTokens(),
+      ]);
+
+      if (prices && tokens) {
+        return;
+      }
+
+      await sleep(250);
+    }
+
+    this.logger.warn(
+      `${this.dexKey}-${this.network}: initial pricing state was not ready after ${timeoutMs}ms`,
+    );
+  }
+
   async initializePricing(blockNumber: number) {
     if (!this.dexHelper.config.isSlave) {
       this.rateFetcher.start();
-      await sleep(BEBOP_INIT_TIMEOUT_MS);
+      await this.waitForInitialState(BEBOP_INIT_TIMEOUT_MS);
     }
 
     await this.setTokensMap();
@@ -555,7 +636,7 @@ export class Bebop
     const payload = tx.data;
 
     return {
-      targetExchange: this.settlementAddress,
+      targetExchange: this.getTransactionTarget(data),
       payload,
       networkFee: '0',
     };
@@ -585,7 +666,9 @@ export class Bebop
     _tokenAddress: Address,
     limit: number,
   ): Promise<PoolLiquidity[]> {
-    const tokenAddress = _tokenAddress.toLowerCase();
+    const normalizedTokenAddress = this.dexHelper.config
+      .wrapETH(_tokenAddress)
+      .toLowerCase();
     const prices = await this.getCachedPrices();
 
     if (!prices) {
@@ -600,8 +683,8 @@ export class Bebop
       let token;
       const [base, quote] = pair.split('/').map(t => t.toLowerCase());
 
-      const isBase = base == tokenAddress;
-      const isQuote = quote == tokenAddress;
+      const isBase = base == normalizedTokenAddress;
+      const isQuote = quote == normalizedTokenAddress;
 
       // There is pricing for token is not enabled at the moment
       if (!(quote in this.tokensMap && base in this.tokensMap)) {
@@ -677,6 +760,10 @@ export class Bebop
     const { tx } = data;
 
     assert(tx !== undefined, `${this.dexKey}-${this.network}: tx undefined`);
+    assert(tx.data, `${this.dexKey}-${this.network}: tx.data undefined`);
+
+    const targetExchange = this.getTransactionTarget(data);
+    const spender = this.getApprovalTarget(data);
 
     const isSwapSingle = tx.data.slice(0, 10) === SWAP_SINGLE_METHOD_SELECTOR;
     const isSwapAggregate =
@@ -714,14 +801,34 @@ export class Bebop
         exchangeData: exchangeData,
         needWrapNative: this.needWrapNative,
         dexFuncHasRecipient: true,
-        targetExchange: this.settlementAddress,
+        targetExchange,
+        spender,
         returnAmountPos: undefined,
         sendEthButSupportsInsertFromAmount: true,
         insertFromAmountPos: filledTakerAmountPos,
       };
-    } else {
-      throw new Error('Not supported method');
     }
+
+    const partialFillAmountPos = this.getPartialFillAmountPos(data);
+    const canInsertPartialFillAmount =
+      side === SwapSide.SELL && partialFillAmountPos !== undefined;
+
+    return {
+      exchangeData: tx.data,
+      needWrapNative: this.needWrapNative,
+      dexFuncHasRecipient: true,
+      targetExchange,
+      spender,
+      returnAmountPos: undefined,
+      ...(canInsertPartialFillAmount
+        ? {
+            sendEthButSupportsInsertFromAmount: true,
+            insertFromAmountPos: partialFillAmountPos,
+          }
+        : {
+            swappedAmountNotPresentInExchangeData: true,
+          }),
+    };
   }
 
   async preProcessTransaction(
@@ -748,6 +855,7 @@ export class Bebop
       gasless: false,
       skip_validation: true,
       source: this.bebopAuthName,
+      slippage: this.getQuoteSlippage(side, options.slippageFactor),
     };
 
     let requestId: string | undefined;
@@ -785,8 +893,11 @@ export class Bebop
 
       if (
         !response.tx ||
+        !response.tx.to ||
+        !response.tx.data ||
         !response.buyTokens ||
         !response.sellTokens ||
+        !response.approvalTarget ||
         !response.expiry
       ) {
         const baseMessage = `Bebop quote failed on chain ${this.network} Sell: ${params.sell_tokens}. Buy: ${params.buy_tokens}.`;
@@ -803,8 +914,11 @@ export class Bebop
 
       if (side === SwapSide.SELL) {
         const requiredAmount = optimalSwapExchange.destAmount;
-        const quoteAmount =
-          response.buyTokens[utils.getAddress(destToken.address)].amount;
+        const quoteTokenAmount = this.getTokenAmount(
+          response.buyTokens,
+          destToken.address,
+        );
+        const quoteAmount = quoteTokenAmount.amount;
 
         const requiredAmountWithSlippage = new BigNumber(requiredAmount)
           .times(options.slippageFactor)
@@ -822,8 +936,10 @@ export class Bebop
         }
       } else {
         const requiredAmount = optimalSwapExchange.srcAmount;
-        const quoteAmount =
-          response.sellTokens[utils.getAddress(srcToken.address)].amount;
+        const quoteAmount = this.getTokenAmount(
+          response.sellTokens,
+          srcToken.address,
+        ).amount;
 
         const requiredAmountWithSlippage = new BigNumber(requiredAmount)
           .times(options.slippageFactor)
