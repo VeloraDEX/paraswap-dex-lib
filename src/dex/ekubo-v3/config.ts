@@ -17,11 +17,10 @@ export const TWAMM_DATA_FETCHER_ADDRESS =
 export const BOOSTED_FEES_DATA_FETCHER_ADDRESS =
   '0x7A2fF5819Dc71Bb99133a97c38dA512E60c30475';
 export const ROUTER_ADDRESS = '0xd26f20001a72a18C002b00e6710000d68700ce00';
-// TODO(robinhood-deployment): replace these placeholders after deployment.
-// 0xd1 is the Ve33 extension's registered call-point prefix.
-export const VE33_ADDRESS = '0xd100000000000000000000000000000000000000';
+export const VE33_ADDRESS = '0xD18685a514E59b06d59824e16Db07e73345d9953';
 export const VE33_DATA_FETCHER_ADDRESS =
-  '0x0000000000000000000000000000000000000001';
+  '0x61F03754b1c7A7F0E584FD8869c00Ba898ab888d';
+// TODO(robinhood-deployment): replace after the router is deployed.
 export const ROBINHOOD_ROUTER_ADDRESS =
   '0x0000000000000000000000000000000000000002';
 
