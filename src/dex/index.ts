@@ -69,6 +69,7 @@ import { Native } from './native/native';
 import { Spark } from './spark/spark';
 import { SparkPsm } from './spark/spark-psm';
 import { VelodromeSlipstream } from './uniswap-v3/forks/velodrome-slipstream/velodrome-slipstream';
+import { TopazCL } from './uniswap-v3/forks/topaz-cl/topaz-cl';
 import { AaveV3Stata } from './aave-v3-stata/aave-v3-stata';
 import { AaveV3StataV2 } from './aave-v3-stata-v2/aave-v3-stata-v2';
 import { OSwap } from './oswap/oswap';
@@ -100,6 +101,7 @@ import { MiroMigrator } from './miro-migrator/miro-migrator';
 import { AaveV3PtRollOver } from './aave-v3-pt-roll-over/aave-v3-pt-roll-over';
 import { RingV2 } from './uniswap-v2/ring-v2';
 import { UsdcTransmuter } from './usdc-transmuter/usdc-transmuter';
+import { Topaz } from './solidly/forks-override/topaz';
 import { Blackhole } from './solidly/forks-override/blackhole';
 import { BlackholeCL } from './algebra-integral/forks/blackhole-cl';
 import { dETH } from './deth/dETH';
@@ -140,6 +142,7 @@ const Dexes = [
   PancakeSwapV2,
   PancakeswapV3,
   VelodromeSlipstream,
+  TopazCL,
   BiSwap,
   AaveV3,
   Weth,
@@ -198,6 +201,7 @@ const Dexes = [
   AaveV3PtRollOver,
   RingV2,
   UsdcTransmuter,
+  Topaz,
   Blackhole,
   BlackholeCL,
   Cap,

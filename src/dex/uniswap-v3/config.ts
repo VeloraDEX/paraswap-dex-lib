@@ -462,6 +462,34 @@ export const UniswapV3Config: DexConfigMap<DexParams> = {
       liquidityField: 'liquidity',
     },
   },
+  TopazCL: {
+    [Network.BSC]: {
+      factory: '0x73DC984D9490286E735548f61dfCCec67Af82ed9',
+      quoter: '0x7CCB89bB9BdEF68688F39a2c22d249fD1D9759f1',
+      router: '0x9B63CA87919617d042A89663492dB3c8686e0CaE',
+      supportedFees: SUPPORTED_FEES,
+      tickSpacings: [1n, 50n, 100n, 200n, 2000n],
+      tickSpacingsToFees: {
+        '1': 100n,
+        '50': 500n,
+        '100': 1000n,
+        '200': 3000n,
+        '2000': 10000n,
+      },
+      stateMulticall: '0xa1941194be7c2607FfbC27DE23B1aCA357C45e3D',
+      stateMultiCallAbi: VelodromeSlipstreamMulticallABi as AbiItem[],
+      eventPoolImplementation: VelodromeSlipstreamEventPool,
+      factoryImplementation: VelodromeSlipstreamFactory,
+      decodeStateMultiCallResultWithRelativeBitmaps:
+        decodeStateMultiCallResultWithRelativeBitmapsForVelodromeSlipstream,
+      uniswapMulticall: '0x963Df249eD09c358A4819E39d9Cd5736c3087184',
+      chunksCount: 10,
+      initRetryFrequency: 10,
+      initHash: '0x18e68051d1b1fb44cb539ca4436f112d28577af7',
+      subgraphURL:
+        'https://api.goldsky.com/api/public/project_cmgzljqwl006c5np2gnao4li4/subgraphs/topaz-v3/v0.0.1/gn',
+    },
+  },
   PangolinV3: {
     [Network.AVALANCHE]: {
       factory: '0x1128F23D0bc0A8396E9FBC3c0c68f5EA228B8256',

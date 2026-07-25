@@ -93,6 +93,18 @@ export const SolidlyConfig: DexConfigMap<DexParams> = {
       poolGasCost: 180 * 1000,
     },
   },
+  Topaz: {
+    [Network.BSC]: {
+      factoryAddress: '0x65E6cD0eF5D3467030103cf3d433034E570b5784',
+      router: '0x1E98c8226e7d452e1888e3d3d2F929346321c6c3',
+      initCode:
+        '0xc90b102edcdcb0be645cc77159a870ae92733f16dc519083b819105dfa107f2c',
+      poolGasCost: 180 * 1000,
+      feeCode: 0,
+      factoryAbi: AerodromeFactoryABI as AbiItem[],
+      getPairMethodName: 'getPool',
+    },
+  },
   Blackhole: {
     [Network.AVALANCHE]: {
       // RPC pool tracker is used
