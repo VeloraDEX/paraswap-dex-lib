@@ -166,6 +166,36 @@ export const UniswapV2Config: DexConfigMap<DexParams> = {
       feeCode: 30,
     },
   },
+  RubiconAquila: {
+    [Network.MAINNET]: {
+      factoryAddress: '0x7bad585c3ae4ae266f92a4af13b388bc7b26067c',
+      initCode:
+        '0x79cb29831f0abd24ae48de6fa5dc9eb647f10df38618ed09b70b2044d35dfba5',
+      poolGasCost: 80 * 1000,
+      feeCode: 30,
+    },
+    [Network.OPTIMISM]: {
+      factoryAddress: '0x3B2C6fe3039B42f00E98b76531C05932abfB258e',
+      initCode:
+        '0x79cb29831f0abd24ae48de6fa5dc9eb647f10df38618ed09b70b2044d35dfba5',
+      poolGasCost: 80 * 1000,
+      feeCode: 30,
+    },
+    [Network.ARBITRUM]: {
+      factoryAddress: '0xEca3EA559b7566e610d113bbA8D1B15B085C9c68',
+      initCode:
+        '0x79cb29831f0abd24ae48de6fa5dc9eb647f10df38618ed09b70b2044d35dfba5',
+      poolGasCost: 80 * 1000,
+      feeCode: 30,
+    },
+    [Network.BASE]: {
+      factoryAddress: '0xA5cA8Ba2e3017E9aF3Bd9EDa69e9E8C263Abf6cD',
+      initCode:
+        '0x79cb29831f0abd24ae48de6fa5dc9eb647f10df38618ed09b70b2044d35dfba5',
+      poolGasCost: 80 * 1000,
+      feeCode: 30,
+    },
+  },
   ApeSwap: {
     [Network.BSC]: {
       factoryAddress: '0x0841bd0b734e4f5853f0dd8d7ea041c241fb0da6',

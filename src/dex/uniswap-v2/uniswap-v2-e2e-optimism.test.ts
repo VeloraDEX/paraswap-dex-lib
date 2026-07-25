@@ -15,4 +15,24 @@ describe('UniswapV2 E2E Optimism', () => {
     generateConfig(network).privateHttpProvider,
     network,
   );
+
+  describe('RubiconAquila', () => {
+    const dexKey = 'RubiconAquila';
+
+    describe('Simpleswap', () => {
+      it('RubiconAquila USDC -> DAI', async () => {
+        await testE2E(
+          tokens.USDC,
+          tokens.DAI,
+          holders.USDC,
+          '100000000',
+          SwapSide.SELL,
+          dexKey,
+          ContractMethod.simpleSwap,
+          network,
+          provider,
+        );
+      });
+    });
+  });
 });
