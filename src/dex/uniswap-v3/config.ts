@@ -462,6 +462,35 @@ export const UniswapV3Config: DexConfigMap<DexParams> = {
       liquidityField: 'liquidity',
     },
   },
+  AerodromeSlipstreamFactory3: {
+    [Network.BASE]: {
+      factory: '0xf8f2eB4940CFE7d13603DDDD87f123820Fc061Ef',
+      quoter: '0x86D33DCbEC9c75897c6Ce521f33CF84009c4272e',
+      router: '0x33a47A122De0B5c429Ba79E6d17965B0e841c60e',
+      supportedFees: [20000n, 10000n, 3000n, 500n, 100n],
+      tickSpacings: [1n, 10n, 50n, 100n, 200n, 500n, 2000n],
+      tickSpacingsToFees: {
+        '1': 100n,
+        '10': 500n,
+        '50': 500n,
+        '100': 500n,
+        '200': 3000n,
+        '500': 20000n,
+        '2000': 10000n,
+      },
+      stateMulticall: '0x736518161516c1cfBD5bf5e7049FCBDC9b933987',
+      stateMultiCallAbi: VelodromeSlipstreamMulticallABi as AbiItem[],
+      eventPoolImplementation: VelodromeSlipstreamEventPool,
+      factoryImplementation: VelodromeSlipstreamFactory,
+      decodeStateMultiCallResultWithRelativeBitmaps:
+        decodeStateMultiCallResultWithRelativeBitmapsForVelodromeSlipstream,
+      uniswapMulticall: '0x091e99cb1C49331a94dD62755D168E941AbD0693',
+      chunksCount: 10,
+      initRetryFrequency: 10,
+      initHash: '0xc770898522D2A9c8Da7A10D63989b6b58305B665', // pool implementation address from factory contract is used instead of initHash here
+      liquidityField: 'liquidity',
+    },
+  },
   PangolinV3: {
     [Network.AVALANCHE]: {
       factory: '0x1128F23D0bc0A8396E9FBC3c0c68f5EA228B8256',
