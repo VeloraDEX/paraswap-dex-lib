@@ -2570,6 +2570,144 @@ describe('Slipstream', () => {
     });
   });
 
+  describe('AerodromeSlipstreamFactory3', () => {
+    const dexKey = 'AerodromeSlipstreamFactory3';
+
+    describe('Base', () => {
+      let blockNumber: number;
+      let slipstream: VelodromeSlipstream;
+
+      const network = Network.BASE;
+      const dexHelper = new DummyDexHelper(network);
+      const TokenASymbol = 'USDC';
+      const TokenA = Tokens[network][TokenASymbol];
+
+      const TokenBSymbol = 'WETH';
+      const TokenB = Tokens[network][TokenBSymbol];
+
+      const QuoterV2 = UniswapV3Config[dexKey][network].quoter;
+
+      beforeEach(async () => {
+        blockNumber = await dexHelper.web3Provider.eth.getBlockNumber();
+        slipstream = new VelodromeSlipstream(network, dexKey, dexHelper);
+      });
+
+      it('getPoolIdentifiers and getPricesVolume SELL', async () => {
+        const amounts = [0n, BI_POWS[6], BI_POWS[6] * 2n];
+
+        const pools = await slipstream.getPoolIdentifiers(
+          TokenA,
+          TokenB,
+          SwapSide.SELL,
+          blockNumber,
+        );
+        console.log(
+          `${TokenASymbol} <> ${TokenBSymbol} Pool Identifiers: `,
+          pools,
+        );
+
+        expect(pools.length).toBeGreaterThan(0);
+
+        const poolPrices = await slipstream.getPricesVolume(
+          TokenA,
+          TokenB,
+          amounts,
+          SwapSide.SELL,
+          blockNumber,
+          pools,
+        );
+        console.log(
+          `${TokenASymbol} <> ${TokenBSymbol} Pool Prices: `,
+          poolPrices,
+        );
+
+        expect(poolPrices).not.toBeNull();
+        checkPoolPrices(poolPrices!, amounts, SwapSide.SELL, dexKey);
+
+        let falseChecksCounter = 0;
+        await Promise.all(
+          poolPrices!.map(async price => {
+            const tickSpacing =
+              slipstream.eventPools[price.poolIdentifiers![0]]!.tickSpacing!;
+            const res = await checkOnChainPricing(
+              dexHelper,
+              slipstream,
+              'quoteExactInputSingle',
+              blockNumber,
+              QuoterV2,
+              price.prices,
+              TokenA.address,
+              TokenB.address,
+              tickSpacing,
+              amounts,
+              velodromeQuoterIface,
+            );
+            if (res === false) falseChecksCounter++;
+          }),
+        );
+
+        expect(falseChecksCounter).toBeLessThan(poolPrices!.length);
+      });
+
+      it('getPoolIdentifiers and getPricesVolume BUY', async () => {
+        const amounts = [0n, BI_POWS[15], BI_POWS[15] * 2n];
+
+        const pools = await slipstream.getPoolIdentifiers(
+          TokenA,
+          TokenB,
+          SwapSide.BUY,
+          blockNumber,
+        );
+        console.log(
+          `${TokenASymbol} <> ${TokenBSymbol} Pool Identifiers: `,
+          pools,
+        );
+
+        expect(pools.length).toBeGreaterThan(0);
+
+        const poolPrices = await slipstream.getPricesVolume(
+          TokenA,
+          TokenB,
+          amounts,
+          SwapSide.BUY,
+          blockNumber,
+          pools,
+        );
+        console.log(
+          `${TokenASymbol} <> ${TokenBSymbol} Pool Prices: `,
+          poolPrices,
+        );
+
+        expect(poolPrices).not.toBeNull();
+        checkPoolPrices(poolPrices!, amounts, SwapSide.BUY, dexKey);
+
+        let falseChecksCounter = 0;
+        await Promise.all(
+          poolPrices!.map(async price => {
+            const tickSpacing =
+              slipstream.eventPools[price.poolIdentifiers![0]]!.tickSpacing!;
+            const res = await checkOnChainPricing(
+              dexHelper,
+              slipstream,
+              'quoteExactOutputSingle',
+              blockNumber,
+              QuoterV2,
+              price.prices,
+              TokenA.address,
+              TokenB.address,
+              tickSpacing,
+              amounts,
+              velodromeQuoterIface,
+            );
+            if (res === false) falseChecksCounter++;
+          }),
+        );
+
+        expect(falseChecksCounter).toBeLessThan(poolPrices!.length);
+      });
+    });
+  });
+
   describe('VelodromeSlipstream', () => {
     const dexKey = 'VelodromeSlipstream';
 
