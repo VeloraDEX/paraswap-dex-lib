@@ -2077,6 +2077,9 @@ export const Holders: {
     wstETH: '0x3c22ec75ea5D745c78fc84762F7F1E6D82a2c5BF',
     WETH: '0x6B44ba0a126a2A1a8aa6cD1AdeeD002e141Bcd44',
     USDT: '0xAf64555DDD61FcF7D094824dd9B4eBea165aFc5b',
+    // Top EOA holder of ROME (6-dec, 0x2bd1…f0f) on mainnet — ~499 ROME, well over the
+    // RangePool e2e trade sizes. Used as the (Tenderly-funded) sender for the ROME cases.
+    ROME: '0x53e79cafacfbc54938f7da4445f6f700be40b479',
     XAUT: '0xc4e161e8d8a4bc4ac762ab33a28bbac5474203d7',
     R: '0xBfe4c9D3235475C138a61f62e9e72FaD94A3303b',
     sDAI: '0x4C612E3B15b96Ff9A6faED838F8d07d479a8dD4c',

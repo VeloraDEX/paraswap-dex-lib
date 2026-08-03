@@ -129,11 +129,34 @@ export class RangePool extends SimpleExchange implements IDex<RangePoolData> {
   // implement this function
   async initializePricing(blockNumber: number) {
     await this.refreshPools(blockNumber);
+  }
 
-    // Eager-load each pool's event subscriber, seeding it with the snapshot we just
-    // fetched (no extra RPC). From here the subscriber keeps virtual + fact balances
-    // current from logs; the framework's blockManager polls + regenerates on any gap,
-    // which doubles as the periodic safety refresh.
+  // Enumerate all pools from the factory, (re)load their on-chain state, and ensure every
+  // discovered pool has a live event subscriber. Re-running this (via updatePoolState, which
+  // the framework calls periodically) is the discovery path for pools created AFTER startup:
+  // getAllPools re-reads the factory list each time, and ensureEventPools wires a subscriber
+  // for any newly seen pool.
+  private async refreshPools(blockNumber: number): Promise<void> {
+    const pools = await getAllPools(
+      this.dexHelper,
+      this.params.factoryAddress,
+      blockNumber,
+    );
+    this.poolStates = await getPoolStates(
+      this.dexHelper,
+      this.params.vaultAddress,
+      pools,
+      blockNumber,
+    );
+    await this.ensureEventPools(blockNumber);
+  }
+
+  // Create + initialize an event subscriber for every pool in `poolStates` that doesn't
+  // already have one, seeding it with the snapshot we just fetched (no extra RPC). From
+  // there each subscriber keeps virtual + fact balances current from logs; the framework's
+  // blockManager polls + regenerates on any gap, which doubles as the periodic safety
+  // refresh. Existing subscribers are left untouched so their live state is preserved.
+  private async ensureEventPools(blockNumber: number): Promise<void> {
     await Promise.all(
       Object.entries(this.poolStates).map(async ([pool, state]) => {
         if (this.eventPools[pool]) return;
@@ -152,30 +175,22 @@ export class RangePool extends SimpleExchange implements IDex<RangePoolData> {
     );
   }
 
-  // Enumerate all pools from the factory and (re)load their on-chain state.
-  private async refreshPools(blockNumber: number): Promise<void> {
-    const pools = await getAllPools(
-      this.dexHelper,
-      this.params.factoryAddress,
-      blockNumber,
-    );
-    this.poolStates = await getPoolStates(
-      this.dexHelper,
-      this.params.vaultAddress,
-      pools,
-      blockNumber,
-    );
-  }
-
-  // Live state for a pool: prefer the event subscriber (kept current from logs),
-  // falling back to the last discovery snapshot if the subscriber is stale/absent.
-  private getLiveState(pool: string, blockNumber: number): PoolState | null {
+  // Live state for a pool from its event subscriber (kept current from logs). On a
+  // subscriber miss the state is REGENERATED on-chain at `blockNumber` rather than served
+  // from the possibly-far-behind discovery snapshot — stale balances/fees would misprice.
+  // Returns null (⇒ skip the pool, no quote) if there's no subscriber or regeneration fails.
+  private async getLiveState(
+    pool: string,
+    blockNumber: number,
+  ): Promise<PoolState | null> {
     const eventPool = this.eventPools[pool];
-    if (eventPool) {
-      const state = eventPool.getState(blockNumber);
-      if (state) return state as PoolState;
+    if (!eventPool) return null;
+    try {
+      return (await eventPool.getStateOrGenerate(blockNumber)) as PoolState;
+    } catch (e) {
+      this.logger.error(`getLiveState: regenerate failed for ${pool}`, e);
+      return null;
     }
-    return this.poolStates[pool] ?? null;
   }
 
   // Legacy: was only used for V5
@@ -238,7 +253,7 @@ export class RangePool extends SimpleExchange implements IDex<RangePoolData> {
 
       const result: ExchangePrices<RangePoolData> = [];
       for (const pool of pools) {
-        const state = this.getLiveState(pool, blockNumber);
+        const state = await this.getLiveState(pool, blockNumber);
         if (!state || !isPoolLive(state)) continue;
         const indexIn = state.tokens.indexOf(src);
         const indexOut = state.tokens.indexOf(dest);

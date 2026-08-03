@@ -14,13 +14,23 @@ import { toScaled18RoundDown } from './lib/vaultSwap';
 // Events that drive cached state. Decoded together by topic0, regardless of which of
 // the three subscribed addresses (Vault / pool / hook) emitted the log:
 //   Vault  -> Swap, LiquidityAdded, LiquidityRemoved   (fact deltas; pool in arg)
+//   Vault  -> SwapFeePercentageChanged,                (fee/pause config; pool in arg)
+//            AggregateSwapFeePercentageChanged,
+//            PoolPausedStateChanged
 //   pool   -> VirtualBalancesUpdated                   (virtual overwrite; emitter = pool)
 //   hook   -> VirtualBalancesResynced                  (virtual overwrite; pool in arg)
 //   hook   -> Stopped / Resumed                        (global liveness gate)
+// Signatures verified against the custom Vault source
+// (balancer-v3-monorepo/pkg/interfaces/contracts/vault/IVaultEvents.sol) — they are the
+// shared Balancer V3 Vault events, decoded here so the subscriber tracks fee/pause changes
+// (mirrors balancer-v3-pool). RangeVault.json carries the same ABI as a reference copy.
 const SUBSCRIBER_EVENTS_ABI = [
   'event Swap(address indexed pool, address indexed tokenIn, address indexed tokenOut, uint256 amountIn, uint256 amountOut, uint256 swapFeePercentage, uint256 swapFeeAmount)',
   'event LiquidityAdded(address indexed pool, address indexed liquidityProvider, uint8 indexed kind, uint256 totalSupply, uint256[] amountsAddedRaw, uint256[] swapFeeAmountsRaw)',
   'event LiquidityRemoved(address indexed pool, address indexed liquidityProvider, uint8 indexed kind, uint256 totalSupply, uint256[] amountsRemovedRaw, uint256[] swapFeeAmountsRaw)',
+  'event SwapFeePercentageChanged(address indexed pool, uint256 swapFeePercentage)',
+  'event AggregateSwapFeePercentageChanged(address indexed pool, uint256 aggregateSwapFeePercentage)',
+  'event PoolPausedStateChanged(address indexed pool, bool paused)',
   'event VirtualBalancesUpdated(uint256[] newVirtualBalances)',
   'event VirtualBalancesResynced(address indexed pool, uint256[] newVirtualBalances)',
   'event Stopped(address indexed caller)',
@@ -28,6 +38,12 @@ const SUBSCRIBER_EVENTS_ABI = [
 ];
 
 const subscriberIface = new Interface(SUBSCRIBER_EVENTS_ABI);
+
+// The Vault truncates a swap-fee percentage to FEE_SCALING_FACTOR (5-decimal, i.e. 1e-7)
+// precision before storing it (PoolConfigLib.setStaticSwapFeePercentage). generateState
+// reads back that truncated value, so the SwapFeePercentageChanged handler must apply the
+// same truncation to keep the cached fee bit-identical to a fresh on-chain read.
+const FEE_SCALING_FACTOR = 10n ** 11n;
 
 /**
  * Per-pool event subscriber: keeps the cached fact (`balancesLiveScaled18`) and virtual
@@ -83,6 +99,12 @@ export class RangePoolEventPool extends StatefulEventSubscriber<PoolState> {
     this.handlers['Swap'] = this.handleSwap.bind(this);
     this.handlers['LiquidityAdded'] = this.handleLiquidityAdded.bind(this);
     this.handlers['LiquidityRemoved'] = this.handleLiquidityRemoved.bind(this);
+    this.handlers['SwapFeePercentageChanged'] =
+      this.handleSwapFeePercentageChanged.bind(this);
+    this.handlers['AggregateSwapFeePercentageChanged'] =
+      this.handleAggregateSwapFeePercentageChanged.bind(this);
+    this.handlers['PoolPausedStateChanged'] =
+      this.handlePoolPausedStateChanged.bind(this);
     this.handlers['VirtualBalancesUpdated'] =
       this.handleVirtualBalancesUpdated.bind(this);
     this.handlers['VirtualBalancesResynced'] =
@@ -119,6 +141,25 @@ export class RangePoolEventPool extends StatefulEventSubscriber<PoolState> {
       throw new Error(
         `RangePool: cannot generate state for ${this.poolAddress} at block ${blockNumber}`,
       );
+    }
+    return state;
+  }
+
+  /**
+   * Live state at `blockNumber`, regenerating on a subscriber miss instead of returning a
+   * stale snapshot. Mirrors the canonical getStateOrGenerate pattern (e.g. fluid-dex-pool):
+   * if the cached state is fresh enough it's returned as-is; otherwise the state is rebuilt
+   * from chain at `blockNumber` and (unless `readonly`) written back. Throws only if the
+   * on-chain regeneration itself fails — the caller treats that as "skip this pool".
+   */
+  async getStateOrGenerate(
+    blockNumber: number,
+    readonly = false,
+  ): Promise<DeepReadonly<PoolState>> {
+    let state = this.getState(blockNumber);
+    if (!state) {
+      state = await this.generateState(blockNumber);
+      if (!readonly) this.setState(state, blockNumber);
     }
     return state;
   }
@@ -247,6 +288,50 @@ export class RangePoolEventPool extends StatefulEventSubscriber<PoolState> {
       );
     }
     newState.totalSupply = BigInt(event.args.totalSupply);
+    return newState;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Fee / pause config (Vault events). A stale swapFee/aggregateSwapFee would corrupt
+  // BOTH the quote and the per-swap virtual-delta reconstruction (fee feeds it), and a
+  // missed pause would keep the pool quotable — so track all three (mirrors balancer-v3).
+  // ---------------------------------------------------------------------------
+  handleSwapFeePercentageChanged(
+    event: any,
+    state: DeepReadonly<PoolState>,
+    _log: Readonly<Log>,
+  ): DeepReadonly<PoolState> | null {
+    if (!this.isThisPool(event)) return null;
+    const newState = _.cloneDeep(state) as PoolState;
+    // Truncate to the Vault's stored precision so the cached fee matches a fresh read.
+    const value = BigInt(event.args.swapFeePercentage);
+    newState.swapFeePercentage =
+      (value / FEE_SCALING_FACTOR) * FEE_SCALING_FACTOR;
+    return newState;
+  }
+
+  handleAggregateSwapFeePercentageChanged(
+    event: any,
+    state: DeepReadonly<PoolState>,
+    _log: Readonly<Log>,
+  ): DeepReadonly<PoolState> | null {
+    if (!this.isThisPool(event)) return null;
+    const newState = _.cloneDeep(state) as PoolState;
+    // The ProtocolFeeController already truncates this before the Vault stores/emits it.
+    newState.aggregateSwapFee = BigInt(event.args.aggregateSwapFeePercentage);
+    return newState;
+  }
+
+  handlePoolPausedStateChanged(
+    event: any,
+    state: DeepReadonly<PoolState>,
+    _log: Readonly<Log>,
+  ): DeepReadonly<PoolState> | null {
+    if (!this.isThisPool(event)) return null;
+    const paused = Boolean(event.args.paused);
+    if (state.isPoolPaused === paused) return null;
+    const newState = _.cloneDeep(state) as PoolState;
+    newState.isPoolPaused = paused; // isPoolLive() gates a paused pool out of pricing
     return newState;
   }
 
