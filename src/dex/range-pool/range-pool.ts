@@ -260,13 +260,24 @@ export class RangePool extends SimpleExchange implements IDex<RangePoolData> {
         if (indexIn < 0 || indexOut < 0) continue;
 
         // Emulate the full Vault swap flow per amount; 0 means "no price at this point"
-        // (a EXACT_OUT amount the pool can't serve, or a dust input).
+        // (an EXACT_OUT amount the pool can't serve, a dust input, or an oversized
+        // exact-in whose LogExpMath.pow overflows before the fact cap on a pool whose
+        // weight ratio isn't a powUp short-circuit). The try/catch ISOLATES the failure
+        // per amount: one un-quotable size yields 0 while every other amount (and pool)
+        // still returns its price — a single throw must not null the whole pair. 0 is
+        // consistent with the revert⟺0 parity contract: on-chain querySwap reverts for
+        // such sizes, i.e. there's no executable price. The outer getPricesVolume
+        // try/catch remains for genuinely unexpected errors.
         const quote = (amount: bigint): bigint => {
           if (amount === 0n) return 0n;
-          if (side === SwapSide.SELL) {
-            return computeAmountOut(state, indexIn, indexOut, amount);
+          try {
+            if (side === SwapSide.SELL) {
+              return computeAmountOut(state, indexIn, indexOut, amount);
+            }
+            return computeAmountIn(state, indexIn, indexOut, amount) ?? 0n;
+          } catch (e) {
+            return 0n;
           }
-          return computeAmountIn(state, indexIn, indexOut, amount) ?? 0n;
         };
 
         result.push({

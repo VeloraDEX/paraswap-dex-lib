@@ -431,6 +431,88 @@ describe('RangePool — Stage 3: price parity vs Router querySwap', () => {
     expect(buyPrices[0]).toBe(0n);
   });
 
+  // Fix 5 (per-amount error isolation). calcOutGivenIn runs LogExpMath.pow BEFORE the
+  // fact-balance cap. On a pool whose weight ratio wIn/wOut is NOT a powUp short-circuit
+  // (1/2/4) AND wIn > wOut (exponent > 1e18), a large exact-in drives the curve base to 1;
+  // pow(1, exponent) then overflows MIN_NATURAL_EXPONENT (PRODUCT_OUT_OF_BOUNDS). A single
+  // such amount must NOT null every other price for the pair — getPricesVolume isolates the
+  // throw per amount (that amount → 0, the rest keep their exact prices). Chain parity
+  // holds: the oversized amount reverts on-chain too (same vendored math), so 0 is the
+  // correct "no executable price" (revert⟺0). The 8-token pool has unequal integer-percent
+  // weights (7/10/20/…), so such a pair exists; the 50/50 and 80/20 pools short-circuit.
+  it('oversized exact-in overflows pow → that amount prices 0, smaller amounts unaffected', async () => {
+    const s = states[TOP_CRYPTO_POOL];
+    const SHORTCUTS = [WAD, 2n * WAD, 4n * WAD];
+    // Find a pair whose exponent divDown(wIn, wOut) is > 1e18 (so base→1 overflows pow)
+    // and bypasses the powUp fast path.
+    let iIn = -1;
+    let iOut = -1;
+    for (let a = 0; a < s.tokens.length && iIn < 0; a++) {
+      for (let b = 0; b < s.tokens.length; b++) {
+        if (a === b) continue;
+        const exponent = (s.weights[a] * WAD) / s.weights[b]; // divDown
+        if (exponent > WAD && !SHORTCUTS.includes(exponent)) {
+          iIn = a;
+          iOut = b;
+          break;
+        }
+      }
+    }
+    expect(iIn).toBeGreaterThanOrEqual(0); // such a pair must exist in this pool
+
+    const tokenIn = s.tokens[iIn];
+    const tokenOut = s.tokens[iOut];
+    const sfIn = s.scalingFactors[iIn];
+    const sfOut = s.scalingFactors[iOut];
+    const decIn = decimalsFromScalingFactor(sfIn);
+    const decOut = decimalsFromScalingFactor(sfOut);
+    const factInRaw = s.balancesLiveScaled18[iIn] / sfIn;
+
+    const small = frac(factInRaw, 1_000n); // 0.1% of fact — safely priceable
+    expect(small).toBeGreaterThan(0n);
+    // ≫ virtual balance ⇒ base = divUp(vIn, vIn + amountIn) collapses to 1 ⇒ pow overflows.
+    // Sized off the virtual balance (×1e20) rather than a fixed constant so it drives base
+    // to 1 without overflowing the Vault's uint256 scaling on-chain (a fixed 1e60 does).
+    const huge = (s.virtualBalances[iIn] * 10n ** 20n) / sfIn;
+    expect(huge).toBeGreaterThan(small);
+
+    // connectorPrices asserts the result is NOT null — the crux of the fix: without
+    // per-amount isolation the throwing `huge` would null the entire pair's prices.
+    const [prices, smallChain, hugeChain] = await Promise.all([
+      connectorPrices(
+        tokenIn,
+        tokenOut,
+        decIn,
+        decOut,
+        [small, huge],
+        SwapSide.SELL,
+        TOP_CRYPTO_POOL,
+      ),
+      queryRouter({
+        pool: TOP_CRYPTO_POOL,
+        tokenIn,
+        tokenOut,
+        amount: small,
+        side: SwapSide.SELL,
+      }),
+      queryRouter({
+        pool: TOP_CRYPTO_POOL,
+        tokenIn,
+        tokenOut,
+        amount: huge,
+        side: SwapSide.SELL,
+      }),
+    ]);
+
+    // The oversized amount overflows pow on-chain too ⇒ Router reverts (no price).
+    expect(hugeChain).toBeNull();
+    expect(prices[1]).toBe(0n); // isolated to 0, not a thrown null for the whole pair
+    // The smaller amount is unaffected and still bit-exact vs the Router.
+    expect(smallChain).not.toBeNull();
+    expect(prices[0]).toBeGreaterThan(0n);
+    expect(prices[0]).toBe(smallChain);
+  });
+
   it('returns no price for a non-live (filtered) pool pair', async () => {
     // Same token both sides ⇒ never priced (mirrors getPoolIdentifiers).
     const ex = await rangePool.getPricesVolume(

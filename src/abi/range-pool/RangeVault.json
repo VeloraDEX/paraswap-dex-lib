@@ -190,5 +190,18 @@
     ],
     "name": "PoolPausedStateChanged",
     "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "bool",
+        "name": "paused",
+        "type": "bool"
+      }
+    ],
+    "name": "VaultPausedStateChanged",
+    "type": "event"
   }
 ]

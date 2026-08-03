@@ -17,6 +17,7 @@ import { toScaled18RoundDown } from './lib/vaultSwap';
 //   Vault  -> SwapFeePercentageChanged,                (fee/pause config; pool in arg)
 //            AggregateSwapFeePercentageChanged,
 //            PoolPausedStateChanged
+//   Vault  -> VaultPausedStateChanged                  (GLOBAL pause; NO pool arg)
 //   pool   -> VirtualBalancesUpdated                   (virtual overwrite; emitter = pool)
 //   hook   -> VirtualBalancesResynced                  (virtual overwrite; pool in arg)
 //   hook   -> Stopped / Resumed                        (global liveness gate)
@@ -31,6 +32,7 @@ const SUBSCRIBER_EVENTS_ABI = [
   'event SwapFeePercentageChanged(address indexed pool, uint256 swapFeePercentage)',
   'event AggregateSwapFeePercentageChanged(address indexed pool, uint256 aggregateSwapFeePercentage)',
   'event PoolPausedStateChanged(address indexed pool, bool paused)',
+  'event VaultPausedStateChanged(bool paused)',
   'event VirtualBalancesUpdated(uint256[] newVirtualBalances)',
   'event VirtualBalancesResynced(address indexed pool, uint256[] newVirtualBalances)',
   'event Stopped(address indexed caller)',
@@ -105,6 +107,8 @@ export class RangePoolEventPool extends StatefulEventSubscriber<PoolState> {
       this.handleAggregateSwapFeePercentageChanged.bind(this);
     this.handlers['PoolPausedStateChanged'] =
       this.handlePoolPausedStateChanged.bind(this);
+    this.handlers['VaultPausedStateChanged'] =
+      this.handleVaultPausedStateChanged.bind(this);
     this.handlers['VirtualBalancesUpdated'] =
       this.handleVirtualBalancesUpdated.bind(this);
     this.handlers['VirtualBalancesResynced'] =
@@ -332,6 +336,24 @@ export class RangePoolEventPool extends StatefulEventSubscriber<PoolState> {
     if (state.isPoolPaused === paused) return null;
     const newState = _.cloneDeep(state) as PoolState;
     newState.isPoolPaused = paused; // isPoolLive() gates a paused pool out of pricing
+    return newState;
+  }
+
+  // Global Vault pause. Unlike PoolPausedStateChanged this event carries NO `pool` arg
+  // (it applies to every pool), so there's no isThisPool filter — each pool subscriber
+  // records it on its own state. Signature verified against the custom Vault source
+  // (balancer-v3-monorepo IVaultEvents.sol: `event VaultPausedStateChanged(bool paused)`,
+  // emitted at VaultAdmin.sol). isPoolLive() already gates isVaultPaused out of pricing —
+  // same class as the pool-pause handler, one level up.
+  handleVaultPausedStateChanged(
+    event: any,
+    state: DeepReadonly<PoolState>,
+    _log: Readonly<Log>,
+  ): DeepReadonly<PoolState> | null {
+    const paused = Boolean(event.args.paused);
+    if (state.isVaultPaused === paused) return null;
+    const newState = _.cloneDeep(state) as PoolState;
+    newState.isVaultPaused = paused;
     return newState;
   }
 
