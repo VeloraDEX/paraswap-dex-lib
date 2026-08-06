@@ -211,7 +211,14 @@ export class Bebop
       `${this.dexKey}-${this.network}: invalid partialFillOffset ${data.partialFillOffset}`,
     );
 
-    return 4 + data.partialFillOffset * 32;
+    const amountPos = 4 + data.partialFillOffset * 32;
+
+    assert(
+      amountPos <= 0xffff,
+      `${this.dexKey}-${this.network}: partialFillOffset ${data.partialFillOffset} results in insertFromAmountPos ${amountPos} > 65535`,
+    );
+
+    return amountPos;
   }
 
   private async waitForInitialState(timeoutMs: number): Promise<void> {
