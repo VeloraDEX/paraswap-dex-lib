@@ -12,6 +12,7 @@ import {
   NumberAsString,
   PoolPrices,
   DexExchangeParam,
+  GetDexParamOptions,
 } from '../../types';
 import { SwapSide, Network, CACHE_PREFIX } from '../../constants';
 import * as CALLDATA_GAS_COST from '../../calldata-gas-cost';
@@ -930,6 +931,8 @@ export class PancakeswapV3
     recipient: Address,
     data: UniswapV3Data,
     side: SwapSide,
+    executorAddress: Address,
+    options?: GetDexParamOptions,
   ): DexExchangeParam {
     const swapFunction =
       side === SwapSide.SELL
@@ -942,14 +945,18 @@ export class PancakeswapV3
       side === SwapSide.SELL
         ? {
             recipient,
-            deadline: getLocalDeadlineAsFriendlyPlaceholder(),
+            deadline: getLocalDeadlineAsFriendlyPlaceholder(
+              options?.nowTimestampMs,
+            ),
             amountIn: srcAmount,
             amountOutMinimum: destAmount,
             path,
           }
         : {
             recipient,
-            deadline: getLocalDeadlineAsFriendlyPlaceholder(),
+            deadline: getLocalDeadlineAsFriendlyPlaceholder(
+              options?.nowTimestampMs,
+            ),
             amountOut: destAmount,
             amountInMaximum: srcAmount,
             path,
