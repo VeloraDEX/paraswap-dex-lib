@@ -4,6 +4,7 @@ import {
   DexExchangeParam,
   DexExchangeParamWithBooleanNeedWrapNative,
   GetDexParamOptions,
+  Logger,
   OptimalRate,
   OptimalSwap,
   OptimalSwapExchange,
@@ -87,7 +88,51 @@ export function normaliseRemoteDexExchangeParam(
   );
 }
 
-export type NewDexConfig = { needWrapNative: boolean };
+// Everything that ends up in the encoded swap. `executorIsDestReceiver` is
+// build-time only (never returned by either builder) so it is not compared.
+const COMPARED_DEX_PARAM_FIELDS: (keyof DexExchangeParam)[] = [
+  'needWrapNative',
+  'needUnwrapNative',
+  'skipApproval',
+  'wethAddress',
+  'exchangeData',
+  'targetExchange',
+  'dexFuncHasRecipient',
+  'specialDexFlag',
+  'transferSrcTokenBeforeSwap',
+  'spender',
+  'sendEthButSupportsInsertFromAmount',
+  'specialDexSupportsInsertFromAmount',
+  'swappedAmountNotPresentInExchangeData',
+  'returnAmountPos',
+  'insertFromAmountPos',
+  'amountsPacked128',
+  'permit2Approval',
+];
+
+// Remote params come from JSON, so an optional boolean may arrive as undefined
+// where the local builder returns `false` — those encode identically. Strings
+// are addresses/hex data, compared case-insensitively. Numbers are byte
+// positions, where undefined and 0 are NOT interchangeable.
+const normaliseDexParamValue = (value: unknown) =>
+  typeof value === 'string'
+    ? value.toLowerCase()
+    : value === false
+    ? undefined
+    : value;
+
+function diffDexExchangeParams(
+  local: DexExchangeParam,
+  remote: DexExchangeParam,
+) {
+  return COMPARED_DEX_PARAM_FIELDS.filter(
+    field =>
+      normaliseDexParamValue(local[field]) !==
+      normaliseDexParamValue(remote[field]),
+  ).map(field => ({ field, local: local[field], remote: remote[field] }));
+}
+
+export type NewDexConfig = { needWrapNative: boolean; compareOnly?: boolean };
 export type NewDexsConfig = { [dexKey: string]: NewDexConfig };
 type NewDexEntry = NewDexConfig & { key: string };
 
@@ -112,6 +157,8 @@ export class GenericSwapTransactionBuilder {
 
   executorDetector: ExecutorDetector;
 
+  protected logger: Logger;
+
   constructor(
     protected dexAdapterService: DexAdapterService,
     protected wExchangeNetworkToKey = Weth.dexKeysWithNetwork.reduce<
@@ -135,6 +182,9 @@ export class GenericSwapTransactionBuilder {
       this.dexAdapterService.dexHelper.config.data.augustusV6Address!;
     this.executorDetector = new ExecutorDetector(
       this.dexAdapterService.dexHelper,
+    );
+    this.logger = this.dexAdapterService.dexHelper.getLogger(
+      'GenericSwapTransactionBuilder',
     );
   }
 
@@ -860,10 +910,18 @@ export class GenericSwapTransactionBuilder {
     const newDex = this.findNewDex(se.exchange);
     const executorAddress = bytecodeBuilder.getAddress();
 
+    // A `compareOnly` new-dex still runs the local builder and only shadows it
+    // with the remote one: local wins whenever it is available, and any
+    // encoding divergence between the two is logged.
+    const compareOnly = !!newDex?.compareOnly;
+
     let dexNeedWrapNative: boolean;
     let dex: IDexTxBuilder<any, any> | undefined;
     if (newDex) {
       dexNeedWrapNative = newDex.needWrapNative;
+      if (compareOnly) {
+        dex = this.findLocalTxBuilderDex(se.exchange);
+      }
     } else {
       dex = this.dexAdapterService.getTxBuilderDexByKey(se.exchange);
       dexNeedWrapNative =
@@ -892,31 +950,27 @@ export class GenericSwapTransactionBuilder {
       groupFallback,
     );
 
-    // A needUnwrapNative dex must self-normalize on WETH-dest hops to be
-    // group-fallback-safe: deliver on the executor with
-    // dexFuncHasRecipient=false (see FluidDex).
-    let dexParams: DexExchangeParam;
-    if (newDex) {
-      dexParams = await this.fetchRemoteDexParam({
-        dexKey: newDex.key,
-        srcToken,
-        destToken,
-        srcAmount: side === SwapSide.BUY ? se.srcAmount : srcAmount,
-        destAmount,
-        recipient,
-        data: se.data,
-        side,
-        executorAddress,
-        options: getDexParamOptions,
-      });
-
-      // The local `newDexs[*].needWrapNative` is the single source of truth:
-      // it already drove `getDexCallsParams` (and therefore `wethDeposit`/
-      // `wethWithdraw`). Keep the executor builder in lockstep so the wrap
-      // accounting and the bytecode wiring can't diverge.
-      dexParams.needWrapNative = newDex.needWrapNative;
-    } else {
-      dexParams = await dex!.getDexParam!(
+    const [remoteParams, localParams] = await Promise.all([
+      newDex &&
+        this.fetchRemoteDexParam({
+          dexKey: newDex.key,
+          srcToken,
+          destToken,
+          srcAmount: side === SwapSide.BUY ? se.srcAmount : srcAmount,
+          destAmount,
+          recipient,
+          data: se.data,
+          side,
+          executorAddress,
+          options: getDexParamOptions,
+        }).catch(e => {
+          // Under compareOnly the remote build is only a shadow of the local
+          // one, so it must not be able to take the swap down.
+          if (!compareOnly) throw e;
+          this.logger.warn(`[compareOnly] remote build failed`, e);
+          return undefined;
+        }),
+      dex?.getDexParam?.(
         srcToken,
         destToken,
         side === SwapSide.BUY ? se.srcAmount : srcAmount, // in other case we would not be able to make insert from amount on Ex3
@@ -926,10 +980,46 @@ export class GenericSwapTransactionBuilder {
         side,
         executorAddress,
         getDexParamOptions,
+      ),
+    ]);
+
+    if (localParams && typeof localParams.needWrapNative === 'function') {
+      localParams.needWrapNative = localParams.needWrapNative(
+        priceRoute,
+        swap,
+        se,
       );
     }
-    if (typeof dexParams.needWrapNative === 'function') {
-      dexParams.needWrapNative = dexParams.needWrapNative(priceRoute, swap, se);
+
+    if (localParams && remoteParams) {
+      const diffs = diffDexExchangeParams(localParams, remoteParams);
+      if (diffs.length) {
+        this.logger.warn(
+          `[compareOnly] local and remote dex params diverge for ${
+            newDex!.key
+          } on network ${this.dexAdapterService.network} (${swap.srcToken} -> ${
+            swap.destToken
+          }, ${side}): ${JSON.stringify(diffs)}`,
+        );
+      }
+    }
+
+    // A needUnwrapNative dex must self-normalize on WETH-dest hops to be
+    // group-fallback-safe: deliver on the executor with
+    // dexFuncHasRecipient=false (see FluidDex).
+    const dexParams = localParams ?? remoteParams;
+    if (!dexParams) {
+      throw new Error(
+        `[GenericSwapTransactionBuilder] no dex param available for ${se.exchange}`,
+      );
+    }
+
+    if (newDex) {
+      // The local `newDexs[*].needWrapNative` is the single source of truth:
+      // it already drove `getDexCallsParams` (and therefore `wethDeposit`/
+      // `wethWithdraw`). Keep the executor builder in lockstep so the wrap
+      // accounting and the bytecode wiring can't diverge.
+      dexParams.needWrapNative = newDex.needWrapNative;
     }
 
     // The fallback was redirected onto the executor: the flag builders must
@@ -944,6 +1034,21 @@ export class GenericSwapTransactionBuilder {
       wethDeposit,
       wethWithdraw,
     };
+  }
+
+  // A `compareOnly` dex is not guaranteed to have a local implementation on
+  // this network — the remote build covers that case.
+  protected findLocalTxBuilderDex(
+    exchange: string,
+  ): IDexTxBuilder<any, any> | undefined {
+    let dex: IDexTxBuilder<any, any>;
+    try {
+      dex = this.dexAdapterService.getTxBuilderDexByKey(exchange);
+    } catch (e) {
+      return undefined;
+    }
+
+    return dex.getDexParam ? dex : undefined;
   }
 
   // Turn a fallback DexExchangeParam into a DexExchangeBuildParam with its
