@@ -236,7 +236,7 @@ export class DexAdapterService {
     balancerV2Merge,
     balancerV3Merge,
     uniswapMerge,
-    // curveV1Merge,
+    curveV1Merge,
     uniswapV4Merge,
   ];
 
