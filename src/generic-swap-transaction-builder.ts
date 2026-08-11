@@ -26,7 +26,7 @@ import { AbiCoder, Interface } from '@ethersproject/abi';
 import joi from 'joi';
 import AugustusV6ABI from './abi/augustus-v6/ABI.json';
 import { validateAndCast } from './lib/validators';
-import { isETHAddress, uuidToBytes16 } from './utils';
+import { isAxiosError, isETHAddress, uuidToBytes16 } from './utils';
 import {
   DepositWithdrawReturn,
   IWethDepositorWithdrawer,
@@ -967,7 +967,15 @@ export class GenericSwapTransactionBuilder {
           // Under compareOnly the remote build is only a shadow of the local
           // one, so it must not be able to take the swap down.
           if (!compareOnly) throw e;
-          this.logger.warn(`[compareOnly] remote build failed`, e);
+          if (isAxiosError(e)) {
+            this.logger.warn(
+              `[compareOnly] remote build failed, body=${
+                e.config?.data
+              }, response=${JSON.stringify(e.response?.data)}`,
+            );
+          } else {
+            this.logger.warn(`[compareOnly] remote build failed`, e);
+          }
           return undefined;
         }),
       dex?.getDexParam?.(
@@ -994,12 +1002,24 @@ export class GenericSwapTransactionBuilder {
     if (localParams && remoteParams) {
       const diffs = diffDexExchangeParams(localParams, remoteParams);
       if (diffs.length) {
+        const params = {
+          dexKey: se.exchange,
+          srcToken,
+          destToken,
+          srcAmount: side === SwapSide.BUY ? se.srcAmount : srcAmount,
+          destAmount,
+          recipient,
+          data: se.data,
+          side,
+          executorAddress,
+          options: getDexParamOptions,
+        };
         this.logger.warn(
           `[compareOnly] local and remote dex params diverge for ${
             newDex!.key
-          } on network ${this.dexAdapterService.network} (${swap.srcToken} -> ${
-            swap.destToken
-          }, ${side}): ${JSON.stringify(diffs)}`,
+          } on network ${
+            this.dexAdapterService.network
+          } params=${JSON.stringify(params)}, diffs=${JSON.stringify(diffs)}`,
         );
       }
     }
