@@ -26,7 +26,7 @@ import { AbiCoder, Interface } from '@ethersproject/abi';
 import joi from 'joi';
 import AugustusV6ABI from './abi/augustus-v6/ABI.json';
 import { validateAndCast } from './lib/validators';
-import { isETHAddress, uuidToBytes16 } from './utils';
+import { isAxiosError, isETHAddress, uuidToBytes16 } from './utils';
 import {
   DepositWithdrawReturn,
   IWethDepositorWithdrawer,
@@ -967,7 +967,13 @@ export class GenericSwapTransactionBuilder {
           // Under compareOnly the remote build is only a shadow of the local
           // one, so it must not be able to take the swap down.
           if (!compareOnly) throw e;
-          this.logger.warn(`[compareOnly] remote build failed`, e);
+          if (isAxiosError(e)) {
+            this.logger.warn(
+              `[compareOnly] remote build failed, body=${e.config?.data}, response=${e.response?.data}`,
+            );
+          } else {
+            this.logger.warn(`[compareOnly] remote build failed`, e);
+          }
           return undefined;
         }),
       dex?.getDexParam?.(
