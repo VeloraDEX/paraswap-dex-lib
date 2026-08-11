@@ -969,7 +969,9 @@ export class GenericSwapTransactionBuilder {
           if (!compareOnly) throw e;
           if (isAxiosError(e)) {
             this.logger.warn(
-              `[compareOnly] remote build failed, body=${e.config?.data}, response=${e.response?.data}`,
+              `[compareOnly] remote build failed, body=${
+                e.config?.data
+              }, response=${JSON.stringify(e.response?.data)}`,
             );
           } else {
             this.logger.warn(`[compareOnly] remote build failed`, e);
@@ -999,13 +1001,25 @@ export class GenericSwapTransactionBuilder {
 
     if (localParams && remoteParams) {
       const diffs = diffDexExchangeParams(localParams, remoteParams);
+      const params = {
+        dexKey: se.exchange,
+        srcToken,
+        destToken,
+        srcAmount: side === SwapSide.BUY ? se.srcAmount : srcAmount,
+        destAmount,
+        recipient,
+        data: se.data,
+        side,
+        executorAddress,
+        options: getDexParamOptions,
+      };
       if (diffs.length) {
         this.logger.warn(
           `[compareOnly] local and remote dex params diverge for ${
             newDex!.key
-          } on network ${this.dexAdapterService.network} (${swap.srcToken} -> ${
-            swap.destToken
-          }, ${side}): ${JSON.stringify(diffs)}`,
+          } on network ${
+            this.dexAdapterService.network
+          } params=${JSON.stringify(params)}: ${JSON.stringify(diffs)}`,
         );
       }
     }
