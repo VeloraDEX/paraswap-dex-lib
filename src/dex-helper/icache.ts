@@ -40,6 +40,13 @@ export interface ICache {
     ttlSeconds: number,
   ): Promise<string | null>;
 
+  // Raw keys, like `mget`. Values are cached in-process for `ttlSeconds` and
+  // concurrent misses for the same key share a single round trip.
+  mgetAndCacheLocally(
+    keys: string[],
+    ttlSeconds: number,
+  ): Promise<Array<string | null>>;
+
   setexAndCacheLocally(
     dexKey: string,
     network: number,

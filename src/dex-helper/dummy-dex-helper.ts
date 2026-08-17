@@ -44,7 +44,7 @@ class DummyCache implements ICache {
   }
 
   async mget(keys: string[]): Promise<Array<string | null>> {
-    return Promise.all(keys.map(this.rawget));
+    return Promise.all(keys.map(key => this.rawget(key)));
   }
 
   async keys(
@@ -139,6 +139,13 @@ class DummyCache implements ICache {
       return this.storage[key];
     }
     return null;
+  }
+
+  async mgetAndCacheLocally(
+    keys: string[],
+    _ttlSeconds: number,
+  ): Promise<Array<string | null>> {
+    return this.mget(keys);
   }
 
   async setexAndCacheLocally(

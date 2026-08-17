@@ -13,6 +13,7 @@ import {
 import { BebopPricingUpdate, tokensResponseValidator } from './validators';
 import { WebSocketFetcher } from '../../lib/fetcher/wsFetcher';
 import { utils } from 'ethers';
+import { BEBOP_PRICES_WRITE_CHUNK_SIZE } from './constants';
 
 export function levels_from_flat_array(values: number[]): BebopLevel[] {
   const levels: BebopLevel[] = [];
@@ -21,6 +22,24 @@ export function levels_from_flat_array(values: number[]): BebopLevel[] {
   }
   return levels;
 }
+
+// The whole book is ~1MB on mainnet while pricing a swap needs at most 8 pairs,
+// so each pair is cached under its own key and read with `mget`. These build raw
+// Redis keys and must mirror the `dexKey_network_cacheKey` layout that `setex`
+// produces, since `msetex`/`mget` do not prefix keys themselves.
+export const pairPricesCacheKey = (
+  dexKey: string,
+  network: Network,
+  pricesCacheKey: string,
+  pair: string,
+) => `${dexKey}_${network}_${pricesCacheKey}_${pair}`;
+
+// Holds every pair currently in the book, for consumers that need all of them.
+export const pairsIndexCacheKey = (
+  dexKey: string,
+  network: Network,
+  pricesCacheKey: string,
+) => `${dexKey}_${network}_${pricesCacheKey}_index`;
 
 export class RateFetcher {
   private pricesFetcher: WebSocketFetcher<BebopPricingResponse>;
@@ -31,6 +50,10 @@ export class RateFetcher {
   private tokensAddrCacheKey: string;
   private tokensCacheKey: string;
   private tokensCacheTTL: number;
+
+  private writingPrices = false;
+  private queuedPrices: BebopPricingResponse | null = null;
+  private publishedPrices = false;
 
   constructor(
     private dexHelper: IDexHelper,
@@ -161,12 +184,85 @@ export class RateFetcher {
       normalizedPrices[pair.toLowerCase()] = levels;
     }
 
-    this.dexHelper.cache.setex(
-      this.dexKey,
-      this.network,
-      this.pricesCacheKey,
+    this.schedulePerPairWrite(normalizedPrices);
+  }
+
+  // Updates arrive faster than a full book can be written, and two overlapping
+  // writes could land out of order. Only ever run one, keeping just the newest
+  // update queued behind it.
+  private schedulePerPairWrite(prices: BebopPricingResponse): void {
+    this.queuedPrices = prices;
+
+    if (this.writingPrices) {
+      return;
+    }
+
+    this.writingPrices = true;
+    void (async () => {
+      try {
+        while (this.queuedPrices) {
+          const next = this.queuedPrices;
+          this.queuedPrices = null;
+          await this.cachePricesPerPair(next);
+        }
+      } finally {
+        this.writingPrices = false;
+      }
+    })();
+  }
+
+  // Whether this process has published a complete per-pair book at least once.
+  // Reading the flag back out of Redis would not prove it: reads go to a
+  // replica and could return a flag left behind by a previous writer.
+  hasPublishedPrices(): boolean {
+    return this.publishedPrices;
+  }
+
+  private async cachePricesPerPair(
+    prices: BebopPricingResponse,
+  ): Promise<void> {
+    const pairs = Object.keys(prices);
+    if (!pairs.length) {
+      return;
+    }
+
+    const args: (string | number)[] = [];
+    for (const pair of pairs) {
+      args.push(
+        pairPricesCacheKey(
+          this.dexKey,
+          this.network,
+          this.pricesCacheKey,
+          pair,
+        ),
+        JSON.stringify(prices[pair]),
+        this.pricesCacheTTL,
+      );
+    }
+
+    args.push(
+      pairsIndexCacheKey(this.dexKey, this.network, this.pricesCacheKey),
+      JSON.stringify(pairs),
       this.pricesCacheTTL,
-      JSON.stringify(normalizedPrices),
     );
+
+    const chunkSize = BEBOP_PRICES_WRITE_CHUNK_SIZE * 3;
+
+    try {
+      const chunks: Promise<void>[] = [];
+      for (let i = 0; i < args.length; i += chunkSize) {
+        chunks.push(
+          this.dexHelper.cache.msetex(...args.slice(i, i + chunkSize)),
+        );
+      }
+      await Promise.all(chunks);
+
+      this.publishedPrices = true;
+    } catch (e) {
+      this.logger.error(
+        `${this.dexKey}-${this.network}: failed to cache per-pair prices`,
+        e,
+      );
+    }
   }
 }
