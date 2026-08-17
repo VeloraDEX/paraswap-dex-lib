@@ -20,6 +20,9 @@ export class FairylaunchEventPool extends StatefulEventSubscriber<PoolState> {
   } = {};
 
   private knownBondingCurves: Set<string> = new Set();
+  
+  // CORRECCIÓN BOT 2: Estado por cada BondingCurve
+  private statesByCurve: Map<string, PoolState> = new Map();
 
   constructor(
     readonly dexKey: string,
@@ -59,23 +62,15 @@ export class FairylaunchEventPool extends StatefulEventSubscriber<PoolState> {
       return this.getEmptyState();
     }
 
+    // Registrar todas las BondingCurves y sus estados
     for (let i = 1; i <= totalLaunches; i++) {
       try {
         const launchInfo = await launchFactoryContract.methods.getLaunch(i).call({}, blockNumber);
         if (!launchInfo.graduated) {
-          this.knownBondingCurves.add(launchInfo.bondingCurve.toLowerCase());
-        }
-      } catch (e) {
-        this.logger.warn(`Error getting launch ${i}: ${(e as Error).message}`);
-      }
-    }
-
-    this.updateSubscriptions();
-
-    for (let i = 1; i <= totalLaunches; i++) {
-      try {
-        const launchInfo = await launchFactoryContract.methods.getLaunch(i).call({}, blockNumber);
-        if (!launchInfo.graduated) {
+          const curveAddress = launchInfo.bondingCurve.toLowerCase();
+          this.knownBondingCurves.add(curveAddress);
+          
+          // Obtener y guardar estado de esta curva
           const bondingCurveContract = new this.dexHelper.web3Provider.eth.Contract(
             BondingCurveABI as any,
             launchInfo.bondingCurve,
@@ -88,7 +83,7 @@ export class FairylaunchEventPool extends StatefulEventSubscriber<PoolState> {
             bondingCurveContract.methods.graduated().call({}, blockNumber),
           ]);
 
-          return {
+          const curveState: PoolState = {
             bondingCurve: launchInfo.bondingCurve,
             token: launchInfo.token,
             ethReserve: BigInt(ethReserve.toString()),
@@ -97,10 +92,20 @@ export class FairylaunchEventPool extends StatefulEventSubscriber<PoolState> {
             graduated,
             launchId: Number(launchInfo.launchId),
           };
+
+          this.statesByCurve.set(curveAddress, curveState);
         }
       } catch (e) {
-        this.logger.warn(`Error getting state for launch ${i}: ${(e as Error).message}`);
+        this.logger.warn(`Error getting launch ${i}: ${(e as Error).message}`);
       }
+    }
+
+    this.updateSubscriptions();
+
+    // Retornar el estado de la primera curva activa como estado principal
+    const firstActive = Array.from(this.statesByCurve.values()).find(s => !s.graduated);
+    if (firstActive) {
+      return firstActive;
     }
 
     return this.getEmptyState();
@@ -164,7 +169,8 @@ export class FairylaunchEventPool extends StatefulEventSubscriber<PoolState> {
   ): DeepReadonly<PoolState> | null {
     const { bondingCurve } = event.args;
     if (bondingCurve) {
-      this.knownBondingCurves.add(bondingCurve.toLowerCase());
+      const curveAddress = bondingCurve.toLowerCase();
+      this.knownBondingCurves.add(curveAddress);
       this.updateSubscriptions();
     }
     return state;
@@ -174,35 +180,56 @@ export class FairylaunchEventPool extends StatefulEventSubscriber<PoolState> {
     event: any,
     state: DeepReadonly<PoolState>,
   ): DeepReadonly<PoolState> | null {
-    const { ethReserveAfter, tokenAmount } = event.args;
-    return {
-      ...state,
-      ethReserve: BigInt(ethReserveAfter.toString()),
-      tokenReserve: state.tokenReserve - BigInt(tokenAmount.toString()),
-      totalTokensSold: state.totalTokensSold + BigInt(tokenAmount.toString()),
+    // CORRECCIÓN BOT 2: Usar la dirección del contrato que emitió el evento
+    const curveAddress = (event.address || state.bondingCurve).toLowerCase();
+    const curveState = this.statesByCurve.get(curveAddress) || state;
+    
+    const newState: PoolState = {
+      ...curveState,
+      bondingCurve: curveAddress,
+      ethReserve: BigInt(event.args.ethReserveAfter.toString()),
+      tokenReserve: curveState.tokenReserve - BigInt(event.args.tokenAmount.toString()),
+      totalTokensSold: curveState.totalTokensSold + BigInt(event.args.tokenAmount.toString()),
     };
+    
+    this.statesByCurve.set(curveAddress, newState);
+    return newState;
   }
 
   handleSell(
     event: any,
     state: DeepReadonly<PoolState>,
   ): DeepReadonly<PoolState> | null {
-    const { ethReserveAfter, tokenAmount } = event.args;
-    return {
-      ...state,
-      ethReserve: BigInt(ethReserveAfter.toString()),
-      tokenReserve: state.tokenReserve + BigInt(tokenAmount.toString()),
-      totalTokensSold: state.totalTokensSold - BigInt(tokenAmount.toString()),
+    // CORRECCIÓN BOT 2: Usar la dirección del contrato que emitió el evento
+    const curveAddress = (event.address || state.bondingCurve).toLowerCase();
+    const curveState = this.statesByCurve.get(curveAddress) || state;
+    
+    const newState: PoolState = {
+      ...curveState,
+      bondingCurve: curveAddress,
+      ethReserve: BigInt(event.args.ethReserveAfter.toString()),
+      tokenReserve: curveState.tokenReserve + BigInt(event.args.tokenAmount.toString()),
+      totalTokensSold: curveState.totalTokensSold - BigInt(event.args.tokenAmount.toString()),
     };
+    
+    this.statesByCurve.set(curveAddress, newState);
+    return newState;
   }
 
   handleGraduate(
     event: any,
     state: DeepReadonly<PoolState>,
   ): DeepReadonly<PoolState> | null {
-    return {
-      ...state,
+    // CORRECCIÓN BOT 2: Usar la dirección del contrato que emitió el evento
+    const curveAddress = (event.address || state.bondingCurve).toLowerCase();
+    const curveState = this.statesByCurve.get(curveAddress) || state;
+    
+    const newState: PoolState = {
+      ...curveState,
       graduated: true,
     };
+    
+    this.statesByCurve.set(curveAddress, newState);
+    return newState;
   }
 }

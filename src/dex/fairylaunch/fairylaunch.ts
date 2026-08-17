@@ -236,6 +236,12 @@ export class Fairylaunch
 
       if (pools.length === 0) return null;
 
+      // CORRECCIÓN BOT 1: Decidir quoteBuy vs quoteSell basado en srcToken
+      // En ParaSwap: SwapSide.BUY = exact-output, SwapSide.SELL = exact-input
+      // No significa "comprar con BNB" o "vender por BNB"
+      const isBuyingTokens = srcToken.address.toLowerCase() === BNB_ADDRESS;
+      const quoteFunction = isBuyingTokens ? 'quoteBuy' : 'quoteSell';
+
       const poolPrices = await Promise.all(
         pools.map(async (pool) => {
           const state = await this.getPoolState(pool, blockNumber);
@@ -251,7 +257,6 @@ export class Fairylaunch
               if (amount === 0n) return 0n;
               
               try {
-                const quoteFunction = side === SwapSide.BUY ? 'quoteBuy' : 'quoteSell';
                 const result = await contract.methods[quoteFunction](amount.toString()).call({}, blockNumber);
                 return BigInt(result.toString());
               } catch (e) {
@@ -261,7 +266,6 @@ export class Fairylaunch
             }),
           );
 
-          // CORRECCIÓN: Si TODOS los amounts son 0, retornar precios [0n] válidos
           const allZeroAmounts = amounts.every(a => a === 0n);
           const hasValidPrice = prices.some(p => p > 0n);
           if (!hasValidPrice && !allZeroAmounts) return null;
@@ -308,11 +312,13 @@ export class Fairylaunch
     side: SwapSide,
   ): AdapterExchangeParam {
     const { exchange } = data;
-    const isBuy = side === SwapSide.BUY;
+    
+    // CORRECCIÓN BOT 1: Decidir buy vs sell basado en srcToken
+    const isBuyingTokens = srcToken.toLowerCase() === BNB_ADDRESS;
     
     const deadline = Math.floor(Date.now() / 1000) + 1200;
     
-    const swapData = isBuy
+    const swapData = isBuyingTokens
       ? bondingCurveIface.encodeFunctionData('buy', [destAmount, deadline])
       : bondingCurveIface.encodeFunctionData('sell', [srcAmount, destAmount, deadline]);
 
@@ -327,7 +333,7 @@ export class Fairylaunch
       { 
         target: exchange, 
         callData: swapData, 
-        value: isBuy ? srcAmount : '0' 
+        value: isBuyingTokens ? srcAmount : '0' 
       },
     );
 
@@ -348,11 +354,13 @@ export class Fairylaunch
     side: SwapSide,
   ): DexExchangeParam {
     const { exchange } = data;
-    const isBuy = side === SwapSide.BUY;
+    
+    // CORRECCIÓN BOT 1: Decidir buy vs sell basado en srcToken
+    const isBuyingTokens = srcToken.toLowerCase() === BNB_ADDRESS;
     
     const deadline = Math.floor(Date.now() / 1000) + 1200;
     
-    const exchangeData = isBuy
+    const exchangeData = isBuyingTokens
       ? bondingCurveIface.encodeFunctionData('buy', [destAmount, deadline])
       : bondingCurveIface.encodeFunctionData('sell', [srcAmount, destAmount, deadline]);
 
