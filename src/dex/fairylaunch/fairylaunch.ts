@@ -237,8 +237,6 @@ export class Fairylaunch
       if (pools.length === 0) return null;
 
       // CORRECCIÓN BOT 1: Decidir quoteBuy vs quoteSell basado en srcToken
-      // En ParaSwap: SwapSide.BUY = exact-output, SwapSide.SELL = exact-input
-      // No significa "comprar con BNB" o "vender por BNB"
       const isBuyingTokens = srcToken.address.toLowerCase() === BNB_ADDRESS;
       const quoteFunction = isBuyingTokens ? 'quoteBuy' : 'quoteSell';
 
@@ -312,8 +310,6 @@ export class Fairylaunch
     side: SwapSide,
   ): AdapterExchangeParam {
     const { exchange } = data;
-    
-    // CORRECCIÓN BOT 1: Decidir buy vs sell basado en srcToken
     const isBuyingTokens = srcToken.toLowerCase() === BNB_ADDRESS;
     
     const deadline = Math.floor(Date.now() / 1000) + 1200;
@@ -354,8 +350,6 @@ export class Fairylaunch
     side: SwapSide,
   ): DexExchangeParam {
     const { exchange } = data;
-    
-    // CORRECCIÓN BOT 1: Decidir buy vs sell basado en srcToken
     const isBuyingTokens = srcToken.toLowerCase() === BNB_ADDRESS;
     
     const deadline = Math.floor(Date.now() / 1000) + 1200;
@@ -386,6 +380,18 @@ export class Fairylaunch
       const latestBlock = await this.dexHelper.web3Provider.eth.getBlockNumber();
       const launches = await this.getActiveLaunches(latestBlock);
       
+      // Obtener precio de BNB en USD usando el helper de Velora
+      const bnbToken = { address: ETHER_ADDRESS, decimals: 18 };
+      const oneBNB = BigInt(1e18);
+      
+      let bnbPriceUSD = 0;
+      try {
+        bnbPriceUSD = await this.dexHelper.getTokenUSDPrice(bnbToken, oneBNB);
+      } catch (e) {
+        this.logger.warn('Error getting BNB price from oracle, using 0', e);
+        bnbPriceUSD = 0;
+      }
+      
       const pools: PoolLiquidity[] = [];
 
       for (const launch of launches) {
@@ -394,7 +400,7 @@ export class Fairylaunch
           if (!state || state.graduated) continue;
 
           const liquidityBNB = Number(state.ethReserve) / 1e18;
-          const liquidityUSD = liquidityBNB * 300;
+          const liquidityUSD = liquidityBNB * bnbPriceUSD;
 
           pools.push({
             exchange: this.dexKey,

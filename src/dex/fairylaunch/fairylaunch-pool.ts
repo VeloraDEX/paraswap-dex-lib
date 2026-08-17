@@ -20,8 +20,6 @@ export class FairylaunchEventPool extends StatefulEventSubscriber<PoolState> {
   } = {};
 
   private knownBondingCurves: Set<string> = new Set();
-  
-  // CORRECCIÓN BOT 2: Estado por cada BondingCurve
   private statesByCurve: Map<string, PoolState> = new Map();
 
   constructor(
@@ -58,7 +56,12 @@ export class FairylaunchEventPool extends StatefulEventSubscriber<PoolState> {
       await launchFactoryContract.methods.totalLaunches().call({}, blockNumber),
     );
 
+    // CORRECCIÓN BUGBOT: SIEMPRE limpiar antes de regenerar
+    this.statesByCurve.clear();
+    this.knownBondingCurves.clear();
+
     if (totalLaunches === 0) {
+      this.updateSubscriptions();
       return this.getEmptyState();
     }
 
@@ -70,7 +73,6 @@ export class FairylaunchEventPool extends StatefulEventSubscriber<PoolState> {
           const curveAddress = launchInfo.bondingCurve.toLowerCase();
           this.knownBondingCurves.add(curveAddress);
           
-          // Obtener y guardar estado de esta curva
           const bondingCurveContract = new this.dexHelper.web3Provider.eth.Contract(
             BondingCurveABI as any,
             launchInfo.bondingCurve,
@@ -102,7 +104,6 @@ export class FairylaunchEventPool extends StatefulEventSubscriber<PoolState> {
 
     this.updateSubscriptions();
 
-    // Retornar el estado de la primera curva activa como estado principal
     const firstActive = Array.from(this.statesByCurve.values()).find(s => !s.graduated);
     if (firstActive) {
       return firstActive;
@@ -180,7 +181,6 @@ export class FairylaunchEventPool extends StatefulEventSubscriber<PoolState> {
     event: any,
     state: DeepReadonly<PoolState>,
   ): DeepReadonly<PoolState> | null {
-    // CORRECCIÓN BOT 2: Usar la dirección del contrato que emitió el evento
     const curveAddress = (event.address || state.bondingCurve).toLowerCase();
     const curveState = this.statesByCurve.get(curveAddress) || state;
     
@@ -200,7 +200,6 @@ export class FairylaunchEventPool extends StatefulEventSubscriber<PoolState> {
     event: any,
     state: DeepReadonly<PoolState>,
   ): DeepReadonly<PoolState> | null {
-    // CORRECCIÓN BOT 2: Usar la dirección del contrato que emitió el evento
     const curveAddress = (event.address || state.bondingCurve).toLowerCase();
     const curveState = this.statesByCurve.get(curveAddress) || state;
     
@@ -220,7 +219,6 @@ export class FairylaunchEventPool extends StatefulEventSubscriber<PoolState> {
     event: any,
     state: DeepReadonly<PoolState>,
   ): DeepReadonly<PoolState> | null {
-    // CORRECCIÓN BOT 2: Usar la dirección del contrato que emitió el evento
     const curveAddress = (event.address || state.bondingCurve).toLowerCase();
     const curveState = this.statesByCurve.get(curveAddress) || state;
     
