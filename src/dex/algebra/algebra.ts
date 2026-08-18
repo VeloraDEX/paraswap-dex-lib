@@ -612,7 +612,8 @@ export class Algebra extends SimpleExchange implements IDex<AlgebraData> {
       if (_srcAddress === _destAddress) return null;
 
       if (
-        !limitPools?.includes(this.getPoolIdentifier(_srcAddress, _destAddress))
+        limitPools &&
+        !limitPools.includes(this.getPoolIdentifier(_srcAddress, _destAddress))
       )
         return null;
 
