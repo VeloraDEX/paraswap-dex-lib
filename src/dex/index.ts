@@ -81,7 +81,6 @@ import { StkGHO } from './stkgho/stkgho';
 import { BalancerV3 } from './balancer-v3/balancer-v3';
 import { balancerV3Merge } from './balancer-v3/optimizer';
 import { SkyConverter } from './sky-converter/sky-converter';
-import { Cables } from './cables/cables';
 import { UsualBond } from './usual/usual-bond';
 import { UsdcUsualUSDC } from './usual/usdc-usual-usdc';
 import { UsualUSDCUsd0 } from './usual/usual-usdc-usd0';
@@ -182,7 +181,6 @@ const Dexes = [
   UsualBond,
   StkGHO,
   SkyConverter,
-  Cables,
   FluidDex,
   FluidDexLite,
   UsdcUsualUSDC,
