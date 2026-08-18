@@ -482,15 +482,16 @@ export class Dexalot
 
       const tokensAddr = (await this.getCachedTokensAddr()) || {};
       const pairKey = `${pairData.base}/${pairData.quote}`.toLowerCase();
-      if (
-        !(pairKey in priceMap) ||
-        !pools.includes(
-          this.getIdentifier(
-            tokensAddr[pairData.base.toLowerCase()],
-            tokensAddr[pairData.quote.toLowerCase()],
-          ),
-        )
-      ) {
+
+      const baseAddress = tokensAddr[pairData.base.toLowerCase()];
+      const quoteAddress = tokensAddr[pairData.quote.toLowerCase()];
+      if (!baseAddress || !quoteAddress) {
+        return null;
+      }
+
+      const poolIdentifier = this.getIdentifier(baseAddress, quoteAddress);
+
+      if (!(pairKey in priceMap) || !pools.includes(poolIdentifier)) {
         return null;
       }
 
@@ -526,7 +527,6 @@ export class Dexalot
       );
       const outDecimals =
         clobSide === ClobSide.BID ? baseToken.decimals : quoteToken.decimals;
-      const poolIdentifier = this.getIdentifier(pairData.base, pairData.quote);
 
       return [
         {
