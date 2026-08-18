@@ -352,6 +352,13 @@ export class Ekubo extends SimpleExchange implements IDex<EkuboData> {
     _blockNumber: number,
   ): Promise<string[]> {
     const [token0, token1] = convertAndSortTokens(srcToken, destToken);
+    return this.poolStringIdsForPair(token0, token1);
+  }
+
+  // Tracked pools for the pair. While the pool keys couldn't be fetched from
+  // the API, the most common pool parameters are assumed to exist so that
+  // pricing can fall back to initializing them on demand.
+  private poolStringIdsForPair(token0: bigint, token1: bigint): string[] {
     const stringIds = new Set(
       this.pools
         .entries()
@@ -694,31 +701,26 @@ export class Ekubo extends SimpleExchange implements IDex<EkuboData> {
   ): Promise<Iterable<IEkuboPool>> {
     const [token0, token1] = convertAndSortTokens(tokenA, tokenB);
 
-    let unfilteredPools: IteratorObject<IEkuboPool>;
-    if (typeof limitPools === 'undefined') {
-      unfilteredPools = this.pools.values();
-    } else {
-      const unfilteredPoolsArr: IEkuboPool[] = [];
+    const stringIds = limitPools ?? this.poolStringIdsForPair(token0, token1);
 
-      await Promise.all(
-        limitPools.map(async stringId => {
-          let pool = this.pools.get(stringId);
+    const unfilteredPools: IEkuboPool[] = [];
 
-          if (typeof pool === 'undefined') {
-            try {
-              pool = await this.initializeUntrackedPool(stringId, blockNumber);
-            } catch (err) {
-              this.logger.error(`Initializing pool ${stringId} failed: ${err}`);
-              return;
-            }
+    await Promise.all(
+      stringIds.map(async stringId => {
+        let pool = this.pools.get(stringId);
+
+        if (typeof pool === 'undefined') {
+          try {
+            pool = await this.initializeUntrackedPool(stringId, blockNumber);
+          } catch (err) {
+            this.logger.error(`Initializing pool ${stringId} failed: ${err}`);
+            return;
           }
+        }
 
-          unfilteredPoolsArr.push(pool);
-        }),
-      );
-
-      unfilteredPools = Iterator.from(unfilteredPoolsArr);
-    }
+        unfilteredPools.push(pool);
+      }),
+    );
 
     return unfilteredPools.filter(
       pool => pool.key.token0 === token0 && pool.key.token1 === token1,
