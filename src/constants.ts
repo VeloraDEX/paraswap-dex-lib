@@ -42,6 +42,7 @@ export enum Network {
   UNICHAIN = 130,
   POLYGON = 137,
   SONIC = 146,
+  HYPEREVM = 999,
   BASE = 8453,
   PLASMA = 9745,
   ARBITRUM = 42161,
