@@ -1,7 +1,8 @@
-import { PoolKey } from '../types';
+import { Pool, PoolKey } from '../types';
 import { IDexHelper } from '../../../dex-helper';
 import { Network } from '../../../constants';
-import { Logger } from '../../../types';
+import { Logger, PoolLiquidity } from '../../../types';
+import { SwapSide } from '@paraswap/core';
 
 export type HookConfig<HookParams> = {
   [network: number]: HookParams;
@@ -54,9 +55,25 @@ export interface IBaseHook {
 
   getHookPermissions(): HooksPermissions;
 
-  registerPool(poolId: string, poolKey: PoolKey): void;
+  registerPool(poolId: string, poolKey: PoolKey): boolean;
 
   initialize(blockNumber: number): Promise<void>;
+
+  getPricesVolume?(params: {
+    pool: Pool;
+    amounts: bigint[];
+    zeroForOne: boolean;
+    side: SwapSide;
+    blockNumber: number;
+    routerAddress: string;
+  }): Promise<bigint[] | null>;
+
+  getTopPoolsForToken?(
+    tokenAddress: string,
+    limit: number,
+    blockNumber: number,
+    dexKey: string,
+  ): Promise<PoolLiquidity[]>;
 
   beforeInitialize?(sender: string, key: PoolKey, sqrtPriceX96: string): string; // bytes4
 
