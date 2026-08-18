@@ -1,5 +1,8 @@
 export const BEBOP_INIT_TIMEOUT_MS = 5000;
 export const BEBOP_PRICES_CACHE_TTL = 10;
+export const BEBOP_PRICES_LOCAL_CACHE_TTL = 2;
+// Number of pair keys written per msetex round trip.
+export const BEBOP_PRICES_WRITE_CHUNK_SIZE = 200;
 export const BEBOP_TOKENS_CACHE_TTL = 60;
 export const BEBOP_TOKENS_POLLING_INTERVAL_MS = 30 * 1000;
 export const BEBOP_API_URL = 'https://api.bebop.xyz';

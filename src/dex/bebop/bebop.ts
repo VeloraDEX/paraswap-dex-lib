@@ -32,12 +32,17 @@ import settlementABI from '../../abi/bebop/BebopSettlement.abi.json';
 import { SimpleExchangeWithRestrictions } from '../simple-exchange-with-restrictions';
 import { BebopConfig } from './config';
 import { Interface } from 'ethers/lib/utils';
-import { RateFetcher } from './rate-fetcher';
+import {
+  pairPricesCacheKey,
+  pairsIndexCacheKey,
+  RateFetcher,
+} from './rate-fetcher';
 import {
   BEBOP_API_URL,
   BEBOP_GAS_COST,
   BEBOP_INIT_TIMEOUT_MS,
   BEBOP_PRICES_CACHE_TTL,
+  BEBOP_PRICES_LOCAL_CACHE_TTL,
   BEBOP_QUOTE_TIMEOUT_MS,
   BEBOP_TOKENS_CACHE_TTL,
   BEBOP_TOKENS_POLLING_INTERVAL_MS,
@@ -224,13 +229,13 @@ export class Bebop
   private async waitForInitialState(timeoutMs: number): Promise<void> {
     const deadline = Date.now() + timeoutMs;
 
+    // Only the writer reaches this. Ask the fetcher whether *it* has published
+    // a book — reading the flag back would hit a replica and could return one
+    // left behind by a previous writer.
     while (Date.now() < deadline) {
-      const [prices, tokens] = await Promise.all([
-        this.getCachedPrices(),
-        this.getCachedTokens(),
-      ]);
+      const tokens = await this.getCachedTokens();
 
-      if (prices && tokens) {
+      if (this.rateFetcher.hasPublishedPrices() && tokens) {
         return;
       }
 
@@ -276,6 +281,23 @@ export class Bebop
     };
   }
 
+  // Every pair `calculateInstructions` can consult: direct, inverse, and both
+  // legs through each middle token.
+  private getRelevantPairs(srcToken: Token, destToken: Token): string[] {
+    const src = srcToken.address.toLowerCase();
+    const dest = destToken.address.toLowerCase();
+
+    const pairs = [`${src}/${dest}`, `${dest}/${src}`];
+
+    for (const middleToken of BebopConfig['Bebop'][this.network].middleTokens) {
+      const middle = middleToken.toLowerCase();
+      pairs.push(`${src}/${middle}`, `${dest}/${middle}`);
+    }
+
+    // src or dest can itself be a middle token
+    return [...new Set(pairs)];
+  }
+
   // considers only swapside.sell
   async calculateInstructions(
     srcToken: Token,
@@ -286,10 +308,11 @@ export class Bebop
       return [];
     }
 
-    const prices = await this.getCachedPrices();
-    if (!prices) {
-      throw new Error('No prices available');
-    }
+    // An empty result means Bebop does not quote any of these pairs, which is
+    // the common case and not an error.
+    const prices = await this.getCachedPricesForPairs(
+      this.getRelevantPairs(srcToken, destToken),
+    );
 
     const instructions = [];
 
@@ -690,7 +713,7 @@ export class Bebop
     const normalizedTokenAddress = this.dexHelper.config
       .wrapETH(_tokenAddress)
       .toLowerCase();
-    const prices = await this.getCachedPrices();
+    const prices = await this.getAllCachedPrices();
 
     if (!prices) {
       return [];
@@ -1003,19 +1026,48 @@ export class Bebop
     }
   }
 
-  async getCachedPrices(): Promise<BebopPricingResponse | null> {
-    const cachedPrices = await this.dexHelper.cache.getAndCacheLocally(
-      this.dexKey,
-      this.network,
-      this.pricesCacheKey,
-      2,
+  // Reads only the given pairs. A pair with no key is simply not quoted.
+  async getCachedPricesForPairs(
+    pairs: string[],
+  ): Promise<BebopPricingResponse> {
+    const values = await this.dexHelper.cache.mgetAndCacheLocally(
+      pairs.map(pair =>
+        pairPricesCacheKey(
+          this.dexKey,
+          this.network,
+          this.pricesCacheKey,
+          pair,
+        ),
+      ),
+      BEBOP_PRICES_LOCAL_CACHE_TTL,
     );
 
-    if (cachedPrices) {
-      return JSON.parse(cachedPrices) as BebopPricingResponse;
+    const prices: BebopPricingResponse = {};
+    values.forEach((value, i) => {
+      if (value) {
+        prices[pairs[i]] = JSON.parse(value) as BebopPair;
+      }
+    });
+
+    return prices;
+  }
+
+  // Whole book, assembled from the per-pair keys via the index.
+  async getAllCachedPrices(): Promise<BebopPricingResponse | null> {
+    const index = await this.dexHelper.cache.rawget(
+      pairsIndexCacheKey(this.dexKey, this.network, this.pricesCacheKey),
+    );
+
+    // No index means nothing is writing the cache. Safe to log here: this runs
+    // on a pool-tracker interval, not per request.
+    if (!index) {
+      this.logger.warn(
+        `${this.dexKey}-${this.network}: no pairs index in cache, prices unavailable`,
+      );
+      return null;
     }
 
-    return null;
+    return this.getCachedPricesForPairs(JSON.parse(index) as string[]);
   }
 
   async getCachedTokens(): Promise<TokenDataMap | null> {
