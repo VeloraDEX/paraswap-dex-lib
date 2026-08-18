@@ -173,7 +173,7 @@ export class GenericRFQ extends ParaSwapLimitOrders {
       _destToken.address,
     );
 
-    if (!limitPools?.includes(expectedIdentifier)) {
+    if (limitPools && !limitPools.includes(expectedIdentifier)) {
       return null;
     }
 
