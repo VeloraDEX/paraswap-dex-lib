@@ -635,6 +635,8 @@ export class Camelot
     },
   ): Promise<ExchangePrices<SolidlyData> | null> {
     try {
+      if (side === SwapSide.BUY) return null;
+
       const from = this.dexHelper.config.wrapETH(_from);
       const to = this.dexHelper.config.wrapETH(_to);
 
@@ -656,8 +658,7 @@ export class Camelot
         transferFees.srcDexFee,
       );
 
-      if (!pairParam || (side === SwapSide.BUY && pairParam.stable))
-        return null;
+      if (!pairParam) return null;
 
       const unitAmount = getBigIntPow(isSell ? from.decimals : to.decimals);
 

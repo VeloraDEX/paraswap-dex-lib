@@ -49,7 +49,7 @@ const {
   utils: { hexlify, hexConcat, hexZeroPad },
 } = ethers;
 
-const REMOTE_DEX_PARAM_TIMEOUT_MS = 10_000;
+const REMOTE_DEX_PARAM_TIMEOUT_MS = 2_000;
 
 // `.empty(null)` makes joi treat a JSON `null` as missing (i.e. undefined),
 // which is what downstream `value !== undefined` checks expect — see
@@ -969,9 +969,9 @@ export class GenericSwapTransactionBuilder {
           if (!compareOnly) throw e;
           if (isAxiosError(e)) {
             this.logger.warn(
-              `[compareOnly] remote build failed, body=${
+              `[compareOnly] remote build failed for ${newDex.key}, body=${
                 e.config?.data
-              }, response=${JSON.stringify(e.response?.data)}`,
+              }, response=${JSON.stringify(e.response?.data) ?? e.message}`,
             );
           } else {
             this.logger.warn(`[compareOnly] remote build failed`, e);
