@@ -50,6 +50,14 @@ const RingV2Config: DexConfigMap<DexParams> = {
       feeCode: 30,
       router: '0x39d1d8fcC5E6EEAf567Bce4e29B94fec956D3519',
     },
+    [Network.BSC]: {
+      factoryAddress: '0x4De602A30Ad7fEf8223dcf67A9fB704324C4dd9B',
+      initCode:
+        '0xa7ae6a5ec37f0c21bbdac560794258c4089b8ae3ffa6e3909b53c6091764a676',
+      poolGasCost: 80 * 1000,
+      feeCode: 30,
+      router: '0x20504f37A95eF80e3FC7476c4801fb39AaE6bAd0',
+    },
   },
 };
 
@@ -60,6 +68,11 @@ const FewWrappedTokenConfig: DexConfigMap<{
   RingV2: {
     [Network.MAINNET]: {
       fewWrapFactory: '0x7D86394139bf1122E82FDF45Bb4e3b038A4464DD',
+      initCode:
+        '0x2bdba5734ddf754fb149ef1faa937956c52cfd1f24d68163a95f42d08ec06d38',
+    },
+    [Network.BSC]: {
+      fewWrapFactory: '0xEeE400Eabfba8F60f4e6B351D8577394BeB972CD',
       initCode:
         '0x2bdba5734ddf754fb149ef1faa937956c52cfd1f24d68163a95f42d08ec06d38',
     },
