@@ -17,7 +17,7 @@ describe('GlueHook', () => {
       c.hookAddress.toLowerCase(),
     );
     expect(new Set(addresses).size).toBe(1);
-    expect(hook.address).toBe('0xb216070c3509047ea597e2e626a29cea427a60c8');
+    expect(hook.address).toBe('0x0f41715dc432692b66a5adf8dcfef6ac407b20c8');
   });
 
   it('afterSwap is a pure passthrough of the pool output (exact input)', () => {

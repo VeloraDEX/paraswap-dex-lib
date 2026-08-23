@@ -3,9 +3,9 @@ import { HookParams } from './types';
 import { Network } from '../../../../constants';
 
 // GlueHook is deployed via CREATE from a nonce-0 deployer, so it lives at the SAME
-// address on every chain (also live on Blast, Celo, Monad, X Layer, World Chain, Zora,
-// Soneium, MegaETH, Robinhood and Tempo beyond the networks configured here).
-const GLUEHOOK_ADDRESS = '0xb216070c3509047ea597e2e626a29cea427a60c8';
+// address on every chain (also live on X Layer, World Chain, Soneium, MegaETH and
+// Robinhood beyond the networks configured here).
+const GLUEHOOK_ADDRESS = '0x0f41715dc432692b66a5adf8dcfef6ac407b20c8';
 
 export const GlueHookConfig: HookConfig<HookParams> = {
   [Network.MAINNET]: { hookAddress: GLUEHOOK_ADDRESS },
