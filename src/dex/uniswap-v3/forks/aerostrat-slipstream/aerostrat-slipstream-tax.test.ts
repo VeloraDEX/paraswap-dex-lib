@@ -40,13 +40,16 @@ describe('AerostratSlipstream tax handling', () => {
     amounts: bigint[],
     side: SwapSide,
     taxOnPoolInput: boolean,
+    taxBps = 1000n,
   ): bigint[] =>
-    (aerostrat as any).toPoolAmounts(amounts, side, taxOnPoolInput);
+    (aerostrat as any).toPoolAmounts(amounts, side, taxOnPoolInput, taxBps);
   const toUserPrices = (
     prices: bigint[],
     side: SwapSide,
     taxOnPoolInput: boolean,
-  ): bigint[] => (aerostrat as any).toUserPrices(prices, side, taxOnPoolInput);
+    taxBps = 1000n,
+  ): bigint[] =>
+    (aerostrat as any).toUserPrices(prices, side, taxOnPoolInput, taxBps);
 
   describe('supported swaps', () => {
     it('supports the two routable quadrants', () => {
@@ -309,6 +312,39 @@ describe('AerostratSlipstream tax handling', () => {
       );
 
       expect(spy.mock.calls[0][3]).toEqual(priced.toString());
+    });
+
+    it('stamps the quote with the rate it priced at, even if the rate then moves', async () => {
+      // The refresh interval can fire during super.getPricesVolume; a quote whose
+      // amounts and recorded rate disagree would be sized wrong at build time.
+      setTax(1000n);
+      const spy = jest
+        .spyOn(UniswapV3.prototype, 'getPricesVolume')
+        .mockImplementation(async () => {
+          // simulate the interval landing mid-await
+          setTax(2000n);
+          return [
+            {
+              unit: 0n,
+              prices: [0n, 1n],
+              data: { path: [{ tokenIn: '', tokenOut: '', fee: '500' }] },
+              exchange: 'AerostratSlipstream',
+              gasCost: [0, 1],
+              poolAddresses: ['0x0'],
+            },
+          ] as any;
+        });
+
+      const out = await aerostrat.getPricesVolume(
+        AEROSTRAT,
+        AERO,
+        [0n, BI_POWS[18]],
+        SwapSide.SELL,
+        1,
+      );
+
+      expect(spy).toHaveBeenCalled();
+      expect((out![0].data as any).taxBps).toEqual('1000');
     });
 
     it('refuses to build a buy against a route priced without a rate', () => {

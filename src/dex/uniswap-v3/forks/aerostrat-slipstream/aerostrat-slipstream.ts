@@ -106,8 +106,12 @@ export class AerostratSlipstream extends VelodromeSlipstream {
     return this.taxBps !== undefined && this.taxBps < BPS_MAX_VALUE;
   }
 
-  private applyTax(amounts: bigint[], side: SwapSide): bigint[] {
-    return applyTransferFee(amounts, side, Number(this.taxBps!), 1);
+  private applyTax(
+    amounts: bigint[],
+    side: SwapSide,
+    taxBps: bigint,
+  ): bigint[] {
+    return applyTransferFee(amounts, side, Number(taxBps), 1);
   }
 
   protected async updateTax(): Promise<void> {
@@ -213,18 +217,6 @@ export class AerostratSlipstream extends VelodromeSlipstream {
     ).filter(pool => this.isTaxedPool(pool));
   }
 
-  protected prepareData(
-    srcAddress: string,
-    destAddress: string,
-    pool: UniswapV3EventPool,
-    state: PoolState,
-  ): AerostratSlipstreamData {
-    return {
-      ...super.prepareData(srcAddress, destAddress, pool, state),
-      taxBps: this.taxBps!.toString(),
-    };
-  }
-
   async getPoolIdentifiers(
     srcToken: Token,
     destToken: Token,
@@ -272,10 +264,18 @@ export class AerostratSlipstream extends VelodromeSlipstream {
 
     const taxOnPoolInput = this.isAerostrat(srcToken.address);
 
+    /*
+     * Snapshot the rate once. The refresh interval can fire during the await
+     * below, and a quote whose amounts, prices and recorded rate came from
+     * different rates would be internally inconsistent - getDexParam trusts the
+     * recorded one to size the swap.
+     */
+    const taxBps = this.taxBps!;
+
     const results = await super.getPricesVolume(
       srcToken,
       destToken,
-      this.toPoolAmounts(amounts, side, taxOnPoolInput),
+      this.toPoolAmounts(amounts, side, taxOnPoolInput, taxBps),
       side,
       blockNumber,
       limitPools,
@@ -285,9 +285,10 @@ export class AerostratSlipstream extends VelodromeSlipstream {
 
     return results.map(result => ({
       ...result,
-      unit: this.toUserPrices([result.unit], side, taxOnPoolInput)[0],
-      prices: this.toUserPrices(result.prices, side, taxOnPoolInput),
+      unit: this.toUserPrices([result.unit], side, taxOnPoolInput, taxBps)[0],
+      prices: this.toUserPrices(result.prices, side, taxOnPoolInput, taxBps),
       gasCost: this.addRouterOverhead(result.gasCost, taxOnPoolInput),
+      data: { ...result.data, taxBps: taxBps.toString() },
     }));
   }
 
@@ -297,10 +298,13 @@ export class AerostratSlipstream extends VelodromeSlipstream {
     srcToken: Token,
     destToken: Token,
   ): bigint {
+    // Called by the parent mid-pricing, so it reads the live rate rather than
+    // the caller's snapshot. unit only ranks venues; it never sizes a fill.
     return this.toPoolAmounts(
       [super.getUnitAmount(side, srcToken, destToken)],
       side,
       this.isAerostrat(srcToken.address),
+      this.taxBps!,
     )[0];
   }
 
@@ -323,9 +327,11 @@ export class AerostratSlipstream extends VelodromeSlipstream {
     amounts: bigint[],
     side: SwapSide,
     taxOnPoolInput: boolean,
+    taxBps: bigint,
   ): bigint[] {
-    if (taxOnPoolInput) return this.applyTax(amounts, SwapSide.SELL);
-    if (side === SwapSide.BUY) return this.applyTax(amounts, SwapSide.BUY);
+    if (taxOnPoolInput) return this.applyTax(amounts, SwapSide.SELL, taxBps);
+    if (side === SwapSide.BUY)
+      return this.applyTax(amounts, SwapSide.BUY, taxBps);
     return amounts;
   }
 
@@ -333,9 +339,10 @@ export class AerostratSlipstream extends VelodromeSlipstream {
     prices: bigint[],
     side: SwapSide,
     taxOnPoolInput: boolean,
+    taxBps: bigint,
   ): bigint[] {
     if (!taxOnPoolInput && side === SwapSide.SELL) {
-      return this.applyTax(prices, SwapSide.SELL);
+      return this.applyTax(prices, SwapSide.SELL, taxBps);
     }
     return prices;
   }
