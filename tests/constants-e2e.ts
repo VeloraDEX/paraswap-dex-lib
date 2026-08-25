@@ -1702,6 +1702,10 @@ export const Tokens: {
     },
   },
   [Network.BASE]: {
+    AEROSTRAT: {
+      address: '0x1A85b97F8b0E1CEE4D5500E093F5970a2aeB3fB8',
+      decimals: 18,
+    },
     yoETH: {
       address: '0x3a43aec53490cb9fa922847385d82fe25d0e9de7',
       decimals: 18,
@@ -2378,6 +2382,9 @@ export const Holders: {
     waGnoGNO: '0x9Ec6472Fc33D9a5D17613484aDF0295A001fDF32',
   },
   [Network.BASE]: {
+    // Plain EOA, neither whitelisted nor taxlisted, so the transfer tax applies
+    // to it exactly as it would to a real seller.
+    AEROSTRAT: '0xf5c4f3dc02c3fb9279495a8fef7b0741da956157',
     WETH: '0x24D61e5411C143135068557AfD06546d81A751b8',
     PRIME: '0xe3879b7359695f802d6FD56Bb76fD82C362Dafd6',
     ETH: '0xd34ea7278e6bd48defe656bbe263aef11101469c',

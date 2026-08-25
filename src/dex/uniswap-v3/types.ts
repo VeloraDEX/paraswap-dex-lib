@@ -68,6 +68,9 @@ export type UniswapV3Data = {
     tokenOut: Address;
     fee: NumberAsString;
     currentFee?: NumberAsString;
+    // Set by Slipstream forks, whose pools are keyed by tickSpacing rather than
+    // fee. Absent on the RPC pricing fallback, which is how that path is spotted.
+    tickSpacing?: NumberAsString;
   }[];
   isApproved?: boolean;
 };
@@ -97,6 +100,13 @@ export type DexParams = {
   factoryImplementation?: typeof UniswapV3Factory;
   decodeStateMultiCallResultWithRelativeBitmaps?: DecodeStateMultiCallFunc;
   liquidityField?: string;
+  // Pool addresses (lowercased) this dexKey must never quote. Used to stop a
+  // generic fork from pricing a pool that a specialised dexKey owns.
+  excludedPools?: string[];
+  // Fee-on-transfer token and the router able to sell it, for forks that price
+  // a taxed pool. Both are set together or not at all.
+  aerostratToken?: Address;
+  aerostratRouter?: Address;
 };
 
 export type UniswapV3SimpleSwapSellParam = {

@@ -503,6 +503,20 @@ export class UniswapV3
     return !!pool;
   }
 
+  // Pools owned by a more specialised dexKey (e.g. a fee-on-transfer fork) must
+  // not also be quoted by the generic fork, otherwise the untaxed quote always
+  // outbids the correct one.
+  protected isExcludedPool(poolAddress: Address): boolean {
+    // Both sides are lowercased here rather than relying on config
+    // normalization: Slipstream forks re-assign the raw config as a constructor
+    // parameter property after super() runs, so a checksummed address in
+    // excludedPools would otherwise silently never match.
+    const target = poolAddress.toLowerCase();
+    return !!this.config.excludedPools?.some(
+      pool => pool.toLowerCase() === target,
+    );
+  }
+
   async getPoolIdentifiers(
     srcToken: Token,
     destToken: Token,
@@ -521,7 +535,7 @@ export class UniswapV3
 
     const pools = (
       await this.getPoolsForIdentifiers(_srcAddress, _destAddress, blockNumber)
-    ).filter(pool => pool);
+    ).filter(pool => pool && !this.isExcludedPool(pool.poolAddress));
 
     if (pools.length === 0) return [];
 
@@ -757,6 +771,10 @@ export class UniswapV3
           )
         ).filter(isTruthy);
       }
+
+      selectedPools = selectedPools.filter(
+        pool => !this.isExcludedPool(pool.poolAddress),
+      );
 
       if (selectedPools.length === 0) return null;
 
@@ -1397,6 +1415,7 @@ export class UniswapV3
     });
 
     return pools
+      .filter(pool => !this.isExcludedPool(pool.address))
       .sort((a, b) => b.liquidityUSD - a.liquidityUSD)
       .slice(0, limit);
   }
@@ -1466,6 +1485,9 @@ export class UniswapV3
       decodeStateMultiCallResultWithRelativeBitmaps:
         this.config.decodeStateMultiCallResultWithRelativeBitmaps,
       liquidityField: this.config.liquidityField,
+      excludedPools: this.config.excludedPools?.map(pool => pool.toLowerCase()),
+      aerostratToken: this.config.aerostratToken?.toLowerCase(),
+      aerostratRouter: this.config.aerostratRouter?.toLowerCase(),
     };
     return newConfig;
   }

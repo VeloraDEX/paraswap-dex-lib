@@ -15,6 +15,8 @@ import { Address } from '@paraswap/core';
 import { UniswapV3Config } from './config';
 import { VelodromeSlipstream } from './forks/velodrome-slipstream/velodrome-slipstream';
 import { PharaohV3 } from './forks/pharaoh-v3/pharaoh-v3';
+import { AerostratSlipstream } from './forks/aerostrat-slipstream/aerostrat-slipstream';
+import AerostratTokenABI from '../../abi/aerostrat/AerostratToken.abi.json';
 
 const network = Network.POLYGON;
 const TokenASymbol = 'USDC';
@@ -2996,6 +2998,237 @@ describe('Slipstream', () => {
 
         expect(poolLiquidity).toEqual([]); // no subgraph
       });
+    });
+  });
+  describe('AerostratSlipstream', () => {
+    const dexKey = 'AerostratSlipstream';
+    const network = Network.BASE;
+    const dexHelper = new DummyDexHelper(network);
+
+    const AEROSTRAT = Tokens[network]['AEROSTRAT'];
+    const AERO = Tokens[network]['AERO'];
+
+    const config = UniswapV3Config[dexKey][network];
+    const quoterIface = new Interface(VelodromeSlipstreamQuoterV2ABI);
+    const tokenIface = new Interface(AerostratTokenABI);
+    const TICK_SPACING = 100;
+    const BPS = 10000n;
+
+    let blockNumber: number;
+    let aerostrat: AerostratSlipstream;
+
+    beforeEach(async () => {
+      blockNumber = await dexHelper.web3Provider.eth.getBlockNumber();
+      aerostrat = new AerostratSlipstream(network, dexKey, dexHelper);
+      // The module refuses to quote until it has read the transfer tax. Read it
+      // directly rather than running initializePricing, which additionally
+      // subscribes to factory events - the other Slipstream suites here rely on
+      // lazy pool discovery for the same reason.
+      await (aerostrat as any).updateTax();
+    });
+
+    const readTaxBps = async (): Promise<bigint> => {
+      const data = await dexHelper.provider.call(
+        {
+          to: AEROSTRAT.address,
+          data: tokenIface.encodeFunctionData('getCurrentFee'),
+        },
+        blockNumber,
+      );
+      return BigInt(
+        tokenIface.decodeFunctionResult('getCurrentFee', data)[0].toString(),
+      );
+    };
+
+    // QuoterV2 reverts out of its callback before any token transfer, so it is
+    // not itself taxed and returns raw pool math. That makes it a valid oracle
+    // for the post-tax amount the router actually swaps.
+    const quoteExactInput = async (
+      amountIn: bigint,
+      tokenIn = AEROSTRAT.address,
+      tokenOut = AERO.address,
+    ): Promise<bigint> => {
+      const data = await dexHelper.provider.call(
+        {
+          to: config.quoter,
+          data: quoterIface.encodeFunctionData('quoteExactInputSingle', [
+            {
+              tokenIn,
+              tokenOut,
+              amountIn: amountIn.toString(),
+              tickSpacing: TICK_SPACING,
+              sqrtPriceLimitX96: 0,
+            },
+          ]),
+        },
+        blockNumber,
+      );
+      return BigInt(
+        quoterIface
+          .decodeFunctionResult('quoteExactInputSingle', data)[0]
+          .toString(),
+      );
+    };
+
+    const quoteExactOutput = async (amountOut: bigint): Promise<bigint> => {
+      const data = await dexHelper.provider.call(
+        {
+          to: config.quoter,
+          data: quoterIface.encodeFunctionData('quoteExactOutputSingle', [
+            {
+              tokenIn: AERO.address,
+              tokenOut: AEROSTRAT.address,
+              amount: amountOut.toString(),
+              tickSpacing: TICK_SPACING,
+              sqrtPriceLimitX96: 0,
+            },
+          ]),
+        },
+        blockNumber,
+      );
+      return BigInt(
+        quoterIface
+          .decodeFunctionResult('quoteExactOutputSingle', data)[0]
+          .toString(),
+      );
+    };
+
+    it('prices a SELL against the post-tax input', async () => {
+      const amounts = [0n, 1000n * BI_POWS[18], 2000n * BI_POWS[18]];
+
+      const pools = await aerostrat.getPoolIdentifiers(
+        AEROSTRAT,
+        AERO,
+        SwapSide.SELL,
+        blockNumber,
+      );
+      expect(pools.length).toBeGreaterThan(0);
+
+      const poolPrices = await aerostrat.getPricesVolume(
+        AEROSTRAT,
+        AERO,
+        amounts,
+        SwapSide.SELL,
+        blockNumber,
+        pools,
+      );
+      expect(poolPrices).not.toBeNull();
+      checkPoolPrices(poolPrices!, amounts, SwapSide.SELL, dexKey);
+
+      // Read the tax rather than hardcoding it, so the assertion exercises the
+      // module's own refresh and does not silently pass if it never ran.
+      const taxBps = await readTaxBps();
+      expect(taxBps).toBeGreaterThan(0n);
+
+      for (let i = 0; i < amounts.length; i++) {
+        if (amounts[i] === 0n) continue;
+        const postTax = amounts[i] - (amounts[i] * taxBps) / BPS;
+        expect(poolPrices![0].prices[i]).toEqual(
+          await quoteExactInput(postTax),
+        );
+      }
+    });
+
+    it('quotes below the untaxed price for the same pool', async () => {
+      const amount = 1000n * BI_POWS[18];
+      const poolPrices = await aerostrat.getPricesVolume(
+        AEROSTRAT,
+        AERO,
+        [0n, amount],
+        SwapSide.SELL,
+        blockNumber,
+      );
+
+      expect(poolPrices).not.toBeNull();
+      expect(poolPrices![0].prices[1]).toBeLessThan(
+        await quoteExactInput(amount),
+      );
+    });
+
+    it('delivers less than the pool emits when buying AEROSTRAT', async () => {
+      // AERO in, AEROSTRAT out: the pool prices normally and the recipient is
+      // taxed on the way out, so the quote must sit below the raw pool output.
+      const amount = BI_POWS[18];
+
+      const poolPrices = await aerostrat.getPricesVolume(
+        AERO,
+        AEROSTRAT,
+        [0n, amount],
+        SwapSide.SELL,
+        blockNumber,
+      );
+      expect(poolPrices).not.toBeNull();
+
+      const untaxed = await quoteExactInput(
+        amount,
+        AERO.address,
+        AEROSTRAT.address,
+      );
+      const taxBps = await readTaxBps();
+
+      expect(poolPrices![0].prices[1]).toEqual(
+        untaxed - (untaxed * taxBps) / BPS,
+      );
+    });
+
+    it('requires more input for an exact-output buy of AEROSTRAT', async () => {
+      // To leave the user with `amount` the pool must emit amount/(1-tax), which
+      // costs strictly more AERO than the untaxed exact-output quote.
+      const amount = 1000n * BI_POWS[18];
+
+      const poolPrices = await aerostrat.getPricesVolume(
+        AERO,
+        AEROSTRAT,
+        [0n, amount],
+        SwapSide.BUY,
+        blockNumber,
+      );
+      expect(poolPrices).not.toBeNull();
+
+      const taxBps = await readTaxBps();
+      const grossed = (amount * BPS) / (BPS - taxBps);
+
+      expect(poolPrices![0].prices[1]).toBeGreaterThan(
+        await quoteExactOutput(amount),
+      );
+      expect(poolPrices![0].prices[1]).toEqual(await quoteExactOutput(grossed));
+    });
+
+    it('returns no pools for BUY with AEROSTRAT as input', async () => {
+      // AEROSTRATRouter only exposes an exact-input entry point.
+      const pools = await aerostrat.getPoolIdentifiers(
+        AEROSTRAT,
+        AERO,
+        SwapSide.BUY,
+        blockNumber,
+      );
+      expect(pools).toEqual([]);
+    });
+
+    it('returns no pools for a pair not involving AEROSTRAT', async () => {
+      const pools = await aerostrat.getPoolIdentifiers(
+        AERO,
+        Tokens[network]['USDC'],
+        SwapSide.SELL,
+        blockNumber,
+      );
+      expect(pools).toEqual([]);
+    });
+
+    it('is excluded from the stock Aerodrome keys', async () => {
+      const stock = new VelodromeSlipstream(
+        network,
+        'AerodromeSlipstreamNewFactory',
+        dexHelper,
+      );
+      const pools = await stock.getPoolIdentifiers(
+        AEROSTRAT,
+        AERO,
+        SwapSide.SELL,
+        blockNumber,
+      );
+      // Without this the untaxed quote always outbids the taxed one.
+      expect(pools).toEqual([]);
     });
   });
 });

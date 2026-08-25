@@ -20,7 +20,7 @@ import { MultiCallParams } from '../../../../lib/multi-wrapper';
 import { uint24ToBigInt } from '../../../../lib/decoders';
 import VelodromeSlipstreamFactoryABI from '../../../../abi/velodrome-slipstream/VelodromeSlipstreamFactory.abi.json';
 
-type VelodromeSlipstreamData = {
+export type VelodromeSlipstreamData = {
   path: {
     tokenIn: Address;
     tokenOut: Address;
