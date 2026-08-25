@@ -1,7 +1,6 @@
 import _ from 'lodash';
 import { Interface } from '@ethersproject/abi';
 import { BPS_MAX_VALUE, Network, SwapSide } from '../../../../constants';
-import { IDexHelper } from '../../../../dex-helper';
 import {
   Address,
   DexExchangeParam,
@@ -15,15 +14,13 @@ import {
 } from '../../../../types';
 import { getDexKeysWithNetwork } from '../../../../utils';
 import { extractReturnAmountPosition } from '../../../../executor/utils';
-import { booleanDecode, uint256ToBigInt } from '../../../../lib/decoders';
+import { uint256ToBigInt } from '../../../../lib/decoders';
 import { applyTransferFee } from '../../../../lib/token-transfer-fee';
 import { getLocalDeadlineAsFriendlyPlaceholder } from '../../../simple-exchange';
 import AerostratRouterABI from '../../../../abi/aerostrat/AerostratRouter.abi.json';
 import AerostratTokenABI from '../../../../abi/aerostrat/AerostratToken.abi.json';
 import * as CALLDATA_GAS_COST from '../../../../calldata-gas-cost';
-import { PoolState } from '../../types';
-import { UniswapV3EventPool } from '../../uniswap-v3-pool';
-import { Adapters, UniswapV3Config } from '../../config';
+import { UniswapV3Config } from '../../config';
 import {
   VelodromeSlipstream,
   VelodromeSlipstreamData,
@@ -40,18 +37,13 @@ import {
  *     go through AEROSTRATRouter, which swaps the post-tax amount and grosses
  *     the charge back up in the swap callback.
  *   - buying, the pool's outgoing transfer is taxed, so the recipient receives
- *     (1 - tax) of the pool's output. The stock router can execute this, but the
- *     pool has to be asked for the grossed-up amount, both when quoting and when
- *     encoding an exact-output swap.
+ *     (1 - tax) of the pool's output. The stock router executes this, but the
+ *     quote has to account for the tax, and an exact-output swap has to ask the
+ *     pool for the grossed-up amount.
  *
  * The tax rate is read from the token rather than supplied by the caller,
  * because it is governed on-chain and can move.
  */
-const AEROSTRAT_DECIMALS = 18;
-
-// Page requested from the subgraph before filtering down to the taxed pool.
-const TOP_POOLS_SEARCH_COUNT = 20;
-
 export class AerostratSlipstream extends VelodromeSlipstream {
   /*
    * Declared so pricing-helper does not drop this dexKey when the backend flags
@@ -88,15 +80,11 @@ export class AerostratSlipstream extends VelodromeSlipstream {
   }
 
   /*
-   * Quotable means: a rate has been read, it is usable, and it is recent.
-   * At BPS_MAX_VALUE the router's calculateAmountToCharge divides by zero and
-   * above it the token underflows on every taxed transfer; and a rate that
-   * could not be refreshed is no more trustworthy than a guessed one, so it
-   * expires. Refuse to quote rather than emit a route that cannot be filled.
+   * At BPS_MAX_VALUE the router's calculateAmountToCharge divides by zero, and
+   * above it the token underflows on every taxed transfer. Refuse to quote
+   * rather than emit a route that cannot be filled.
    */
   private isQuotable(): boolean {
-    // At BPS_MAX_VALUE the router's calculateAmountToCharge divides by zero and
-    // above it the token underflows on every taxed transfer.
     return this.taxBps !== undefined && this.taxBps < BPS_MAX_VALUE;
   }
 
@@ -159,12 +147,6 @@ export class AerostratSlipstream extends VelodromeSlipstream {
     }
   }
 
-  /*
-   * The config carries the full AerodromeSlipstreamNewFactory subgraph, so the
-   * inherited implementation would advertise every Aerodrome pool as belonging
-   * to this dexKey - each of which then resolves to no pool identifiers. Only
-   * the taxed pair is ours.
-   */
   async getTopPoolsForToken(
     tokenAddress: Address,
     limit: number,
