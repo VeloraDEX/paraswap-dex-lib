@@ -7,6 +7,7 @@ import { BI_POWS } from '../../../../bigint-constants';
 import { Tokens } from '../../../../../tests/constants-e2e';
 import { Interface } from '@ethersproject/abi';
 import { UniswapV3 } from '../../uniswap-v3';
+import { VelodromeSlipstream } from '../velodrome-slipstream/velodrome-slipstream';
 import { UniswapV3Config } from '../../config';
 import AerostratRouterABI from '../../../../abi/aerostrat/AerostratRouter.abi.json';
 import { AerostratSlipstream } from './aerostrat-slipstream';
@@ -438,6 +439,97 @@ describe('AerostratSlipstream tax handling', () => {
           SwapSide.SELL,
         ),
       ).toThrow(/tax is unknown or out of range/);
+    });
+  });
+
+  describe('pool scoping and executor contract', () => {
+    const RECIPIENT2 = '0xf5c4f3dc02c3fb9279495a8fef7b0741da956157';
+    const config = UniswapV3Config['AerostratSlipstream'][Network.BASE];
+
+    afterEach(() => jest.restoreAllMocks());
+
+    it('prices only the configured taxed pool', async () => {
+      // Pool creation on this factory is permissionless; another AEROSTRAT pool
+      // would not be taxlisted and must not be priced with a tax.
+      setTax(1000n);
+      jest
+        .spyOn(VelodromeSlipstream.prototype, 'getPoolsForIdentifiers')
+        .mockResolvedValue([
+          { poolAddress: config.taxedPool! } as any,
+          { poolAddress: '0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef' } as any,
+          null,
+        ]);
+
+      const pools = await (aerostrat as any).getPoolsForIdentifiers(
+        AEROSTRAT.address,
+        AERO.address,
+        1,
+      );
+
+      expect(pools).toHaveLength(1);
+      expect(pools[0].poolAddress).toEqual(config.taxedPool);
+    });
+
+    it('does not let the executor trust the router return on a taxed output', () => {
+      // The router reports the pool's output; the recipient is taxed on the way
+      // out, so the executor has to measure the balance instead.
+      setTax(1000n);
+      jest.spyOn(UniswapV3.prototype, 'getDexParam').mockReturnValue({
+        returnAmountPos: 0,
+        exchangeData: '0x',
+        targetExchange: config.router,
+        needWrapNative: false,
+        dexFuncHasRecipient: true,
+      } as any);
+
+      const buy = aerostrat.getDexParam(
+        AERO.address,
+        AEROSTRAT.address,
+        '1',
+        (900n * BI_POWS[18]).toString(),
+        RECIPIENT2,
+        {
+          path: [
+            {
+              tokenIn: AERO.address,
+              tokenOut: AEROSTRAT.address,
+              fee: '500',
+              tickSpacing: '100',
+            },
+          ],
+          taxBps: '1000',
+        } as any,
+        SwapSide.BUY,
+      );
+
+      expect(buy.returnAmountPos).toBeUndefined();
+    });
+
+    it('advertises pools even before the tax rate is known', async () => {
+      // Pool tracking runs on a service that never calls initializePricing, so
+      // gating discovery on the rate would hide this key from routing entirely.
+      setTax(undefined);
+      jest.spyOn(UniswapV3.prototype, 'getTopPoolsForToken').mockResolvedValue([
+        {
+          exchange: 'AerostratSlipstream',
+          address: config.taxedPool!,
+          connectorTokens: [
+            { address: AERO.address, decimals: 18, liquidityUSD: 5 },
+          ],
+          liquidityUSD: 10,
+        } as any,
+      ]);
+
+      const pools = await aerostrat.getTopPoolsForToken(AEROSTRAT.address, 10);
+      expect(pools).toHaveLength(1);
+
+      // Queried for the counter token the record must be re-oriented.
+      const flipped = await aerostrat.getTopPoolsForToken(AERO.address, 10);
+      expect(flipped).toHaveLength(1);
+      expect(flipped[0].connectorTokens[0].address.toLowerCase()).toEqual(
+        AEROSTRAT.address.toLowerCase(),
+      );
+      expect(flipped[0].liquidityUSD).toEqual(5);
     });
   });
 
