@@ -15,7 +15,7 @@ import {
 } from '../../../../types';
 import { getDexKeysWithNetwork } from '../../../../utils';
 import { extractReturnAmountPosition } from '../../../../executor/utils';
-import { uint256ToBigInt } from '../../../../lib/decoders';
+import { booleanDecode, uint256ToBigInt } from '../../../../lib/decoders';
 import { applyTransferFee } from '../../../../lib/token-transfer-fee';
 import { getLocalDeadlineAsFriendlyPlaceholder } from '../../../simple-exchange';
 import AerostratRouterABI from '../../../../abi/aerostrat/AerostratRouter.abi.json';
@@ -72,6 +72,11 @@ export class AerostratSlipstream extends VelodromeSlipstream {
   // an assumed tax would misprice every route if the real rate differs.
   private taxBps?: bigint;
 
+  // Wall-clock of the last successful read. An unbounded stale rate is the same
+  // failure as a seeded guess, only slower to appear.
+  private taxReadAt = 0;
+  private static readonly MAX_TAX_AGE_MS = 5 * 60 * 1000;
+
   private taxUpdateIntervalTask?: NodeJS.Timeout;
 
   private readonly taxedTokenIface = new Interface(AerostratTokenABI);
@@ -103,7 +108,8 @@ export class AerostratSlipstream extends VelodromeSlipstream {
    * Refuse to quote rather than emit a route that cannot be filled.
    */
   private isQuotable(): boolean {
-    return this.taxBps !== undefined && this.taxBps < BPS_MAX_VALUE;
+    if (this.taxBps === undefined || this.taxBps >= BPS_MAX_VALUE) return false;
+    return Date.now() - this.taxReadAt < AerostratSlipstream.MAX_TAX_AGE_MS;
   }
 
   private applyTax(
@@ -116,25 +122,47 @@ export class AerostratSlipstream extends VelodromeSlipstream {
 
   protected async updateTax(): Promise<void> {
     try {
-      const results = await this.dexHelper.multiWrapper.tryAggregate<bigint>(
-        false,
-        [
-          {
-            target: this.taxedToken,
-            callData: this.taxedTokenIface.encodeFunctionData('getCurrentFee'),
-            decodeFunction: uint256ToBigInt,
-          },
-        ],
-      );
+      const results = await this.dexHelper.multiWrapper.tryAggregate<
+        bigint | boolean
+      >(false, [
+        {
+          target: this.taxedToken,
+          callData: this.taxedTokenIface.encodeFunctionData('getCurrentFee'),
+          decodeFunction: uint256ToBigInt,
+        },
+        {
+          target: this.taxedToken,
+          callData: this.taxedTokenIface.encodeFunctionData('isTaxlist', [
+            this.config.taxedPool!,
+          ]),
+          decodeFunction: booleanDecode,
+        },
+      ]);
 
-      if (!results[0].success) {
+      if (!results[0].success || !results[1].success) {
         this.logger.warn(
-          `${this.dexKey}: failed to read getCurrentFee, keeping ${this.taxBps}`,
+          `${this.dexKey}: failed to read tax state, last good rate ${this.taxBps} will expire`,
         );
         return;
       }
 
-      this.taxBps = results[0].returnData;
+      /*
+       * The tax only applies while the pool is on the token's taxlist, and that
+       * membership is owner-mutable. If it is ever removed the custom router
+       * still grosses the charge up, so quoting would overcharge the user -
+       * stop quoting instead.
+       */
+      if (!(results[1].returnData as boolean)) {
+        this.logger.warn(
+          `${this.dexKey}: ${this.config.taxedPool} is no longer taxlisted; not quoting`,
+        );
+        this.taxBps = undefined;
+        this.taxReadAt = 0;
+        return;
+      }
+
+      this.taxBps = results[0].returnData as bigint;
+      this.taxReadAt = Date.now();
     } catch (error) {
       this.logger.error(`${this.dexKey}: error updating tax:`, error);
     }
@@ -175,46 +203,26 @@ export class AerostratSlipstream extends VelodromeSlipstream {
     // Do not advertise liquidity this key would then refuse to quote.
     if (!this.isQuotable()) return [];
 
-    const pools = await super.getTopPoolsForToken(tokenAddress, limit);
-
-    if (this.isAerostrat(tokenAddress)) return pools;
-
-    return pools.filter(pool =>
-      pool.connectorTokens.some(token => this.isAerostrat(token.address)),
+    /*
+     * This key owns exactly one pool. Always query by the taxed token: querying
+     * by the counter token returns a page ordered by liquidity across the whole
+     * factory, and this pair would usually be truncated out of it, leaving the
+     * key invisible to connector-token routing.
+     */
+    const pools = await super.getTopPoolsForToken(this.taxedToken, limit);
+    const taxedPool = this.config.taxedPool!.toLowerCase();
+    const owned = pools.filter(
+      pool => pool.address.toLowerCase() === taxedPool,
     );
-  }
 
-  /*
-   * The tax is a property of the pool, not of the token: anyone can create
-   * another AEROSTRAT pool on this factory and it would not be taxlisted.
-   * Pricing one of those with a tax that does not apply would overcharge the
-   * user, so this key only ever prices the pool it is configured for.
-   */
-  private isTaxedPool(pool: UniswapV3EventPool | null): boolean {
-    return (
-      !!pool &&
-      pool.poolAddress.toLowerCase() === this.config.taxedPool!.toLowerCase()
-    );
-  }
+    if (owned.length === 0) return [];
+    if (this.isAerostrat(tokenAddress)) return owned;
 
-  async getPoolsForIdentifiers(
-    srcAddress: string,
-    destAddress: string,
-    blockNumber: number,
-  ): Promise<(UniswapV3EventPool | null)[]> {
-    return (
-      await super.getPoolsForIdentifiers(srcAddress, destAddress, blockNumber)
-    ).filter(pool => this.isTaxedPool(pool));
-  }
-
-  protected async getSelectedPools(
-    srcAddress: string,
-    destAddress: string,
-    blockNumber: number,
-  ): Promise<(UniswapV3EventPool | null)[]> {
-    return (
-      await super.getSelectedPools(srcAddress, destAddress, blockNumber)
-    ).filter(pool => this.isTaxedPool(pool));
+    return owned[0].connectorTokens.some(
+      token => token.address.toLowerCase() === tokenAddress.toLowerCase(),
+    )
+      ? owned
+      : [];
   }
 
   async getPoolIdentifiers(
@@ -480,7 +488,7 @@ export class AerostratSlipstream extends VelodromeSlipstream {
       return super.getCalldataGasCost(poolPrices);
     }
 
-    return (
+    const cost =
       CALLDATA_GAS_COST.DEX_OVERHEAD +
       CALLDATA_GAS_COST.OFFSET_LARGE +
       // tokenIn, tokenOut, recipient
@@ -491,8 +499,12 @@ export class AerostratSlipstream extends VelodromeSlipstream {
       // amountIn, amountOutMinimum
       CALLDATA_GAS_COST.AMOUNT * 2 +
       // sqrtPriceLimitX96, always zero
-      CALLDATA_GAS_COST.ZERO
-    );
+      CALLDATA_GAS_COST.ZERO;
+
+    // Must mirror the shape of gasCost, which is a per-amount array with zeros
+    // for unpriceable amounts. pricing-helper throws and discards the whole
+    // quote if the two disagree.
+    return poolPrices.prices.map(price => (price === 0n ? 0 : cost));
   }
 
   /*

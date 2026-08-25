@@ -3200,6 +3200,38 @@ describe('Slipstream', () => {
       expect(poolPrices![0].prices[1]).toEqual(await quoteExactOutput(grossed));
     });
 
+    it('returns a calldata gas cost shaped like gasCost', async () => {
+      // pricing-helper compares the two shapes and throws away the entire quote
+      // if they disagree - a scalar here silently drops every sell route.
+      const amounts = [0n, 1000n * BI_POWS[18]];
+      const pools = await aerostrat.getPoolIdentifiers(
+        AEROSTRAT,
+        AERO,
+        SwapSide.SELL,
+        blockNumber,
+      );
+      const poolPrices = await aerostrat.getPricesVolume(
+        AEROSTRAT,
+        AERO,
+        amounts,
+        SwapSide.SELL,
+        blockNumber,
+        pools,
+      );
+      expect(poolPrices).not.toBeNull();
+
+      const pp = poolPrices![0];
+      const calldataGasCost = aerostrat.getCalldataGasCost(pp as any);
+
+      expect(typeof calldataGasCost === 'number').toEqual(
+        typeof pp.gasCost === 'number',
+      );
+      expect((calldataGasCost as number[]).length).toEqual(
+        (pp.gasCost as number[]).length,
+      );
+      expect((calldataGasCost as number[])[0]).toEqual(0);
+    });
+
     it('returns no pools for BUY with AEROSTRAT as input', async () => {
       // AEROSTRATRouter only exposes an exact-input entry point.
       const pools = await aerostrat.getPoolIdentifiers(

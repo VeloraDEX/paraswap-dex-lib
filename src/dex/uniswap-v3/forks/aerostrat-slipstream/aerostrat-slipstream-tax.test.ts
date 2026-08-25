@@ -33,6 +33,7 @@ describe('AerostratSlipstream tax handling', () => {
 
   const setTax = (bps: bigint | undefined) => {
     (aerostrat as any).taxBps = bps;
+    (aerostrat as any).taxReadAt = bps === undefined ? 0 : Date.now();
   };
   const supports = (src: string, dest: string, side: SwapSide): boolean =>
     (aerostrat as any).isSupportedSwap(src, dest, side);
@@ -456,15 +457,53 @@ describe('AerostratSlipstream tax handling', () => {
       ).toBe(false);
     });
 
-    it('keeps the last good tax when the read fails', async () => {
+    it('keeps the last good tax on a failed read, but lets it expire', async () => {
       setTax(1000n);
-      jest
-        .spyOn(dexHelper.multiWrapper, 'tryAggregate')
-        .mockResolvedValue([{ success: false, returnData: 0n }] as any);
+      jest.spyOn(dexHelper.multiWrapper, 'tryAggregate').mockResolvedValue([
+        { success: false, returnData: 0n },
+        { success: false, returnData: false },
+      ] as any);
+
+      await (aerostrat as any).updateTax();
+      expect((aerostrat as any).taxBps).toEqual(1000n);
+      expect(
+        (aerostrat as any).isSupportedSwap(
+          AEROSTRAT.address,
+          AERO.address,
+          SwapSide.SELL,
+        ),
+      ).toBe(true);
+
+      // A rate we can no longer confirm must not be quoted forever.
+      (aerostrat as any).taxReadAt = Date.now() - 6 * 60 * 1000;
+      expect(
+        (aerostrat as any).isSupportedSwap(
+          AEROSTRAT.address,
+          AERO.address,
+          SwapSide.SELL,
+        ),
+      ).toBe(false);
+    });
+
+    it('stops quoting if the pool is removed from the taxlist', async () => {
+      // The custom router still grosses the charge up, so a de-taxlisted pool
+      // would overcharge the seller.
+      setTax(1000n);
+      jest.spyOn(dexHelper.multiWrapper, 'tryAggregate').mockResolvedValue([
+        { success: true, returnData: 1000n },
+        { success: true, returnData: false },
+      ] as any);
 
       await (aerostrat as any).updateTax();
 
-      expect((aerostrat as any).taxBps).toEqual(1000n);
+      expect((aerostrat as any).taxBps).toBeUndefined();
+      expect(
+        (aerostrat as any).isSupportedSwap(
+          AEROSTRAT.address,
+          AERO.address,
+          SwapSide.SELL,
+        ),
+      ).toBe(false);
     });
 
     it('prices the unit on the same basis as the amounts', () => {
