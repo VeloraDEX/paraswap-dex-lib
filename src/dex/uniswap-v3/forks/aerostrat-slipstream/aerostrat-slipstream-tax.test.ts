@@ -175,9 +175,15 @@ describe('AerostratSlipstream tax handling', () => {
     const config = UniswapV3Config['AerostratSlipstream'][Network.BASE];
     const routerIface = new Interface(AerostratRouterABI);
 
-    const dataFor = (tokenIn: string, tokenOut: string, tickSpacing = '100') =>
+    const dataFor = (
+      tokenIn: string,
+      tokenOut: string,
+      tickSpacing = '100',
+      taxBps: string | undefined = '1000',
+    ) =>
       ({
         path: [{ tokenIn, tokenOut, fee: '500', tickSpacing }],
+        taxBps,
       } as any);
 
     afterEach(() => jest.restoreAllMocks());
@@ -303,6 +309,56 @@ describe('AerostratSlipstream tax handling', () => {
       );
 
       expect(spy.mock.calls[0][3]).toEqual(priced.toString());
+    });
+
+    it('refuses to build a buy against a route priced without a rate', () => {
+      // The rate can move between quoting and building; a route that did not
+      // record the rate it was priced at cannot be sized safely.
+      setTax(1000n);
+      expect(() =>
+        aerostrat.getDexParam(
+          AERO.address,
+          AEROSTRAT.address,
+          '0',
+          (900n * BI_POWS[18]).toString(),
+          RECIPIENT,
+          {
+            path: [
+              {
+                tokenIn: AERO.address,
+                tokenOut: AEROSTRAT.address,
+                fee: '500',
+                tickSpacing: '100',
+              },
+            ],
+          } as any,
+          SwapSide.BUY,
+        ),
+      ).toThrow(/priced without a tax rate/);
+    });
+
+    it('sizes the buy from the rate that priced it, not the current one', () => {
+      setTax(1000n);
+      const spy = jest
+        .spyOn(UniswapV3.prototype, 'getDexParam')
+        .mockReturnValue({} as any);
+
+      // Route priced at 10%; rate has since moved to 20%.
+      const data = dataFor(AERO.address, AEROSTRAT.address, '100', '1000');
+      setTax(2000n);
+
+      aerostrat.getDexParam(
+        AERO.address,
+        AEROSTRAT.address,
+        '0',
+        (900n * BI_POWS[18]).toString(),
+        RECIPIENT,
+        data,
+        SwapSide.BUY,
+      );
+
+      // 900 / 0.9 = 1000, not 900 / 0.8 = 1125.
+      expect(spy.mock.calls[0][3]).toEqual((1000n * BI_POWS[18]).toString());
     });
 
     it('refuses to encode anything the pricing guards should have excluded', () => {

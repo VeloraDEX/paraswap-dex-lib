@@ -1520,6 +1520,7 @@ export class UniswapV3
       // silently, with no compile error and no warning.
       excludedPools: this.config.excludedPools?.map(pool => pool.toLowerCase()),
       taxedToken: this.config.taxedToken?.toLowerCase(),
+      taxedPool: this.config.taxedPool?.toLowerCase(),
       taxedRouter: this.config.taxedRouter?.toLowerCase(),
     };
     return newConfig;

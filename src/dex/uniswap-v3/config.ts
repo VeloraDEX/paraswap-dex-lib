@@ -511,6 +511,7 @@ export const UniswapV3Config: DexConfigMap<DexParams> = {
     [Network.BASE]: {
       ...AERODROME_SLIPSTREAM_NEW_FACTORY_BASE,
       taxedToken: '0x1A85b97F8b0E1CEE4D5500E093F5970a2aeB3fB8',
+      taxedPool: AEROSTRAT_AERO_POOL,
       taxedRouter: '0xD3AFf447095Be71c43aeAF000c7c48AC227C228b',
       // Only the AEROSTRAT/AERO pool is taxed, and it is tickSpacing 100.
       // Keeping this narrow avoids duplicating discovery for the whole

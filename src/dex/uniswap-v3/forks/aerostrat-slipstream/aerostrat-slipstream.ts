@@ -9,20 +9,20 @@ import {
   GetDexParamOptions,
   NumberAsString,
   PoolLiquidity,
+  PoolPrices,
   SimpleExchangeParam,
   Token,
 } from '../../../../types';
-import {
-  getBigIntPow,
-  getDexKeysWithNetwork,
-  isTruthy,
-} from '../../../../utils';
+import { getDexKeysWithNetwork } from '../../../../utils';
 import { extractReturnAmountPosition } from '../../../../executor/utils';
 import { uint256ToBigInt } from '../../../../lib/decoders';
 import { applyTransferFee } from '../../../../lib/token-transfer-fee';
 import { getLocalDeadlineAsFriendlyPlaceholder } from '../../../simple-exchange';
 import AerostratRouterABI from '../../../../abi/aerostrat/AerostratRouter.abi.json';
 import AerostratTokenABI from '../../../../abi/aerostrat/AerostratToken.abi.json';
+import * as CALLDATA_GAS_COST from '../../../../calldata-gas-cost';
+import { PoolState } from '../../types';
+import { UniswapV3EventPool } from '../../uniswap-v3-pool';
 import { Adapters, UniswapV3Config } from '../../config';
 import {
   VelodromeSlipstream,
@@ -47,6 +47,12 @@ import {
  * The tax rate is read from the token rather than supplied by the caller,
  * because it is governed on-chain and can move.
  */
+export type AerostratSlipstreamData = VelodromeSlipstreamData & {
+  // The rate this route was priced at. Carried so the calldata cannot be built
+  // against a rate that changed after the quote.
+  taxBps?: NumberAsString;
+};
+
 export class AerostratSlipstream extends VelodromeSlipstream {
   /*
    * Declared so pricing-helper does not drop this dexKey when the backend flags
@@ -162,6 +168,9 @@ export class AerostratSlipstream extends VelodromeSlipstream {
     tokenAddress: Address,
     limit: number,
   ): Promise<PoolLiquidity[]> {
+    // Do not advertise liquidity this key would then refuse to quote.
+    if (!this.isQuotable()) return [];
+
     const pools = await super.getTopPoolsForToken(tokenAddress, limit);
 
     if (this.isAerostrat(tokenAddress)) return pools;
@@ -169,6 +178,51 @@ export class AerostratSlipstream extends VelodromeSlipstream {
     return pools.filter(pool =>
       pool.connectorTokens.some(token => this.isAerostrat(token.address)),
     );
+  }
+
+  /*
+   * The tax is a property of the pool, not of the token: anyone can create
+   * another AEROSTRAT pool on this factory and it would not be taxlisted.
+   * Pricing one of those with a tax that does not apply would overcharge the
+   * user, so this key only ever prices the pool it is configured for.
+   */
+  private isTaxedPool(pool: UniswapV3EventPool | null): boolean {
+    return (
+      !!pool &&
+      pool.poolAddress.toLowerCase() === this.config.taxedPool!.toLowerCase()
+    );
+  }
+
+  async getPoolsForIdentifiers(
+    srcAddress: string,
+    destAddress: string,
+    blockNumber: number,
+  ): Promise<(UniswapV3EventPool | null)[]> {
+    return (
+      await super.getPoolsForIdentifiers(srcAddress, destAddress, blockNumber)
+    ).filter(pool => this.isTaxedPool(pool));
+  }
+
+  protected async getSelectedPools(
+    srcAddress: string,
+    destAddress: string,
+    blockNumber: number,
+  ): Promise<(UniswapV3EventPool | null)[]> {
+    return (
+      await super.getSelectedPools(srcAddress, destAddress, blockNumber)
+    ).filter(pool => this.isTaxedPool(pool));
+  }
+
+  protected prepareData(
+    srcAddress: string,
+    destAddress: string,
+    pool: UniswapV3EventPool,
+    state: PoolState,
+  ): AerostratSlipstreamData {
+    return {
+      ...super.prepareData(srcAddress, destAddress, pool, state),
+      taxBps: this.taxBps!.toString(),
+    };
   }
 
   async getPoolIdentifiers(
@@ -327,7 +381,12 @@ export class AerostratSlipstream extends VelodromeSlipstream {
       // final received >= toAmount check reverts the whole swap.
       const poolDestAmount =
         side === SwapSide.BUY && this.isAerostrat(destToken)
-          ? this.applyTax([BigInt(destAmount)], SwapSide.BUY)[0].toString()
+          ? applyTransferFee(
+              [BigInt(destAmount)],
+              SwapSide.BUY,
+              Number(this.pricedTaxBps(data)),
+              1,
+            )[0].toString()
           : destAmount;
 
       return super.getDexParam(
@@ -391,11 +450,50 @@ export class AerostratSlipstream extends VelodromeSlipstream {
   }
 
   /*
-   * Everything below encodes this.config.router - the stock Aerodrome router -
-   * with untaxed amounts. Base has a non-null adapter mapping, so these paths go
-   * live the moment the dexKey is registered. Throwing is the real gate: the
-   * direct-method name list is global across Dex classes, so a static override
-   * there would remove nothing.
+   * The rate a route was priced at, not the current one. A refresh between
+   * quoting and building would otherwise size the swap against a rate the quote
+   * never used.
+   */
+  private pricedTaxBps(data: AerostratSlipstreamData): bigint {
+    if (data.taxBps === undefined) {
+      throw new Error(`${this.dexKey}: route was priced without a tax rate`);
+    }
+    return BigInt(data.taxBps);
+  }
+
+  /*
+   * The inherited estimate models a packed `bytes path`; the taxed router takes
+   * an eight-field struct, so leaving it inherited understates L1 calldata cost
+   * on Base.
+   */
+  getCalldataGasCost(
+    poolPrices: PoolPrices<AerostratSlipstreamData>,
+  ): number | number[] {
+    if (!this.isAerostrat(poolPrices.data.path[0]?.tokenIn ?? '')) {
+      return super.getCalldataGasCost(poolPrices);
+    }
+
+    return (
+      CALLDATA_GAS_COST.DEX_OVERHEAD +
+      CALLDATA_GAS_COST.OFFSET_LARGE +
+      // tokenIn, tokenOut, recipient
+      CALLDATA_GAS_COST.ADDRESS * 3 +
+      // tickSpacing
+      CALLDATA_GAS_COST.wordNonZeroBytes(3) +
+      CALLDATA_GAS_COST.TIMESTAMP +
+      // amountIn, amountOutMinimum
+      CALLDATA_GAS_COST.AMOUNT * 2 +
+      // sqrtPriceLimitX96, always zero
+      CALLDATA_GAS_COST.ZERO
+    );
+  }
+
+  /*
+   * getAdapters() returning null is the gate that keeps the V5 adapter path from
+   * ever selecting this key; PayloadEncoder throws before getAdapterParam could
+   * be reached. The throws below cover the remaining paths, all of which would
+   * otherwise encode this.config.router - the stock Aerodrome router - with
+   * untaxed amounts.
    */
   getAdapters() {
     return null;
