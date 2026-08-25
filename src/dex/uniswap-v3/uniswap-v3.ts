@@ -512,7 +512,10 @@ export class UniswapV3
   // Pools owned by a specialised dexKey must not also be quoted by the generic
   // fork, or the untaxed quote outbids the correct one and its fills revert.
   protected isExcludedPool(poolAddress: Address): boolean {
-    return !!this.config.excludedPools?.includes(poolAddress.toLowerCase());
+    const target = poolAddress.toLowerCase();
+    return !!this.config.excludedPools?.some(
+      pool => pool.toLowerCase() === target,
+    );
   }
 
   async getPoolIdentifiers(
@@ -712,18 +715,6 @@ export class UniswapV3
     );
   }
 
-  // Overridable so a fork pricing a fee-on-transfer pool can have the unit
-  // priced on the same basis as its amounts, in the same pass.
-  protected getUnitAmount(
-    side: SwapSide,
-    srcToken: Token,
-    destToken: Token,
-  ): bigint {
-    return getBigIntPow(
-      side == SwapSide.SELL ? srcToken.decimals : destToken.decimals,
-    );
-  }
-
   async getPricesVolume(
     srcToken: Token,
     destToken: Token,
@@ -831,7 +822,9 @@ export class UniswapV3
         blockNumber,
       );
 
-      const unitAmount = this.getUnitAmount(side, _srcToken, _destToken);
+      const unitAmount = getBigIntPow(
+        side == SwapSide.SELL ? _srcToken.decimals : _destToken.decimals,
+      );
 
       const _amounts = [...amounts.slice(1)];
 
@@ -1492,14 +1485,6 @@ export class UniswapV3
       decodeStateMultiCallResultWithRelativeBitmaps:
         this.config.decodeStateMultiCallResultWithRelativeBitmaps,
       liquidityField: this.config.liquidityField,
-      // Carried through explicitly. Slipstream forks re-assign the raw config
-      // after super() so they never see this copy, but every other fork does -
-      // and because these are optional, omitting them here would drop them
-      // silently, with no compile error and no warning.
-      excludedPools: this.config.excludedPools?.map(pool => pool.toLowerCase()),
-      taxedToken: this.config.taxedToken?.toLowerCase(),
-      taxedPool: this.config.taxedPool?.toLowerCase(),
-      taxedRouter: this.config.taxedRouter?.toLowerCase(),
     };
     return newConfig;
   }
