@@ -3120,11 +3120,18 @@ describe('Slipstream', () => {
       const taxBps = await readTaxBps();
       expect(taxBps).toBeGreaterThan(0n);
 
-      // checkPoolPrices only asserts unit >= 0, which 0n satisfies; pin it.
+      // checkPoolPrices only asserts unit >= 0, which 0n satisfies. unit is
+      // scaled rather than re-priced, so it is exact only to first order -
+      // assert it is within a basis point of the true post-tax unit.
       const unitAmount = BI_POWS[18];
-      expect(poolPrices![0].unit).toEqual(
-        await quoteExactInput(unitAmount - (unitAmount * taxBps) / BPS),
+      const trueUnit = await quoteExactInput(
+        unitAmount - (unitAmount * taxBps) / BPS,
       );
+      const delta =
+        poolPrices![0].unit > trueUnit
+          ? poolPrices![0].unit - trueUnit
+          : trueUnit - poolPrices![0].unit;
+      expect(delta * 10000n).toBeLessThan(trueUnit);
 
       for (let i = 0; i < amounts.length; i++) {
         if (amounts[i] === 0n) continue;

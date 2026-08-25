@@ -101,8 +101,6 @@ export class UniswapV3
   private poolInitPromises: Record<string, Promise<UniswapV3EventPool | null>> =
     {};
 
-  private _excludedPoolSet?: Set<string>;
-
   protected totalPoolsCount = 0;
   protected nonNullPoolsCount = 0;
 
@@ -511,23 +509,10 @@ export class UniswapV3
   // Lowercased here rather than in _toLowerForAllConfigAddresses: Slipstream
   // forks re-assign the raw config as a constructor parameter property after
   // super() runs, so normalization there never survives for them.
-  private get excludedPoolSet(): Set<string> {
-    if (!this._excludedPoolSet) {
-      this._excludedPoolSet = new Set(
-        (this.config.excludedPools ?? []).map(pool => pool.toLowerCase()),
-      );
-    }
-    return this._excludedPoolSet;
-  }
-
-  // Checked before reading pool.poolAddress, which is a lazy CREATE2 getter:
-  // dexKeys without excludedPools should not pay to compute it.
-  protected get hasExcludedPools(): boolean {
-    return this.excludedPoolSet.size > 0;
-  }
-
+  // Pools owned by a specialised dexKey must not also be quoted by the generic
+  // fork, or the untaxed quote outbids the correct one and its fills revert.
   protected isExcludedPool(poolAddress: Address): boolean {
-    return this.excludedPoolSet.has(poolAddress.toLowerCase());
+    return !!this.config.excludedPools?.includes(poolAddress.toLowerCase());
   }
 
   async getPoolIdentifiers(
@@ -548,11 +533,7 @@ export class UniswapV3
 
     const pools = (
       await this.getPoolsForIdentifiers(_srcAddress, _destAddress, blockNumber)
-    ).filter(
-      pool =>
-        pool &&
-        !(this.hasExcludedPools && this.isExcludedPool(pool.poolAddress)),
-    );
+    ).filter(pool => pool && !this.isExcludedPool(pool.poolAddress));
 
     if (pools.length === 0) return [];
 
@@ -801,11 +782,9 @@ export class UniswapV3
         ).filter(isTruthy);
       }
 
-      if (this.hasExcludedPools) {
-        selectedPools = selectedPools.filter(
-          pool => !this.isExcludedPool(pool.poolAddress),
-        );
-      }
+      selectedPools = selectedPools.filter(
+        pool => !this.isExcludedPool(pool.poolAddress),
+      );
 
       if (selectedPools.length === 0) return null;
 
@@ -1444,9 +1423,6 @@ export class UniswapV3
     });
 
     return pools
-      .filter(
-        pool => !(this.hasExcludedPools && this.isExcludedPool(pool.address)),
-      )
       .sort((a, b) => b.liquidityUSD - a.liquidityUSD)
       .slice(0, limit);
   }

@@ -52,12 +52,6 @@ const AEROSTRAT_DECIMALS = 18;
 // Page requested from the subgraph before filtering down to the taxed pool.
 const TOP_POOLS_SEARCH_COUNT = 20;
 
-export type AerostratSlipstreamData = VelodromeSlipstreamData & {
-  // The rate this route was priced at. Carried so the calldata cannot be built
-  // against a rate that changed after the quote.
-  taxBps?: NumberAsString;
-};
-
 export class AerostratSlipstream extends VelodromeSlipstream {
   /*
    * Declared so pricing-helper does not drop this dexKey when the backend flags
@@ -76,12 +70,6 @@ export class AerostratSlipstream extends VelodromeSlipstream {
   // Undefined until a successful read. Never seeded with a guess: quoting with
   // an assumed tax would misprice every route if the real rate differs.
   private taxBps?: bigint;
-
-  // Wall-clock of the last successful read. An unbounded stale rate is the same
-  // failure as a seeded guess, only slower to appear.
-  private taxReadAt = 0;
-  private wasQuotable = false;
-  private static readonly MAX_TAX_AGE_MS = 5 * 60 * 1000;
 
   private taxUpdateIntervalTask?: NodeJS.Timeout;
 
@@ -107,33 +95,9 @@ export class AerostratSlipstream extends VelodromeSlipstream {
    * expires. Refuse to quote rather than emit a route that cannot be filled.
    */
   private isQuotable(): boolean {
-    const quotable =
-      this.taxBps !== undefined &&
-      this.taxBps < BPS_MAX_VALUE &&
-      Date.now() - this.taxReadAt < AerostratSlipstream.MAX_TAX_AGE_MS;
-
-    /*
-     * Log the transition, not every call. This pool is excluded from the stock
-     * Aerodrome key, so not quoting is a total blackout for it rather than a
-     * fallback to a worse price - and otherwise it looks identical to the pool
-     * simply having no liquidity.
-     */
-    if (quotable !== this.wasQuotable) {
-      this.wasQuotable = quotable;
-      if (quotable) {
-        this.logger.info(`${this.dexKey}: quoting resumed`);
-      } else {
-        this.logger.warn(
-          `${this.dexKey}: not quoting - rate ${this.taxBps}, last read ${
-            this.taxReadAt === 0
-              ? 'never'
-              : new Date(this.taxReadAt).toISOString()
-          }`,
-        );
-      }
-    }
-
-    return quotable;
+    // At BPS_MAX_VALUE the router's calculateAmountToCharge divides by zero and
+    // above it the token underflows on every taxed transfer.
+    return this.taxBps !== undefined && this.taxBps < BPS_MAX_VALUE;
   }
 
   private applyTax(
@@ -146,47 +110,25 @@ export class AerostratSlipstream extends VelodromeSlipstream {
 
   protected async updateTax(): Promise<void> {
     try {
-      const results = await this.dexHelper.multiWrapper.tryAggregate<
-        bigint | boolean
-      >(false, [
-        {
-          target: this.taxedToken,
-          callData: this.taxedTokenIface.encodeFunctionData('getCurrentFee'),
-          decodeFunction: uint256ToBigInt,
-        },
-        {
-          target: this.taxedToken,
-          callData: this.taxedTokenIface.encodeFunctionData('isTaxlist', [
-            this.config.taxedPool!,
-          ]),
-          decodeFunction: booleanDecode,
-        },
-      ]);
+      const [result] = await this.dexHelper.multiWrapper.tryAggregate<bigint>(
+        false,
+        [
+          {
+            target: this.taxedToken,
+            callData: this.taxedTokenIface.encodeFunctionData('getCurrentFee'),
+            decodeFunction: uint256ToBigInt,
+          },
+        ],
+      );
 
-      if (!results[0].success || !results[1].success) {
+      if (!result.success) {
         this.logger.warn(
-          `${this.dexKey}: failed to read tax state, last good rate ${this.taxBps} will expire`,
+          `${this.dexKey}: failed to read getCurrentFee, keeping ${this.taxBps}`,
         );
         return;
       }
 
-      /*
-       * The tax only applies while the pool is on the token's taxlist, and that
-       * membership is owner-mutable. If it is ever removed the custom router
-       * still grosses the charge up, so quoting would overcharge the user -
-       * stop quoting instead.
-       */
-      if (!(results[1].returnData as boolean)) {
-        this.logger.warn(
-          `${this.dexKey}: ${this.config.taxedPool} is no longer taxlisted; not quoting`,
-        );
-        this.taxBps = undefined;
-        this.taxReadAt = 0;
-        return;
-      }
-
-      this.taxBps = results[0].returnData as bigint;
-      this.taxReadAt = Date.now();
+      this.taxBps = result.returnData;
     } catch (error) {
       this.logger.error(`${this.dexKey}: error updating tax:`, error);
     }
@@ -228,91 +170,19 @@ export class AerostratSlipstream extends VelodromeSlipstream {
     limit: number,
   ): Promise<PoolLiquidity[]> {
     /*
-     * Deliberately not gated on isQuotable(). Pool tracking runs on a different
-     * service instance from pricing, and that instance never calls
-     * initializePricing, so the tax rate is never populated there - gating here
-     * would make this key permanently invisible to routing.
+     * Not gated on isQuotable(): pool tracking runs on a service instance that
+     * never calls initializePricing, so the rate is never populated there.
      *
-     * This key owns exactly one pool, so always query by the taxed token:
-     * querying by the counter token returns a page ordered by liquidity across
-     * the whole factory, and this pair would usually be truncated out of it.
+     * Only the taxed pair belongs to this key - the config carries the whole
+     * AerodromeSlipstreamNewFactory subgraph, and every other pool it lists
+     * would resolve to no identifiers here.
      */
-    /*
-     * Ask for a generous page: the parent sorts by liquidity and truncates to
-     * the requested count before this filter runs, so a small limit could drop
-     * the taxed pool behind any other pool of the same token.
-     */
-    const pools = await super.getTopPoolsForToken(
-      this.taxedToken,
-      Math.max(limit, TOP_POOLS_SEARCH_COUNT),
-    );
+    if (!this.isTaxedToken(tokenAddress)) return [];
+
     const taxedPool = this.config.taxedPool!.toLowerCase();
-    const owned = pools.find(pool => pool.address.toLowerCase() === taxedPool);
-
-    if (!owned) return [];
-    if (this.isTaxedToken(tokenAddress)) return [owned];
-
-    const counterToken = owned.connectorTokens.find(
-      token => token.address.toLowerCase() === tokenAddress.toLowerCase(),
+    return (await super.getTopPoolsForToken(tokenAddress, limit)).filter(
+      pool => pool.address.toLowerCase() === taxedPool,
     );
-    if (!counterToken) return [];
-
-    /*
-     * The record above is oriented around the taxed token: liquidityUSD is
-     * token -> connector and connectorTokens[0] is the other side. Queried for
-     * the counter token it has to be flipped, or it advertises the queried
-     * token as its own connector with both liquidity figures inverted.
-     */
-    return [
-      {
-        ...owned,
-        // connectorTokens[].liquidityUSD is only populated when the two
-        // directions differ; when it is absent both directions are the same.
-        liquidityUSD: counterToken.liquidityUSD ?? owned.liquidityUSD,
-        connectorTokens: [
-          {
-            address: this.taxedToken.toLowerCase(),
-            decimals: AEROSTRAT_DECIMALS,
-            liquidityUSD: owned.liquidityUSD,
-          },
-        ],
-      },
-    ];
-  }
-
-  /*
-   * The tax is a property of the pool, not of the token: pool creation on this
-   * factory is permissionless, so another AEROSTRAT pool could exist and not be
-   * taxlisted. Pricing one of those with a tax that does not apply would
-   * overcharge, so this key only ever prices the pool it is configured for.
-   *
-   * Enforced here rather than in getPoolsForIdentifiers/getSelectedPools
-   * because the parent's limitPools branch resolves identifiers straight
-   * through getPool and never reaches those.
-   */
-  async getPool(
-    srcAddress: Address,
-    destAddress: Address,
-    fee: bigint,
-    blockNumber: number,
-    tickSpacing?: bigint,
-  ): Promise<UniswapV3EventPool | null> {
-    const pool = await super.getPool(
-      srcAddress,
-      destAddress,
-      fee,
-      blockNumber,
-      tickSpacing,
-    );
-
-    if (
-      pool &&
-      pool.poolAddress.toLowerCase() !== this.config.taxedPool!.toLowerCase()
-    ) {
-      return null;
-    }
-
-    return pool;
   }
 
   async getPoolIdentifiers(
@@ -398,42 +268,19 @@ export class AerostratSlipstream extends VelodromeSlipstream {
 
     return owned.map(result => ({
       ...result,
-      unit: this.toUserPrices([result.unit], side, taxOnPoolInput, taxBps)[0],
+      // Scaled rather than re-priced: unit is a ranking heuristic on a single
+      // token, where the curve is linear to well under a basis point.
+      unit: this.toUserPrices(
+        this.toPoolAmounts([result.unit], side, taxOnPoolInput, taxBps),
+        side,
+        taxOnPoolInput,
+        taxBps,
+      )[0],
       prices: this.toUserPrices(result.prices, side, taxOnPoolInput, taxBps),
       gasCost: this.addRouterOverhead(result.gasCost, taxOnPoolInput),
-      data: { ...result.data, taxBps: taxBps.toString() },
     }));
   }
 
-  protected getUnitAmount(
-    side: SwapSide,
-    srcToken: Token,
-    destToken: Token,
-  ): bigint {
-    /*
-     * Called by the parent mid-pricing, so it sees the live rate rather than
-     * the caller's snapshot. If a refresh cleared the rate in between there is
-     * no basis on which to price the unit, so fail the whole quote: the parent
-     * catches this and returns null for the pool. Deliberate - a unit priced on
-     * a different basis than the amounts misranks the venue in a route split
-     * rather than simply omitting it.
-     */
-    if (this.taxBps === undefined) {
-      throw new Error(`${this.dexKey}: tax rate cleared while pricing`);
-    }
-
-    return this.toPoolAmounts(
-      [super.getUnitAmount(side, srcToken, destToken)],
-      side,
-      this.isTaxedToken(srcToken.address),
-      this.taxBps,
-    )[0];
-  }
-
-  /*
-   * The quoter prices the pool untaxed, and RPC results carry no tickSpacing for
-   * the sell calldata, so this key must never fall back to it.
-   */
   async getPricingFromRpc(): Promise<null> {
     return null;
   }
@@ -516,7 +363,7 @@ export class AerostratSlipstream extends VelodromeSlipstream {
           ? this.applyTax(
               [BigInt(destAmount)],
               SwapSide.BUY,
-              this.pricedTaxBps(data),
+              this.taxBps!,
             )[0].toString()
           : destAmount;
 
@@ -609,33 +456,8 @@ export class AerostratSlipstream extends VelodromeSlipstream {
    * quoting and building would otherwise size the swap against a rate the quote
    * never used.
    */
-  private pricedTaxBps(data: AerostratSlipstreamData): bigint {
-    /*
-     * Prefer the rate the route was priced at. A route that never carried one
-     * (a replayed or older serialized priceRoute) falls back to the live rate
-     * rather than throwing: a throw here kills the whole transaction build, not
-     * just this leg.
-     */
-    const recorded = data.taxBps ?? this.taxBps?.toString();
-    if (recorded === undefined) {
-      throw new Error(`${this.dexKey}: no tax rate available to size the swap`);
-    }
-
-    const taxBps = BigInt(recorded);
-    // Same bound as isQuotable: at BPS_MAX_VALUE the gross-up divides by zero.
-    if (taxBps >= BPS_MAX_VALUE) {
-      throw new Error(`${this.dexKey}: route was priced at an unusable rate`);
-    }
-    return taxBps;
-  }
-
-  /*
-   * The inherited estimate models a packed `bytes path`; the taxed router takes
-   * an eight-field struct, so leaving it inherited understates L1 calldata cost
-   * on Base.
-   */
   getCalldataGasCost(
-    poolPrices: PoolPrices<AerostratSlipstreamData>,
+    poolPrices: PoolPrices<VelodromeSlipstreamData>,
   ): number | number[] {
     if (!this.isTaxedToken(poolPrices.data.path[0]?.tokenIn ?? '')) {
       return super.getCalldataGasCost(poolPrices);
@@ -681,14 +503,6 @@ export class AerostratSlipstream extends VelodromeSlipstream {
 
   async getSimpleParam(): Promise<SimpleExchangeParam> {
     return this.unsupported('V5 simple swap');
-  }
-
-  getDirectParam(): never {
-    return this.unsupported('direct swaps');
-  }
-
-  getDirectParamV6(): never {
-    return this.unsupported('direct swaps');
   }
 
   private unsupported(what: string): never {
