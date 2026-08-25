@@ -329,10 +329,37 @@ describe('AerostratSlipstream tax handling', () => {
       expect((out![0].data as any).taxBps).toEqual('1000');
     });
 
-    it('refuses to build a buy against a route priced without a rate', () => {
-      // The rate can move between quoting and building; a route that did not
-      // record the rate it was priced at cannot be sized safely.
+    it('falls back to the live rate when a route carries none', () => {
+      // A throw here would kill the whole transaction build, not just this leg,
+      // so a route that never recorded a rate is sized from the live one.
       setTax(1000n);
+      const spy = jest
+        .spyOn(UniswapV3.prototype, 'getDexParam')
+        .mockReturnValue({} as any);
+
+      aerostrat.getDexParam(
+        AERO.address,
+        AEROSTRAT.address,
+        '0',
+        (900n * BI_POWS[18]).toString(),
+        RECIPIENT,
+        {
+          path: [
+            {
+              tokenIn: AERO.address,
+              tokenOut: AEROSTRAT.address,
+              fee: '500',
+              tickSpacing: '100',
+            },
+          ],
+        } as any,
+        SwapSide.BUY,
+      );
+      expect(spy.mock.calls[0][3]).toEqual((1000n * BI_POWS[18]).toString());
+    });
+
+    it('fails only when no rate is available at all', () => {
+      setTax(undefined);
       expect(() =>
         aerostrat.getDexParam(
           AERO.address,
@@ -352,7 +379,7 @@ describe('AerostratSlipstream tax handling', () => {
           } as any,
           SwapSide.BUY,
         ),
-      ).toThrow(/priced without a tax rate/);
+      ).toThrow(/no tax rate available/);
     });
 
     it('sizes the buy from the rate that priced it, not the current one', () => {
@@ -433,24 +460,36 @@ describe('AerostratSlipstream tax handling', () => {
 
     it('prices only the configured taxed pool', async () => {
       // Pool creation on this factory is permissionless; another AEROSTRAT pool
-      // would not be taxlisted and must not be priced with a tax.
+      // would not be taxlisted and must not be priced with a tax. getPool is the
+      // choke point both the identifier path and the limitPools path go through.
       setTax(1000n);
-      jest
-        .spyOn(VelodromeSlipstream.prototype, 'getPoolsForIdentifiers')
-        .mockResolvedValue([
-          { poolAddress: config.taxedPool! } as any,
-          { poolAddress: '0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef' } as any,
-          null,
-        ]);
+      const spy = jest
+        .spyOn(VelodromeSlipstream.prototype, 'getPool')
+        .mockResolvedValue({ poolAddress: config.taxedPool! } as any);
 
-      const pools = await (aerostrat as any).getPoolsForIdentifiers(
-        AEROSTRAT.address,
-        AERO.address,
-        1,
-      );
+      await expect(
+        (aerostrat as any).getPool(
+          AEROSTRAT.address,
+          AERO.address,
+          500n,
+          1,
+          100n,
+        ),
+      ).resolves.toMatchObject({ poolAddress: config.taxedPool });
 
-      expect(pools).toHaveLength(1);
-      expect(pools[0].poolAddress).toEqual(config.taxedPool);
+      spy.mockResolvedValue({
+        poolAddress: '0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef',
+      } as any);
+
+      await expect(
+        (aerostrat as any).getPool(
+          AEROSTRAT.address,
+          AERO.address,
+          500n,
+          1,
+          200n,
+        ),
+      ).resolves.toBeNull();
     });
 
     it('does not let the executor trust the router return on a taxed output', () => {
@@ -533,27 +572,6 @@ describe('AerostratSlipstream tax handling', () => {
       );
 
       expect(spy.mock.calls[0][3]).toEqual((1000n * BI_POWS[18]).toString());
-    });
-
-    it('filters the pricing path down to the taxed pool as well', async () => {
-      // getSelectedPools is the override that guards pricing; the sibling test
-      // only covers getPoolsForIdentifiers.
-      setTax(1000n);
-      jest
-        .spyOn(VelodromeSlipstream.prototype, 'getSelectedPools' as any)
-        .mockResolvedValue([
-          { poolAddress: config.taxedPool! } as any,
-          { poolAddress: '0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef' } as any,
-        ]);
-
-      const pools = await (aerostrat as any).getSelectedPools(
-        AEROSTRAT.address,
-        AERO.address,
-        1,
-      );
-
-      expect(pools).toHaveLength(1);
-      expect(pools[0].poolAddress).toEqual(config.taxedPool);
     });
 
     it('advertises pools even before the tax rate is known', async () => {

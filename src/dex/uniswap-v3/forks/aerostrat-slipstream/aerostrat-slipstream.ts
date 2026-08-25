@@ -90,27 +90,20 @@ export class AerostratSlipstream extends VelodromeSlipstream {
   public static dexKeysWithNetwork: { key: string; networks: Network[] }[] =
     getDexKeysWithNetwork(_.pick(UniswapV3Config, ['AerostratSlipstream']));
 
-  constructor(
-    protected network: Network,
-    dexKey: string,
-    protected dexHelper: IDexHelper,
-    protected adapters = Adapters[network] || {},
-  ) {
-    super(network, dexKey, dexHelper, adapters);
-  }
-
   private get taxedToken(): Address {
     return this.config.taxedToken!;
   }
 
-  private isAerostrat(tokenAddress: Address): boolean {
+  private isTaxedToken(tokenAddress: Address): boolean {
     return tokenAddress.toLowerCase() === this.taxedToken.toLowerCase();
   }
 
   /*
-   * A tax of BPS_MAX_VALUE or more makes the router's calculateAmountToCharge divide by
-   * zero, and above BPS the token itself underflows on every taxed transfer.
-   * Refuse to quote rather than emit a route that cannot be filled.
+   * Quotable means: a rate has been read, it is usable, and it is recent.
+   * At BPS_MAX_VALUE the router's calculateAmountToCharge divides by zero and
+   * above it the token underflows on every taxed transfer; and a rate that
+   * could not be refreshed is no more trustworthy than a guessed one, so it
+   * expires. Refuse to quote rather than emit a route that cannot be filled.
    */
   private isQuotable(): boolean {
     if (this.taxBps === undefined || this.taxBps >= BPS_MAX_VALUE) return false;
@@ -176,10 +169,13 @@ export class AerostratSlipstream extends VelodromeSlipstream {
   async initializePricing(blockNumber: number) {
     await Promise.all([super.initializePricing(blockNumber), this.updateTax()]);
 
-    // Deliberately unconditional. The parent refreshes pool fees only on the
-    // slave branch; copying that would leave a master node serving a tax rate
-    // frozen at boot.
     clearInterval(this.taxUpdateIntervalTask);
+
+    // Deliberately unconditional: the parent refreshes pool fees only on the
+    // slave branch, and copying that would leave a master node serving a tax
+    // rate frozen at boot. The parent's own fee refresh keeps its slave-only
+    // behaviour, so on a master the pool fee is still the boot value - that is
+    // pre-existing and unchanged by this key.
     this.taxUpdateIntervalTask = setInterval(
       this.updateTax.bind(this),
       AerostratSlipstream.TAX_REFRESH_INTERVAL_MS,
@@ -228,7 +224,7 @@ export class AerostratSlipstream extends VelodromeSlipstream {
     const owned = pools.find(pool => pool.address.toLowerCase() === taxedPool);
 
     if (!owned) return [];
-    if (this.isAerostrat(tokenAddress)) return [owned];
+    if (this.isTaxedToken(tokenAddress)) return [owned];
 
     const counterToken = owned.connectorTokens.find(
       token => token.address.toLowerCase() === tokenAddress.toLowerCase(),
@@ -263,32 +259,34 @@ export class AerostratSlipstream extends VelodromeSlipstream {
    * factory is permissionless, so another AEROSTRAT pool could exist and not be
    * taxlisted. Pricing one of those with a tax that does not apply would
    * overcharge, so this key only ever prices the pool it is configured for.
+   *
+   * Enforced here rather than in getPoolsForIdentifiers/getSelectedPools
+   * because the parent's limitPools branch resolves identifiers straight
+   * through getPool and never reaches those.
    */
-  private isTaxedPool(pool: UniswapV3EventPool | null): boolean {
-    return (
-      !!pool &&
-      pool.poolAddress.toLowerCase() === this.config.taxedPool!.toLowerCase()
+  async getPool(
+    srcAddress: Address,
+    destAddress: Address,
+    fee: bigint,
+    blockNumber: number,
+    tickSpacing?: bigint,
+  ): Promise<UniswapV3EventPool | null> {
+    const pool = await super.getPool(
+      srcAddress,
+      destAddress,
+      fee,
+      blockNumber,
+      tickSpacing,
     );
-  }
 
-  async getPoolsForIdentifiers(
-    srcAddress: string,
-    destAddress: string,
-    blockNumber: number,
-  ): Promise<(UniswapV3EventPool | null)[]> {
-    return (
-      await super.getPoolsForIdentifiers(srcAddress, destAddress, blockNumber)
-    ).filter(pool => this.isTaxedPool(pool));
-  }
+    if (
+      pool &&
+      pool.poolAddress.toLowerCase() !== this.config.taxedPool!.toLowerCase()
+    ) {
+      return null;
+    }
 
-  protected async getSelectedPools(
-    srcAddress: string,
-    destAddress: string,
-    blockNumber: number,
-  ): Promise<(UniswapV3EventPool | null)[]> {
-    return (
-      await super.getSelectedPools(srcAddress, destAddress, blockNumber)
-    ).filter(pool => this.isTaxedPool(pool));
+    return pool;
   }
 
   async getPoolIdentifiers(
@@ -315,8 +313,8 @@ export class AerostratSlipstream extends VelodromeSlipstream {
   ): boolean {
     if (!this.isQuotable()) return false;
 
-    const srcIsAerostrat = this.isAerostrat(srcAddress);
-    const destIsAerostrat = this.isAerostrat(destAddress);
+    const srcIsAerostrat = this.isTaxedToken(srcAddress);
+    const destIsAerostrat = this.isTaxedToken(destAddress);
 
     if (!srcIsAerostrat && !destIsAerostrat) return false;
     if (srcIsAerostrat && side === SwapSide.BUY) return false;
@@ -336,7 +334,7 @@ export class AerostratSlipstream extends VelodromeSlipstream {
       return null;
     }
 
-    const taxOnPoolInput = this.isAerostrat(srcToken.address);
+    const taxOnPoolInput = this.isTaxedToken(srcToken.address);
 
     /*
      * Snapshot the rate once. The refresh interval can fire during the await
@@ -366,7 +364,6 @@ export class AerostratSlipstream extends VelodromeSlipstream {
     }));
   }
 
-  // Priced on the same basis as the amounts, in the parent's existing pass.
   protected getUnitAmount(
     side: SwapSide,
     srcToken: Token,
@@ -385,7 +382,7 @@ export class AerostratSlipstream extends VelodromeSlipstream {
     return this.toPoolAmounts(
       [super.getUnitAmount(side, srcToken, destToken)],
       side,
-      this.isAerostrat(srcToken.address),
+      this.isTaxedToken(srcToken.address),
       this.taxBps,
     )[0];
   }
@@ -454,7 +451,7 @@ export class AerostratSlipstream extends VelodromeSlipstream {
     executorAddress?: Address,
     options?: GetDexParamOptions,
   ): DexExchangeParam {
-    if (!this.isAerostrat(srcToken)) {
+    if (!this.isTaxedToken(srcToken)) {
       // Buys execute through the stock Aerodrome router. On an exact-output buy
       // the pool's outgoing transfer is taxed, so the pool has to be asked for
       // more than the user is to receive - otherwise it emits exactly the
@@ -467,12 +464,11 @@ export class AerostratSlipstream extends VelodromeSlipstream {
        * pool must emit, and for a sell it keeps amountOutMinimum as tight as
        * the user's tolerance rather than ~taxBps looser.
        */
-      const poolDestAmount = this.isAerostrat(destToken)
-        ? applyTransferFee(
+      const poolDestAmount = this.isTaxedToken(destToken)
+        ? this.applyTax(
             [BigInt(destAmount)],
             SwapSide.BUY,
-            Number(this.pricedTaxBps(data)),
-            1,
+            this.pricedTaxBps(data),
           )[0].toString()
         : destAmount;
 
@@ -495,7 +491,7 @@ export class AerostratSlipstream extends VelodromeSlipstream {
        * to measure the balance instead, as the other fee-on-transfer
        * integration in this repo does.
        */
-      return this.isAerostrat(destToken)
+      return this.isTaxedToken(destToken)
         ? { ...param, returnAmountPos: undefined }
         : param;
     }
@@ -553,11 +549,18 @@ export class AerostratSlipstream extends VelodromeSlipstream {
    * never used.
    */
   private pricedTaxBps(data: AerostratSlipstreamData): bigint {
-    if (data.taxBps === undefined) {
-      throw new Error(`${this.dexKey}: route was priced without a tax rate`);
+    /*
+     * Prefer the rate the route was priced at. A route that never carried one
+     * (a replayed or older serialized priceRoute) falls back to the live rate
+     * rather than throwing: a throw here kills the whole transaction build, not
+     * just this leg.
+     */
+    const recorded = data.taxBps ?? this.taxBps?.toString();
+    if (recorded === undefined) {
+      throw new Error(`${this.dexKey}: no tax rate available to size the swap`);
     }
 
-    const taxBps = BigInt(data.taxBps);
+    const taxBps = BigInt(recorded);
     // Same bound as isQuotable: at BPS_MAX_VALUE the gross-up divides by zero.
     if (taxBps >= BPS_MAX_VALUE) {
       throw new Error(`${this.dexKey}: route was priced at an unusable rate`);
@@ -573,7 +576,7 @@ export class AerostratSlipstream extends VelodromeSlipstream {
   getCalldataGasCost(
     poolPrices: PoolPrices<AerostratSlipstreamData>,
   ): number | number[] {
-    if (!this.isAerostrat(poolPrices.data.path[0]?.tokenIn ?? '')) {
+    if (!this.isTaxedToken(poolPrices.data.path[0]?.tokenIn ?? '')) {
       return super.getCalldataGasCost(poolPrices);
     }
 
@@ -605,6 +608,14 @@ export class AerostratSlipstream extends VelodromeSlipstream {
    */
   getAdapters() {
     return null;
+  }
+
+  static getDirectFunctionName(): string[] {
+    return [];
+  }
+
+  static getDirectFunctionNameV6(): string[] {
+    return [];
   }
 
   async getSimpleParam(): Promise<SimpleExchangeParam> {

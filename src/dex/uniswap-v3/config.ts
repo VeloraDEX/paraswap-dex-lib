@@ -19,9 +19,11 @@ import { PharaohV3Factory } from './forks/pharaoh-v3/pharaoh-v3-factory';
 const SUPPORTED_FEES = [10000n, 3000n, 500n, 100n];
 
 // AEROSTRAT is a fee-on-transfer token: its AERO pool is on the token's taxlist,
-// so 10% of a sell never reaches the pool. The generic Aerodrome keys price it
-// untaxed and would always outbid the taxed AerostratSlipstream key, so they
-// exclude it and AerostratSlipstream owns the pool.
+// so part of a sell never reaches the pool. AerodromeSlipstreamNewFactory would
+// otherwise price it untaxed and always outbid the taxed AerostratSlipstream
+// key, so it excludes the pool. The other two Aerodrome keys deploy pools from
+// different implementations and cannot derive this address, so they need no
+// entry.
 const AEROSTRAT_AERO_POOL = '0x95180496adabc8380fca36ec81bae131ca97cd3b';
 const RAMSES_FORKS_FEES = [...SUPPORTED_FEES, 50n, 250n];
 const PANGOLIN_SUPPORTED_FEES = [8000n, 2500n, 500n, 100n];
@@ -458,7 +460,6 @@ export const UniswapV3Config: DexConfigMap<DexParams> = {
       initRetryFrequency: 10,
       initHash: '0xeC8E5342B19977B4eF8892e02D8DAEcfa1315831', // pool implementation address from factory contract is used instead of initHash here
       subgraphURL: 'GENunSHWLBXm59mBSgPzQ8metBEp9YDfdqwFr91Av1UM',
-      excludedPools: [AEROSTRAT_AERO_POOL],
     },
   },
   AerodromeSlipstreamNewFactory: {
@@ -503,7 +504,6 @@ export const UniswapV3Config: DexConfigMap<DexParams> = {
       chunksCount: 10,
       initRetryFrequency: 10,
       initHash: '0xc770898522D2A9c8Da7A10D63989b6b58305B665', // pool implementation address from factory contract is used instead of initHash here
-      excludedPools: [AEROSTRAT_AERO_POOL],
       liquidityField: 'liquidity',
     },
   },

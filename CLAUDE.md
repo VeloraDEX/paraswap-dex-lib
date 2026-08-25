@@ -11,6 +11,14 @@ When making fixes based on code review comments or feedback, add a concise descr
 <!-- Add new fixes at the top of this list -->
 <!-- Format: - **[Date] Issue**: Brief description of fix -->
 
+- **[2026-08] getCalldataGasCost must mirror gasCost's shape**: `pricing-helper` compares the two and throws when a scalar meets an array, and the caller swallows that into an empty result - a dex returning a scalar while `getPricesVolume` returns a per-amount array silently contributes no prices at all on L2 networks. Return `poolPrices.prices.map(p => p === 0n ? 0 : cost)`.
+
+- **[2026-08] Scope a pool-restricted fork at getPool, not at getPoolsForIdentifiers**: the parent's `limitPools` branch resolves caller-supplied identifiers straight through `getPool` and never calls `getPoolsForIdentifiers` or `getSelectedPools`, so filters placed there leave that path unguarded.
+
+- **[2026-08] getTopPoolsForToken runs on a different service instance from pricing**: it is part of `IDexPooltracker`, whose init hook is `updatePoolState()`, so state populated in `initializePricing` is absent there. Gating pool discovery on such state hides the dex from routing entirely.
+
+- **[2026-08] returnAmountPos on a fee-on-transfer output**: when the destination token taxes its own transfer, the router's returned amount overstates what the recipient received. Leave `returnAmountPos` undefined so the executor measures the balance instead, as UniswapV2 and Solidly do.
+
 - **[2025-01] Block manager unavailable in certain methods**: `dexHelper.blockManager` is not available in `getTopPoolsForToken()` and `updatePoolState()` methods since these are called on a service that does not have it implemented. Use direct RPC calls (e.g., `dexHelper.provider.getBlock('latest')`) instead when block data is needed in these methods.
 
 - **[2025-01] Remove unused ABIs when removing DEXes**: When removing DEX integrations, also remove their associated ABI files from `src/abi/` if no longer referenced. Use `grep` to verify ABIs are not imported elsewhere before deletion.

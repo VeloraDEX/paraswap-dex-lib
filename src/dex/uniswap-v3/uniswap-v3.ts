@@ -1444,7 +1444,9 @@ export class UniswapV3
     });
 
     return pools
-      .filter(pool => !this.isExcludedPool(pool.address))
+      .filter(
+        pool => !(this.hasExcludedPools && this.isExcludedPool(pool.address)),
+      )
       .sort((a, b) => b.liquidityUSD - a.liquidityUSD)
       .slice(0, limit);
   }

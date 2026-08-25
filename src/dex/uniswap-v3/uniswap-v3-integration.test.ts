@@ -3253,39 +3253,41 @@ describe('Slipstream', () => {
       expect(pools).toEqual([]);
     });
 
-    it.each([
-      'AerodromeSlipstream',
-      'AerodromeSlipstreamNewFactory',
-      'AerodromeSlipstreamFactory3',
-    ])('%s does not quote the taxed pool', async stockKey => {
-      const stock = new VelodromeSlipstream(network, stockKey, dexHelper);
+    // Only AerodromeSlipstreamNewFactory shares the factory that deploys this
+    // pool, so it is the only key that needs excluding; the other two derive
+    // pool addresses from different implementations and cannot reach it.
+    it.each(['AerodromeSlipstreamNewFactory'])(
+      '%s does not quote the taxed pool',
+      async stockKey => {
+        const stock = new VelodromeSlipstream(network, stockKey, dexHelper);
 
-      // Without this the untaxed quote always outbids the taxed one and the
-      // resulting swap reverts.
-      expect(
-        await stock.getPoolIdentifiers(
-          AEROSTRAT,
-          AERO,
-          SwapSide.SELL,
-          blockNumber,
-        ),
-      ).toEqual([]);
+        // Without this the untaxed quote always outbids the taxed one and the
+        // resulting swap reverts.
+        expect(
+          await stock.getPoolIdentifiers(
+            AEROSTRAT,
+            AERO,
+            SwapSide.SELL,
+            blockNumber,
+          ),
+        ).toEqual([]);
 
-      // limitPools bypasses getPoolIdentifiers, so the pricing filter has to
-      // hold independently.
-      expect(
-        await stock.getPricesVolume(
-          AEROSTRAT,
-          AERO,
-          [0n, BI_POWS[18]],
-          SwapSide.SELL,
-          blockNumber,
-          [
-            `${stockKey}_${AEROSTRAT.address.toLowerCase()}_${AERO.address.toLowerCase()}_500_100`,
-          ],
-        ),
-      ).toBeNull();
-    });
+        // limitPools bypasses getPoolIdentifiers, so the pricing filter has to
+        // hold independently.
+        expect(
+          await stock.getPricesVolume(
+            AEROSTRAT,
+            AERO,
+            [0n, BI_POWS[18]],
+            SwapSide.SELL,
+            blockNumber,
+            [
+              `${stockKey}_${AEROSTRAT.address.toLowerCase()}_${AERO.address.toLowerCase()}_500_100`,
+            ],
+          ),
+        ).toBeNull();
+      },
+    );
 
     it('the stock key still quotes pairs it is not excluded from', async () => {
       // Positive control: without this the exclusion test above would pass even
