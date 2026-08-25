@@ -12,7 +12,7 @@ import { getDexKeysWithNetwork } from '../../../../utils';
 import _ from 'lodash';
 import { Address, NumberAsString, Token } from '../../../../types';
 import { pack } from '@ethersproject/solidity';
-import { PoolState } from '../../types';
+import { PoolState, UniswapV3Data } from '../../types';
 import { VelodromeSlipstreamEventPool } from './velodrome-slipstream-pool';
 import { UniswapV3EventPool } from '../../uniswap-v3-pool';
 import { OnPoolCreatedCallback } from '../../uniswap-v3-factory';
@@ -20,16 +20,7 @@ import { MultiCallParams } from '../../../../lib/multi-wrapper';
 import { uint24ToBigInt } from '../../../../lib/decoders';
 import VelodromeSlipstreamFactoryABI from '../../../../abi/velodrome-slipstream/VelodromeSlipstreamFactory.abi.json';
 
-export type VelodromeSlipstreamData = {
-  path: {
-    tokenIn: Address;
-    tokenOut: Address;
-    fee: NumberAsString;
-    currentFee?: NumberAsString;
-    tickSpacing?: NumberAsString;
-  }[];
-  isApproved?: boolean;
-};
+export type VelodromeSlipstreamData = UniswapV3Data;
 
 export class VelodromeSlipstream extends UniswapV3 {
   readonly eventPools: Record<string, VelodromeSlipstreamEventPool | null> = {};
@@ -223,7 +214,7 @@ export class VelodromeSlipstream extends UniswapV3 {
   protected async updateAllPoolFees(): Promise<void> {
     try {
       const activePools = Object.values(this.eventPools).filter(
-        pool => pool !== null,
+        pool => pool !== null && !this.isExcludedPool(pool.poolAddress),
       ) as VelodromeSlipstreamEventPool[];
 
       if (activePools.length === 0) {

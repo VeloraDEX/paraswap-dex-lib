@@ -1,6 +1,6 @@
 import _ from 'lodash';
 import { Interface } from '@ethersproject/abi';
-import { Network, SwapSide } from '../../../../constants';
+import { BPS_MAX_VALUE, Network, SwapSide } from '../../../../constants';
 import { IDexHelper } from '../../../../dex-helper';
 import {
   Address,
@@ -28,8 +28,6 @@ import {
   VelodromeSlipstream,
   VelodromeSlipstreamData,
 } from '../velodrome-slipstream/velodrome-slipstream';
-
-const BPS = 10000n;
 
 /*
  * AEROSTRAT charges a transfer tax whenever one side of a transfer is on the
@@ -70,8 +68,8 @@ export class AerostratSlipstream extends VelodromeSlipstream {
 
   private taxUpdateIntervalTask?: NodeJS.Timeout;
 
-  private readonly aerostratTokenIface = new Interface(AerostratTokenABI);
-  private readonly aerostratRouterIface = new Interface(AerostratRouterABI);
+  private readonly taxedTokenIface = new Interface(AerostratTokenABI);
+  private readonly taxedRouterIface = new Interface(AerostratRouterABI);
 
   public static dexKeysWithNetwork: { key: string; networks: Network[] }[] =
     getDexKeysWithNetwork(_.pick(UniswapV3Config, ['AerostratSlipstream']));
@@ -85,21 +83,21 @@ export class AerostratSlipstream extends VelodromeSlipstream {
     super(network, dexKey, dexHelper, adapters);
   }
 
-  private get aerostratToken(): Address {
-    return this.config.aerostratToken!;
+  private get taxedToken(): Address {
+    return this.config.taxedToken!;
   }
 
   private isAerostrat(tokenAddress: Address): boolean {
-    return tokenAddress.toLowerCase() === this.aerostratToken.toLowerCase();
+    return tokenAddress.toLowerCase() === this.taxedToken.toLowerCase();
   }
 
   /*
-   * A tax of BPS or more makes the router's calculateAmountToCharge divide by
+   * A tax of BPS_MAX_VALUE or more makes the router's calculateAmountToCharge divide by
    * zero, and above BPS the token itself underflows on every taxed transfer.
    * Refuse to quote rather than emit a route that cannot be filled.
    */
   private isQuotable(): boolean {
-    return this.taxBps !== undefined && this.taxBps < BPS;
+    return this.taxBps !== undefined && this.taxBps < BPS_MAX_VALUE;
   }
 
   private applyTax(amounts: bigint[], side: SwapSide): bigint[] {
@@ -112,9 +110,8 @@ export class AerostratSlipstream extends VelodromeSlipstream {
         false,
         [
           {
-            target: this.aerostratToken,
-            callData:
-              this.aerostratTokenIface.encodeFunctionData('getCurrentFee'),
+            target: this.taxedToken,
+            callData: this.taxedTokenIface.encodeFunctionData('getCurrentFee'),
             decodeFunction: uint256ToBigInt,
           },
         ],
@@ -134,17 +131,12 @@ export class AerostratSlipstream extends VelodromeSlipstream {
   }
 
   async initializePricing(blockNumber: number) {
-    await super.initializePricing(blockNumber);
-
-    await this.updateTax();
+    await Promise.all([super.initializePricing(blockNumber), this.updateTax()]);
 
     // Deliberately unconditional. The parent refreshes pool fees only on the
     // slave branch; copying that would leave a master node serving a tax rate
     // frozen at boot.
-    if (this.taxUpdateIntervalTask !== undefined) {
-      clearInterval(this.taxUpdateIntervalTask);
-    }
-
+    clearInterval(this.taxUpdateIntervalTask);
     this.taxUpdateIntervalTask = setInterval(
       this.updateTax.bind(this),
       AerostratSlipstream.TAX_REFRESH_INTERVAL_MS,
@@ -226,16 +218,10 @@ export class AerostratSlipstream extends VelodromeSlipstream {
 
     const taxOnPoolInput = this.isAerostrat(srcToken.address);
 
-    const pricedAmounts = this.toPoolAmounts(amounts, side, taxOnPoolInput);
-
-    const unitAmount = getBigIntPow(
-      side === SwapSide.SELL ? srcToken.decimals : destToken.decimals,
-    );
-
     const results = await super.getPricesVolume(
       srcToken,
       destToken,
-      pricedAmounts,
+      this.toPoolAmounts(amounts, side, taxOnPoolInput),
       side,
       blockNumber,
       limitPools,
@@ -243,58 +229,41 @@ export class AerostratSlipstream extends VelodromeSlipstream {
 
     if (!results) return null;
 
-    // super concatenates event-priced and RPC-priced results. RPC entries emit a
-    // path without tickSpacing, which the sell calldata needs, and their unit is
-    // derived independently of the amounts we passed. Drop them.
-    const eventPriced = results.filter(
-      result => result.data.path[0]?.tickSpacing !== undefined,
-    );
+    return results.map(result => ({
+      ...result,
+      unit: this.toUserPrices([result.unit], side, taxOnPoolInput)[0],
+      prices: this.toUserPrices(result.prices, side, taxOnPoolInput),
+      gasCost: this.addRouterOverhead(result.gasCost, taxOnPoolInput),
+    }));
+  }
 
-    if (eventPriced.length === 0) return null;
-
-    const units = await this.getUnitPrices(
-      srcToken,
-      destToken,
-      unitAmount,
+  // Priced on the same basis as the amounts, in the parent's existing pass.
+  protected getUnitAmount(
+    side: SwapSide,
+    srcToken: Token,
+    destToken: Token,
+  ): bigint {
+    return this.toPoolAmounts(
+      [super.getUnitAmount(side, srcToken, destToken)],
       side,
-      blockNumber,
-      limitPools,
-      taxOnPoolInput,
-    );
+      this.isAerostrat(srcToken.address),
+    )[0];
+  }
 
-    const adjusted = eventPriced.map(result => {
-      const unit = units[this.poolKeyOf(result.poolAddresses)];
-
-      // Falling back to the parent's unit would serve an untaxed price, which is
-      // the exact bug this module exists to remove. Drop the entry instead.
-      if (unit === undefined) return null;
-
-      return {
-        ...result,
-        unit,
-        prices: this.toUserPrices(result.prices, side, taxOnPoolInput),
-        gasCost: this.addRouterOverhead(result.gasCost, taxOnPoolInput),
-      };
-    });
-
-    const usable = adjusted.filter(isTruthy);
-
-    return usable.length > 0 ? usable : null;
+  /*
+   * The quoter prices the pool untaxed, and RPC results carry no tickSpacing for
+   * the sell calldata, so this key must never fall back to it.
+   */
+  async getPricingFromRpc(): Promise<null> {
+    return null;
   }
 
   /*
    * amounts and prices mean different things per side:
    *   SELL: amounts = src in,   prices = dest out
    *   BUY:  amounts = dest out, prices = src in
-   *
-   * The tax always lands on the AEROSTRAT side, never on AERO, so the transform
-   * follows which side of the pool AEROSTRAT sits on rather than the swap side:
-   *   - AEROSTRAT is the input (SELL only): less reaches the pool, so the pool
-   *     should be priced on a reduced input.
-   *   - AEROSTRAT is the output on a BUY: the recipient is taxed on the way out,
-   *     so the pool must be asked for more than the user requested.
-   *   - AEROSTRAT is the output on a SELL: the pool prices normally and the
-   *     delivered amount is reduced afterwards, in toUserPrices.
+   * The tax lands on the AEROSTRAT side, so the transform follows which side of
+   * the pool AEROSTRAT sits on rather than the swap side.
    */
   private toPoolAmounts(
     amounts: bigint[],
@@ -317,60 +286,11 @@ export class AerostratSlipstream extends VelodromeSlipstream {
     return prices;
   }
 
-  private poolKeyOf(poolAddresses?: Address[]): string {
-    return (poolAddresses?.[0] ?? '').toLowerCase();
-  }
-
-  /*
-   * The unit price cannot be recovered by appending the unit amount to the
-   * amounts array: queryOutputs requires strictly increasing amounts and carries
-   * swap state forward between entries, so a trailing small value drives
-   * amountSpecifiedRemaining negative and returns garbage. Price it separately,
-   * keyed by pool so a pair with more than one tickSpacing stays correct.
-   */
-  private async getUnitPrices(
-    srcToken: Token,
-    destToken: Token,
-    unitAmount: bigint,
-    side: SwapSide,
-    blockNumber: number,
-    limitPools: string[] | undefined,
+  private addRouterOverhead(
+    gasCost: number | number[],
     taxOnPoolInput: boolean,
-  ): Promise<Record<string, bigint>> {
-    const pricedUnit = this.toPoolAmounts(
-      [unitAmount],
-      side,
-      taxOnPoolInput,
-    )[0];
-
-    const unitResults = await super.getPricesVolume(
-      srcToken,
-      destToken,
-      [0n, pricedUnit],
-      side,
-      blockNumber,
-      limitPools,
-    );
-
-    if (!unitResults) return {};
-
-    return unitResults.reduce<Record<string, bigint>>((acc, result) => {
-      if (result.data.path[0]?.tickSpacing === undefined) return acc;
-
-      const unit = result.prices[1];
-      if (unit === undefined) return acc;
-
-      acc[this.poolKeyOf(result.poolAddresses)] = this.toUserPrices(
-        [unit],
-        side,
-        taxOnPoolInput,
-      )[0];
-      return acc;
-    }, {});
-  }
-
-  private addRouterOverhead(gasCost: number | number[], isSell: boolean) {
-    if (!isSell) return gasCost;
+  ) {
+    if (!taxOnPoolInput) return gasCost;
 
     const overhead = AerostratSlipstream.SELL_ROUTER_GAS_OVERHEAD;
 
@@ -438,7 +358,7 @@ export class AerostratSlipstream extends VelodromeSlipstream {
       );
     }
 
-    const exchangeData = this.aerostratRouterIface.encodeFunctionData(
+    const exchangeData = this.taxedRouterIface.encodeFunctionData(
       'exactInputSellAEROSTRAT',
       [
         {
@@ -461,9 +381,9 @@ export class AerostratSlipstream extends VelodromeSlipstream {
       needWrapNative: this.needWrapNative,
       dexFuncHasRecipient: true,
       exchangeData,
-      targetExchange: this.config.aerostratRouter!,
+      targetExchange: this.config.taxedRouter!,
       returnAmountPos: extractReturnAmountPosition(
-        this.aerostratRouterIface,
+        this.taxedRouterIface,
         'exactInputSellAEROSTRAT',
         'amountOut',
       ),
@@ -482,18 +402,18 @@ export class AerostratSlipstream extends VelodromeSlipstream {
   }
 
   async getSimpleParam(): Promise<SimpleExchangeParam> {
-    throw new Error(`${this.dexKey}: V5 simple swap is not supported`);
-  }
-
-  getAdapterParam(): never {
-    throw new Error(`${this.dexKey}: V5 adapters are not supported`);
+    return this.unsupported('V5 simple swap');
   }
 
   getDirectParam(): never {
-    throw new Error(`${this.dexKey}: direct swaps are not supported`);
+    return this.unsupported('direct swaps');
   }
 
   getDirectParamV6(): never {
-    throw new Error(`${this.dexKey}: direct swaps are not supported`);
+    return this.unsupported('direct swaps');
+  }
+
+  private unsupported(what: string): never {
+    throw new Error(`${this.dexKey}: ${what} is not supported`);
   }
 }

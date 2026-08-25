@@ -101,6 +101,8 @@ export class UniswapV3
   private poolInitPromises: Record<string, Promise<UniswapV3EventPool | null>> =
     {};
 
+  private _excludedPoolSet?: Set<string>;
+
   protected totalPoolsCount = 0;
   protected nonNullPoolsCount = 0;
 
@@ -506,15 +508,21 @@ export class UniswapV3
   // Pools owned by a more specialised dexKey (e.g. a fee-on-transfer fork) must
   // not also be quoted by the generic fork, otherwise the untaxed quote always
   // outbids the correct one.
+  // Lowercased here rather than in _toLowerForAllConfigAddresses: Slipstream
+  // forks re-assign the raw config as a constructor parameter property after
+  // super() runs, so normalization there never survives for them.
+  private get excludedPoolSet(): Set<string> {
+    if (!this._excludedPoolSet) {
+      this._excludedPoolSet = new Set(
+        (this.config.excludedPools ?? []).map(pool => pool.toLowerCase()),
+      );
+    }
+    return this._excludedPoolSet;
+  }
+
   protected isExcludedPool(poolAddress: Address): boolean {
-    // Both sides are lowercased here rather than relying on config
-    // normalization: Slipstream forks re-assign the raw config as a constructor
-    // parameter property after super() runs, so a checksummed address in
-    // excludedPools would otherwise silently never match.
-    const target = poolAddress.toLowerCase();
-    return !!this.config.excludedPools?.some(
-      pool => pool.toLowerCase() === target,
-    );
+    if (this.excludedPoolSet.size === 0) return false;
+    return this.excludedPoolSet.has(poolAddress.toLowerCase());
   }
 
   async getPoolIdentifiers(
@@ -714,6 +722,18 @@ export class UniswapV3
     );
   }
 
+  // Overridable so a fork pricing a fee-on-transfer pool can have the unit
+  // priced on the same basis as its amounts, in the same pass.
+  protected getUnitAmount(
+    side: SwapSide,
+    srcToken: Token,
+    destToken: Token,
+  ): bigint {
+    return getBigIntPow(
+      side == SwapSide.SELL ? srcToken.decimals : destToken.decimals,
+    );
+  }
+
   async getPricesVolume(
     srcToken: Token,
     destToken: Token,
@@ -821,9 +841,7 @@ export class UniswapV3
         blockNumber,
       );
 
-      const unitAmount = getBigIntPow(
-        side == SwapSide.SELL ? _srcToken.decimals : _destToken.decimals,
-      );
+      const unitAmount = this.getUnitAmount(side, _srcToken, _destToken);
 
       const _amounts = [...amounts.slice(1)];
 
@@ -1485,9 +1503,6 @@ export class UniswapV3
       decodeStateMultiCallResultWithRelativeBitmaps:
         this.config.decodeStateMultiCallResultWithRelativeBitmaps,
       liquidityField: this.config.liquidityField,
-      excludedPools: this.config.excludedPools?.map(pool => pool.toLowerCase()),
-      aerostratToken: this.config.aerostratToken?.toLowerCase(),
-      aerostratRouter: this.config.aerostratRouter?.toLowerCase(),
     };
     return newConfig;
   }

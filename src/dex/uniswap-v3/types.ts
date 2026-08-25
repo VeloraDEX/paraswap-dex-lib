@@ -105,8 +105,8 @@ export type DexParams = {
   excludedPools?: string[];
   // Fee-on-transfer token and the router able to sell it, for forks that price
   // a taxed pool. Both are set together or not at all.
-  aerostratToken?: Address;
-  aerostratRouter?: Address;
+  taxedToken?: Address;
+  taxedRouter?: Address;
 };
 
 export type UniswapV3SimpleSwapSellParam = {

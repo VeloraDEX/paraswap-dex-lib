@@ -46,6 +46,28 @@ export const PoolsToPreload: DexConfigMap<
   },
 };
 
+// AerostratSlipstream prices the same protocol deployment as
+// AerodromeSlipstreamNewFactory and must not drift from it, so the shared
+// addresses live in one place.
+const AERODROME_SLIPSTREAM_NEW_FACTORY_BASE = {
+  factory: '0xaDe65c38CD4849aDBA595a4323a8C7DdfE89716a',
+  quoter: '0xfa2CB6D6cea79D6Efa102e527B3D67b2e61E3659',
+  router: '0xcbBb8035cAc7D4B3Ca7aBb74cF7BdF900215Ce0D',
+  supportedFees: SUPPORTED_FEES,
+  stateMulticall: '0x736518161516c1cfBD5bf5e7049FCBDC9b933987',
+  stateMultiCallAbi: VelodromeSlipstreamMulticallABi as AbiItem[],
+  eventPoolImplementation: VelodromeSlipstreamEventPool,
+  factoryImplementation: VelodromeSlipstreamFactory,
+  decodeStateMultiCallResultWithRelativeBitmaps:
+    decodeStateMultiCallResultWithRelativeBitmapsForVelodromeSlipstream,
+  uniswapMulticall: '0x091e99cb1C49331a94dD62755D168E941AbD0693',
+  chunksCount: 10,
+  initRetryFrequency: 10,
+  initHash: '0x942e97a4c6FdC38B4CD1c0298D37d81fDD8E5A16', // pool implementation address from factory contract is used instead of initHash here
+  subgraphURL: 'EeEmhjkK76RKQpZcfT2S8ZxzcV6Saq4RUw6krq1KuDJu',
+  liquidityField: 'liquidity',
+};
+
 export const UniswapV3Config: DexConfigMap<DexParams> = {
   UniswapV3: {
     [Network.MAINNET]: {
@@ -441,11 +463,8 @@ export const UniswapV3Config: DexConfigMap<DexParams> = {
   },
   AerodromeSlipstreamNewFactory: {
     [Network.BASE]: {
-      factory: '0xaDe65c38CD4849aDBA595a4323a8C7DdfE89716a',
-      quoter: '0xfa2CB6D6cea79D6Efa102e527B3D67b2e61E3659',
-      router: '0xcbBb8035cAc7D4B3Ca7aBb74cF7BdF900215Ce0D',
+      ...AERODROME_SLIPSTREAM_NEW_FACTORY_BASE,
       excludedPools: [AEROSTRAT_AERO_POOL],
-      supportedFees: SUPPORTED_FEES,
       tickSpacings: [1n, 10n, 50n, 100n, 200n, 500n, 2000n],
       tickSpacingsToFees: {
         '1': 100n,
@@ -456,18 +475,6 @@ export const UniswapV3Config: DexConfigMap<DexParams> = {
         '500': 10000n,
         '2000': 10000n,
       },
-      stateMulticall: '0x736518161516c1cfBD5bf5e7049FCBDC9b933987',
-      stateMultiCallAbi: VelodromeSlipstreamMulticallABi as AbiItem[],
-      eventPoolImplementation: VelodromeSlipstreamEventPool,
-      factoryImplementation: VelodromeSlipstreamFactory,
-      decodeStateMultiCallResultWithRelativeBitmaps:
-        decodeStateMultiCallResultWithRelativeBitmapsForVelodromeSlipstream,
-      uniswapMulticall: '0x091e99cb1C49331a94dD62755D168E941AbD0693',
-      chunksCount: 10,
-      initRetryFrequency: 10,
-      initHash: '0x942e97a4c6FdC38B4CD1c0298D37d81fDD8E5A16', // pool implementation address from factory contract is used instead of initHash here
-      subgraphURL: 'EeEmhjkK76RKQpZcfT2S8ZxzcV6Saq4RUw6krq1KuDJu',
-      liquidityField: 'liquidity',
     },
   },
   AerodromeSlipstreamFactory3: {
@@ -502,30 +509,16 @@ export const UniswapV3Config: DexConfigMap<DexParams> = {
   },
   AerostratSlipstream: {
     [Network.BASE]: {
-      factory: '0xaDe65c38CD4849aDBA595a4323a8C7DdfE89716a',
-      quoter: '0xfa2CB6D6cea79D6Efa102e527B3D67b2e61E3659',
-      router: '0xcbBb8035cAc7D4B3Ca7aBb74cF7BdF900215Ce0D',
-      aerostratToken: '0x1A85b97F8b0E1CEE4D5500E093F5970a2aeB3fB8',
-      aerostratRouter: '0xD3AFf447095Be71c43aeAF000c7c48AC227C228b',
-      supportedFees: SUPPORTED_FEES,
-      // Only the AEROSTRAT/AERO pool is taxed, and it is tickSpacing 100. Keeping
-      // this narrow avoids duplicating discovery for the whole Aerodrome universe.
+      ...AERODROME_SLIPSTREAM_NEW_FACTORY_BASE,
+      taxedToken: '0x1A85b97F8b0E1CEE4D5500E093F5970a2aeB3fB8',
+      taxedRouter: '0xD3AFf447095Be71c43aeAF000c7c48AC227C228b',
+      // Only the AEROSTRAT/AERO pool is taxed, and it is tickSpacing 100.
+      // Keeping this narrow avoids duplicating discovery for the whole
+      // Aerodrome universe.
       tickSpacings: [100n],
       tickSpacingsToFees: {
         '100': 500n,
       },
-      stateMulticall: '0x736518161516c1cfBD5bf5e7049FCBDC9b933987',
-      stateMultiCallAbi: VelodromeSlipstreamMulticallABi as AbiItem[],
-      eventPoolImplementation: VelodromeSlipstreamEventPool,
-      factoryImplementation: VelodromeSlipstreamFactory,
-      decodeStateMultiCallResultWithRelativeBitmaps:
-        decodeStateMultiCallResultWithRelativeBitmapsForVelodromeSlipstream,
-      uniswapMulticall: '0x091e99cb1C49331a94dD62755D168E941AbD0693',
-      chunksCount: 10,
-      initRetryFrequency: 10,
-      initHash: '0x942e97a4c6FdC38B4CD1c0298D37d81fDD8E5A16', // pool implementation address from factory contract is used instead of initHash here
-      subgraphURL: 'EeEmhjkK76RKQpZcfT2S8ZxzcV6Saq4RUw6krq1KuDJu',
-      liquidityField: 'liquidity',
     },
   },
   PangolinV3: {
