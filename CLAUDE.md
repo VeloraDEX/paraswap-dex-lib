@@ -11,6 +11,8 @@ When making fixes based on code review comments or feedback, add a concise descr
 <!-- Add new fixes at the top of this list -->
 <!-- Format: - **[Date] Issue**: Brief description of fix -->
 
+- **[2026-08] Delete a helper, delete its docblock**: removing a private helper leaves its comment attached to whatever method follows, where it reads as documentation for code that never did that thing. Grep for orphaned comment blocks after removing a method.
+
 - **[2026-08] getCalldataGasCost must mirror gasCost's shape**: `pricing-helper` compares the two and throws when a scalar meets an array, and the caller swallows that into an empty result - a dex returning a scalar while `getPricesVolume` returns a per-amount array silently contributes no prices at all on L2 networks. Return `poolPrices.prices.map(p => p === 0n ? 0 : cost)`.
 
 - **[2026-08] Scope a pool-restricted fork by filtering results, not by overriding pool lookup**: `_initPool` writes a pool into `eventPools` before an override can reject it, and `getSelectedPools` reads that cache first, so a `getPool` override does not close the hole. Filter what `getPricesVolume` returns instead - it covers every branch the parent can take.

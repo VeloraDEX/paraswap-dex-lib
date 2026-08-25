@@ -216,9 +216,8 @@ export class AerostratSlipstream extends VelodromeSlipstream {
 
     /*
      * Snapshot the rate once. The refresh interval can fire during the await
-     * below, and a quote whose amounts, prices and recorded rate came from
-     * different rates would be internally inconsistent - getDexParam trusts the
-     * recorded one to size the swap.
+     * below, and amounts and prices computed against different rates would make
+     * a single quote internally inconsistent.
      */
     const taxBps = this.taxBps!;
 
@@ -433,11 +432,6 @@ export class AerostratSlipstream extends VelodromeSlipstream {
     };
   }
 
-  /*
-   * The rate a route was priced at, not the current one. A refresh between
-   * quoting and building would otherwise size the swap against a rate the quote
-   * never used.
-   */
   getCalldataGasCost(
     poolPrices: PoolPrices<VelodromeSlipstreamData>,
   ): number | number[] {

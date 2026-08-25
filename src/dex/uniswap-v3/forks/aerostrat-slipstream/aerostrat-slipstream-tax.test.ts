@@ -179,15 +179,9 @@ describe('AerostratSlipstream tax handling', () => {
     const config = UniswapV3Config['AerostratSlipstream'][Network.BASE];
     const routerIface = new Interface(AerostratRouterABI);
 
-    const dataFor = (
-      tokenIn: string,
-      tokenOut: string,
-      tickSpacing = '100',
-      taxBps: string | undefined = '1000',
-    ) =>
+    const dataFor = (tokenIn: string, tokenOut: string, tickSpacing = '100') =>
       ({
         path: [{ tokenIn, tokenOut, fee: '500', tickSpacing }],
-        taxBps,
       } as any);
 
     afterEach(() => jest.restoreAllMocks());
@@ -307,35 +301,6 @@ describe('AerostratSlipstream tax handling', () => {
       expect(spy.mock.calls[0][3]).toEqual(priced.toString());
     });
 
-    it('falls back to the live rate when a route carries none', () => {
-      // A throw here would kill the whole transaction build, not just this leg,
-      // so a route that never recorded a rate is sized from the live one.
-      setTax(1000n);
-      const spy = jest
-        .spyOn(UniswapV3.prototype, 'getDexParam')
-        .mockReturnValue({} as any);
-
-      aerostrat.getDexParam(
-        AERO.address,
-        AEROSTRAT.address,
-        '0',
-        (900n * BI_POWS[18]).toString(),
-        RECIPIENT,
-        {
-          path: [
-            {
-              tokenIn: AERO.address,
-              tokenOut: AEROSTRAT.address,
-              fee: '500',
-              tickSpacing: '100',
-            },
-          ],
-        } as any,
-        SwapSide.BUY,
-      );
-      expect(spy.mock.calls[0][3]).toEqual((1000n * BI_POWS[18]).toString());
-    });
-
     it('refuses to encode anything the pricing guards should have excluded', () => {
       setTax(1000n);
       const data = dataFor(AEROSTRAT.address, AERO.address);
@@ -437,7 +402,6 @@ describe('AerostratSlipstream tax handling', () => {
               tickSpacing: '100',
             },
           ],
-          taxBps: '1000',
         } as any,
         SwapSide.SELL,
       );
@@ -460,7 +424,6 @@ describe('AerostratSlipstream tax handling', () => {
               tickSpacing: '100',
             },
           ],
-          taxBps: '1000',
         } as any,
         SwapSide.SELL,
       );
