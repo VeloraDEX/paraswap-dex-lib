@@ -49,6 +49,9 @@ import {
  */
 const AEROSTRAT_DECIMALS = 18;
 
+// Page requested from the subgraph before filtering down to the taxed pool.
+const TOP_POOLS_SEARCH_COUNT = 20;
+
 export type AerostratSlipstreamData = VelodromeSlipstreamData & {
   // The rate this route was priced at. Carried so the calldata cannot be built
   // against a rate that changed after the quote.
@@ -212,7 +215,15 @@ export class AerostratSlipstream extends VelodromeSlipstream {
      * querying by the counter token returns a page ordered by liquidity across
      * the whole factory, and this pair would usually be truncated out of it.
      */
-    const pools = await super.getTopPoolsForToken(this.taxedToken, limit);
+    /*
+     * Ask for a generous page: the parent sorts by liquidity and truncates to
+     * the requested count before this filter runs, so a small limit could drop
+     * the taxed pool behind any other pool of the same token.
+     */
+    const pools = await super.getTopPoolsForToken(
+      this.taxedToken,
+      Math.max(limit, TOP_POOLS_SEARCH_COUNT),
+    );
     const taxedPool = this.config.taxedPool!.toLowerCase();
     const owned = pools.find(pool => pool.address.toLowerCase() === taxedPool);
 
@@ -238,7 +249,7 @@ export class AerostratSlipstream extends VelodromeSlipstream {
         liquidityUSD: counterToken.liquidityUSD ?? owned.liquidityUSD,
         connectorTokens: [
           {
-            address: this.taxedToken,
+            address: this.taxedToken.toLowerCase(),
             decimals: AEROSTRAT_DECIMALS,
             liquidityUSD: owned.liquidityUSD,
           },
@@ -361,18 +372,18 @@ export class AerostratSlipstream extends VelodromeSlipstream {
     srcToken: Token,
     destToken: Token,
   ): bigint {
-    const unitAmount = super.getUnitAmount(side, srcToken, destToken);
-
     /*
      * Called by the parent mid-pricing, so it sees the live rate rather than
      * the caller's snapshot. If a refresh cleared the rate in between, fall
      * back to the untaxed unit rather than building a NaN: unit only ranks
      * venues, it never sizes a fill.
      */
-    if (this.taxBps === undefined) return unitAmount;
+    if (this.taxBps === undefined) {
+      throw new Error(`${this.dexKey}: tax rate cleared while pricing`);
+    }
 
     return this.toPoolAmounts(
-      [unitAmount],
+      [super.getUnitAmount(side, srcToken, destToken)],
       side,
       this.isAerostrat(srcToken.address),
       this.taxBps,
@@ -443,29 +454,27 @@ export class AerostratSlipstream extends VelodromeSlipstream {
     executorAddress?: Address,
     options?: GetDexParamOptions,
   ): DexExchangeParam {
-    // Assertions of last resort. A throw here rejects the whole transaction
-    // build, not just this leg, so the pricing guards must make them unreachable.
-    if (!this.isQuotable()) {
-      throw new Error(
-        `${this.dexKey}: transfer tax is unknown or out of range`,
-      );
-    }
-
     if (!this.isAerostrat(srcToken)) {
       // Buys execute through the stock Aerodrome router. On an exact-output buy
       // the pool's outgoing transfer is taxed, so the pool has to be asked for
       // more than the user is to receive - otherwise it emits exactly the
       // requested amount, the recipient is handed ~10% less, and Augustus's
       // final received >= toAmount check reverts the whole swap.
-      const poolDestAmount =
-        side === SwapSide.BUY && this.isAerostrat(destToken)
-          ? applyTransferFee(
-              [BigInt(destAmount)],
-              SwapSide.BUY,
-              Number(this.pricedTaxBps(data)),
-              1,
-            )[0].toString()
-          : destAmount;
+      /*
+       * destAmount is what the user should end up with, but both router entry
+       * points compare against the pool's output, which is taxed on the way
+       * out. Gross it up on either side: for an exact-output buy it is what the
+       * pool must emit, and for a sell it keeps amountOutMinimum as tight as
+       * the user's tolerance rather than ~taxBps looser.
+       */
+      const poolDestAmount = this.isAerostrat(destToken)
+        ? applyTransferFee(
+            [BigInt(destAmount)],
+            SwapSide.BUY,
+            Number(this.pricedTaxBps(data)),
+            1,
+          )[0].toString()
+        : destAmount;
 
       const param = super.getDexParam(
         srcToken,
@@ -570,11 +579,11 @@ export class AerostratSlipstream extends VelodromeSlipstream {
 
     const cost =
       CALLDATA_GAS_COST.DEX_OVERHEAD +
-      CALLDATA_GAS_COST.OFFSET_LARGE +
-      // tokenIn, tokenOut, recipient
+      // tokenIn, tokenOut, recipient. Every field of the router's params tuple
+      // is static, so it is encoded inline with no offset word.
       CALLDATA_GAS_COST.ADDRESS * 3 +
-      // tickSpacing
-      CALLDATA_GAS_COST.wordNonZeroBytes(3) +
+      // tickSpacing, one non-zero byte at the configured spacings
+      CALLDATA_GAS_COST.wordNonZeroBytes(1) +
       CALLDATA_GAS_COST.TIMESTAMP +
       // amountIn, amountOutMinimum
       CALLDATA_GAS_COST.AMOUNT * 2 +

@@ -273,26 +273,6 @@ describe('AerostratSlipstream tax handling', () => {
       expect(spy.mock.calls[0][3]).toEqual((1000n * BI_POWS[18]).toString());
     });
 
-    it('does not gross up the exact-input sell side of a buy', () => {
-      setTax(1000n);
-      const spy = jest
-        .spyOn(UniswapV3.prototype, 'getDexParam')
-        .mockReturnValue({} as any);
-
-      const destAmount = 900n * BI_POWS[18];
-      aerostrat.getDexParam(
-        AERO.address,
-        AEROSTRAT.address,
-        '0',
-        destAmount.toString(),
-        RECIPIENT,
-        dataFor(AERO.address, AEROSTRAT.address),
-        SwapSide.SELL,
-      );
-
-      expect(spy.mock.calls[0][3]).toEqual(destAmount.toString());
-    });
-
     it('hands the pool exactly what pricing grossed up', () => {
       // The gross-up lives in two places; if they ever disagree the quote is a
       // lie. Assert they agree rather than pinning each independently.
@@ -427,6 +407,9 @@ describe('AerostratSlipstream tax handling', () => {
         ),
       ).toThrow(/single hop/);
 
+      // A sell encodes from the route data alone, so an expired live rate must
+      // not abort a route that was quoted while the rate was fresh - a throw
+      // here would kill the whole transaction build, not just this leg.
       setTax(undefined);
       expect(() =>
         aerostrat.getDexParam(
@@ -438,7 +421,7 @@ describe('AerostratSlipstream tax handling', () => {
           data,
           SwapSide.SELL,
         ),
-      ).toThrow(/tax is unknown or out of range/);
+      ).not.toThrow();
     });
   });
 
@@ -471,18 +454,65 @@ describe('AerostratSlipstream tax handling', () => {
     });
 
     it('does not let the executor trust the router return on a taxed output', () => {
-      // The router reports the pool's output; the recipient is taxed on the way
-      // out, so the executor has to measure the balance instead.
+      // SELL AERO -> AEROSTRAT is the direction where the parent actually sets
+      // returnAmountPos. The router reports the pool's output; the recipient is
+      // taxed on the way out, so the executor must measure the balance instead.
       setTax(1000n);
-      jest.spyOn(UniswapV3.prototype, 'getDexParam').mockReturnValue({
-        returnAmountPos: 0,
-        exchangeData: '0x',
-        targetExchange: config.router,
-        needWrapNative: false,
-        dexFuncHasRecipient: true,
-      } as any);
 
-      const buy = aerostrat.getDexParam(
+      const sell = aerostrat.getDexParam(
+        AERO.address,
+        AEROSTRAT.address,
+        (1n * BI_POWS[18]).toString(),
+        (900n * BI_POWS[18]).toString(),
+        RECIPIENT2,
+        {
+          path: [
+            {
+              tokenIn: AERO.address,
+              tokenOut: AEROSTRAT.address,
+              fee: '500',
+              tickSpacing: '100',
+            },
+          ],
+          taxBps: '1000',
+        } as any,
+        SwapSide.SELL,
+      );
+      expect(sell.returnAmountPos).toBeUndefined();
+
+      // The custom-router sell pays out AERO, which is untaxed, so that
+      // direction keeps its return position.
+      const untaxedOut = aerostrat.getDexParam(
+        AEROSTRAT.address,
+        AERO.address,
+        '1',
+        '1',
+        RECIPIENT2,
+        {
+          path: [
+            {
+              tokenIn: AEROSTRAT.address,
+              tokenOut: AERO.address,
+              fee: '500',
+              tickSpacing: '100',
+            },
+          ],
+          taxBps: '1000',
+        } as any,
+        SwapSide.SELL,
+      );
+      expect(untaxedOut.returnAmountPos).toEqual(0);
+    });
+
+    it('grosses up the pool-side minimum on a sell into the taxed token', () => {
+      // amountOutMinimum is compared against the pool's pre-tax output, so a
+      // post-tax figure leaves the bound ~taxBps looser than the user asked for.
+      setTax(1000n);
+      const spy = jest
+        .spyOn(UniswapV3.prototype, 'getDexParam')
+        .mockReturnValue({} as any);
+
+      aerostrat.getDexParam(
         AERO.address,
         AEROSTRAT.address,
         '1',
@@ -499,10 +529,31 @@ describe('AerostratSlipstream tax handling', () => {
           ],
           taxBps: '1000',
         } as any,
-        SwapSide.BUY,
+        SwapSide.SELL,
       );
 
-      expect(buy.returnAmountPos).toBeUndefined();
+      expect(spy.mock.calls[0][3]).toEqual((1000n * BI_POWS[18]).toString());
+    });
+
+    it('filters the pricing path down to the taxed pool as well', async () => {
+      // getSelectedPools is the override that guards pricing; the sibling test
+      // only covers getPoolsForIdentifiers.
+      setTax(1000n);
+      jest
+        .spyOn(VelodromeSlipstream.prototype, 'getSelectedPools' as any)
+        .mockResolvedValue([
+          { poolAddress: config.taxedPool! } as any,
+          { poolAddress: '0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef' } as any,
+        ]);
+
+      const pools = await (aerostrat as any).getSelectedPools(
+        AEROSTRAT.address,
+        AERO.address,
+        1,
+      );
+
+      expect(pools).toHaveLength(1);
+      expect(pools[0].poolAddress).toEqual(config.taxedPool);
     });
 
     it('advertises pools even before the tax rate is known', async () => {
