@@ -13,6 +13,7 @@ import {
   TransferFeeParams,
   NumberAsString,
   DexExchangeParam,
+  GetDexParamOptions,
 } from '../../types';
 import {
   SwapSide,
@@ -42,6 +43,7 @@ import {
   SlippageCheckError,
   TooStrictSlippageCheckError,
 } from '../generic-rfq/types';
+import { resolvePreProcessedData } from '../preprocess-in-dex-param';
 import { SimpleExchangeWithRestrictions } from '../simple-exchange-with-restrictions';
 import { Adapters, DexalotConfig } from './config';
 import { RateFetcher } from './rate-fetcher';
@@ -883,7 +885,7 @@ export class Dexalot
     );
   }
 
-  getDexParam(
+  async getDexParam(
     srcToken: Address,
     destToken: Address,
     srcAmount: NumberAsString,
@@ -891,8 +893,19 @@ export class Dexalot
     recipient: Address,
     data: DexalotData,
     side: SwapSide,
-  ): DexExchangeParam {
-    const { quoteData } = data;
+    executorAddress: Address,
+    options?: GetDexParamOptions,
+  ): Promise<DexExchangeParam> {
+    const { data: _data, minDeadline } = await resolvePreProcessedData({
+      dexKey: this.dexKey,
+      data,
+      side,
+      isPreProcessed: !!data.quoteData?.signature,
+      preProcessTransaction: this.preProcessTransaction.bind(this),
+      options,
+    });
+
+    const { quoteData } = _data;
 
     assert(
       quoteData !== undefined,
@@ -930,6 +943,7 @@ export class Dexalot
       specialDexFlag: SpecialDex.SWAP_ON_DEXALOT,
       // cannot modify amount due to signature checks
       specialDexSupportsInsertFromAmount: false,
+      ...(minDeadline !== undefined ? { minDeadline } : {}),
     };
   }
 

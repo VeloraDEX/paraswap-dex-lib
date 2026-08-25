@@ -30,6 +30,7 @@ export {
   BlockHeader,
   Config,
   GetDexParamOptions,
+  GetDexParamPreProcessOptions,
 } from './types';
 
 export { IDex } from './dex/idex';
@@ -37,6 +38,12 @@ export { IDex } from './dex/idex';
 export { ConfigHelper } from './config';
 
 export { SlippageCheckError, BlacklistError } from './dex/generic-rfq/types';
+
+export {
+  GetDexParamPreProcessError,
+  GetDexParamPreProcessErrorCode,
+  unwrapPreProcessError,
+} from './dex/preprocess-in-dex-param';
 
 export {
   TenderlySimulator,

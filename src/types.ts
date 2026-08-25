@@ -1,4 +1,4 @@
-import { Address, ParaSwapVersion } from '@paraswap/core';
+import { Address, NumberAsString, ParaSwapVersion } from '@paraswap/core';
 export { BlockHeader } from 'web3-eth';
 export {
   Address,
@@ -158,8 +158,27 @@ export type AdapterExchangeParam = {
   networkFee: string;
 };
 
+// Everything preProcessTransaction needs, in a JSON-serializable shape, so that
+// getDexParam can produce the order build itself when the caller did not run
+// the preProcessTransaction step (e.g. the standalone dex-param HTTP endpoint).
+export type GetDexParamPreProcessOptions = Omit<
+  PreprocessTransactionOptions,
+  'slippageFactor'
+> & {
+  // bignumber.js has toJSON, but it round-trips to a plain string and loses the
+  // class, so the wire format is an explicit decimal string revived on arrival.
+  slippageFactor: string;
+  // getDexParam receives WETH-substituted addresses without decimals and, on
+  // SELL, destAmount === '1' — the preprocess inputs cannot be derived from it.
+  srcToken: Token;
+  destToken: Token;
+  srcAmount: NumberAsString;
+  destAmount: NumberAsString;
+};
+
 export type GetDexParamOptions = {
   nowTimestampMs?: number;
+  preProcess?: GetDexParamPreProcessOptions;
 };
 
 export type DexExchangeParam = {
@@ -184,6 +203,9 @@ export type DexExchangeParam = {
   insertFromAmountPos?: number;
   amountsPacked128?: boolean;
   permit2Approval?: boolean;
+  // Quote expiry (ExchangeTxInfo.deadline) from a preProcessTransaction that
+  // getDexParam ran itself. Absent whenever the order build was already present.
+  minDeadline?: NumberAsString;
   // Build-time only, set by the transaction builder (never returned by
   // getDexParam): true when this swap was built with the executor as its
   // recipient. Only ever set on revertable-group FALLBACK params, where the

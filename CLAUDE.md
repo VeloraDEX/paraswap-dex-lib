@@ -21,6 +21,14 @@ When making fixes based on code review comments or feedback, add a concise descr
 
 - **[2025-01] VelodromeSlipstream RPC optimization**: Centralized per-pool `factory.getSwapFee()` calls into a single batched interval at DEX level. Used `multiWrapper.tryAggregate()` to batch calls, `setState()` for immutable state updates, master/slave check to prevent duplicate RPC calls, and proper interval cleanup in `releaseResources()`.
 
+- **[2026-08] Lazy preprocessing in `getDexParam`**: `getDexParam` can be called standalone (over HTTP), with no preceding `preProcessTransaction`. RFQ dexes now build the order themselves via `resolvePreProcessedData` (`src/dex/preprocess-in-dex-param.ts`) using the context in `GetDexParamOptions.preProcess`. The `isPreProcessed` predicate must cover _every_ field the encoding path needs, not just the first one (e.g. Hashflow needs `quoteData` **and** `signature`; Bebop needs `tx.data`, `tx.to` **and** `approvalTarget`) — otherwise a partially-filled payload silently skips the rebuild. Note the preprocess inputs cannot be derived from `getDexParam`'s own args: it gets WETH-substituted addresses without decimals and `destAmount === '1'` on SELL.
+
+- **[2026-08] Lazy preprocess failures have one error type**: every failure of the `preProcessTransaction` that `getDexParam` runs itself throws `GetDexParamPreProcessError` (`src/dex/preprocess-in-dex-param.ts`) with a `code` of `MISSING_CONTEXT` / `INVALID_CONTEXT` / `PREPROCESS_FAILED` / `MISSING_DATA`. Otherwise a build-time RFQ failure is indistinguishable from an encoding failure. The dex still logs and applies its own restrictions first; the original error stays on `originalError`, so callers branching on `SlippageCheckError` / blacklist codes must go through `unwrapPreProcessError` first. Both are exported from `src/index.ts`.
+
+- **[2026-08] `compareOnly` must not duplicate side effects**: `buildSingleExchangeParam` runs the remote and local dex-param builds in the same `Promise.all`. Once `getDexParam` can quote lazily, that means two firm quotes for one swap, so the remote shadow build is skipped whenever `getDexParamOptions.preProcess` is set. Any future work that gives `getDexParam` side effects has to reconsider that parallel pair.
+
+- **[2026-08] Structural params can't reference `protected` members**: a helper typed `{ network: number }` is not assignable from a class where `network` is `protected` (`SimpleExchange`). Pass the bound method plus plain values (`dexKey` is public) instead of `this`.
+
 - **[2025-01] Avoid analytics logging**: Don't add success/failure count logs (e.g., `Updated ${successCount}/${totalCount} pools`). Log only important operations, warnings for failures, and errors with context. Analytics-style logs create unnecessary noise.
 
 ## Repository Overview

@@ -8,10 +8,12 @@ import {
   PoolLiquidity,
   Address,
   DexExchangeParam,
+  GetDexParamOptions,
 } from '../../types';
 import { Network, SwapSide } from '../../constants';
 import { IDexHelper } from '../../dex-helper';
 import { ParaSwapLimitOrders } from '../paraswap-limit-orders/paraswap-limit-orders';
+import { resolvePreProcessedData } from '../preprocess-in-dex-param';
 import { BN_0, BN_1, getBigNumberPow } from '../../bignumber-constants';
 import { ParaSwapLimitOrdersData } from '../paraswap-limit-orders/types';
 import { ONE_ORDER_GASCOST } from '../paraswap-limit-orders/constant';
@@ -291,7 +293,7 @@ export class GenericRFQ extends ParaSwapLimitOrders {
     return { params: payload, encoder, networkFee: '0' };
   }
 
-  getDexParam(
+  async getDexParam(
     srcToken: Address,
     destToken: Address,
     srcAmount: NumberAsString,
@@ -299,8 +301,19 @@ export class GenericRFQ extends ParaSwapLimitOrders {
     recipient: Address,
     data: ParaSwapLimitOrdersData,
     side: SwapSide,
-  ): DexExchangeParam {
-    const { orderInfos } = data;
+    executorAddress: Address,
+    options?: GetDexParamOptions,
+  ): Promise<DexExchangeParam> {
+    const { data: _data, minDeadline } = await resolvePreProcessedData({
+      dexKey: this.dexKey,
+      data,
+      side,
+      isPreProcessed: data.orderInfos != null,
+      preProcessTransaction: this.preProcessTransaction.bind(this),
+      options,
+    });
+
+    const { orderInfos } = _data;
 
     if (orderInfos === null) {
       throw new Error(
@@ -324,6 +337,7 @@ export class GenericRFQ extends ParaSwapLimitOrders {
       targetExchange: this.augustusRFQAddress,
       specialDexSupportsInsertFromAmount: true,
       returnAmountPos: undefined,
+      ...(minDeadline !== undefined ? { minDeadline } : {}),
     };
   }
 
