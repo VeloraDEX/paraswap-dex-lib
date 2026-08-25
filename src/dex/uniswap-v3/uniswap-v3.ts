@@ -520,8 +520,13 @@ export class UniswapV3
     return this._excludedPoolSet;
   }
 
+  // Checked before reading pool.poolAddress, which is a lazy CREATE2 getter:
+  // dexKeys without excludedPools should not pay to compute it.
+  protected get hasExcludedPools(): boolean {
+    return this.excludedPoolSet.size > 0;
+  }
+
   protected isExcludedPool(poolAddress: Address): boolean {
-    if (this.excludedPoolSet.size === 0) return false;
     return this.excludedPoolSet.has(poolAddress.toLowerCase());
   }
 
@@ -543,7 +548,11 @@ export class UniswapV3
 
     const pools = (
       await this.getPoolsForIdentifiers(_srcAddress, _destAddress, blockNumber)
-    ).filter(pool => pool && !this.isExcludedPool(pool.poolAddress));
+    ).filter(
+      pool =>
+        pool &&
+        !(this.hasExcludedPools && this.isExcludedPool(pool.poolAddress)),
+    );
 
     if (pools.length === 0) return [];
 
@@ -792,9 +801,11 @@ export class UniswapV3
         ).filter(isTruthy);
       }
 
-      selectedPools = selectedPools.filter(
-        pool => !this.isExcludedPool(pool.poolAddress),
-      );
+      if (this.hasExcludedPools) {
+        selectedPools = selectedPools.filter(
+          pool => !this.isExcludedPool(pool.poolAddress),
+        );
+      }
 
       if (selectedPools.length === 0) return null;
 
@@ -1503,6 +1514,13 @@ export class UniswapV3
       decodeStateMultiCallResultWithRelativeBitmaps:
         this.config.decodeStateMultiCallResultWithRelativeBitmaps,
       liquidityField: this.config.liquidityField,
+      // Carried through explicitly. Slipstream forks re-assign the raw config
+      // after super() so they never see this copy, but every other fork does -
+      // and because these are optional, omitting them here would drop them
+      // silently, with no compile error and no warning.
+      excludedPools: this.config.excludedPools?.map(pool => pool.toLowerCase()),
+      taxedToken: this.config.taxedToken?.toLowerCase(),
+      taxedRouter: this.config.taxedRouter?.toLowerCase(),
     };
     return newConfig;
   }

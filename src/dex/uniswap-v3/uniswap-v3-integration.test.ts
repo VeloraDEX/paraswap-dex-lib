@@ -3120,6 +3120,12 @@ describe('Slipstream', () => {
       const taxBps = await readTaxBps();
       expect(taxBps).toBeGreaterThan(0n);
 
+      // checkPoolPrices only asserts unit >= 0, which 0n satisfies; pin it.
+      const unitAmount = BI_POWS[18];
+      expect(poolPrices![0].unit).toEqual(
+        await quoteExactInput(unitAmount - (unitAmount * taxBps) / BPS),
+      );
+
       for (let i = 0; i < amounts.length; i++) {
         if (amounts[i] === 0n) continue;
         const postTax = amounts[i] - (amounts[i] * taxBps) / BPS;
@@ -3215,20 +3221,55 @@ describe('Slipstream', () => {
       expect(pools).toEqual([]);
     });
 
-    it('is excluded from the stock Aerodrome keys', async () => {
+    it.each([
+      'AerodromeSlipstream',
+      'AerodromeSlipstreamNewFactory',
+      'AerodromeSlipstreamFactory3',
+    ])('%s does not quote the taxed pool', async stockKey => {
+      const stock = new VelodromeSlipstream(network, stockKey, dexHelper);
+
+      // Without this the untaxed quote always outbids the taxed one and the
+      // resulting swap reverts.
+      expect(
+        await stock.getPoolIdentifiers(
+          AEROSTRAT,
+          AERO,
+          SwapSide.SELL,
+          blockNumber,
+        ),
+      ).toEqual([]);
+
+      // limitPools bypasses getPoolIdentifiers, so the pricing filter has to
+      // hold independently.
+      expect(
+        await stock.getPricesVolume(
+          AEROSTRAT,
+          AERO,
+          [0n, BI_POWS[18]],
+          SwapSide.SELL,
+          blockNumber,
+          [
+            `${stockKey}_${AEROSTRAT.address.toLowerCase()}_${AERO.address.toLowerCase()}_500_100`,
+          ],
+        ),
+      ).toBeNull();
+    });
+
+    it('the stock key still quotes pairs it is not excluded from', async () => {
+      // Positive control: without this the exclusion test above would pass even
+      // if the stock key's discovery were broken outright.
       const stock = new VelodromeSlipstream(
         network,
         'AerodromeSlipstreamNewFactory',
         dexHelper,
       );
       const pools = await stock.getPoolIdentifiers(
-        AEROSTRAT,
         AERO,
+        Tokens[network]['USDC'],
         SwapSide.SELL,
         blockNumber,
       );
-      // Without this the untaxed quote always outbids the taxed one.
-      expect(pools).toEqual([]);
+      expect(pools.length).toBeGreaterThan(0);
     });
   });
 });

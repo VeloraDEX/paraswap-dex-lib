@@ -214,7 +214,9 @@ export class VelodromeSlipstream extends UniswapV3 {
   protected async updateAllPoolFees(): Promise<void> {
     try {
       const activePools = Object.values(this.eventPools).filter(
-        pool => pool !== null && !this.isExcludedPool(pool.poolAddress),
+        pool =>
+          pool !== null &&
+          !(this.hasExcludedPools && this.isExcludedPool(pool.poolAddress)),
       ) as VelodromeSlipstreamEventPool[];
 
       if (activePools.length === 0) {
