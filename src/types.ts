@@ -385,7 +385,6 @@ export type PreprocessTransactionOptions = {
   txOrigin: Address;
   userAddress: Address;
   executionContractAddress: Address;
-  hmac?: string;
   mockRfqAndLO?: boolean;
   isDirectMethod?: boolean;
   partner?: string;
