@@ -80,6 +80,7 @@ export class AerostratSlipstream extends VelodromeSlipstream {
   // Wall-clock of the last successful read. An unbounded stale rate is the same
   // failure as a seeded guess, only slower to appear.
   private taxReadAt = 0;
+  private wasQuotable = false;
   private static readonly MAX_TAX_AGE_MS = 5 * 60 * 1000;
 
   private taxUpdateIntervalTask?: NodeJS.Timeout;
@@ -106,8 +107,33 @@ export class AerostratSlipstream extends VelodromeSlipstream {
    * expires. Refuse to quote rather than emit a route that cannot be filled.
    */
   private isQuotable(): boolean {
-    if (this.taxBps === undefined || this.taxBps >= BPS_MAX_VALUE) return false;
-    return Date.now() - this.taxReadAt < AerostratSlipstream.MAX_TAX_AGE_MS;
+    const quotable =
+      this.taxBps !== undefined &&
+      this.taxBps < BPS_MAX_VALUE &&
+      Date.now() - this.taxReadAt < AerostratSlipstream.MAX_TAX_AGE_MS;
+
+    /*
+     * Log the transition, not every call. This pool is excluded from the stock
+     * Aerodrome key, so not quoting is a total blackout for it rather than a
+     * fallback to a worse price - and otherwise it looks identical to the pool
+     * simply having no liquidity.
+     */
+    if (quotable !== this.wasQuotable) {
+      this.wasQuotable = quotable;
+      if (quotable) {
+        this.logger.info(`${this.dexKey}: quoting resumed`);
+      } else {
+        this.logger.warn(
+          `${this.dexKey}: not quoting - rate ${this.taxBps}, last read ${
+            this.taxReadAt === 0
+              ? 'never'
+              : new Date(this.taxReadAt).toISOString()
+          }`,
+        );
+      }
+    }
+
+    return quotable;
   }
 
   private applyTax(
@@ -355,7 +381,22 @@ export class AerostratSlipstream extends VelodromeSlipstream {
 
     if (!results) return null;
 
-    return results.map(result => ({
+    /*
+     * Belt and braces over the getPool guard. The parent writes a pool into
+     * this.eventPools inside _initPool before this fork can reject it, and its
+     * limitPools branch returns that cache entry directly without calling
+     * getPool - so a caller-supplied identifier naming another tickSpacing of
+     * the same pair could otherwise be priced here with a tax that does not
+     * apply to it. Filtering the results covers every branch the parent takes.
+     */
+    const taxedPool = this.config.taxedPool!.toLowerCase();
+    const owned = results.filter(
+      result => result.poolAddresses?.[0]?.toLowerCase() === taxedPool,
+    );
+
+    if (owned.length === 0) return null;
+
+    return owned.map(result => ({
       ...result,
       unit: this.toUserPrices([result.unit], side, taxOnPoolInput, taxBps)[0],
       prices: this.toUserPrices(result.prices, side, taxOnPoolInput, taxBps),
@@ -371,9 +412,11 @@ export class AerostratSlipstream extends VelodromeSlipstream {
   ): bigint {
     /*
      * Called by the parent mid-pricing, so it sees the live rate rather than
-     * the caller's snapshot. If a refresh cleared the rate in between, fall
-     * back to the untaxed unit rather than building a NaN: unit only ranks
-     * venues, it never sizes a fill.
+     * the caller's snapshot. If a refresh cleared the rate in between there is
+     * no basis on which to price the unit, so fail the whole quote: the parent
+     * catches this and returns null for the pool. Deliberate - a unit priced on
+     * a different basis than the amounts misranks the venue in a route split
+     * rather than simply omitting it.
      */
     if (this.taxBps === undefined) {
       throw new Error(`${this.dexKey}: tax rate cleared while pricing`);
@@ -458,19 +501,24 @@ export class AerostratSlipstream extends VelodromeSlipstream {
       // requested amount, the recipient is handed ~10% less, and Augustus's
       // final received >= toAmount check reverts the whole swap.
       /*
-       * destAmount is what the user should end up with, but both router entry
-       * points compare against the pool's output, which is taxed on the way
-       * out. Gross it up on either side: for an exact-output buy it is what the
-       * pool must emit, and for a sell it keeps amountOutMinimum as tight as
-       * the user's tolerance rather than ~taxBps looser.
+       * On an exact-output buy destAmount is what the user must end up with,
+       * but the router asks the pool for it and the pool's outgoing transfer is
+       * taxed - so the pool has to be asked for the grossed-up amount.
+       *
+       * Only BUY: the caller builds every SELL leg with destAmount '1'
+       * (generic-swap-transaction-builder), so there is no leg-level bound to
+       * adjust on that side. The user's actual protection on both sides is
+       * Augustus checking the received balance once at route level, which is
+       * post-tax and therefore already correct.
        */
-      const poolDestAmount = this.isTaxedToken(destToken)
-        ? this.applyTax(
-            [BigInt(destAmount)],
-            SwapSide.BUY,
-            this.pricedTaxBps(data),
-          )[0].toString()
-        : destAmount;
+      const poolDestAmount =
+        side === SwapSide.BUY && this.isTaxedToken(destToken)
+          ? this.applyTax(
+              [BigInt(destAmount)],
+              SwapSide.BUY,
+              this.pricedTaxBps(data),
+            )[0].toString()
+          : destAmount;
 
       const param = super.getDexParam(
         srcToken,
@@ -505,6 +553,12 @@ export class AerostratSlipstream extends VelodromeSlipstream {
       );
     }
     const tickSpacing = data.path[0]?.tickSpacing;
+    if (
+      tickSpacing !== undefined &&
+      !this.config.tickSpacings!.includes(BigInt(tickSpacing))
+    ) {
+      throw new Error(`${this.dexKey}: unsupported tickSpacing ${tickSpacing}`);
+    }
     if (data.path.length !== 1 || tickSpacing === undefined) {
       throw new Error(
         `${this.dexKey}: sell requires a single hop with a known tickSpacing`,
@@ -540,6 +594,13 @@ export class AerostratSlipstream extends VelodromeSlipstream {
         'exactInputSellAEROSTRAT',
         'amountOut',
       ),
+      /*
+       * amountIn is the sixth field of an all-static tuple: 4 selector bytes
+       * plus five words. Pinning it stops the executor scanning the calldata
+       * for the quoted value, which could otherwise match tickSpacing or the
+       * deadline on a small enough amount.
+       */
+      insertFromAmountPos: 4 + 5 * 32,
     };
   }
 

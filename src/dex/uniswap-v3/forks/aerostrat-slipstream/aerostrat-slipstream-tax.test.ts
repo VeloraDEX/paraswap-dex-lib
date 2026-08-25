@@ -230,25 +230,37 @@ describe('AerostratSlipstream tax handling', () => {
       expect(p.sqrtPriceLimitX96.toString()).toEqual('0');
     });
 
-    it('takes tickSpacing from the pool data rather than a constant', () => {
+    it('encodes tickSpacing from the pool data and rejects unsupported values', () => {
       setTax(1000n);
 
-      for (const tickSpacing of ['100', '200']) {
-        const param = aerostrat.getDexParam(
+      const param = aerostrat.getDexParam(
+        AEROSTRAT.address,
+        AERO.address,
+        '1',
+        '1',
+        RECIPIENT,
+        dataFor(AEROSTRAT.address, AERO.address, '100'),
+        SwapSide.SELL,
+      );
+      const [p] = routerIface.decodeFunctionData(
+        'exactInputSellAEROSTRAT',
+        param.exchangeData,
+      );
+      expect(p.tickSpacing).toEqual(100);
+
+      // A caller-supplied route naming a tickSpacing this key does not own must
+      // not be encoded against the taxed router.
+      expect(() =>
+        aerostrat.getDexParam(
           AEROSTRAT.address,
           AERO.address,
           '1',
           '1',
           RECIPIENT,
-          dataFor(AEROSTRAT.address, AERO.address, tickSpacing),
+          dataFor(AEROSTRAT.address, AERO.address, '200'),
           SwapSide.SELL,
-        );
-        const [p] = routerIface.decodeFunctionData(
-          'exactInputSellAEROSTRAT',
-          param.exchangeData,
-        );
-        expect(p.tickSpacing).toEqual(Number(tickSpacing));
-      }
+        ),
+      ).toThrow(/unsupported tickSpacing/);
     });
 
     it('asks the pool for the grossed-up amount in exact-output BUY calldata', () => {
@@ -312,7 +324,9 @@ describe('AerostratSlipstream tax handling', () => {
               data: { path: [{ tokenIn: '', tokenOut: '', fee: '500' }] },
               exchange: 'AerostratSlipstream',
               gasCost: [0, 1],
-              poolAddresses: ['0x0'],
+              poolAddresses: [
+                UniswapV3Config['AerostratSlipstream'][Network.BASE].taxedPool!,
+              ],
             },
           ] as any;
         });
@@ -541,37 +555,6 @@ describe('AerostratSlipstream tax handling', () => {
         SwapSide.SELL,
       );
       expect(untaxedOut.returnAmountPos).toEqual(0);
-    });
-
-    it('grosses up the pool-side minimum on a sell into the taxed token', () => {
-      // amountOutMinimum is compared against the pool's pre-tax output, so a
-      // post-tax figure leaves the bound ~taxBps looser than the user asked for.
-      setTax(1000n);
-      const spy = jest
-        .spyOn(UniswapV3.prototype, 'getDexParam')
-        .mockReturnValue({} as any);
-
-      aerostrat.getDexParam(
-        AERO.address,
-        AEROSTRAT.address,
-        '1',
-        (900n * BI_POWS[18]).toString(),
-        RECIPIENT2,
-        {
-          path: [
-            {
-              tokenIn: AERO.address,
-              tokenOut: AEROSTRAT.address,
-              fee: '500',
-              tickSpacing: '100',
-            },
-          ],
-          taxBps: '1000',
-        } as any,
-        SwapSide.SELL,
-      );
-
-      expect(spy.mock.calls[0][3]).toEqual((1000n * BI_POWS[18]).toString());
     });
 
     it('advertises pools even before the tax rate is known', async () => {
