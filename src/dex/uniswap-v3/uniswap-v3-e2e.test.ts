@@ -1034,6 +1034,71 @@ describe('UniswapV3 E2E', () => {
       });
     });
 
+    /*
+     * AEROSTRAT cannot use the shared testForNetwork helper: that runs both
+     * sides for every pair, and BUY with AEROSTRAT as the input token is
+     * deliberately unsupported (AEROSTRATRouter has no exact-output entry
+     * point). Only the three routable quadrants are exercised here.
+     */
+    describe('AerostratSlipstream', () => {
+      const dexKey = 'AerostratSlipstream';
+
+      describe('Base', () => {
+        const network = Network.BASE;
+        const provider = new StaticJsonRpcProvider(
+          generateConfig(network).privateHttpProvider,
+          network,
+        );
+        const tokens = Tokens[network];
+        const holders = Holders[network];
+
+        const aerostratAmount = '1000000000000000000000';
+        const aeroAmount = '1000000000000000000';
+
+        it('AEROSTRAT -> AERO, SELL', async () => {
+          await testE2E(
+            tokens['AEROSTRAT'],
+            tokens['AERO'],
+            holders['AEROSTRAT'],
+            aerostratAmount,
+            SwapSide.SELL,
+            dexKey,
+            ContractMethod.swapExactAmountIn,
+            network,
+            provider,
+          );
+        });
+
+        it('AERO -> AEROSTRAT, SELL', async () => {
+          await testE2E(
+            tokens['AERO'],
+            tokens['AEROSTRAT'],
+            holders['AERO'],
+            aeroAmount,
+            SwapSide.SELL,
+            dexKey,
+            ContractMethod.swapExactAmountIn,
+            network,
+            provider,
+          );
+        });
+
+        it('AERO -> AEROSTRAT, BUY', async () => {
+          await testE2E(
+            tokens['AERO'],
+            tokens['AEROSTRAT'],
+            holders['AERO'],
+            aerostratAmount,
+            SwapSide.BUY,
+            dexKey,
+            ContractMethod.swapExactAmountOut,
+            network,
+            provider,
+          );
+        });
+      });
+    });
+
     describe('AerodromeSlipstreamFactory3', () => {
       const dexKey = 'AerodromeSlipstreamFactory3';
       describe('Base', () => {

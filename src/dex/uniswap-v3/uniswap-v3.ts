@@ -503,6 +503,19 @@ export class UniswapV3
     return !!pool;
   }
 
+  // Pools owned by a more specialised dexKey (e.g. a fee-on-transfer fork) must
+  // not also be quoted by the generic fork, otherwise the untaxed quote always
+  // outbids the correct one and its fills revert.
+  // Lowercased here as well as in _toLowerForAllConfigAddresses: Slipstream
+  // forks re-assign the raw config as a constructor parameter property after
+  // super() runs, so the normalized copy never survives for them.
+  protected isExcludedPool(poolAddress: Address): boolean {
+    const target = poolAddress.toLowerCase();
+    return !!this.config.excludedPools?.some(
+      pool => pool.toLowerCase() === target,
+    );
+  }
+
   async getPoolIdentifiers(
     srcToken: Token,
     destToken: Token,
@@ -521,7 +534,7 @@ export class UniswapV3
 
     const pools = (
       await this.getPoolsForIdentifiers(_srcAddress, _destAddress, blockNumber)
-    ).filter(pool => pool);
+    ).filter(pool => pool && !this.isExcludedPool(pool.poolAddress));
 
     if (pools.length === 0) return [];
 
@@ -757,6 +770,10 @@ export class UniswapV3
           )
         ).filter(isTruthy);
       }
+
+      selectedPools = selectedPools.filter(
+        pool => !this.isExcludedPool(pool.poolAddress),
+      );
 
       if (selectedPools.length === 0) return null;
 
@@ -1447,25 +1464,19 @@ export class UniswapV3
   }
 
   private _toLowerForAllConfigAddresses() {
-    // If new config property will be added, the TS will throw compile error
+    // Spread first so a property survives by default. Listing every field
+    // explicitly only catches a new *required* one at compile time: an optional
+    // one left out disappeared silently, which is how tickSpacings,
+    // tickSpacingsToFees and routerType ended up absent here and reachable only
+    // because the Slipstream forks re-assign the raw config after super().
     const newConfig: DexParams = {
+      ...this.config,
       router: this.config.router.toLowerCase(),
       quoter: this.config.quoter.toLowerCase(),
       factory: this.config.factory.toLowerCase(),
-      supportedFees: this.config.supportedFees,
       stateMulticall: this.config.stateMulticall.toLowerCase(),
-      chunksCount: this.config.chunksCount,
-      initRetryFrequency: this.config.initRetryFrequency,
-      uniswapMulticall: this.config.uniswapMulticall,
       deployer: this.config.deployer?.toLowerCase(),
-      initHash: this.config.initHash,
-      subgraphURL: this.config.subgraphURL,
-      stateMultiCallAbi: this.config.stateMultiCallAbi,
-      eventPoolImplementation: this.config.eventPoolImplementation,
-      factoryImplementation: this.config.factoryImplementation,
-      decodeStateMultiCallResultWithRelativeBitmaps:
-        this.config.decodeStateMultiCallResultWithRelativeBitmaps,
-      liquidityField: this.config.liquidityField,
+      excludedPools: this.config.excludedPools?.map(pool => pool.toLowerCase()),
     };
     return newConfig;
   }
