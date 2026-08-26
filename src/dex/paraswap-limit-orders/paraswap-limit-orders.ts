@@ -15,11 +15,13 @@ import {
   PreprocessTransactionOptions,
   NumberAsString,
   DexExchangeParam,
+  GetDexParamOptions,
 } from '../../types';
 import { SwapSide, Network, LIMIT_ORDER_PROVIDERS } from '../../constants';
 import * as CALLDATA_GAS_COST from '../../calldata-gas-cost';
 import { getBigIntPow, getDexKeysWithNetwork } from '../../utils';
 import { IDex } from '../../dex/idex';
+import { resolvePreProcessedData } from '../preprocess-in-dex-param';
 import { IDexHelper } from '../../dex-helper/idex-helper';
 import {
   ParaSwapLimitOrdersData,
@@ -351,7 +353,7 @@ export class ParaSwapLimitOrders
     );
   }
 
-  getDexParam(
+  async getDexParam(
     srcToken: Address,
     destToken: Address,
     srcAmount: NumberAsString,
@@ -359,12 +361,23 @@ export class ParaSwapLimitOrders
     recipient: Address,
     data: ParaSwapLimitOrdersData,
     side: SwapSide,
-  ): DexExchangeParam {
-    const { orderInfos } = data;
+    executorAddress: Address,
+    options?: GetDexParamOptions,
+  ): Promise<DexExchangeParam> {
+    const { data: _data, minDeadline } = await resolvePreProcessedData({
+      dexKey: this.dexKey,
+      data,
+      side,
+      isPreProcessed: data.orderInfos != null,
+      preProcessTransaction: this.preProcessTransaction!.bind(this),
+      options,
+    });
+
+    const { orderInfos } = _data;
 
     if (orderInfos === null) {
       throw new Error(
-        `Error_${this.dexKey}_getAdapterParam payload is not received. It may be because of` +
+        `Error_${this.dexKey}_getDexParam payload is not received. It may be because of` +
           `not calling preProcessTransaction before`,
       );
     }
@@ -383,6 +396,7 @@ export class ParaSwapLimitOrders
       targetExchange: this.augustusRFQAddress,
       specialDexSupportsInsertFromAmount: true,
       returnAmountPos: undefined,
+      ...(minDeadline !== undefined ? { minDeadline } : {}),
     };
   }
 
