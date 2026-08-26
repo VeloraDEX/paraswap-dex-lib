@@ -11,22 +11,6 @@ When making fixes based on code review comments or feedback, add a concise descr
 <!-- Add new fixes at the top of this list -->
 <!-- Format: - **[Date] Issue**: Brief description of fix -->
 
-- **[2026-08] getDexParam must not depend on state only initializePricing populates**: transaction building consumes a caller-supplied `priceRoute` and never runs the pricing guards, so an instance serving builds may hold none of that state. A throw there is not local either - `buildCalls` flat-maps every leg of the route into one `Promise.all` and the local `getDexParam` branch has no `.catch()`, so one leg rejects the caller's entire build. Carry values the encoding needs on the route data instead of asserting on instance fields.
-
-- **[2026-08] Validate route data by type before parsing it**: `data` reaches `getDexParam` as client-supplied JSON. `BigInt('')`, `BigInt('  ')`, `BigInt([])` and `BigInt(false)` all return `0n`, so a range check alone lets a caller silently zero out a field, while `BigInt('abc')` throws and takes the build down. Check the type and shape first, then parse.
-
-- **[2026-08] \_toLowerForAllConfigAddresses only catches missing _required_ fields**: it hand-builds the normalized `DexParams` field by field, so a new _optional_ property omitted from that literal compiles clean and silently disappears. Keys that re-declare `config` as a constructor parameter property (the Slipstream forks) mask this, because that assignment runs after `super()` and restores the raw config - so the field appears to work while failing open everywhere else.
-
-- **[2026-08] Delete a helper, delete its docblock**: removing a private helper leaves its comment attached to whatever method follows, where it reads as documentation for code that never did that thing. Grep for orphaned comment blocks after removing a method.
-
-- **[2026-08] getCalldataGasCost must mirror gasCost's shape**: `pricing-helper` compares the two and throws when a scalar meets an array, and the caller swallows that into an empty result - a dex returning a scalar while `getPricesVolume` returns a per-amount array silently contributes no prices at all on L2 networks. Return `poolPrices.prices.map(p => p === 0n ? 0 : cost)`.
-
-- **[2026-08] Scope a pool-restricted fork by filtering results, not by overriding pool lookup**: `_initPool` writes a pool into `eventPools` before an override can reject it, and `getSelectedPools` reads that cache first, so a `getPool` override does not close the hole. Filter what `getPricesVolume` returns instead - it covers every branch the parent can take.
-
-- **[2026-08] getTopPoolsForToken runs on a different service instance from pricing**: it is part of `IDexPooltracker`, whose init hook is `updatePoolState()`, so state populated in `initializePricing` is absent there. Gating pool discovery on such state hides the dex from routing entirely.
-
-- **[2026-08] returnAmountPos on a fee-on-transfer output**: when the destination token taxes its own transfer, the router's returned amount overstates what the recipient received. Leave `returnAmountPos` undefined so the executor measures the balance instead, as UniswapV2 and Solidly do.
-
 - **[2025-01] Block manager unavailable in certain methods**: `dexHelper.blockManager` is not available in `getTopPoolsForToken()` and `updatePoolState()` methods since these are called on a service that does not have it implemented. Use direct RPC calls (e.g., `dexHelper.provider.getBlock('latest')`) instead when block data is needed in these methods.
 
 - **[2025-01] Remove unused ABIs when removing DEXes**: When removing DEX integrations, also remove their associated ABI files from `src/abi/` if no longer referenced. Use `grep` to verify ABIs are not imported elsewhere before deletion.
