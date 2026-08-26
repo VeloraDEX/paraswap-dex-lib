@@ -7,7 +7,6 @@ import { BI_POWS } from '../../../../bigint-constants';
 import { Tokens } from '../../../../../tests/constants-e2e';
 import { Interface } from '@ethersproject/abi';
 import { UniswapV3 } from '../../uniswap-v3';
-import { VelodromeSlipstream } from '../velodrome-slipstream/velodrome-slipstream';
 import { UniswapV3Config } from '../../config';
 import AerostratRouterABI from '../../../../abi/aerostrat/AerostratRouter.abi.json';
 import { AerostratSlipstream } from './aerostrat-slipstream';
@@ -183,6 +182,10 @@ describe('AerostratSlipstream tax handling', () => {
       ({
         path: [{ tokenIn, tokenOut, fee: '500', tickSpacing }],
       } as any);
+    // Buys delegate to the parent for encoding; stub it to read back the amount
+    // this fork asked the pool for.
+    const spySuperGetDexParam = () =>
+      jest.spyOn(UniswapV3.prototype, 'getDexParam').mockReturnValue({} as any);
 
     afterEach(() => jest.restoreAllMocks());
 
@@ -258,9 +261,7 @@ describe('AerostratSlipstream tax handling', () => {
 
     it('asks the pool for the grossed-up amount in exact-output BUY calldata', () => {
       setTax(1000n);
-      const spy = jest
-        .spyOn(UniswapV3.prototype, 'getDexParam')
-        .mockReturnValue({} as any);
+      const spy = spySuperGetDexParam();
 
       const userWants = 900n * BI_POWS[18];
       aerostrat.getDexParam(
@@ -285,9 +286,7 @@ describe('AerostratSlipstream tax handling', () => {
       const userWants = 777n * BI_POWS[18];
       const priced = toPoolAmounts([userWants], SwapSide.BUY, false)[0];
 
-      const spy = jest
-        .spyOn(UniswapV3.prototype, 'getDexParam')
-        .mockReturnValue({} as any);
+      const spy = spySuperGetDexParam();
       aerostrat.getDexParam(
         AERO.address,
         AEROSTRAT.address,
@@ -344,6 +343,165 @@ describe('AerostratSlipstream tax handling', () => {
           SwapSide.SELL,
         ),
       ).not.toThrow();
+    });
+
+    it('sizes the buy from the rate the route was priced at', () => {
+      // Live state is set to a different rate on purpose: the route's rate is
+      // the one the quote used, so it is the one the calldata must agree with.
+      setTax(2000n);
+      const userWants = 500n * BI_POWS[18];
+      const atRouteRate = toPoolAmounts(
+        [userWants],
+        SwapSide.BUY,
+        false,
+        1000n,
+      )[0];
+
+      const spy = spySuperGetDexParam();
+
+      aerostrat.getDexParam(
+        AERO.address,
+        AEROSTRAT.address,
+        '0',
+        userWants.toString(),
+        RECIPIENT,
+        { ...dataFor(AERO.address, AEROSTRAT.address), taxBps: '1000' },
+        SwapSide.BUY,
+      );
+
+      expect(spy.mock.calls[0][3]).toEqual(atRouteRate.toString());
+    });
+
+    it('builds a buy on an instance that never read the rate', () => {
+      // Only initializePricing populates the live rate, so an instance serving
+      // builds without pricing has none. Sizing from live state there reached
+      // BigInt(NaN) and threw, rejecting every leg of the caller's build.
+      setTax(undefined);
+      const userWants = 500n * BI_POWS[18];
+      const priced = toPoolAmounts([userWants], SwapSide.BUY, false, 1000n)[0];
+
+      const spy = spySuperGetDexParam();
+
+      expect(() =>
+        aerostrat.getDexParam(
+          AERO.address,
+          AEROSTRAT.address,
+          '0',
+          userWants.toString(),
+          RECIPIENT,
+          { ...dataFor(AERO.address, AEROSTRAT.address), taxBps: '1000' },
+          SwapSide.BUY,
+        ),
+      ).not.toThrow();
+
+      expect(spy.mock.calls[0][3]).toEqual(priced.toString());
+    });
+
+    it('falls back to the live rate for a route priced before taxBps existed', () => {
+      // Deliberately not 1000n: that is toPoolAmounts' default, so a hardcoded
+      // rate would satisfy this assertion without the fallback working.
+      setTax(2000n);
+      const userWants = 500n * BI_POWS[18];
+      const priced = toPoolAmounts([userWants], SwapSide.BUY, false, 2000n)[0];
+
+      const spy = spySuperGetDexParam();
+
+      aerostrat.getDexParam(
+        AERO.address,
+        AEROSTRAT.address,
+        '0',
+        userWants.toString(),
+        RECIPIENT,
+        dataFor(AERO.address, AEROSTRAT.address),
+        SwapSide.BUY,
+      );
+
+      expect(spy.mock.calls[0][3]).toEqual(priced.toString());
+    });
+
+    it('refuses a buy it cannot size rather than encoding one certain to revert', () => {
+      // A BUY leg carries no slippage buffer, so an ungrossed one always trips
+      // the route-level check. Failing the build costs the caller no gas.
+      setTax(undefined);
+
+      expect(() =>
+        aerostrat.getDexParam(
+          AERO.address,
+          AEROSTRAT.address,
+          '0',
+          (500n * BI_POWS[18]).toString(),
+          RECIPIENT,
+          dataFor(AERO.address, AEROSTRAT.address),
+          SwapSide.BUY,
+        ),
+      ).toThrow(/no usable tax rate/);
+    });
+
+    it('never reads an unusable route rate as zero, or falls back past it', () => {
+      // BigInt(''), BigInt([]) and BigInt(false) are all 0n, which a range check
+      // cannot tell apart from a genuine zero-tax route. The live rate is set to
+      // prove a malformed value does not quietly fall back to it either.
+      setTax(1000n);
+
+      // Deeply nested, and reachable: JSON.parse handles depths that recursive
+      // serialisers cannot, so logging the rejected value with JSON.stringify or
+      // String() blows the stack inside the guard that must not throw.
+      const deeplyNested = JSON.parse(
+        `{"t":${'['.repeat(10000)}${']'.repeat(10000)}}`,
+      ).t;
+
+      for (const taxBps of [
+        '',
+        '  ',
+        [],
+        false,
+        'abc',
+        '-1000',
+        '10000',
+        12,
+        deeplyNested,
+      ]) {
+        expect(() =>
+          aerostrat.getDexParam(
+            AERO.address,
+            AEROSTRAT.address,
+            '0',
+            (500n * BI_POWS[18]).toString(),
+            RECIPIENT,
+            {
+              ...dataFor(AERO.address, AEROSTRAT.address),
+              taxBps,
+            } as any,
+            SwapSide.BUY,
+          ),
+        ).toThrow(/no usable tax rate/);
+      }
+    });
+
+    it('treats a route rate of zero as a real rate, not as unusable', () => {
+      // setFees(0) is reachable on-chain and isQuotable() allows it, so pricing
+      // can legitimately stamp '0'. Rejecting it alongside the malformed values
+      // above would make every honestly-priced zero-tax route fail to build.
+      // Live rate is non-zero so falling back instead would gross up visibly.
+      setTax(2000n);
+      const userWants = 500n * BI_POWS[18];
+
+      const spy = spySuperGetDexParam();
+
+      expect(() =>
+        aerostrat.getDexParam(
+          AERO.address,
+          AEROSTRAT.address,
+          '0',
+          userWants.toString(),
+          RECIPIENT,
+          { ...dataFor(AERO.address, AEROSTRAT.address), taxBps: '0' },
+          SwapSide.BUY,
+        ),
+      ).not.toThrow();
+
+      // No tax means no gross-up: the pool is asked for exactly what was wanted.
+      expect(spy.mock.calls[0][3]).toEqual(userWants.toString());
     });
   });
 
@@ -507,6 +665,42 @@ describe('AerostratSlipstream tax handling', () => {
       } finally {
         jest.useRealTimers();
       }
+    });
+  });
+
+  describe('excludedPools reaches the base class', () => {
+    /*
+     * excludedPools is read by UniswapV3.isExcludedPool, but the config it reads
+     * is rebuilt field by field in _toLowerForAllConfigAddresses. TypeScript only
+     * catches a *required* property missing from that literal, so an optional one
+     * left out compiles clean and silently vanishes - and the filter then fails
+     * open with nothing to notice it.
+     *
+     * Slipstream forks happen to survive that by re-assigning the raw config as a
+     * constructor parameter property after super(), so exercising this fork would
+     * prove nothing. AlienBaseV3 is served by the base class directly, which is
+     * where the field has to work.
+     */
+    const EXCLUDED = '0x95180496aDAbC8380fca36EC81BAE131CA97cD3b';
+
+    const baseServedDex = () =>
+      new UniswapV3(network, 'AlienBaseV3', dexHelper, undefined, undefined, {
+        ...UniswapV3Config['AlienBaseV3'][network],
+        excludedPools: [EXCLUDED],
+      }) as any;
+
+    it('survives config normalization, lowercased', () => {
+      expect(baseServedDex().config.excludedPools).toEqual([
+        EXCLUDED.toLowerCase(),
+      ]);
+    });
+
+    it('matches whatever case the pool was configured in', () => {
+      const dex = baseServedDex();
+
+      expect(dex.isExcludedPool(EXCLUDED)).toBe(true);
+      expect(dex.isExcludedPool(EXCLUDED.toLowerCase())).toBe(true);
+      expect(dex.isExcludedPool(AERO.address)).toBe(false);
     });
   });
 });

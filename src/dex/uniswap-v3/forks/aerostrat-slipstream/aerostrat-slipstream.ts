@@ -26,6 +26,13 @@ import {
   VelodromeSlipstreamData,
 } from '../velodrome-slipstream/velodrome-slipstream';
 
+export type AerostratSlipstreamData = VelodromeSlipstreamData & {
+  // The rate this route was priced at. Carried because the instance building the
+  // transaction need not be the one that priced it, and only initializePricing
+  // populates the live rate.
+  taxBps?: NumberAsString;
+};
+
 /*
  * AEROSTRAT charges a transfer tax whenever one side of a transfer is on the
  * token's taxlist. Its AERO pool is taxlisted, so:
@@ -79,13 +86,8 @@ export class AerostratSlipstream extends VelodromeSlipstream {
     return tokenAddress.toLowerCase() === this.taxedToken.toLowerCase();
   }
 
-  /*
-   * At BPS_MAX_VALUE the router's calculateAmountToCharge divides by zero, and
-   * above it the token underflows on every taxed transfer. Refuse to quote
-   * rather than emit a route that cannot be filled.
-   */
   private isQuotable(): boolean {
-    return this.taxBps !== undefined && this.taxBps < BPS_MAX_VALUE;
+    return this.inRangeTax(this.taxBps) !== undefined;
   }
 
   private applyTax(
@@ -127,11 +129,10 @@ export class AerostratSlipstream extends VelodromeSlipstream {
 
     clearInterval(this.taxUpdateIntervalTask);
 
-    // Deliberately unconditional: the parent refreshes pool fees only on the
-    // slave branch, and copying that would leave a master node serving a tax
-    // rate frozen at boot. The parent's own fee refresh keeps its slave-only
-    // behaviour, so on a master the pool fee is still the boot value - that is
-    // pre-existing and unchanged by this key.
+    // Not folded into the parent's fee refresh: that is slave-gated and
+    // early-returns while eventPools is empty, and seeding the rate there would
+    // deadlock - no rate means isQuotable() is false, so no pool is ever
+    // discovered, so the refresh keeps early-returning.
     this.taxUpdateIntervalTask = setInterval(
       this.updateTax.bind(this),
       AerostratSlipstream.TAX_REFRESH_INTERVAL_MS,
@@ -207,7 +208,7 @@ export class AerostratSlipstream extends VelodromeSlipstream {
     side: SwapSide,
     blockNumber: number,
     limitPools?: string[],
-  ): Promise<null | ExchangePrices<VelodromeSlipstreamData>> {
+  ): Promise<null | ExchangePrices<AerostratSlipstreamData>> {
     if (!this.isSupportedSwap(srcToken.address, destToken.address, side)) {
       return null;
     }
@@ -233,12 +234,12 @@ export class AerostratSlipstream extends VelodromeSlipstream {
     if (!results) return null;
 
     /*
-     * Belt and braces over the getPool guard. The parent writes a pool into
-     * this.eventPools inside _initPool before this fork can reject it, and its
-     * limitPools branch returns that cache entry directly without calling
-     * getPool - so a caller-supplied identifier naming another tickSpacing of
-     * the same pair could otherwise be priced here with a tax that does not
-     * apply to it. Filtering the results covers every branch the parent takes.
+     * A results filter rather than a pool-lookup override: the parent caches a
+     * pool in _initPool before an override could reject it, and its limitPools
+     * branch returns that cache entry directly - so a caller-supplied identifier
+     * naming another tickSpacing of the same pair could otherwise be priced here
+     * with a tax that does not apply to it. Filtering the results covers every
+     * branch the parent takes.
      */
     const taxedPool = this.config.taxedPool!.toLowerCase();
     const owned = results.filter(
@@ -249,6 +250,7 @@ export class AerostratSlipstream extends VelodromeSlipstream {
 
     return owned.map(result => ({
       ...result,
+      data: { ...result.data, taxBps: taxBps.toString() },
       // Scaled rather than re-priced: unit is a ranking heuristic on a single
       // token, where the curve is linear to well under a basis point.
       unit: this.toUserPrices(
@@ -311,42 +313,88 @@ export class AerostratSlipstream extends VelodromeSlipstream {
     return gasCost.map(cost => (cost === 0 ? cost : cost + overhead));
   }
 
+  /*
+   * A route carrying no rate - one priced before this field existed - falls back
+   * to the live one. A malformed rate does not: the quote was made against some
+   * rate, and sizing the swap with a different one is worse than refusing to.
+   */
+  private pricedTaxBps(data: AerostratSlipstreamData): bigint | undefined {
+    const recorded = data.taxBps;
+
+    if (recorded === undefined) return this.inRangeTax(this.taxBps);
+
+    // Digits only. BigInt(''), BigInt([]) and BigInt(false) are all 0n, which a
+    // range check cannot tell apart from a genuine zero-tax route, and BigInt
+    // throws outright on anything else non-numeric.
+    if (typeof recorded !== 'string' || !/^\d{1,5}$/.test(recorded)) {
+      // Only a value already known to be a string is interpolated. JSON.stringify
+      // and String() both recurse, so either would blow the stack on a deeply
+      // nested array - inside the one function here that must not throw.
+      this.logger.warn(
+        `${this.dexKey}: unusable taxBps on route: ${
+          typeof recorded === 'string' ? recorded.slice(0, 32) : typeof recorded
+        }`,
+      );
+      return undefined;
+    }
+
+    return this.inRangeTax(BigInt(recorded));
+  }
+
+  /*
+   * At BPS_MAX_VALUE the router's calculateAmountToCharge divides by zero, and
+   * above it the token underflows on every taxed transfer - so a rate at or
+   * over the bound is refused rather than quoted or encoded. Returns the rate
+   * itself, so callers must test against undefined: zero is a valid rate.
+   */
+  private inRangeTax(taxBps?: bigint): bigint | undefined {
+    return taxBps !== undefined && taxBps < BPS_MAX_VALUE ? taxBps : undefined;
+  }
+
   getDexParam(
     srcToken: Address,
     destToken: Address,
     srcAmount: NumberAsString,
     destAmount: NumberAsString,
     recipient: Address,
-    data: VelodromeSlipstreamData,
+    data: AerostratSlipstreamData,
     side: SwapSide,
     executorAddress?: Address,
     options?: GetDexParamOptions,
   ): DexExchangeParam {
     if (!this.isTaxedToken(srcToken)) {
-      // Buys execute through the stock Aerodrome router. On an exact-output buy
-      // the pool's outgoing transfer is taxed, so the pool has to be asked for
-      // more than the user is to receive - otherwise it emits exactly the
-      // requested amount, the recipient is handed ~10% less, and Augustus's
-      // final received >= toAmount check reverts the whole swap.
       /*
-       * On an exact-output buy destAmount is what the user must end up with,
-       * but the router asks the pool for it and the pool's outgoing transfer is
-       * taxed - so the pool has to be asked for the grossed-up amount.
+       * Buys execute through the stock Aerodrome router. On an exact-output buy
+       * the pool's outgoing transfer is taxed, so it must be asked for the
+       * grossed-up amount at the rate the route was priced at - otherwise it
+       * emits exactly what was requested and the recipient is handed ~10% less.
        *
-       * Only BUY: the caller builds every SELL leg with destAmount '1'
+       * Only BUY: every SELL leg is built with destAmount '1'
        * (generic-swap-transaction-builder), so there is no leg-level bound to
-       * adjust on that side. The user's actual protection on both sides is
-       * Augustus checking the received balance once at route level, which is
-       * post-tax and therefore already correct.
+       * adjust there. Either way the real protection is the route-level
+       * received >= toAmount check, which is post-tax and already correct.
        */
-      const poolDestAmount =
-        side === SwapSide.BUY && this.isTaxedToken(destToken)
-          ? this.applyTax(
-              [BigInt(destAmount)],
-              SwapSide.BUY,
-              this.taxBps!,
-            )[0].toString()
-          : destAmount;
+      let poolDestAmount = destAmount;
+
+      if (side === SwapSide.BUY && this.isTaxedToken(destToken)) {
+        const taxBps = this.pricedTaxBps(data);
+
+        if (taxBps === undefined) {
+          // Encoding it ungrossed would return a transaction certain to revert:
+          // a BUY leg has no slippage buffer, so the shortfall always trips the
+          // route-level check and the caller pays gas to find out. Failing the
+          // build loses them the rest of this route, but no gas.
+          throw new Error(
+            `${this.dexKey}: no usable tax rate to size an exact-output buy`,
+          );
+        }
+
+        poolDestAmount = this.applyTax(
+          [BigInt(destAmount)],
+          SwapSide.BUY,
+          taxBps,
+        )[0].toString();
+      }
 
       const param = super.getDexParam(
         srcToken,
@@ -372,9 +420,10 @@ export class AerostratSlipstream extends VelodromeSlipstream {
         : param;
     }
 
-    // Assertions of last resort. A throw here rejects the whole transaction
-    // build, not just this leg, so the pricing guards above must make these
-    // unreachable.
+    // A throw here rejects the caller's whole transaction build, not just this
+    // leg, so the pricing guards make these unreachable for any route this key
+    // priced. The exception is the missing-rate throw above, which is reachable
+    // from tampered or pre-field route data by design.
     if (side !== SwapSide.SELL) {
       throw new Error(
         `${this.dexKey}: BUY with AEROSTRAT input is unsupported`,
@@ -433,7 +482,7 @@ export class AerostratSlipstream extends VelodromeSlipstream {
   }
 
   getCalldataGasCost(
-    poolPrices: PoolPrices<VelodromeSlipstreamData>,
+    poolPrices: PoolPrices<AerostratSlipstreamData>,
   ): number | number[] {
     if (!this.isTaxedToken(poolPrices.data.path[0]?.tokenIn ?? '')) {
       return super.getCalldataGasCost(poolPrices);
@@ -461,9 +510,10 @@ export class AerostratSlipstream extends VelodromeSlipstream {
   /*
    * getAdapters() returning null is the gate that keeps the V5 adapter path from
    * ever selecting this key; PayloadEncoder throws before getAdapterParam could
-   * be reached. The throws below cover the remaining paths, all of which would
-   * otherwise encode this.config.router - the stock Aerodrome router - with
-   * untaxed amounts.
+   * be reached. The empty direct-function lists de-advertise the direct paths,
+   * and getSimpleParam below throws. Between them they cover every remaining
+   * route that would otherwise encode this.config.router - the stock Aerodrome
+   * router - with untaxed amounts.
    */
   getAdapters() {
     return null;

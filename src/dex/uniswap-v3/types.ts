@@ -100,8 +100,9 @@ export type DexParams = {
   factoryImplementation?: typeof UniswapV3Factory;
   decodeStateMultiCallResultWithRelativeBitmaps?: DecodeStateMultiCallFunc;
   liquidityField?: string;
-  // Pool addresses (lowercased) this dexKey must never quote. Used to stop a
-  // generic fork from pricing a pool that a specialised dexKey owns.
+  // Pool addresses this dexKey must never quote. Used to stop a generic fork
+  // from pricing a pool that a specialised dexKey owns. Case does not matter:
+  // both sides are lowercased before comparison.
   excludedPools?: string[];
   // Fee-on-transfer token, the pool this dexKey prices, and the router able to
   // sell it. Set together or not at all. The pool is named explicitly because
