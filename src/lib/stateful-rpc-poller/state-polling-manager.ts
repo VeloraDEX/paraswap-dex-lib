@@ -35,7 +35,7 @@ export class StatePollingManager {
   // This pools will be updated if we see new block and the time has come
   private _poolsToBeUpdated: Set<string> = new Set();
 
-  // This pools wont be updated before we change _isStateToBeUpdated to true
+  // This pools won't be updated before we change _isStateToBeUpdated to true
   private _idlePools: Set<string> = new Set();
 
   private constructor(protected dexHelper: IDexHelper) {
