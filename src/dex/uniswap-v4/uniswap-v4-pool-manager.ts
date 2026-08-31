@@ -475,8 +475,7 @@ export class UniswapV4PoolManager extends StatefulEventSubscriber<PoolManagerSta
       return undefined;
     }
 
-    hook.registerPool(poolId, poolKey);
-    return hook;
+    return hook.registerPool(poolId, poolKey) ? hook : undefined;
   }
 
   private getBitmapRange() {
