@@ -7,6 +7,7 @@ import {
   DexExchangeParam,
   ExchangePrices,
   ExchangeTxInfo,
+  GetDexParamOptions,
   Log,
   Logger,
   PoolLiquidity,
@@ -1212,6 +1213,7 @@ export class BalancerV2
     side: SwapSide,
     recipient: string,
     sender: string,
+    nowTimestampMs?: number,
   ): BalancerV2SwapParam {
     assert(data.swaps.length === 1, 'should have exactly one pool');
 
@@ -1238,7 +1240,7 @@ export class BalancerV2
       singleSwap,
       funds,
       side === SwapSide.SELL ? '1' : MAX_INT,
-      getLocalDeadlineAsFriendlyPlaceholder(),
+      getLocalDeadlineAsFriendlyPlaceholder(nowTimestampMs),
     ];
 
     return params;
@@ -1270,6 +1272,7 @@ export class BalancerV2
     recipient: string,
     sender: string,
     shouldWalkAssetsBackward?: boolean, // should do for all buy but prefer keep it under control
+    nowTimestampMs?: number,
   ): BalancerV2BatchSwapParam {
     let swapOffset = 0;
     let swaps: BalancerSwap[] = [];
@@ -1365,7 +1368,7 @@ export class BalancerV2
       shouldWalkAssetsBackward ? assets.reverse() : assets,
       funds,
       limits,
-      getLocalDeadlineAsFriendlyPlaceholder(),
+      getLocalDeadlineAsFriendlyPlaceholder(nowTimestampMs),
     ];
 
     return params;
@@ -1699,6 +1702,7 @@ export class BalancerV2
     rawData: OptimizedBalancerV2Data | BalancerV2Data,
     side: SwapSide,
     executor: Address,
+    options?: GetDexParamOptions,
   ): DexExchangeParam {
     const data = this.toOptimizedData(rawData, srcAmount, destAmount, side);
 
@@ -1709,6 +1713,8 @@ export class BalancerV2
       side,
       recipient,
       side === SwapSide.SELL ? NULL_ADDRESS : executor,
+      undefined,
+      options?.nowTimestampMs,
     );
 
     const [, swaps] = balancerBatchSwapParam;
@@ -1722,6 +1728,7 @@ export class BalancerV2
         side,
         recipient,
         executor,
+        options?.nowTimestampMs,
       );
 
       const exchangeData = this.eventPools.vaultInterface.encodeFunctionData(

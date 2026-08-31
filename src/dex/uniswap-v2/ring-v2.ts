@@ -16,6 +16,7 @@ import {
   ExchangePrices,
   Address,
   DexExchangeParam,
+  GetDexParamOptions,
   NumberAsString,
   DexConfigMap,
   SimpleExchangeParam,
@@ -353,13 +354,15 @@ export class RingV2 extends UniswapV2 {
     recipient: Address,
     data: UniswapV2Data,
     side: SwapSide,
+    _executorAddress?: Address,
+    options?: GetDexParamOptions,
   ): DexExchangeParam {
     let args: any[];
     let functionName: RingV2Functions;
 
     let ttl = 1200;
     const deadline = `0x${(
-      Math.floor(new Date().getTime() / 1000) + ttl
+      Math.floor((options?.nowTimestampMs ?? Date.now()) / 1000) + ttl
     ).toString(16)}`;
 
     if (side == SwapSide.SELL) {
