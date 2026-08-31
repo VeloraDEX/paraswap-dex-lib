@@ -3,6 +3,7 @@ import {
   AdapterExchangeParam,
   Address,
   DexExchangeParam,
+  GetDexParamOptions,
   SimpleExchangeParam,
 } from '../../types';
 import { IDexTxBuilder } from '../idex';
@@ -119,13 +120,17 @@ export class BaseTraderJoeV2
     recipient: Address,
     data: TraderJoeV2Data,
     side: SwapSide,
+    _executorAddress?: Address,
+    options?: GetDexParamOptions,
   ): DexExchangeParam {
     const swapFunction =
       side === SwapSide.SELL
         ? TraderJoeV2RouterFunctions.swapExactTokensForTokens
         : TraderJoeV2RouterFunctions.swapTokensForExactTokens;
 
-    const placeholder = getLocalDeadlineAsFriendlyPlaceholder();
+    const placeholder = getLocalDeadlineAsFriendlyPlaceholder(
+      options?.nowTimestampMs,
+    );
 
     const swapFunctionParams: TraderJoeV2RouterParam =
       side === SwapSide.SELL

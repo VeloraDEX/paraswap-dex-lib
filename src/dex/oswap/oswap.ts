@@ -10,6 +10,7 @@ import {
   Logger,
   NumberAsString,
   DexExchangeParam,
+  GetDexParamOptions,
   TransferFeeParams,
 } from '../../types';
 import {
@@ -404,11 +405,14 @@ export class OSwap extends SimpleExchange implements IDex<OSwapData> {
     data: OSwapData,
     side: SwapSide,
     executorAddress: Address,
+    options?: GetDexParamOptions,
   ): DexExchangeParam {
     let method: string;
     let args: any;
     let returnAmountPos: number | undefined = undefined;
-    const deadline = getLocalDeadlineAsFriendlyPlaceholder();
+    const deadline = getLocalDeadlineAsFriendlyPlaceholder(
+      options?.nowTimestampMs,
+    );
 
     if (side === SwapSide.SELL) {
       method = 'swapExactTokensForTokens';
