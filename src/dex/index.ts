@@ -106,6 +106,7 @@ import { Cap } from './cap/cap';
 import { PancakeSwapInfinity } from './pancakeswap-infinity/pancakeswap-infinity';
 import { Metric } from './metric/metric';
 import { Tessera } from './tessera/tessera';
+import { Machima } from './machima/machima';
 
 const LegacyDexes = [
   CurveV2,
@@ -199,6 +200,7 @@ const Dexes = [
   Blackhole,
   BlackholeCL,
   Cap,
+  Machima,
 ];
 
 export type LegacyDexConstructor = new (dexHelper: IDexHelper) => IDexTxBuilder<
