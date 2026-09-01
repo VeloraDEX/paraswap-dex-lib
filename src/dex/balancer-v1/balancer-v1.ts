@@ -15,7 +15,7 @@ import {
 import { MAX_UINT, Network, SUBGRAPH_TIMEOUT } from '../../constants';
 import * as CALLDATA_GAS_COST from '../../calldata-gas-cost';
 import { getBigIntPow, getDexKeysWithNetwork, isETHAddress } from '../../utils';
-import { IDex } from '../../dex/idex';
+import { IDex, NeedWrapNativeFunc } from '../../dex/idex';
 import { IDexHelper } from '../../dex-helper/idex-helper';
 import {
   BalancerFunctions,
@@ -81,7 +81,15 @@ export class BalancerV1
   protected eventPools: { [poolAddress: string]: BalancerV1EventPool } = {};
 
   readonly hasConstantPriceLargeAmounts = false;
-  readonly needWrapNative = false;
+  // Mirrors the swap-function choice in getDexParam: native-in/out swaps use
+  // the proxy's batchEthIn/OutSwapExactIn variants (raw ETH, no wrap), while a
+  // SELL with no native side uses batchSwapExactIn, which needs ERC-20/WETH.
+  // Declaring the same rule here keeps the advertised posture equal to the
+  // needWrapNative that getDexParam returns for every route shape.
+  readonly needWrapNative: NeedWrapNativeFunc = (priceRoute, swap) =>
+    priceRoute.side === SwapSide.SELL &&
+    !isETHAddress(swap.srcToken) &&
+    !isETHAddress(swap.destToken);
   readonly isFeeOnTransferSupported = false;
 
   public static dexKeysWithNetwork: { key: string; networks: Network[] }[] =
@@ -449,10 +457,7 @@ export class BalancerV1
     }
 
     return {
-      needWrapNative:
-        swapFunction === BalancerFunctions.batchSwapExactIn
-          ? true
-          : this.needWrapNative,
+      needWrapNative: swapFunction === BalancerFunctions.batchSwapExactIn,
       specialDexFlag,
       insertFromAmountPos,
       specialDexSupportsInsertFromAmount,
