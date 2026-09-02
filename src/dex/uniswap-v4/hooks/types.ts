@@ -1,4 +1,4 @@
-import { PoolKey } from '../types';
+import { PoolKey, SubgraphPool } from '../types';
 import { IDexHelper } from '../../../dex-helper';
 import { Network } from '../../../constants';
 import { Logger } from '../../../types';
@@ -57,6 +57,14 @@ export interface IBaseHook {
   registerPool(poolId: string, poolKey: PoolKey): void;
 
   initialize(blockNumber: number): Promise<void>;
+
+  /**
+   * Optional on-chain discovery of the pools using this hook. When
+   * implemented, the discovered pools are merged into the pools list,
+   * which makes the hook's pools routable even on networks where pools
+   * are not discovered through the subgraph (static pools list)
+   */
+  discoverPools?(blockNumber: number): Promise<SubgraphPool[]>;
 
   beforeInitialize?(sender: string, key: PoolKey, sqrtPriceX96: string): string; // bytes4
 

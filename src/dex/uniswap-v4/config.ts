@@ -326,17 +326,5 @@ export const UniswapV4PoolsList: Record<number, SubgraphPool[]> = {
     //     address: '0xd9aaec86b65d86f6a7b5b1b0c42ffa531710b6ca', // symbol: 'USDbC',
     //   },
     // },
-    {
-      fee: '8388608', // DYNAMIC_FEE_FLAG, actual fee is set by ArrakisPrivateHook
-      hooks: '0xa4e6f5500e88691fdcb289aa0e99067481434880', // ArrakisPrivateHook
-      id: '0x68ab198bc4c61c8c691a3e35d1b3a5248d8e04acb9e28a1bb2ef0d3fa564fe93',
-      tickSpacing: '5',
-      token0: {
-        address: '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913', // symbol: 'USDC',
-      },
-      token1: {
-        address: '0xe908475f8beb7a138b0dc6eb5a05cb27068ffb9a', // symbol: 'DGLD',
-      },
-    },
   ],
 };

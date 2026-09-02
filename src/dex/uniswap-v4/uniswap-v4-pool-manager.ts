@@ -116,7 +116,40 @@ export class UniswapV4PoolManager extends StatefulEventSubscriber<PoolManagerSta
     options?: InitializeStateOptions<PoolManagerState>,
   ) {
     this.pools = await this.queryAllAvailablePools(blockNumber);
+    await this.discoverHookPools(blockNumber);
     return super.initialize(blockNumber, options);
+  }
+
+  /**
+   * Merges pools discovered on-chain by hooks implementing discoverPools
+   * into the pools list. Keeps hook pools routable independently of the
+   * subgraph / static pools list discovery
+   */
+  private async discoverHookPools(blockNumber: number) {
+    const discovered = (
+      await Promise.all(
+        Object.values(this.hookInstancesByAddress).map(async hook => {
+          if (!hook.discoverPools) return [];
+          try {
+            return await hook.discoverPools(blockNumber);
+          } catch (e) {
+            this.logger.error(
+              `${this.parentName}: failed to discover pools for hook ${hook.name}`,
+              e,
+            );
+            return [];
+          }
+        }),
+      )
+    ).flat();
+
+    const newPools = discovered.filter(
+      pool =>
+        !this.pools.some(p => p.id.toLowerCase() === pool.id.toLowerCase()),
+    );
+
+    this.pools = this.pools.concat(newPools);
+    this.registerHookPools(newPools);
   }
 
   generateState(): FactoryState {
@@ -391,9 +424,12 @@ export class UniswapV4PoolManager extends StatefulEventSubscriber<PoolManagerSta
       return {};
     }
 
+    // the static pools list only governs hookless pools: pools with a
+    // supported hook are discovered dynamically
     if (
       UniswapV4PoolsList[this.network] &&
-      !UniswapV4PoolsList[this.network].some(p => p.id === id)
+      !UniswapV4PoolsList[this.network].some(p => p.id === id) &&
+      hooks.toLowerCase() === NULL_ADDRESS
     ) {
       this.logger.warn(`Pool ${id} is not in the static pools list, skipping.`);
       return {};

@@ -1,0 +1,49 @@
+[
+  {
+    "inputs": [],
+    "name": "numOfPrivateVaults",
+    "outputs": [
+      { "internalType": "uint256", "name": "result", "type": "uint256" }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "uint256", "name": "startIndex_", "type": "uint256" },
+      { "internalType": "uint256", "name": "endIndex_", "type": "uint256" }
+    ],
+    "name": "privateVaults",
+    "outputs": [
+      { "internalType": "address[]", "name": "", "type": "address[]" }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "module",
+    "outputs": [
+      {
+        "internalType": "contract IArrakisLPModule",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "poolKey",
+    "outputs": [
+      { "internalType": "Currency", "name": "currency0", "type": "address" },
+      { "internalType": "Currency", "name": "currency1", "type": "address" },
+      { "internalType": "uint24", "name": "fee", "type": "uint24" },
+      { "internalType": "int24", "name": "tickSpacing", "type": "int24" },
+      { "internalType": "contract IHooks", "name": "hooks", "type": "address" }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  }
+]
