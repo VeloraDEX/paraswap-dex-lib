@@ -1,0 +1,210 @@
+[
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "uint256[]",
+        "name": "newVirtualBalances",
+        "type": "uint256[]"
+      }
+    ],
+    "name": "VirtualBalancesUpdated",
+    "type": "event"
+  },
+  {
+    "inputs": [],
+    "name": "getHook",
+    "outputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "getNormalizedWeights",
+    "outputs": [
+      {
+        "internalType": "uint256[]",
+        "name": "",
+        "type": "uint256[]"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "baseTokenIndex",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "quoteTokenIndex",
+        "type": "uint256"
+      }
+    ],
+    "name": "getPriceRange",
+    "outputs": [
+      {
+        "components": [
+          {
+            "internalType": "uint256",
+            "name": "minPrice",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "maxPrice",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "currentPrice",
+            "type": "uint256"
+          },
+          {
+            "internalType": "bool",
+            "name": "maxPriceDefined",
+            "type": "bool"
+          }
+        ],
+        "internalType": "struct RangePool.PriceRange",
+        "name": "priceRange",
+        "type": "tuple"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "getRangePoolDynamicData",
+    "outputs": [
+      {
+        "components": [
+          {
+            "internalType": "uint256[]",
+            "name": "balancesRaw",
+            "type": "uint256[]"
+          },
+          {
+            "internalType": "uint256[]",
+            "name": "balancesLiveScaled18",
+            "type": "uint256[]"
+          },
+          {
+            "internalType": "uint256[]",
+            "name": "virtualBalances",
+            "type": "uint256[]"
+          },
+          {
+            "internalType": "uint256[]",
+            "name": "leverageRatios",
+            "type": "uint256[]"
+          },
+          {
+            "internalType": "uint256[]",
+            "name": "tokenRates",
+            "type": "uint256[]"
+          },
+          {
+            "internalType": "uint256",
+            "name": "staticSwapFeePercentage",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "totalSupply",
+            "type": "uint256"
+          },
+          {
+            "internalType": "bool",
+            "name": "isPoolRegistered",
+            "type": "bool"
+          },
+          {
+            "internalType": "bool",
+            "name": "isPoolInitialized",
+            "type": "bool"
+          },
+          {
+            "internalType": "bool",
+            "name": "isPoolPaused",
+            "type": "bool"
+          },
+          {
+            "internalType": "bool",
+            "name": "isPoolInRecoveryMode",
+            "type": "bool"
+          },
+          {
+            "internalType": "bool",
+            "name": "isVaultPaused",
+            "type": "bool"
+          },
+          {
+            "internalType": "bool",
+            "name": "isHookStopped",
+            "type": "bool"
+          }
+        ],
+        "internalType": "struct RangePoolDynamicData",
+        "name": "data",
+        "type": "tuple"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "getRangePoolImmutableData",
+    "outputs": [
+      {
+        "components": [
+          {
+            "internalType": "contract IERC20[]",
+            "name": "tokens",
+            "type": "address[]"
+          },
+          {
+            "internalType": "uint256[]",
+            "name": "decimalScalingFactors",
+            "type": "uint256[]"
+          },
+          {
+            "internalType": "uint256[]",
+            "name": "normalizedWeights",
+            "type": "uint256[]"
+          }
+        ],
+        "internalType": "struct RangePoolImmutableData",
+        "name": "data",
+        "type": "tuple"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "getVirtualBalances",
+    "outputs": [
+      {
+        "internalType": "uint256[]",
+        "name": "",
+        "type": "uint256[]"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  }
+]
