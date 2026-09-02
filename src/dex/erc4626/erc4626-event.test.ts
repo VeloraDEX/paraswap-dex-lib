@@ -7,7 +7,12 @@ import { ERC4626Config } from './config';
 import { Network } from '../../constants';
 import { DummyDexHelper } from '../../dex-helper/index';
 import ERC4626_ABI from '../../abi/ERC4626.json';
-import { DEPOSIT_TOPIC, TRANSFER_TOPIC, WITHDRAW_TOPIC } from './constants';
+import {
+  DEPOSIT_TOPIC,
+  LOG_DERIVABLE_STATE_VAULTS,
+  TRANSFER_TOPIC,
+  WITHDRAW_TOPIC,
+} from './constants';
 import { testEventSubscriber } from '../../../tests/utils-events';
 import { ERC4626PoolState } from './types';
 
@@ -15,11 +20,6 @@ import { Interface } from '@ethersproject/abi';
 import _ from 'lodash';
 
 jest.setTimeout(50 * 1000);
-
-// vaults whose state is fully derivable from logs, so the event-derived state can be
-// compared against on-chain. The others accrue assets without emitting any log (e.g.
-// sUSDe vests yield linearly over time), so they can only be checked against themselves.
-const STRICT_STATE_CHECK = new Set(['sftUSD']);
 
 async function fetchPoolState(
   pool: ERC4626EventPool,
@@ -149,7 +149,7 @@ describe('ERC4626 Event Tests', function () {
                   fetchPoolState(
                     pool,
                     _blockNumber,
-                    STRICT_STATE_CHECK.has(dexKey),
+                    LOG_DERIVABLE_STATE_VAULTS.has(dexKey),
                   ),
                 blockNumber,
                 `${dexKey}_${vaultAddress}`,
