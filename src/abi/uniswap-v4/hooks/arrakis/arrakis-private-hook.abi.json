@@ -1,0 +1,58 @@
+[
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "PoolId",
+        "name": "id",
+        "type": "bytes32"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "module",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint24",
+        "name": "zeroForOneFee",
+        "type": "uint24"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint24",
+        "name": "oneForZeroFee",
+        "type": "uint24"
+      }
+    ],
+    "name": "SetFees",
+    "type": "event"
+  },
+  {
+    "inputs": [{ "internalType": "PoolId", "name": "id_", "type": "bytes32" }],
+    "name": "getFeesData",
+    "outputs": [
+      { "internalType": "address", "name": "module", "type": "address" },
+      { "internalType": "uint24", "name": "zeroForOneFee", "type": "uint24" },
+      { "internalType": "uint24", "name": "oneForZeroFee", "type": "uint24" }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "manager",
+    "outputs": [{ "internalType": "address", "name": "", "type": "address" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "factory",
+    "outputs": [{ "internalType": "address", "name": "", "type": "address" }],
+    "stateMutability": "view",
+    "type": "function"
+  }
+]

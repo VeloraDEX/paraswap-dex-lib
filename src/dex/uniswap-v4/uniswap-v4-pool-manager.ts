@@ -40,6 +40,7 @@ import {
   TICK_BITMAP_TO_USE_BY_CHAIN,
 } from './constants';
 import { IBaseHook } from './hooks/types';
+import { LPFeeLibrary } from './contract-math/LPFeeLibrary';
 
 export class UniswapV4PoolManager extends StatefulEventSubscriber<PoolManagerState> {
   handlers: {
@@ -452,6 +453,12 @@ export class UniswapV4PoolManager extends StatefulEventSubscriber<PoolManagerSta
   }
 
   private isPoolWithUnconventionalFees(fee: string | number): boolean {
+    // dynamic fee pools hold a flag instead of a fee value in the pool key,
+    // the actual fee is determined by the hook
+    if (LPFeeLibrary.isDynamicFee(BigInt(+fee))) {
+      return false;
+    }
+
     return +fee % 100 !== 0;
   }
 

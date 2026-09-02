@@ -2,6 +2,7 @@ import { DexConfigMap } from '../../types';
 import { Network } from '../../constants';
 import { DexParams, SubgraphPool } from './types';
 import { ArenaHook } from './hooks/arena/arena-hook';
+import { ArrakisPrivateHook } from './hooks/arrakis/arrakis-private-hook';
 
 export const UniswapV4Config: DexConfigMap<DexParams> = {
   UniswapV4: {
@@ -12,6 +13,7 @@ export const UniswapV4Config: DexConfigMap<DexParams> = {
       router: '0x66a9893cc07d91d95644aedd05d03f95e1dba8af',
       stateView: '0x7ffe42c4a5deea5b0fec41c94c136cf115597227',
       stateMulticall: '0xDCf1849caCdfF839f93682262a04915f83a9dB0e',
+      supportedHooks: [ArrakisPrivateHook],
     },
     [Network.BASE]: {
       poolManager: '0x498581ff718922c3f8e6a244956af099b2652b2b',
@@ -22,6 +24,7 @@ export const UniswapV4Config: DexConfigMap<DexParams> = {
       stateView: '0xa3c0c9b65bad0b08107aa264b0f3db444b867a71',
       skipPoolsWithUnconventionalFees: true,
       stateMulticall: '0x223c5fc295557f634979827728558424cf879d44',
+      supportedHooks: [ArrakisPrivateHook],
     },
     [Network.OPTIMISM]: {
       poolManager: '0x9a13f98cb987694c9f086b1f5eb990eea8264ec3',
@@ -30,6 +33,7 @@ export const UniswapV4Config: DexConfigMap<DexParams> = {
       router: '0x851116d9223fabed8e56c0e6b8ad0c31d98b3507',
       stateView: '0xc18a3169788f4f75a170290584eca6395c75ecdb',
       stateMulticall: '0x4377Ead7BFC000711821934B72597bd700DD6E71',
+      supportedHooks: [ArrakisPrivateHook],
     },
     [Network.ARBITRUM]: {
       poolManager: '0x360e68faccca8ca495c1b759fd9eee466db9fb32',
@@ -38,6 +42,7 @@ export const UniswapV4Config: DexConfigMap<DexParams> = {
       router: '0xa51afafe0263b40edaef0df8781ea9aa03e381a3',
       stateView: '0x76fd297e2d437cd7f76d50f01afe6160f86e9990',
       stateMulticall: '0x482cA248d91E08668efF568Ebb9805694D4DC396',
+      supportedHooks: [ArrakisPrivateHook],
     },
     [Network.POLYGON]: {
       poolManager: '0x67366782805870060151383f4bbff9dab53e5cd6',
@@ -63,6 +68,7 @@ export const UniswapV4Config: DexConfigMap<DexParams> = {
       router: '0x1906c1d672b88cd1b9ac7593301ca990f94eae07',
       stateView: '0xd13dd3d6e93f276fafc9db9e6bb47c1180aee0c4',
       stateMulticall: '0x3f5ef7d58ed47135d9911600c1dc1d0f8601b039',
+      supportedHooks: [ArrakisPrivateHook],
     },
     [Network.UNICHAIN]: {
       poolManager: '0x1f98400000000000000000000000000000000004',

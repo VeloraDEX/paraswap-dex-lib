@@ -126,8 +126,6 @@ describe('UniswapV4 events', () => {
               '0xF19308F923582A6f7c465e5CE7a9Dc1BEC6665B1',
               '10000',
               '0x0000000000000000000000000000000000000000',
-              7446534289545374680448599517924334n,
-              '229030',
               '200',
             );
 
@@ -223,8 +221,6 @@ describe('UniswapV4 events', () => {
               '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2',
               '500',
               '0x0000000000000000000000000000000000000000',
-              1379171615076210458510263019585807n,
-              '195303',
               '10',
             );
 
@@ -284,8 +280,6 @@ describe('UniswapV4 events', () => {
               '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
               '500',
               '0x0000000000000000000000000000000000000000',
-              1385053131113435054849380000069420n,
-              '195388',
               '10',
             );
 
@@ -342,8 +336,6 @@ describe('UniswapV4 events', () => {
               '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
               '3000',
               '0x0000000000000000000000000000000000000000',
-              0n,
-              '68878',
               '60',
             );
 
@@ -409,10 +401,75 @@ describe('UniswapV4 events', () => {
               '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
               '500',
               '0x0000000000000000000000000000000000000000',
-              0n,
-              '0',
               '10',
             );
+
+            await testEventSubscriber(
+              uniswapV4Pool,
+              uniswapV4Pool.addressesSubscribed,
+              (_blockNumber: number) =>
+                fetchPoolStateFromContract(
+                  uniswapV4Pool,
+                  _blockNumber,
+                  config.poolManager,
+                ),
+              blockNumber,
+              `${dexKey}_${config.poolManager}_${uniswapV4Pool.poolId}`,
+              dexHelper.provider,
+            );
+          });
+        });
+      });
+    });
+  });
+
+  describe('Mainnet (ArrakisPrivateHook dynamic fee pool)', () => {
+    const network = Network.MAINNET;
+    const config = UniswapV4Config[dexKey][network];
+
+    describe('UniswapV4Pool USDC / DGLD (0xde31d7cdc7f4db844e87bb67a139ff78afbb8d32e38cce429dbc3a66f1f76dc9)', () => {
+      const blockNumbers: { [eventName: string]: number[] } = {
+        ['Swap']: [
+          25803595, // https://etherscan.io/tx/0x8fc7f9cd8cba600ef6c58be51324cfd9b32a86a2a4324777ee2537ed6106ac71
+          25804781, // https://etherscan.io/tx/0xae7283299df5a4f23a686efd781586af28d1410ed68faeecf6af2f76423ca08b
+          25825992, // https://etherscan.io/tx/0x722760fae823ae6e918a54c317ae662a638247147d691a90d2cc4e88db337697
+          25832391, // https://etherscan.io/tx/0xdb1b8dbdaef080f7c9cd9ce24ab41202b9ec44947da91dad87b4b294304fc8de
+          // 25832397 is excluded: exact-output swap, whose fee rounding can not
+          // be replayed exactly from the event deltas (replay is always exact-input),
+          // leading to a dust-level feeGrowthGlobal difference
+          25833138, // https://etherscan.io/tx/0x444f8b36d4958f7308029ddbf4e1b44972dc647d49a720cb9b4e61608d369491
+          25838450, // https://etherscan.io/tx/0xd6415c8f3d0a09e6e847297b5733b2e5a4192e440fdcaf1eb0fdac905a76a0f8
+        ],
+        ['ModifyLiquidity']: [
+          25803595, // https://etherscan.io/tx/0x8fc7f9cd8cba600ef6c58be51324cfd9b32a86a2a4324777ee2537ed6106ac71
+          25804781, // https://etherscan.io/tx/0xae7283299df5a4f23a686efd781586af28d1410ed68faeecf6af2f76423ca08b
+        ],
+      };
+
+      Object.keys(blockNumbers).forEach((event: string) => {
+        blockNumbers[event].forEach((blockNumber: number) => {
+          it(`${event}:${blockNumber} - should return correct state`, async function () {
+            const dexHelper = new DummyDexHelper(network);
+
+            const logger = dexHelper.getLogger(dexKey);
+
+            const uniswapV4Pool = new UniswapV4Pool(
+              dexHelper,
+              dexKey,
+              network,
+              config,
+              logger,
+              '',
+              '0xde31d7cdc7f4db844e87bb67a139ff78afbb8d32e38cce429dbc3a66f1f76dc9', // initial params from Initialize event
+              '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
+              '0xa9299c296d7830a99414d1e5546f5171fa01e9c8',
+              '8388608', // DYNAMIC_FEE_FLAG
+              '0xa4e6f5500e88691fdcb289aa0e99067481434880',
+              '5',
+            );
+
+            // no need to initialize pool, as state is set on testEventSubscriber eventSubscriber.setState(
+            // await uniswapV4Pool.initialize(blockNumber);
 
             await testEventSubscriber(
               uniswapV4Pool,
@@ -514,8 +571,6 @@ describe('UniswapV4 events', () => {
               '0xcbb7c0000ab88b473b1f5afd9ef808440eed33bf',
               '3000',
               '0x0000000000000000000000000000000000000000',
-              2462569646102515538650341413n,
-              '-69426',
               '60',
             );
 
@@ -566,8 +621,6 @@ describe('UniswapV4 events', () => {
               '0x616b416f777e3dc904a44aa259a475bf26d06ef9',
               '100000',
               '0x0000000000000000000000000000000000000000',
-              0n,
-              '0',
               '2000',
             );
 
@@ -592,7 +645,7 @@ describe('UniswapV4 events', () => {
       });
     });
 
-    describe.only('UniswapV4Pool USDC / USD1 (0x5bd7db5892be4b43834d9c35960e112d08ba89f45c2da8d286661c9352b814bc)', () => {
+    describe('UniswapV4Pool USDC / USD1 (0x5bd7db5892be4b43834d9c35960e112d08ba89f45c2da8d286661c9352b814bc)', () => {
       const blockNumbers: { [eventName: string]: number[] } = {
         ['Swap']: [
           32601921, // https://basescan.org/tx/0xebb99cc21ce04ec12de8134d639250eba7a128d90705371a655966e44c842d4c
@@ -618,8 +671,6 @@ describe('UniswapV4 events', () => {
               '0x616b416f777e3dc904a44aa259a475bf26d06ef9',
               '100',
               '0x0000000000000000000000000000000000000000',
-              0n,
-              '0',
               '1',
             );
 
@@ -735,8 +786,6 @@ describe('UniswapV4 events', () => {
               '0xaf88d065e77c8cc2239327c5edb3a432268e5831',
               '3000',
               '0x0000000000000000000000000000000000000000',
-              2530339182490235575176398027343n,
-              '69279',
               '60',
             );
 
@@ -830,8 +879,6 @@ describe('UniswapV4 events', () => {
               '0x3c499c542cef5e3811e1192ce70d8cc03d5c3359',
               '55',
               '0x0000000000000000000000000000000000000000',
-              79228162514264337593543950336n,
-              '0',
               '1',
             );
 
@@ -895,8 +942,6 @@ describe('UniswapV4 events', () => {
               '0x7ceb23fd6bc0add59e62ac25578270cff1b9f619',
               '500',
               '0x0000000000000000000000000000000000000000',
-              0n,
-              '0',
               '10',
             );
 
@@ -960,8 +1005,6 @@ describe('UniswapV4 events', () => {
               '0x7ceb23fd6bc0add59e62ac25578270cff1b9f619',
               '10',
               '0x0000000000000000000000000000000000000000',
-              0n,
-              '0',
               '10',
             );
 
@@ -1039,8 +1082,6 @@ describe('UniswapV4 events', () => {
               '0x078d782b760474a361dda0af3839290b0ef57ad6',
               '500',
               '0x0000000000000000000000000000000000000000',
-              4083811512172838615060060n,
-              '-197471',
               '10',
             );
 
@@ -1096,8 +1137,6 @@ describe('UniswapV4 events', () => {
               '0x8d0d000ee44948fc98c9b98a4fa4921476f08b0d',
               '65',
               '0x0000000000000000000000000000000000000000',
-              0n,
-              '0',
               '1',
             );
 
@@ -1148,8 +1187,6 @@ describe('UniswapV4 events', () => {
               '0x7352cdbca63f62358f08f6514d3b7ff2a2872aad',
               '880000',
               '0x0000000000000000000000000000000000000000',
-              0n,
-              '0',
               '17600',
             );
 

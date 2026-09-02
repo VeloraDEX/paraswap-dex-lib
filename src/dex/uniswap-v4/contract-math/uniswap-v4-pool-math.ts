@@ -62,12 +62,19 @@ class UniswapV4PoolMath {
           : TickMath.MAX_SQRT_PRICE - 1n;
 
         const amountSpecified = -amount;
+        const lpFeeOverride = this._getLpFeeOverride(
+          pool,
+          zeroForOne,
+          amountSpecified,
+          sqrtPriceLimitX96,
+          hook,
+        );
         const [amount0, amount1] = this._swap(poolState, {
           zeroForOne,
           amountSpecified,
           tickSpacing: BigInt(pool.key.tickSpacing),
           sqrtPriceLimitX96,
-          lpFeeOverride: 0n,
+          lpFeeOverride,
         } as SwapParams);
 
         const amountSpecifiedActual =
@@ -106,12 +113,19 @@ class UniswapV4PoolMath {
           : TickMath.MAX_SQRT_PRICE - 1n;
 
         const amountSpecified = amount;
+        const lpFeeOverride = this._getLpFeeOverride(
+          pool,
+          zeroForOne,
+          amountSpecified,
+          sqrtPriceLimitX96,
+          hook,
+        );
         const [amount0, amount1] = this._swap(poolState, {
           zeroForOne,
           amountSpecified: amount,
           tickSpacing: BigInt(pool.key.tickSpacing),
           sqrtPriceLimitX96,
-          lpFeeOverride: 0n,
+          lpFeeOverride,
         } as SwapParams);
 
         const amountSpecifiedActual =
@@ -140,6 +154,31 @@ class UniswapV4PoolMath {
         return output;
       });
     }
+  }
+
+  private _getLpFeeOverride(
+    pool: Pool,
+    zeroForOne: boolean,
+    amountSpecified: bigint,
+    sqrtPriceLimitX96: bigint,
+    hook?: IBaseHook,
+  ): bigint {
+    if (!hook?.getHookPermissions().beforeSwap || !hook.beforeSwap) {
+      return 0n;
+    }
+
+    const [, , lpFeeOverride] = hook.beforeSwap(
+      NULL_ADDRESS,
+      pool.key,
+      {
+        zeroForOne,
+        amountSpecified: amountSpecified.toString(),
+        sqrtPriceLimitX96: sqrtPriceLimitX96.toString(),
+      },
+      '0x',
+    );
+
+    return BigInt(lpFeeOverride);
   }
 
   _swap(poolState: PoolState, params: SwapParams): [bigint, bigint] {
@@ -565,10 +604,14 @@ class UniswapV4PoolMath {
     };
 
     const lpFee = slot0Start.lpFee;
-    const swapFee =
-      protocolFee === 0n
-        ? lpFee
-        : ProtocolFeeLibrary.calculateSwapFee(protocolFee, lpFee);
+    // For dynamic fee pools the fee is determined by the hook per swap
+    // (e.g. via beforeSwap lp fee override), so slot0.lpFee is not what was
+    // charged: use the effective swap fee emitted with the Swap event instead
+    const swapFee = LPFeeLibrary.isDynamicFee(BigInt(poolState.fee))
+      ? newSwapFee
+      : protocolFee === 0n
+      ? lpFee
+      : ProtocolFeeLibrary.calculateSwapFee(protocolFee, lpFee);
 
     const paramsTickSpacing = poolState.tickSpacing;
     const paramsSqrtPriceLimitX96 = newSqrtPriceX96;
