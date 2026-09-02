@@ -16,10 +16,18 @@ import _ from 'lodash';
 
 jest.setTimeout(50 * 1000);
 
+// vaults whose state is fully derivable from logs, so the event-derived state can be
+// compared against on-chain. The others accrue assets without emitting any log (e.g.
+// sUSDe vests yield linearly over time), so they can only be checked against themselves.
+const STRICT_STATE_CHECK = new Set(['sftUSD']);
+
 async function fetchPoolState(
   pool: ERC4626EventPool,
   blockNumber: number,
+  strict: boolean,
 ): Promise<ERC4626PoolState> {
+  if (strict) return pool.generateState(blockNumber);
+
   const eventState = pool.getState(blockNumber);
   if (eventState) return eventState;
   const onChainState = await pool.generateState(blockNumber);
@@ -72,6 +80,12 @@ const testBlockNumbers: {
       withdraw: [],
     },
   },
+  sftUSD: {
+    [Network.MAINNET]: {
+      deposit: [25856533, 25884033, 25882464],
+      withdraw: [25885819, 25882223, 25825762],
+    },
+  },
   stcUSD: {
     [Network.MAINNET]: {
       deposit: [21205821, 21198635, 21195019],
@@ -85,7 +99,7 @@ describe('ERC4626 Event Tests', function () {
     describe(`${dexKey}`, function () {
       for (const net of Object.keys(ERC4626Config[dexKey])) {
         const network = Number(net) as Network;
-        const { vault, asset } = ERC4626Config[dexKey][network];
+        const { vault, asset, backingToken } = ERC4626Config[dexKey][network];
 
         // Skip if no test block numbers are defined for this integration
         if (!testBlockNumbers[dexKey]?.[network]) {
@@ -124,12 +138,19 @@ describe('ERC4626 Event Tests', function () {
                 DEPOSIT_TOPIC,
                 WITHDRAW_TOPIC,
                 TRANSFER_TOPIC,
+                false,
+                backingToken,
               );
 
               await testEventSubscriber(
                 pool,
                 pool.addressesSubscribed,
-                (_blockNumber: number) => fetchPoolState(pool, _blockNumber),
+                (_blockNumber: number) =>
+                  fetchPoolState(
+                    pool,
+                    _blockNumber,
+                    STRICT_STATE_CHECK.has(dexKey),
+                  ),
                 blockNumber,
                 `${dexKey}_${vaultAddress}`,
                 dexHelper.provider,
