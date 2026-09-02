@@ -269,9 +269,11 @@ export class UniswapV4PoolManager extends StatefulEventSubscriber<PoolManagerSta
     const staticPoolsList = UniswapV4PoolsList[this.network];
 
     if (staticPoolsList) {
-      return staticPoolsList.filter(pool =>
+      const pools = staticPoolsList.filter(pool =>
         this.isHookSupported(pool.hooks.toLowerCase()),
       );
+      this.registerHookPools(pools);
+      return pools;
     }
 
     const cachedPoolsRaw = await this.dexHelper.cache.getAndCacheLocally(

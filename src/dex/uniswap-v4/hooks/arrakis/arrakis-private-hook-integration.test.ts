@@ -10,6 +10,7 @@ import QuoterAbi from '../../../../abi/uniswap-v4/quoter.abi.json';
 import { UniswapV4Config } from '../../config';
 import { PoolKey, Pool, PoolState } from '../../types';
 import { UniswapV4Pool } from '../../uniswap-v4-pool';
+import { UniswapV4 } from '../../uniswap-v4';
 import { uniswapV4PoolMath } from '../../contract-math/uniswap-v4-pool-math';
 import { ArrakisPrivateHook } from './arrakis-private-hook';
 
@@ -39,15 +40,17 @@ async function quoteOnChain(
   amounts: bigint[],
   zeroForOne: boolean,
   side: SwapSide,
+  quoter: string = config.quoter,
+  key: PoolKey = poolKey,
 ): Promise<bigint[]> {
   const funcName =
     side === SwapSide.SELL ? 'quoteExactInputSingle' : 'quoteExactOutputSingle';
 
   const calls = amounts.map(amount => ({
-    target: config.quoter,
+    target: quoter,
     callData: quoterIface.encodeFunctionData(funcName, [
       {
-        poolKey,
+        poolKey: key,
         zeroForOne,
         exactAmount: amount.toString(),
         hookData: '0x',
@@ -154,6 +157,122 @@ describe('ArrakisPrivateHook pricing vs on-chain quoter (Mainnet)', () => {
       console.log(`${label} expected: `, expected);
 
       expect(outputs).toEqual(expected);
+    });
+  });
+});
+
+// Base uses the static UniswapV4PoolsList instead of the subgraph, so this
+// exercises the full dex flow: static list discovery -> hook registration ->
+// event-based pricing, compared against the on-chain quoter
+describe('ArrakisPrivateHook via UniswapV4 dex (Base, static pools list)', () => {
+  const baseNetwork = Network.BASE;
+  const baseConfig = UniswapV4Config[dexKey][baseNetwork];
+
+  const basePoolKey: PoolKey = {
+    currency0: '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913', // USDC
+    currency1: '0xe908475f8beb7a138b0dc6eb5a05cb27068ffb9a', // DGLD
+    fee: '8388608', // DYNAMIC_FEE_FLAG
+    tickSpacing: 5,
+    hooks: '0xa4e6f5500e88691fdcb289aa0e99067481434880',
+  };
+
+  const basePoolId =
+    '0x68ab198bc4c61c8c691a3e35d1b3a5248d8e04acb9e28a1bb2ef0d3fa564fe93';
+
+  const USDC = {
+    address: '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913',
+    decimals: 6,
+  };
+  const DGLD = {
+    address: '0xe908475f8beb7a138b0dc6eb5a05cb27068ffb9a',
+    decimals: 18,
+  };
+
+  let dexHelper: DummyDexHelper;
+  let uniswapV4: UniswapV4;
+  let blockNumber: number;
+
+  beforeAll(async () => {
+    dexHelper = new DummyDexHelper(baseNetwork);
+    blockNumber = await dexHelper.web3Provider.eth.getBlockNumber();
+
+    uniswapV4 = new UniswapV4(baseNetwork, dexKey, dexHelper);
+    await uniswapV4.initializePricing(blockNumber);
+  });
+
+  it('getPoolIdentifiers includes the Arrakis pool', async () => {
+    const pools = await uniswapV4.getPoolIdentifiers(
+      USDC,
+      DGLD,
+      SwapSide.SELL,
+      blockNumber,
+    );
+    console.log('pool identifiers: ', pools);
+
+    expect(pools).toContain(basePoolId);
+  });
+
+  const cases: [string, any, any, boolean, SwapSide, bigint[]][] = [
+    [
+      'SELL USDC -> DGLD',
+      USDC,
+      DGLD,
+      true,
+      SwapSide.SELL,
+      [0n, 10n * BI_POWS[6], 20n * BI_POWS[6]],
+    ],
+    [
+      'SELL DGLD -> USDC',
+      DGLD,
+      USDC,
+      false,
+      SwapSide.SELL,
+      [0n, BI_POWS[18] / 1000n, (2n * BI_POWS[18]) / 1000n],
+    ],
+    [
+      'BUY USDC -> DGLD',
+      USDC,
+      DGLD,
+      true,
+      SwapSide.BUY,
+      [0n, BI_POWS[18] / 1000n, (2n * BI_POWS[18]) / 1000n],
+    ],
+  ];
+
+  cases.forEach(([label, from, to, zeroForOne, side, amounts]) => {
+    it(label, async () => {
+      const prices = await uniswapV4.getPricesVolume(
+        from,
+        to,
+        amounts,
+        side,
+        blockNumber,
+        [basePoolId],
+      );
+
+      expect(prices).not.toBeNull();
+      const poolPrices = prices!.find(p =>
+        p.poolIdentifiers?.includes(basePoolId),
+      );
+      expect(poolPrices).toBeDefined();
+
+      const expected = [0n].concat(
+        await quoteOnChain(
+          dexHelper,
+          blockNumber,
+          amounts.slice(1),
+          zeroForOne,
+          side,
+          baseConfig.quoter,
+          basePoolKey,
+        ),
+      );
+
+      console.log(`${label} amounts: `, amounts);
+      console.log(`${label} prices: `, poolPrices!.prices);
+      console.log(`${label} expected: `, expected);
+
+      expect(poolPrices!.prices).toEqual(expected);
     });
   });
 });
