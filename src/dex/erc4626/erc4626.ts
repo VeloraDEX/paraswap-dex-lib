@@ -34,6 +34,7 @@ import { Interface } from '@ethersproject/abi';
 import ERC4626_ABI from '../../abi/ERC4626.json';
 import { DEPOSIT_TOPIC, TRANSFER_TOPIC, WITHDRAW_TOPIC } from './constants';
 import { extractReturnAmountPosition } from '../../executor/utils';
+import { hexConcat, hexDataLength, hexZeroPad } from '@ethersproject/bytes';
 
 export class ERC4626
   extends SimpleExchange
@@ -60,6 +61,8 @@ export class ERC4626
     readonly decimals: number = ERC4626Config[dexKey][network].decimals || 18,
     readonly withdrawDisabled: boolean = ERC4626Config[dexKey][network]
       .withdrawDisabled || false,
+    readonly backingToken: string | undefined = ERC4626Config[dexKey][network]
+      .backingToken,
     readonly erc4626Interface: Interface = new Interface(ERC4626_ABI),
   ) {
     super(dexHelper, dexKey);
@@ -77,6 +80,7 @@ export class ERC4626
       WITHDRAW_TOPIC,
       TRANSFER_TOPIC,
       cooldownEnabled,
+      backingToken,
     );
   }
 
@@ -313,11 +317,24 @@ export class ERC4626
       );
     }
 
+    // The executor overwrites the word it locates by searching the calldata for the quoted
+    // srcAmount with the amount it actually holds. On BUY the only amount encoded is the
+    // exact output one, so for a vault trading at 1:1 the search lands on it and the swap
+    // mints/withdraws the whole slippage-buffered input instead of what was quoted. Append
+    // a scratch word (trailing calldata is ignored when the call is decoded) and point the
+    // executor at that instead.
+    let insertFromAmountPos: number | undefined;
+    if (!isSell && BigInt(srcAmount) === BigInt(destAmount)) {
+      insertFromAmountPos = hexDataLength(swapData);
+      swapData = hexConcat([swapData, hexZeroPad('0x', 32)]);
+    }
+
     return {
       needWrapNative: this.needWrapNative,
       dexFuncHasRecipient: true,
       exchangeData: swapData,
       targetExchange: exchange,
+      insertFromAmountPos,
       returnAmountPos: isSell
         ? extractReturnAmountPosition(
             this.erc4626Interface,
