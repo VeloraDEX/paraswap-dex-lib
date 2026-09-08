@@ -48,8 +48,7 @@ export type AerostratSlipstreamData = VelodromeSlipstreamData & {
  *     quote has to account for the tax, and an exact-output swap has to ask the
  *     pool for the grossed-up amount.
  *
- * The tax rate is read from the token rather than supplied by the caller,
- * because it is governed on-chain and can move.
+ * The tax rate is read from the token rather than supplied by the caller.
  */
 export class AerostratSlipstream extends VelodromeSlipstream {
   /*
@@ -281,7 +280,11 @@ export class AerostratSlipstream extends VelodromeSlipstream {
     taxOnPoolInput: boolean,
     taxBps: bigint,
   ): bigint[] {
-    if (taxOnPoolInput) return this.applyTax(amounts, SwapSide.SELL, taxBps);
+    // On a sell it is the router, not the token, that sets the pool's input:
+    // calculateEffectiveAmountIn floors a * (BPS - tax) / BPS, which lands one
+    // wei under the token's a - a*tax/BPS whenever a*tax is not a multiple of BPS.
+    if (taxOnPoolInput)
+      return amounts.map(a => (a * (BPS_MAX_VALUE - taxBps)) / BPS_MAX_VALUE);
     if (side === SwapSide.BUY)
       return this.applyTax(amounts, SwapSide.BUY, taxBps);
     return amounts;
@@ -528,10 +531,6 @@ export class AerostratSlipstream extends VelodromeSlipstream {
   }
 
   async getSimpleParam(): Promise<SimpleExchangeParam> {
-    return this.unsupported('V5 simple swap');
-  }
-
-  private unsupported(what: string): never {
-    throw new Error(`${this.dexKey}: ${what} is not supported`);
+    throw new Error(`${this.dexKey}: V5 simple swap is not supported`);
   }
 }

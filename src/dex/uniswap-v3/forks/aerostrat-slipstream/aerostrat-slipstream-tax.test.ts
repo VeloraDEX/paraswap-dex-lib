@@ -157,11 +157,17 @@ describe('AerostratSlipstream tax handling', () => {
       expect(toUserPrices([456n], SwapSide.BUY, false)).toEqual([456n]);
     });
 
-    it('matches the token rounding rather than flooring the remainder', () => {
-      // Aerostrategy._update computes feeAmount = amount * fee / BPS and
-      // transfers amount - feeAmount, so 1e18 + 1 leaves 9e17 + 1, not 9e17.
+    it('rounds the pool input the way the router does, and the payout the way the token does', () => {
+      // On a sell the router sets the pool's input: calculateEffectiveAmountIn
+      // floors a * (BPS - tax) / BPS, so 1e18 + 1 swaps 9e17 - one wei under the
+      // token's own a - a*tax/BPS. Every round amount hides this; an odd one does not.
       const odd = BI_POWS[18] + 1n;
       expect(toPoolAmounts([odd], SwapSide.SELL, true)).toEqual([
+        900000000000000000n,
+      ]);
+      // The pool's outgoing transfer on a buy-via-sell is a plain token transfer,
+      // where Aerostrategy._update leaves amount - amount*fee/BPS: 9e17 + 1.
+      expect(toUserPrices([odd], SwapSide.SELL, false)).toEqual([
         900000000000000001n,
       ]);
     });
@@ -224,6 +230,16 @@ describe('AerostratSlipstream tax handling', () => {
       expect(p.tokenOut.toLowerCase()).toEqual(AERO.address.toLowerCase());
       expect(p.recipient.toLowerCase()).toEqual(RECIPIENT.toLowerCase());
       expect(p.sqrtPriceLimitX96.toString()).toEqual('0');
+
+      // insertFromAmountPos has to land on amountIn - the sixth word of an
+      // all-static tuple - or the executor patches the wrong field.
+      const amountInOffset = 4 + 5 * 32;
+      expect(param.insertFromAmountPos).toEqual(amountInOffset);
+      const word = param.exchangeData.slice(
+        2 + 2 * amountInOffset,
+        2 + 2 * (amountInOffset + 32),
+      );
+      expect(BigInt('0x' + word)).toEqual(amountIn);
     });
 
     it('encodes tickSpacing from the pool data and rejects unsupported values', () => {

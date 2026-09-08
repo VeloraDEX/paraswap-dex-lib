@@ -107,7 +107,7 @@ export type DexParams = {
   // Fee-on-transfer token, the pool this dexKey prices, and the router able to
   // sell it. Set together or not at all. The pool is named explicitly because
   // the tax is a property of the pool rather than the token - the same token
-  // may have both taxed and untaxed pools, and membership is mutable.
+  // may have both taxed and untaxed pools.
   taxedToken?: Address;
   taxedPool?: Address;
   taxedRouter?: Address;

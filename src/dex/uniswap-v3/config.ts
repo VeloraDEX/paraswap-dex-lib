@@ -51,7 +51,7 @@ export const PoolsToPreload: DexConfigMap<
 // AerostratSlipstream prices the same protocol deployment as
 // AerodromeSlipstreamNewFactory and must not drift from it, so the shared
 // addresses live in one place.
-const AERODROME_SLIPSTREAM_NEW_FACTORY_BASE = {
+const AERODROME_SLIPSTREAM_NEW_FACTORY_BASE: DexParams = {
   factory: '0xaDe65c38CD4849aDBA595a4323a8C7DdfE89716a',
   quoter: '0xfa2CB6D6cea79D6Efa102e527B3D67b2e61E3659',
   router: '0xcbBb8035cAc7D4B3Ca7aBb74cF7BdF900215Ce0D',

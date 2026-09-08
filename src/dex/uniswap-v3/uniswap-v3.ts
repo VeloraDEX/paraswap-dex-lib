@@ -503,12 +503,9 @@ export class UniswapV3
     return !!pool;
   }
 
-  // Pools owned by a more specialised dexKey (e.g. a fee-on-transfer fork) must
-  // not also be quoted by the generic fork, otherwise the untaxed quote always
-  // outbids the correct one and its fills revert.
-  // Lowercased here as well as in _toLowerForAllConfigAddresses: Slipstream
-  // forks re-assign the raw config as a constructor parameter property after
-  // super() runs, so the normalized copy never survives for them.
+  // Pools a more specialised dexKey owns must not be quoted by the generic one,
+  // or the untaxed quote outbids the correct one and its fills revert. Both
+  // sides lowercased: Slipstream forks bypass config normalization.
   protected isExcludedPool(poolAddress: Address): boolean {
     const target = poolAddress.toLowerCase();
     return !!this.config.excludedPools?.some(
@@ -1464,11 +1461,8 @@ export class UniswapV3
   }
 
   private _toLowerForAllConfigAddresses() {
-    // Spread first so a property survives by default. Listing every field
-    // explicitly only catches a new *required* one at compile time: an optional
-    // one left out disappeared silently, which is how tickSpacings,
-    // tickSpacingsToFees and routerType ended up absent here and reachable only
-    // because the Slipstream forks re-assign the raw config after super().
+    // Spread first so a new optional property survives by default; a hand-built
+    // literal only fails to compile when a *required* one is missing.
     const newConfig: DexParams = {
       ...this.config,
       router: this.config.router.toLowerCase(),
