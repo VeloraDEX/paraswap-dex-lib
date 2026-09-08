@@ -7,6 +7,7 @@ import { BI_POWS } from '../../../../bigint-constants';
 import { Tokens } from '../../../../../tests/constants-e2e';
 import { Interface } from '@ethersproject/abi';
 import { UniswapV3 } from '../../uniswap-v3';
+import { VelodromeSlipstream } from '../velodrome-slipstream/velodrome-slipstream';
 import { UniswapV3Config } from '../../config';
 import AerostratRouterABI from '../../../../abi/aerostrat/AerostratRouter.abi.json';
 import { AerostratSlipstream } from './aerostrat-slipstream';
@@ -657,10 +658,7 @@ describe('AerostratSlipstream tax handling', () => {
       jest.useFakeTimers();
       try {
         jest
-          .spyOn(
-            Object.getPrototypeOf(Object.getPrototypeOf(aerostrat)),
-            'initializePricing',
-          )
+          .spyOn(VelodromeSlipstream.prototype, 'initializePricing')
           .mockResolvedValue(undefined);
         const tick = jest
           .spyOn(aerostrat as any, 'updateTax')

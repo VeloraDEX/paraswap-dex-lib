@@ -103,7 +103,7 @@ export type DexParams = {
   // Pool addresses this dexKey must never quote. Used to stop a generic fork
   // from pricing a pool that a specialised dexKey owns. Case does not matter:
   // both sides are lowercased before comparison.
-  excludedPools?: string[];
+  excludedPools?: Address[];
   // Fee-on-transfer token, the pool this dexKey prices, and the router able to
   // sell it. Set together or not at all. The pool is named explicitly because
   // the tax is a property of the pool rather than the token - the same token
