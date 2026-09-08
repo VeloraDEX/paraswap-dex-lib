@@ -69,6 +69,7 @@ import { Native } from './native/native';
 import { Spark } from './spark/spark';
 import { SparkPsm } from './spark/spark-psm';
 import { VelodromeSlipstream } from './uniswap-v3/forks/velodrome-slipstream/velodrome-slipstream';
+import { AerostratSlipstream } from './uniswap-v3/forks/aerostrat-slipstream/aerostrat-slipstream';
 import { AaveV3Stata } from './aave-v3-stata/aave-v3-stata';
 import { AaveV3StataV2 } from './aave-v3-stata-v2/aave-v3-stata-v2';
 import { OSwap } from './oswap/oswap';
@@ -139,6 +140,7 @@ const Dexes = [
   PancakeSwapV2,
   PancakeswapV3,
   VelodromeSlipstream,
+  AerostratSlipstream,
   BiSwap,
   AaveV3,
   Weth,
