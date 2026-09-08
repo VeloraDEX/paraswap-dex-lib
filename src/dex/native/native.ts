@@ -1,7 +1,7 @@
 import BigNumber from 'bignumber.js';
 import { assert } from 'ts-essentials';
 import { BN_0, BN_1, getBigNumberPow } from '../../bignumber-constants';
-import { Network, SwapSide } from '../../constants';
+import { Network, NULL_ADDRESS, SwapSide } from '../../constants';
 import { IDexHelper } from '../../dex-helper/idex-helper';
 import { IDex } from '../../dex/idex';
 import {
@@ -40,6 +40,7 @@ import {
   NATIVE_GAS_COST,
   NATIVE_ORDERBOOK_CACHE_TTL_S,
   NATIVE_ORDERBOOK_POLLING_INTERVAL_MS,
+  NATIVE_TRADE_RFQT_SELECTOR,
 } from './constants';
 import { BytesLike, formatUnits, parseUnits } from 'ethers/lib/utils';
 import { uint8ToNumber } from '../../lib/decoders';
@@ -237,8 +238,10 @@ export class Native
       CALLDATA_GAS_COST.AMOUNT * 3 + // sellerTokenAmount, buyerTokenAmount, amountOutMinimum
       CALLDATA_GAS_COST.TIMESTAMP + // deadlineTimestamp
       CALLDATA_GAS_COST.AMOUNT * 5 + // nonce + confidenceT,N,E,M
+      CALLDATA_GAS_COST.ADDRESS * 2 + // expectedPayer, expectedOrigin
+      CALLDATA_GAS_COST.AMOUNT * 4 + // confidenceP,O,R,D
       CALLDATA_GAS_COST.UUID + // quoteId
-      CALLDATA_GAS_COST.BOOL + // multiHop
+      CALLDATA_GAS_COST.BOOL * 2 + // multiHop, skipPAMM
       CALLDATA_GAS_COST.OFFSET_LARGE * 2 +
       CALLDATA_GAS_COST.LENGTH_SMALL +
       CALLDATA_GAS_COST.FULL_WORD * 3 + // signature
@@ -299,7 +302,16 @@ export class Native
       expiry_time: NATIVE_FIRM_QUOTE_EXPIRY_S.toString(),
     };
 
-    if (options.userAddress) {
+    if (this.isNonZeroAddress(options.executionContractAddress)) {
+      firmQuoteParams.execution_payer =
+        options.executionContractAddress.toLowerCase();
+    }
+
+    if (this.isNonZeroAddress(options.txOrigin)) {
+      firmQuoteParams.tx_origin = options.txOrigin.toLowerCase();
+    }
+
+    if (this.isNonZeroAddress(options.userAddress)) {
       firmQuoteParams.beneficiary_address = options.userAddress.toLowerCase();
     }
 
@@ -423,8 +435,8 @@ export class Native
 
     let insertFromAmountPos;
 
-    // function selectof for tradeRFQT
-    if (selector === '0x0947c2d9') {
+    // function selector for tradeRFQT
+    if (selector === NATIVE_TRADE_RFQT_SELECTOR) {
       insertFromAmountPos = 36; // position of actualSellerAmount in calldata
     }
 
@@ -719,6 +731,10 @@ export class Native
       });
 
     return response.data;
+  }
+
+  private isNonZeroAddress(address?: Address): address is Address {
+    return !!address && address.toLowerCase() !== NULL_ADDRESS;
   }
 
   private normalizeTxRequest(txRequest: NativeTxRequest) {
