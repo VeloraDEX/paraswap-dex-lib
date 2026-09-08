@@ -7,6 +7,7 @@ import { Network, SwapSide } from '../../constants';
 import { Tokens } from '../../../tests/constants-e2e';
 import { GetDexParamPreProcessOptions } from '../../types';
 import { Native } from './native';
+import { NATIVE_TRADE_RFQT_SELECTOR } from './constants';
 
 const dexKey = 'Native';
 const network = Network.MAINNET;
@@ -16,7 +17,7 @@ const routerAddress = '0x1111111254EEB25477B68fb85Ed929f73A960582';
 const userAddress = '0x5Bad996643a924De21b6b2875c85C33F3c5bBcB6';
 const executorAddress = '0x6A000F20005980200259B80c5102003040001068';
 // tradeRFQT selector — the only one Native infers insertFromAmountPos for
-const calldata = '0x0947c2d9' + '0'.repeat(64);
+const calldata = `${NATIVE_TRADE_RFQT_SELECTOR}${'0'.repeat(64)}`;
 
 const DEADLINE = 1893456000;
 
@@ -91,6 +92,17 @@ describe('Native getDexParam without preProcessTransaction', () => {
     const dexParam = await getDexParam(native, {}, { preProcess });
 
     expect(requestMock).toHaveBeenCalledTimes(1);
+    const requestParams = (
+      requestMock.mock.calls as unknown as Array<
+        [{ params: Record<string, string> }]
+      >
+    )[0][0].params;
+    expect(requestParams).toMatchObject({
+      version: '6',
+      execution_payer: executorAddress.toLowerCase(),
+      tx_origin: userAddress.toLowerCase(),
+      beneficiary_address: userAddress.toLowerCase(),
+    });
     expect(dexParam.exchangeData).toBe(calldata);
     expect(dexParam.targetExchange).toBe(routerAddress);
     expect(dexParam.minDeadline).toBe(String(DEADLINE));

@@ -10,5 +10,6 @@ export const NATIVE_GAS_COST = 120_000;
 
 export const NATIVE_BLACKLIST_PAGE_SIZE = 35000;
 
-export const NATIVE_FIRM_QUOTE_VERSION = '4';
+export const NATIVE_FIRM_QUOTE_VERSION = '6';
 export const NATIVE_FIRM_QUOTE_EXPIRY_S = 60;
+export const NATIVE_TRADE_RFQT_SELECTOR = '0x7083527c';
