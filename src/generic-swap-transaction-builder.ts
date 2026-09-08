@@ -75,6 +75,7 @@ const remoteDexExchangeParamSchema = joi
     insertFromAmountPos: joi.number().integer().min(0).max(65535).empty(null),
     amountsPacked128: joi.boolean().empty(null),
     permit2Approval: joi.boolean().empty(null),
+    minDeadline: joi.string().pattern(/^\d+$/).empty(null),
   })
   .unknown(true);
 
@@ -950,8 +951,17 @@ export class GenericSwapTransactionBuilder {
       groupFallback,
     );
 
+    // A lazy preProcessTransaction inside getDexParam has side effects (it
+    // requests a firm quote and can reserve orders), so under compareOnly the
+    // remote shadow build must not run in parallel with the local one — that
+    // would quote twice. Local wins anyway, so the diff coverage is what gets
+    // dropped here, not the swap.
+    const skipRemoteShadowBuild =
+      compareOnly && getDexParamOptions?.preProcess !== undefined;
+
     const [remoteParams, localParams] = await Promise.all([
       newDex &&
+        !skipRemoteShadowBuild &&
         this.fetchRemoteDexParam({
           dexKey: newDex.key,
           srcToken,

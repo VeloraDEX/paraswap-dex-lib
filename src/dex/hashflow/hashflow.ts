@@ -21,6 +21,7 @@ import {
   DexExchangeParam,
   ExchangePrices,
   ExchangeTxInfo,
+  GetDexParamOptions,
   Logger,
   NumberAsString,
   OptimalSwapExchange,
@@ -36,6 +37,7 @@ import {
   SlippageCheckError,
   TooStrictSlippageCheckError,
 } from '../generic-rfq/types';
+import { resolvePreProcessedData } from '../preprocess-in-dex-param';
 import { SimpleExchangeWithRestrictions } from '../simple-exchange-with-restrictions';
 import { Adapters, HashflowConfig } from './config';
 import {
@@ -955,7 +957,7 @@ export class Hashflow
     );
   }
 
-  getDexParam(
+  async getDexParam(
     srcToken: Address,
     destToken: Address,
     srcAmount: NumberAsString,
@@ -963,9 +965,20 @@ export class Hashflow
     recipient: Address,
     data: HashflowData,
     side: SwapSide,
-  ): DexExchangeParam {
+    executorAddress: Address,
+    options?: GetDexParamOptions,
+  ): Promise<DexExchangeParam> {
+    const { data: _data, minDeadline } = await resolvePreProcessedData({
+      dexKey: this.dexKey,
+      data,
+      side,
+      isPreProcessed: !!data.quoteData && !!data.signature,
+      preProcessTransaction: this.preProcessTransaction.bind(this),
+      options,
+    });
+
     try {
-      const { quoteData, signature } = data;
+      const { quoteData, signature } = _data;
 
       assert(
         quoteData !== undefined,
@@ -1004,10 +1017,11 @@ export class Hashflow
         specialDexFlag: SpecialDex.SWAP_ON_HASHFLOW,
         // cannot modify amount due to signature checks
         specialDexSupportsInsertFromAmount: false,
+        ...(minDeadline !== undefined ? { minDeadline } : {}),
       };
     } catch (error) {
       this.logger.error(
-        `Failed to build with ${JSON.stringify(data)}: `,
+        `Failed to build with ${JSON.stringify(_data)}: `,
         error,
       );
       throw error;

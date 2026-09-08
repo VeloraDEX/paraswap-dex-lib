@@ -14,6 +14,7 @@ import {
   PoolLiquidity,
   Token,
   DexExchangeParam,
+  GetDexParamOptions,
   NumberAsString,
 } from '../../types';
 import { SwapSide, Network, CACHE_PREFIX } from '../../constants';
@@ -897,7 +898,12 @@ export class Algebra extends SimpleExchange implements IDex<AlgebraData> {
     recipient: Address,
     data: AlgebraData,
     side: SwapSide,
+    _executorAddress?: Address,
+    options?: GetDexParamOptions,
   ): DexExchangeParam {
+    const deadline = getLocalDeadlineAsFriendlyPlaceholder(
+      options?.nowTimestampMs,
+    );
     let swapFunction;
     let swapFunctionParams;
 
@@ -912,7 +918,7 @@ export class Algebra extends SimpleExchange implements IDex<AlgebraData> {
       swapFunctionParams = {
         limitSqrtPrice: '0',
         recipient: recipient,
-        deadline: getLocalDeadlineAsFriendlyPlaceholder(),
+        deadline,
         amountIn: srcAmount,
         amountOutMinimum: destAmount,
         tokenIn: data.path[0].tokenIn,
@@ -928,14 +934,14 @@ export class Algebra extends SimpleExchange implements IDex<AlgebraData> {
         side === SwapSide.SELL
           ? {
               recipient: recipient,
-              deadline: getLocalDeadlineAsFriendlyPlaceholder(),
+              deadline,
               amountIn: srcAmount,
               amountOutMinimum: destAmount,
               path,
             }
           : {
               recipient: recipient,
-              deadline: getLocalDeadlineAsFriendlyPlaceholder(),
+              deadline,
               amountOut: destAmount,
               amountInMaximum: srcAmount,
               path,

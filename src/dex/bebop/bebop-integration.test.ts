@@ -190,10 +190,11 @@ describe('Bebop', function () {
     const routerAddress = '0xBeb0009ACa35087ce7cCF11637E24dd1Aad3bf2A';
     const settlementAddress = '0xbbbbbBB520d69a9775E85b458C58c648259FAD5F';
     const userAddress = '0x5Bad996643a924De21b6b2875c85C33F3c5bBcB6';
+    const executorAddress = '0x6A000F20005980200259B80c5102003040001068';
     const routerCalldata =
       '0xa3ce737f' + '0'.repeat(64) + '1'.padStart(64, '0');
 
-    it('uses returned router tx target and approval target', () => {
+    it('uses returned router tx target and approval target', async () => {
       const data = {
         approvalTarget: settlementAddress,
         partialFillOffset: 1,
@@ -204,7 +205,7 @@ describe('Bebop', function () {
         },
       };
 
-      const dexParam = bebop.getDexParam(
+      const dexParam = await bebop.getDexParam(
         tokens['WETH'].address,
         tokens['USDC'].address,
         '1000000000000000000',
@@ -212,6 +213,7 @@ describe('Bebop', function () {
         userAddress,
         data,
         SwapSide.SELL,
+        executorAddress,
       );
 
       expect(dexParam.targetExchange).toBe(utils.getAddress(routerAddress));
@@ -220,7 +222,7 @@ describe('Bebop', function () {
       expect(dexParam.insertFromAmountPos).toBe(36);
     });
 
-    it('does not infer a dynamic amount position without partialFillOffset', () => {
+    it('does not infer a dynamic amount position without partialFillOffset', async () => {
       const data = {
         approvalTarget: routerAddress,
         tx: {
@@ -230,7 +232,7 @@ describe('Bebop', function () {
         },
       };
 
-      const dexParam = bebop.getDexParam(
+      const dexParam = await bebop.getDexParam(
         tokens['WETH'].address,
         tokens['USDC'].address,
         '1000000000000000000',
@@ -238,6 +240,7 @@ describe('Bebop', function () {
         userAddress,
         data,
         SwapSide.SELL,
+        executorAddress,
       );
 
       expect(dexParam.targetExchange).toBe(utils.getAddress(routerAddress));
@@ -246,7 +249,7 @@ describe('Bebop', function () {
       expect(dexParam.insertFromAmountPos).toBeUndefined();
     });
 
-    it('does not insert sell amount into router buy calldata', () => {
+    it('does not insert sell amount into router buy calldata', async () => {
       const data = {
         approvalTarget: routerAddress,
         partialFillOffset: 1,
@@ -257,7 +260,7 @@ describe('Bebop', function () {
         },
       };
 
-      const dexParam = bebop.getDexParam(
+      const dexParam = await bebop.getDexParam(
         tokens['WETH'].address,
         tokens['USDC'].address,
         '1000000000000000000',
@@ -265,6 +268,7 @@ describe('Bebop', function () {
         userAddress,
         data,
         SwapSide.BUY,
+        executorAddress,
       );
 
       expect(dexParam.targetExchange).toBe(utils.getAddress(routerAddress));

@@ -10,6 +10,7 @@ import {
   TransferFeeParams,
   Logger,
   DexExchangeParam,
+  GetDexParamOptions,
   NumberAsString,
 } from '../../types';
 import {
@@ -664,7 +665,12 @@ export class AlgebraIntegral
     recipient: Address,
     data: AlgebraIntegralData,
     side: SwapSide,
+    _executorAddress?: Address,
+    options?: GetDexParamOptions,
   ): DexExchangeParam {
+    const deadline = getLocalDeadlineAsFriendlyPlaceholder(
+      options?.nowTimestampMs,
+    );
     let swapFunction;
     let swapFunctionParams;
 
@@ -679,7 +685,7 @@ export class AlgebraIntegral
       swapFunctionParams = {
         limitSqrtPrice: '0',
         recipient: recipient,
-        deadline: getLocalDeadlineAsFriendlyPlaceholder(),
+        deadline,
         amountIn: srcAmount,
         amountOutMinimum: destAmount,
         tokenIn: data.path[0].tokenIn,
@@ -696,14 +702,14 @@ export class AlgebraIntegral
         side === SwapSide.SELL
           ? {
               recipient: recipient,
-              deadline: getLocalDeadlineAsFriendlyPlaceholder(),
+              deadline,
               amountIn: srcAmount,
               amountOutMinimum: destAmount,
               path,
             }
           : {
               recipient: recipient,
-              deadline: getLocalDeadlineAsFriendlyPlaceholder(),
+              deadline,
               amountOut: destAmount,
               amountInMaximum: srcAmount,
               path,

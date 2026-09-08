@@ -11,6 +11,7 @@ import {
   OptimalSwapExchange,
   PreprocessTransactionOptions,
   DexExchangeParam,
+  GetDexParamOptions,
 } from '../../types';
 import {
   SwapSide,
@@ -22,6 +23,7 @@ import {
 import * as CALLDATA_GAS_COST from '../../calldata-gas-cost';
 import { getDexKeysWithNetwork, isAxiosError } from '../../utils';
 import { IDex } from '../idex';
+import { resolvePreProcessedData } from '../preprocess-in-dex-param';
 import { IDexHelper } from '../../dex-helper/idex-helper';
 import {
   SwaapV2Data,
@@ -39,7 +41,7 @@ import routerAbi from '../../abi/swaap-v2/vault.json';
 import BigNumber from 'bignumber.js';
 import { BN_0, BN_1, getBigNumberPow } from '../../bignumber-constants';
 import { Interface } from 'ethers/lib/utils';
-import { AsyncOrSync, assert } from 'ts-essentials';
+import { assert } from 'ts-essentials';
 import {
   SWAAP_RFQ_API_URL,
   SWAAP_RFQ_PRICES_ENDPOINT,
@@ -445,7 +447,7 @@ export class SwaapV2
     }
   }
 
-  getDexParam(
+  async getDexParam(
     srcToken: string,
     destToken: string,
     srcAmount: string,
@@ -453,8 +455,19 @@ export class SwaapV2
     recipient: string,
     data: SwaapV2Data,
     side: SwapSide,
-  ): AsyncOrSync<DexExchangeParam> {
-    const { router, callData } = data;
+    executorAddress: string,
+    options?: GetDexParamOptions,
+  ): Promise<DexExchangeParam> {
+    const { data: _data, minDeadline } = await resolvePreProcessedData({
+      dexKey: this.dexKey,
+      data,
+      side,
+      isPreProcessed: !!data.router && !!data.callData,
+      preProcessTransaction: this.preProcessTransaction.bind(this),
+      options,
+    });
+
+    const { router, callData } = _data;
     const isBatchSwap = callData.slice(0, 10) === BATCH_SWAP_SELECTOR;
 
     // at the moment of writing, batch swap is not supported by SwappV2 API
@@ -485,6 +498,7 @@ export class SwaapV2
               'amountCalculated',
             )
           : undefined,
+      ...(minDeadline !== undefined ? { minDeadline } : {}),
     };
   }
 

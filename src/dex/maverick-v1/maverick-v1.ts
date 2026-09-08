@@ -10,6 +10,7 @@ import {
   PoolLiquidity,
   Logger,
   DexExchangeParam,
+  GetDexParamOptions,
 } from '../../types';
 import { SwapSide, Network } from '../../constants';
 import { getDexKeysWithNetwork, getBigIntPow, isTruthy } from '../../utils';
@@ -369,7 +370,12 @@ export class MaverickV1
     recipient: Address,
     data: MaverickV1Data,
     side: SwapSide,
+    _executorAddress?: Address,
+    options?: GetDexParamOptions,
   ): DexExchangeParam {
+    const deadline = getLocalDeadlineAsFriendlyPlaceholder(
+      options?.nowTimestampMs,
+    );
     const swapFunction =
       side === SwapSide.SELL
         ? MaverickV1Functions.exactInputSingle
@@ -379,7 +385,7 @@ export class MaverickV1
       side === SwapSide.SELL
         ? {
             recipient,
-            deadline: getLocalDeadlineAsFriendlyPlaceholder(),
+            deadline,
             amountIn: srcAmount,
             amountOutMinimum: destAmount,
             tokenIn: srcToken,
@@ -389,7 +395,7 @@ export class MaverickV1
           }
         : {
             recipient,
-            deadline: getLocalDeadlineAsFriendlyPlaceholder(),
+            deadline,
             amountOut: destAmount,
             amountInMaximum: srcAmount,
             tokenIn: srcToken,

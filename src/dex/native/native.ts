@@ -10,6 +10,7 @@ import {
   DexExchangeParam,
   ExchangePrices,
   ExchangeTxInfo,
+  GetDexParamOptions,
   Logger,
   NumberAsString,
   OptimalSwapExchange,
@@ -19,6 +20,7 @@ import {
   Token,
 } from '../../types';
 import { getDexKeysWithNetwork, isETHAddress } from '../../utils';
+import { resolvePreProcessedData } from '../preprocess-in-dex-param';
 import { RateFetcher } from './rate-fetcher';
 import { NativeConfig } from './config';
 import {
@@ -389,16 +391,27 @@ export class Native
     throw new Error('V5 is not supported for Native DEX');
   }
 
-  getDexParam(
+  async getDexParam(
     _srcToken: Address,
     _destToken: Address,
     srcAmount: NumberAsString,
     destAmount: NumberAsString,
     _recipient: Address,
     data: NativeData,
-    _side: SwapSide,
-  ): DexExchangeParam {
-    const txRequest = data.quote?.txRequest;
+    side: SwapSide,
+    _executorAddress: Address,
+    options?: GetDexParamOptions,
+  ): Promise<DexExchangeParam> {
+    const { data: _data, minDeadline } = await resolvePreProcessedData({
+      dexKey: this.dexKey,
+      data,
+      side,
+      isPreProcessed: !!data.quote?.txRequest?.calldata,
+      preProcessTransaction: this.preProcessTransaction.bind(this),
+      options,
+    });
+
+    const txRequest = _data.quote?.txRequest;
     assert(
       txRequest,
       `${this.dexKey}-${this.network}: Missing txRequest for dex param`,
@@ -421,6 +434,7 @@ export class Native
       exchangeData: calldata,
       targetExchange: target,
       insertFromAmountPos,
+      ...(minDeadline !== undefined ? { minDeadline } : {}),
     };
   }
 

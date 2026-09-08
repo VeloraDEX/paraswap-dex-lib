@@ -7,6 +7,7 @@ import {
   DexExchangeParam,
   ExchangePrices,
   ExchangeTxInfo,
+  GetDexParamOptions,
   Log,
   Logger,
   PoolLiquidity,
@@ -1212,6 +1213,7 @@ export class BalancerV2
     side: SwapSide,
     recipient: string,
     sender: string,
+    nowTimestampMs?: number,
   ): BalancerV2SwapParam {
     assert(data.swaps.length === 1, 'should have exactly one pool');
 
@@ -1238,7 +1240,7 @@ export class BalancerV2
       singleSwap,
       funds,
       side === SwapSide.SELL ? '1' : MAX_INT,
-      getLocalDeadlineAsFriendlyPlaceholder(),
+      getLocalDeadlineAsFriendlyPlaceholder(nowTimestampMs),
     ];
 
     return params;
@@ -1270,6 +1272,7 @@ export class BalancerV2
     recipient: string,
     sender: string,
     shouldWalkAssetsBackward?: boolean, // should do for all buy but prefer keep it under control
+    nowTimestampMs?: number,
   ): BalancerV2BatchSwapParam {
     let swapOffset = 0;
     let swaps: BalancerSwap[] = [];
@@ -1278,6 +1281,12 @@ export class BalancerV2
 
     for (const swapData of data.swaps) {
       const pool = this.poolIdMap[swapData.poolId];
+
+      assert(
+        pool !== undefined,
+        `${this.dexKey}: unknown poolId ${swapData.poolId}`,
+      );
+
       const hasEth = [srcToken.toLowerCase(), destToken.toLowerCase()].includes(
         ETHER_ADDRESS.toLowerCase(),
       );
@@ -1359,7 +1368,7 @@ export class BalancerV2
       shouldWalkAssetsBackward ? assets.reverse() : assets,
       funds,
       limits,
-      getLocalDeadlineAsFriendlyPlaceholder(),
+      getLocalDeadlineAsFriendlyPlaceholder(nowTimestampMs),
     ];
 
     return params;
@@ -1646,16 +1655,57 @@ export class BalancerV2
     );
   }
 
+  /**
+   * `getPricesVolume` returns the pool id only: the `swaps` array (pool id +
+   * amount) is normally assembled later by `balancerV2Merge`, once the
+   * optimizer knows how much of the swap goes through each pool. When
+   * `getDexParam` is called standalone - without the optimizer having run - the
+   * pricing data reaches it as is, so rebuild the equivalent single-swap shape
+   * from the amounts passed to `getDexParam` itself.
+   */
+  private toOptimizedData(
+    data: OptimizedBalancerV2Data | BalancerV2Data,
+    srcAmount: NumberAsString,
+    destAmount: NumberAsString,
+    side: SwapSide,
+  ): OptimizedBalancerV2Data {
+    // `length` matters: an empty `swaps` would encode a no-op batchSwap
+    // instead of failing the request
+    if ('swaps' in data && data.swaps?.length) {
+      return data;
+    }
+
+    const { poolId } = data as BalancerV2Data;
+
+    assert(
+      typeof poolId === 'string',
+      `${this.dexKey}: getDexParam data has neither swaps nor poolId`,
+    );
+
+    return {
+      ...data,
+      swaps: [
+        {
+          poolId,
+          amount: side === SwapSide.SELL ? srcAmount : destAmount,
+        },
+      ],
+    };
+  }
+
   getDexParam(
     srcToken: Address,
     destToken: Address,
     srcAmount: NumberAsString,
     destAmount: NumberAsString,
     recipient: Address,
-    data: OptimizedBalancerV2Data,
+    rawData: OptimizedBalancerV2Data | BalancerV2Data,
     side: SwapSide,
     executor: Address,
+    options?: GetDexParamOptions,
   ): DexExchangeParam {
+    const data = this.toOptimizedData(rawData, srcAmount, destAmount, side);
+
     const balancerBatchSwapParam = this.getBalancerV2BatchSwapParam(
       srcToken,
       destToken,
@@ -1663,6 +1713,8 @@ export class BalancerV2
       side,
       recipient,
       side === SwapSide.SELL ? NULL_ADDRESS : executor,
+      undefined,
+      options?.nowTimestampMs,
     );
 
     const [, swaps] = balancerBatchSwapParam;
@@ -1676,6 +1728,7 @@ export class BalancerV2
         side,
         recipient,
         executor,
+        options?.nowTimestampMs,
       );
 
       const exchangeData = this.eventPools.vaultInterface.encodeFunctionData(

@@ -1439,6 +1439,28 @@ export class Executor02BytecodeBuilder extends ExecutorBytecodeBuilder<
     });
   }
 
+  // Returns the index of the swap exchange in the exchangeParams array,
+  // which is flattened across all routes
+  private getGlobalSwapExchangeIndex(
+    priceRoute: OptimalRate,
+    targetSwapExchange: OptimalSwapExchange<any>,
+  ): number {
+    let index = 0;
+    let swapExchangeIndex = 0;
+    priceRoute.bestRoute.forEach(route =>
+      route.swaps.forEach(curSwap =>
+        curSwap.swapExchanges.forEach(se => {
+          if (Object.is(se, targetSwapExchange)) {
+            index = swapExchangeIndex;
+          }
+          swapExchangeIndex++;
+        }),
+      ),
+    );
+
+    return index;
+  }
+
   private anyDexOnSwapDoesntNeedWrapNative(
     priceRoute: OptimalRate,
     swap: OptimalSwap,
@@ -1446,20 +1468,8 @@ export class Executor02BytecodeBuilder extends ExecutorBytecodeBuilder<
   ): boolean {
     return swap.swapExchanges
       .map(curSe => {
-        let index = 0;
-        let swapExchangeIndex = 0;
-        priceRoute.bestRoute.map(route => {
-          route.swaps.map(curSwap =>
-            curSwap.swapExchanges.map(async se => {
-              if (Object.is(se, curSe)) {
-                index = swapExchangeIndex;
-              }
-              swapExchangeIndex++;
-            }),
-          );
-        });
-
-        const curExchangeParam = exchangeParams[index];
+        const curExchangeParam =
+          exchangeParams[this.getGlobalSwapExchangeIndex(priceRoute, curSe)];
 
         return !curExchangeParam.needWrapNative;
       })
@@ -1477,20 +1487,8 @@ export class Executor02BytecodeBuilder extends ExecutorBytecodeBuilder<
 
     return swap.swapExchanges
       .map(curSe => {
-        let index = 0;
-        let swapExchangeIndex = 0;
-        priceRoute.bestRoute.map(route => {
-          route.swaps.map(curSwap =>
-            curSwap.swapExchanges.map(async se => {
-              if (Object.is(se, curSe)) {
-                index = swapExchangeIndex;
-              }
-              swapExchangeIndex++;
-            }),
-          );
-        });
-
-        const curExchangeParam = exchangeParams[index];
+        const curExchangeParam =
+          exchangeParams[this.getGlobalSwapExchangeIndex(priceRoute, curSe)];
 
         return curExchangeParam.needWrapNative;
       })
@@ -1508,20 +1506,8 @@ export class Executor02BytecodeBuilder extends ExecutorBytecodeBuilder<
 
     return swap.swapExchanges
       .map(curSe => {
-        let index = 0;
-        let swapExchangeIndex = 0;
-        priceRoute.bestRoute.map(route => {
-          route.swaps.map(curSwap =>
-            curSwap.swapExchanges.map(async se => {
-              if (Object.is(se, curSe)) {
-                index = swapExchangeIndex;
-              }
-              swapExchangeIndex++;
-            }),
-          );
-        });
-
-        const curExchangeParam = exchangeParams[index];
+        const curExchangeParam =
+          exchangeParams[this.getGlobalSwapExchangeIndex(priceRoute, curSe)];
 
         return curExchangeParam.needWrapNative;
       })
@@ -1561,18 +1547,8 @@ export class Executor02BytecodeBuilder extends ExecutorBytecodeBuilder<
       const lastSwapExchanges = lastSwap.swapExchanges;
       const anyDexLastSwapNeedUnwrap = lastSwapExchanges
         .map(curSe => {
-          let index = 0;
-          let swapExchangeIndex = 0;
-          priceRoute.bestRoute[routeIndex].swaps.map(curSwap =>
-            curSwap.swapExchanges.map(async se => {
-              if (Object.is(se, curSe)) {
-                index = swapExchangeIndex;
-              }
-              swapExchangeIndex++;
-            }),
-          );
-
-          const curExchangeParam = exchangeParams[index];
+          const curExchangeParam =
+            exchangeParams[this.getGlobalSwapExchangeIndex(priceRoute, curSe)];
 
           return (
             curExchangeParam.needWrapNative && !curExchangeParam.wethAddress

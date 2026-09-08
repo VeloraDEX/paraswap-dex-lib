@@ -12,6 +12,7 @@ import {
   ExchangeTxInfo,
   NumberAsString,
   DexExchangeParam,
+  GetDexParamOptions,
 } from '../../types';
 import { SwapSide, Network } from '../../constants';
 import * as CALLDATA_GAS_COST from '../../calldata-gas-cost';
@@ -29,6 +30,7 @@ import {
 } from './types';
 import { BlacklistError, SlippageCheckError } from '../generic-rfq/types';
 import settlementABI from '../../abi/bebop/BebopSettlement.abi.json';
+import { resolvePreProcessedData } from '../preprocess-in-dex-param';
 import { SimpleExchangeWithRestrictions } from '../simple-exchange-with-restrictions';
 import { BebopConfig } from './config';
 import { Interface } from 'ethers/lib/utils';
@@ -792,7 +794,7 @@ export class Bebop
       .slice(0, limit);
   }
 
-  getDexParam(
+  async getDexParam(
     srcToken: Address,
     destToken: Address,
     srcAmount: NumberAsString,
@@ -800,14 +802,25 @@ export class Bebop
     recipient: Address,
     data: BebopData,
     side: SwapSide,
-  ): DexExchangeParam {
-    const { tx } = data;
+    executorAddress: Address,
+    options?: GetDexParamOptions,
+  ): Promise<DexExchangeParam> {
+    const { data: _data, minDeadline } = await resolvePreProcessedData({
+      dexKey: this.dexKey,
+      data,
+      side,
+      isPreProcessed: !!data.tx?.data && !!data.tx?.to && !!data.approvalTarget,
+      preProcessTransaction: this.preProcessTransaction.bind(this),
+      options,
+    });
+
+    const { tx } = _data;
 
     assert(tx !== undefined, `${this.dexKey}-${this.network}: tx undefined`);
     assert(tx.data, `${this.dexKey}-${this.network}: tx.data undefined`);
 
-    const targetExchange = this.getTransactionTarget(data);
-    const spender = this.getApprovalTarget(data);
+    const targetExchange = this.getTransactionTarget(_data);
+    const spender = this.getApprovalTarget(_data);
 
     const isSwapSingle = tx.data.slice(0, 10) === SWAP_SINGLE_METHOD_SELECTOR;
     const isSwapAggregate =
@@ -850,10 +863,11 @@ export class Bebop
         returnAmountPos: undefined,
         sendEthButSupportsInsertFromAmount: true,
         insertFromAmountPos: filledTakerAmountPos,
+        ...(minDeadline !== undefined ? { minDeadline } : {}),
       };
     }
 
-    const partialFillAmountPos = this.getPartialFillAmountPos(data);
+    const partialFillAmountPos = this.getPartialFillAmountPos(_data);
     const canInsertPartialFillAmount =
       side === SwapSide.SELL && partialFillAmountPos !== undefined;
 
@@ -872,6 +886,7 @@ export class Bebop
         : {
             swappedAmountNotPresentInExchangeData: true,
           }),
+      ...(minDeadline !== undefined ? { minDeadline } : {}),
     };
   }
 

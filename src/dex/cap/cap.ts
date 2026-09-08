@@ -8,6 +8,7 @@ import {
   Logger,
   NumberAsString,
   DexExchangeParam,
+  GetDexParamOptions,
 } from '../../types';
 import { SwapSide, Network, UNLIMITED_USD_LIQUIDITY } from '../../constants';
 import * as CALLDATA_GAS_COST from '../../calldata-gas-cost';
@@ -214,6 +215,8 @@ export class Cap extends SimpleExchange implements IDex<CapData> {
     recipient: Address,
     data: CapData,
     side: SwapSide,
+    _executorAddress?: Address,
+    options?: GetDexParamOptions,
   ): DexExchangeParam {
     const functionName = data.isMint ? 'mint' : 'burn';
 
@@ -225,7 +228,7 @@ export class Cap extends SimpleExchange implements IDex<CapData> {
         srcAmount,
         '1', // minAmountOut
         recipient,
-        getLocalDeadlineAsFriendlyPlaceholder(),
+        getLocalDeadlineAsFriendlyPlaceholder(options?.nowTimestampMs),
       ]),
       targetExchange: data.vaultAddress,
       returnAmountPos: extractReturnAmountPosition(
