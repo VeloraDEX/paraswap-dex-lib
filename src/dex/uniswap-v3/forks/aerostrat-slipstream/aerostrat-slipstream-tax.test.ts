@@ -495,7 +495,7 @@ describe('AerostratSlipstream tax handling', () => {
     });
 
     it('treats a route rate of zero as a real rate, not as unusable', () => {
-      // setFees(0) is reachable on-chain and isQuotable() allows it, so pricing
+      // A zero rate is a valid value and isQuotable() allows it, so pricing
       // can legitimately stamp '0'. Rejecting it alongside the malformed values
       // above would make every honestly-priced zero-tax route fail to build.
       // Live rate is non-zero so falling back instead would gross up visibly.
