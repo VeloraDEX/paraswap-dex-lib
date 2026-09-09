@@ -9,6 +9,7 @@ import { DeepReadonly } from 'ts-essentials';
 import { BN_0, BN_1, BN_POWS } from '../../../bignumber-constants';
 import { IDexHelper } from '../../../dex-helper';
 import { erc20Iface } from '../../../lib/utils-interfaces';
+import { getTopicLogDecoder } from '../../../lib/topic-log-decoder';
 import { bigNumberify, catchParseLogError, stringify } from '../../../utils';
 import { getManyPoolStates } from './getstate-multicall';
 
@@ -32,6 +33,8 @@ export abstract class CurvePool extends StatefulEventSubscriber<PoolState> {
   public poolIface: Interface;
 
   decoder: (log: Log) => any;
+
+  protected coinsLowerCase: Set<Address>;
 
   constructor(
     public parentName: string,
@@ -63,18 +66,16 @@ export abstract class CurvePool extends StatefulEventSubscriber<PoolState> {
       this.handleRemoveLiquidityImbalances.bind(this);
     this.handlers['NewParameters'] = this.handleNewParameters.bind(this);
 
-    this.poolIface = new Interface(this.abi);
-    this.decoder = (log: Log) => {
-      if (
-        this.trackCoins &&
-        _.findIndex(
-          this.COINS,
-          c => c.toLowerCase() === log.address.toLowerCase(),
-        ) != -1
-      )
-        return erc20Iface.parseLog(log);
+    this.coinsLowerCase = new Set(this.COINS.map(c => c.toLowerCase()));
 
-      return this.poolIface.parseLog(log);
+    this.poolIface = new Interface(this.abi);
+    const erc20LogDecoder = getTopicLogDecoder(erc20Iface);
+    const poolLogDecoder = getTopicLogDecoder(this.poolIface);
+    this.decoder = (log: Log) => {
+      if (this.trackCoins && this.coinsLowerCase.has(log.address.toLowerCase()))
+        return erc20LogDecoder.decode(log);
+
+      return poolLogDecoder.decode(log);
     };
   }
 

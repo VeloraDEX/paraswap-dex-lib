@@ -12,6 +12,7 @@ import { ArenaHookConfig } from './config';
 import { catchParseLogError } from '../../../../utils';
 import { MultiCallParams } from '../../../../lib/multi-wrapper';
 import { uint256ToBigInt } from '../../../../lib/decoders';
+import { getTopicLogDecoder } from '../../../../lib/topic-log-decoder';
 
 type Fee = {
   recipient: Address;
@@ -63,7 +64,8 @@ export class ArenaFeeHelper extends StatefulEventSubscriber<ArenaFeeHelperState>
       dexHelper.provider,
     );
 
-    this.logDecoder = (log: Log) => this.ArenaFeeHelperIface.parseLog(log);
+    this.logDecoder = (log: Log) =>
+      getTopicLogDecoder(this.ArenaFeeHelperIface).decode(log);
     this.addressesSubscribed = [this.feeHelperAddress];
 
     this.handlers['FeeArraySet'] = this.handleFeeArraySet.bind(this);

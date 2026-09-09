@@ -64,6 +64,7 @@ import { SpecialDex } from '../../executor/types';
 import { hexZeroPad, hexlify, solidityPack, hexConcat } from 'ethers/lib/utils';
 import { BigNumber } from 'ethers';
 import { OnPoolCreatedCallback, UniswapV2Factory } from './uniswap-v2-factory';
+import { getTopicLogDecoder } from '../../lib/topic-log-decoder';
 
 const UNISWAP_V2_RECHECK_PAIR_EXISTENCE_AFTER_MS = 3 * 24 * 60 * 60 * 1000; // 3 days
 
@@ -123,7 +124,7 @@ export interface UniswapV2Pair {
 }
 
 export class UniswapV2EventPool extends StatefulEventSubscriber<UniswapV2PoolState> {
-  decoder = (log: Log) => this.iface.parseLog(log);
+  decoder = (log: Log) => getTopicLogDecoder(this.iface).decode(log);
 
   constructor(
     parentName: string,

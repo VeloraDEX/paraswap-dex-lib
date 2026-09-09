@@ -19,6 +19,7 @@ import { MMath } from './maverick-math/maverick-basic-math';
 import * as _ from 'lodash';
 import { BI_POWS } from '../../bigint-constants';
 import { getBigIntPow } from '../../utils';
+import { getTopicLogDecoder } from '../../lib/topic-log-decoder';
 
 (BigInt.prototype as any).toJSON = function () {
   return this.toString();
@@ -63,7 +64,7 @@ export class MaverickV1EventPool extends StatefulEventSubscriber<PoolState> {
 
     // TODO: make logDecoder decode logs that
     this.logDecoder = (log: Log) => {
-      return this.poolInterface.parseLog(log);
+      return getTopicLogDecoder(this.poolInterface).decode(log);
     };
 
     this.addressesSubscribed = [address];

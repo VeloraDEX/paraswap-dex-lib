@@ -10,6 +10,7 @@ import { NerveConfig } from './config';
 import { BlockHeader } from 'web3-eth';
 import { bigIntify, typeCastPoolState } from './utils';
 import { NervePoolMath } from './nerve-math';
+import { getTopicLogDecoder } from '../../lib/topic-log-decoder';
 
 export class NerveEventPool extends StatefulEventSubscriber<PoolState> {
   readonly math: NervePoolMath;
@@ -45,7 +46,8 @@ export class NerveEventPool extends StatefulEventSubscriber<PoolState> {
     super(parentName, `${poolConfig.name}`, dexHelper, logger);
     this.math = new NervePoolMath(this.name, this.logger);
 
-    this.logDecoder = (log: Log) => this.poolIface.parseLog(log);
+    this.logDecoder = (log: Log) =>
+      getTopicLogDecoder(this.poolIface).decode(log);
     this.addressesSubscribed = [poolConfig.address];
 
     // Add handlers
@@ -70,7 +72,8 @@ export class NerveEventPool extends StatefulEventSubscriber<PoolState> {
     this.poolIface = new Interface(JSON.stringify(this.poolABI));
     this.lpTokenIface = new Interface(JSON.stringify(erc20ABI));
 
-    this.logDecoder = (log: Log) => this.poolIface.parseLog(log);
+    this.logDecoder = (log: Log) =>
+      getTopicLogDecoder(this.poolIface).decode(log);
   }
 
   get tokenAddresses() {

@@ -6,6 +6,7 @@ import { StatefulEventSubscriber } from '../../stateful-event-subscriber';
 import { Address, Log, Logger } from '../../types';
 import { LogDescription } from 'ethers/lib/utils';
 import { FactoryState } from './types';
+import { getTopicLogDecoder } from '../../lib/topic-log-decoder';
 
 export type OnPoolCreatedCallback = ({
   token0,
@@ -47,7 +48,8 @@ export class AlgebraFactory extends StatefulEventSubscriber<FactoryState> {
 
     this.addressesSubscribed = [factoryAddress];
 
-    this.logDecoder = (log: Log) => this.factoryIface.parseLog(log);
+    this.logDecoder = (log: Log) =>
+      getTopicLogDecoder(this.factoryIface).decode(log);
 
     this.handlers['Pool'] = this.handleNewPool.bind(this);
   }

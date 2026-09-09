@@ -31,6 +31,7 @@ import { BigNumber, ethers } from 'ethers';
 import { formatEther, formatUnits } from 'ethers/lib/utils';
 import { filterDictionaryOnly } from './utils';
 import { Network } from '../../constants';
+import { getTopicLogDecoder } from '../../lib/topic-log-decoder';
 
 export class TransmuterSubscriber<State> extends PartialEventSubscriber<
   State,
@@ -59,7 +60,7 @@ export class TransmuterSubscriber<State> extends PartialEventSubscriber<
     blockHeader: Readonly<BlockHeader>,
   ): DeepReadonly<TransmuterState> | null {
     try {
-      const parsed = this.interface.parseLog(log);
+      const parsed = getTopicLogDecoder(this.interface).decode(log);
       const _state: TransmuterState = _.cloneDeep(state) as TransmuterState;
       switch (parsed.name) {
         case 'FeesSet':

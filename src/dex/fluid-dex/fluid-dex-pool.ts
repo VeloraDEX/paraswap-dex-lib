@@ -8,6 +8,7 @@ import { catchParseLogError } from '../../utils';
 import { ethers } from 'ethers';
 import { uint256ToBigInt } from '../../lib/decoders';
 import { DecodedStateMultiCallResultWithRelativeBitmaps } from '../uniswap-v3/types';
+import { getTopicLogDecoder } from '../../lib/topic-log-decoder';
 
 const {
   utils: { hexlify, hexZeroPad },
@@ -39,7 +40,8 @@ export class FluidDexEventPool extends StatefulEventSubscriber<PoolState> {
   ) {
     super(parentName, poolAddress, dexHelper, logger);
 
-    this.logDecoder = (log: Log) => this.poolIface.parseLog(log);
+    this.logDecoder = (log: Log) =>
+      getTopicLogDecoder(this.poolIface).decode(log);
     this.addressesSubscribed = [poolAddress];
 
     // Add handlers

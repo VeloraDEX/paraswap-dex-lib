@@ -6,6 +6,7 @@ import type { DeepReadonly } from 'ts-essentials';
 import type { Address, BlockHeader, Log, Logger } from '../../types';
 import type { ERC4626PoolState } from './types';
 import { uint24ToBigInt, uint256ToBigInt } from '../../lib/decoders';
+import { getTopicLogDecoder } from '../../lib/topic-log-decoder';
 import { Network } from '../../constants';
 
 export class ERC4626EventPool extends StatefulEventSubscriber<ERC4626PoolState> {
@@ -35,7 +36,8 @@ export class ERC4626EventPool extends StatefulEventSubscriber<ERC4626PoolState> 
     this.assetsToken = (backingToken ?? asset).toLowerCase();
     this.vault = vault.toLowerCase();
     this.asset = asset.toLowerCase();
-    this.logDecoder = (log: Log) => this.wrapperInterface.parseLog(log);
+    const logDecoder = getTopicLogDecoder(wrapperInterface);
+    this.logDecoder = (log: Log) => logDecoder.decode(log);
   }
 
   protected async processLog(

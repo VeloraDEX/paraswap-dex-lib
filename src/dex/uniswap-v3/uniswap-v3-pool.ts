@@ -30,6 +30,7 @@ import { TickBitMap } from './contract-math/TickBitMap';
 import { uint256ToBigInt } from '../../lib/decoders';
 import { decodeStateMultiCallResultWithRelativeBitmaps } from './utils';
 import { _reduceTickBitmap, _reduceTicks } from './contract-math/utils';
+import { getTopicLogDecoder } from '../../lib/topic-log-decoder';
 
 export class UniswapV3EventPool extends StatefulEventSubscriber<PoolState> {
   handlers: {
@@ -87,7 +88,8 @@ export class UniswapV3EventPool extends StatefulEventSubscriber<PoolState> {
     this.feeCodeAsString = feeCode.toString();
     this.token0 = token0.toLowerCase();
     this.token1 = token1.toLowerCase();
-    this.logDecoder = (log: Log) => this.poolIface.parseLog(log);
+    this.logDecoder = (log: Log) =>
+      getTopicLogDecoder(this.poolIface).decode(log);
     this.addressesSubscribed = new Array<Address>(1);
 
     // Add handlers

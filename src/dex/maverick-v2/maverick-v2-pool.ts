@@ -13,6 +13,7 @@ import { MaverickPoolMath } from './maverick-math/maverick-pool-math';
 import { MultiResult } from '../../lib/multi-wrapper';
 import { BytesLike } from 'ethers';
 import { extractSuccessAndValue } from '../../lib/decoders';
+import { getTopicLogDecoder } from '../../lib/topic-log-decoder';
 
 export const decodeMaverickFullState = (
   result: MultiResult<BytesLike> | BytesLike,
@@ -106,7 +107,8 @@ export class MaverickV2EventPool extends StatefulEventSubscriber<PoolState> {
     super(parentName, name, dexHelper, logger);
 
     // TODO: make logDecoder decode logs that
-    this.logDecoder = (log: Log) => this.maverickV2Iface.parseLog(log);
+    this.logDecoder = (log: Log) =>
+      getTopicLogDecoder(this.maverickV2Iface).decode(log);
     this.addressesSubscribed = [address];
 
     // Add handlers

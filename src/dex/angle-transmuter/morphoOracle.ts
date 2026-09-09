@@ -13,6 +13,7 @@ import type { IDexHelper } from '../../dex-helper/idex-helper';
 import type { MorphoOracleState } from './types';
 import MorphoOracleABI from '../../abi/angle-transmuter/MorphoOracle.json';
 import ERC20ABI from '../../abi/erc20.json';
+import { getTopicLogDecoder } from '../../lib/topic-log-decoder';
 
 export class MorphoOracleEventPool extends StatefulEventSubscriber<MorphoOracleState> {
   handlers: {
@@ -41,7 +42,7 @@ export class MorphoOracleEventPool extends StatefulEventSubscriber<MorphoOracleS
     super(parentName, 'Morpho_Oracle', dexHelper, logger);
 
     this.logDecoder = (log: Log) =>
-      MorphoOracleEventPool.morphoOracleIface.parseLog(log);
+      getTopicLogDecoder(MorphoOracleEventPool.morphoOracleIface).decode(log);
     this.addressesSubscribed = [morphoOracle];
   }
 
