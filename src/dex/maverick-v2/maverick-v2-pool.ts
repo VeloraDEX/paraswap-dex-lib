@@ -7,13 +7,13 @@ import { IDexHelper } from '../../dex-helper/idex-helper';
 import { PoolState } from './types';
 import MaverickV2PoolABI from '../../abi/maverick-v2/MaverickV2Pool.json';
 import MaverickV2PoolLensABI from '../../abi/maverick-v2/MaverickV2PoolLens.json';
-import { AbiItem } from 'web3-utils';
-import { Contract } from 'web3-eth-contract';
 import { MaverickPoolMath } from './maverick-math/maverick-pool-math';
 import { MultiResult } from '../../lib/multi-wrapper';
 import { BytesLike } from 'ethers';
 import { extractSuccessAndValue } from '../../lib/decoders';
 import { getTopicLogDecoder } from '../../lib/topic-log-decoder';
+
+const BINS_PER_LENS_CALL = 5000n;
 
 export const decodeMaverickFullState = (
   result: MultiResult<BytesLike> | BytesLike,
@@ -75,7 +75,6 @@ export class MaverickV2EventPool extends StatefulEventSubscriber<PoolState> {
     ) => DeepReadonly<PoolState> | null;
   } = {};
 
-  poolContract: Contract;
   logDecoder: (log: Log) => any;
 
   addressesSubscribed: string[];
@@ -92,7 +91,6 @@ export class MaverickV2EventPool extends StatefulEventSubscriber<PoolState> {
     public feeAIn: bigint,
     public feeBIn: bigint,
     public tickSpacing: bigint,
-    public protocolFeeRatio: bigint,
     public lookback: bigint,
     public activeTick: bigint,
     public address: Address,
@@ -116,21 +114,17 @@ export class MaverickV2EventPool extends StatefulEventSubscriber<PoolState> {
     this.handlers['PoolRemoveLiquidity'] =
       this.handleRemoveLiquidityEvent.bind(this);
     this.handlers['PoolSwap'] = this.handleSwapEvent.bind(this);
+    this.handlers['PoolSetVariableFee'] =
+      this.handleSetVariableFeeEvent.bind(this);
+    this.handlers['PoolSetProtocolFeeRatio'] =
+      this.handleSetProtocolFeeRatioEvent.bind(this);
 
     this.poolMath = new MaverickPoolMath(
-      BigInt(feeAIn),
-      BigInt(feeBIn),
       BigInt(lookback),
       BigInt(tickSpacing),
-      BigInt(protocolFeeRatio),
       BigInt(activeTick),
       BigInt(tokenA.decimals),
       BigInt(tokenB.decimals),
-    );
-
-    this.poolContract = new this.dexHelper.web3Provider.eth.Contract(
-      MaverickV2PoolABI as AbiItem[],
-      this.address,
     );
   }
 
@@ -170,88 +164,166 @@ export class MaverickV2EventPool extends StatefulEventSubscriber<PoolState> {
    * @returns state of the event subscriber at blocknumber
    */
 
+  private lensCall(binStart: bigint) {
+    return {
+      target: this.poolLensAddress,
+      callData: this.maverickV2LensIface.encodeFunctionData(
+        'getFullPoolState',
+        [this.address, binStart, binStart + BINS_PER_LENS_CALL - 1n],
+      ),
+      decodeFunction: (data: MultiResult<BytesLike> | BytesLike) => {
+        const [, returnData] = extractSuccessAndValue(data);
+        return returnData === '0x' ? null : decodeMaverickFullState(returnData);
+      },
+    };
+  }
+
   async generateState(blockNumber: number): Promise<DeepReadonly<PoolState>> {
-    try {
-      const poolContractState = await this.poolContract.methods
-        .getState()
-        .call({}, blockNumber);
+    // Pool params and the first page of bins in one round-trip; only pools
+    // with more than BINS_PER_LENS_CALL bins need a second one
+    const [stateResult, feeAInResult, feeBInResult, firstLensPage] =
+      await this.dexHelper.multiWrapper.tryAggregate<any>(
+        false,
+        [
+          {
+            target: this.address,
+            callData: this.maverickV2Iface.encodeFunctionData('getState'),
+            decodeFunction: (data: MultiResult<BytesLike> | BytesLike) => {
+              const [, returnData] = extractSuccessAndValue(data);
+              return returnData === '0x'
+                ? null
+                : this.maverickV2Iface.decodeFunctionResult(
+                    'getState',
+                    returnData,
+                  )[0];
+            },
+          },
+          ...[true, false].map(tokenAIn => ({
+            target: this.address,
+            callData: this.maverickV2Iface.encodeFunctionData('fee', [
+              tokenAIn,
+            ]),
+            decodeFunction: (data: MultiResult<BytesLike> | BytesLike) => {
+              const [, returnData] = extractSuccessAndValue(data);
+              return returnData === '0x'
+                ? null
+                : BigInt(
+                    this.maverickV2Iface
+                      .decodeFunctionResult('fee', returnData)[0]
+                      .toString(),
+                  );
+            },
+          })),
+          this.lensCall(0n),
+        ],
+        blockNumber,
+        undefined,
+        false,
+      );
 
-      const poolState: PoolState = {
-        activeTick: BigInt(poolContractState.activeTick),
-        binCounter: BigInt(poolContractState.binCounter),
-        reserveA: BigInt(poolContractState.reserveA),
-        reserveB: BigInt(poolContractState.reserveB),
-        lastTwaD8: BigInt(poolContractState.lastTwaD8),
-        lastLogPriceD8: BigInt(poolContractState.lastLogPriceD8),
-        lastTimestamp: BigInt(poolContractState.lastTimestamp),
-        bins: {},
-        ticks: {},
-      };
-
-      const calls = [];
-
-      for (let i = 0n; i < poolState.binCounter / 5000n + 1n; i++) {
-        calls.push({
-          target: this.poolLensAddress,
-          callData: this.maverickV2LensIface.encodeFunctionData(
-            'getFullPoolState',
-            [this.address, i * 5000n, (i + 1n) * 5000n],
-          ),
-          decodeFunction: (data: any) => data.toString(),
-        });
-      }
-
-      const poolLensStates = await this.dexHelper.multiWrapper
-        .aggregate<string>(calls, blockNumber)
-        .then(data => {
-          return data.map(item => decodeMaverickFullState(item));
-        });
-
-      poolLensStates.forEach(poolLensState => {
-        poolLensState.binStateMapping.forEach((bin: any, i: number) => {
-          if (i === 0) return;
-
-          const tick = poolLensState.tickStateMapping[i];
-
-          poolState.bins[i.toString()] = {
-            mergeBinBalance: BigInt(bin.mergeBinBalance),
-            mergeId: BigInt(bin.mergeId),
-            totalSupply: BigInt(bin.totalSupply),
-            kind: BigInt(bin.kind),
-            tick: BigInt(bin.tick),
-            tickBalance: BigInt(bin.tickBalance),
-          };
-
-          poolState.ticks[bin.tick.toString()] = {
-            reserveA: BigInt(tick.reserveA),
-            reserveB: BigInt(tick.reserveB),
-            totalSupply: BigInt(tick.totalSupply),
-            binIdsByTick: {},
-          };
-
-          tick.binIdsByTick.forEach((id: any, i: number) => {
-            if (id != 0n) {
-              poolState.ticks[bin.tick.toString()].binIdsByTick[i.toString()] =
-                BigInt(id);
-            }
-          });
-        });
-      });
-
-      return poolState;
-    } catch {
+    // The pool is not deployed yet at this block (call fails or returns no
+    // data): empty state with the creation parameters, so that logs from the
+    // creation block replay
+    if (!stateResult.success || stateResult.returnData == null) {
       return {
-        activeTick: BigInt(0),
-        binCounter: BigInt(0),
-        reserveA: BigInt(0),
-        reserveB: BigInt(0),
-        lastTwaD8: BigInt(0),
-        lastLogPriceD8: BigInt(0),
-        lastTimestamp: BigInt(0),
+        activeTick: BigInt(this.activeTick),
+        binCounter: 0n,
+        reserveA: 0n,
+        reserveB: 0n,
+        lastTwaD8: 0n,
+        lastLogPriceD8: 0n,
+        lastTimestamp: 0n,
+        feeAIn: BigInt(this.feeAIn),
+        feeBIn: BigInt(this.feeBIn),
+        protocolFeeRatioD3: 0n,
         bins: {},
         ticks: {},
       };
     }
+
+    const poolContractState = stateResult.returnData;
+    const poolState: PoolState = {
+      activeTick: BigInt(poolContractState.activeTick),
+      binCounter: BigInt(poolContractState.binCounter),
+      reserveA: BigInt(poolContractState.reserveA.toString()),
+      reserveB: BigInt(poolContractState.reserveB.toString()),
+      lastTwaD8: BigInt(poolContractState.lastTwaD8.toString()),
+      lastLogPriceD8: BigInt(poolContractState.lastLogPriceD8.toString()),
+      lastTimestamp: BigInt(poolContractState.lastTimestamp),
+      protocolFeeRatioD3: BigInt(poolContractState.protocolFeeRatioD3),
+      feeAIn: feeAInResult.returnData,
+      feeBIn: feeBInResult.returnData,
+      bins: {},
+      ticks: {},
+    };
+
+    const poolLensStates = [firstLensPage.returnData];
+
+    const calls = [];
+    for (
+      let binStart = BINS_PER_LENS_CALL;
+      binStart <= poolState.binCounter;
+      binStart += BINS_PER_LENS_CALL
+    ) {
+      calls.push(this.lensCall(binStart));
+    }
+    if (calls.length) {
+      poolLensStates.push(
+        ...(await this.dexHelper.multiWrapper.aggregate<any>(
+          calls,
+          blockNumber,
+        )),
+      );
+    }
+
+    // The lens returns arrays indexed relative to binStart, not by bin id
+    poolLensStates.forEach((poolLensState, page) => {
+      const binStart = BigInt(page) * BINS_PER_LENS_CALL;
+
+      poolLensState.binStateMapping.forEach((bin: any, i: number) => {
+        const binId = binStart + BigInt(i);
+        if (binId === 0n) return;
+
+        const tick = poolLensState.tickStateMapping[i];
+        const tickKey = bin.tick.toString();
+
+        poolState.bins[binId.toString()] = {
+          mergeBinBalance: BigInt(bin.mergeBinBalance),
+          mergeId: BigInt(bin.mergeId),
+          totalSupply: BigInt(bin.totalSupply),
+          kind: BigInt(bin.kind),
+          tick: BigInt(bin.tick),
+          tickBalance: BigInt(bin.tickBalance),
+        };
+
+        poolState.ticks[tickKey] = {
+          reserveA: BigInt(tick.reserveA),
+          reserveB: BigInt(tick.reserveB),
+          totalSupply: BigInt(tick.totalSupply),
+          binIdsByTick: {},
+        };
+
+        tick.binIdsByTick.forEach((id: any, kind: number) => {
+          const tickBinId = BigInt(id.toString());
+          if (tickBinId !== 0n) {
+            poolState.ticks[tickKey].binIdsByTick[kind.toString()] = tickBinId;
+          }
+        });
+      });
+    });
+
+    return poolState;
+  }
+
+  handleSetVariableFeeEvent(event: any, state: PoolState) {
+    state.feeAIn = BigInt(event.args.newFeeAIn.toString());
+    state.feeBIn = BigInt(event.args.newFeeBIn.toString());
+    return state;
+  }
+
+  handleSetProtocolFeeRatioEvent(event: any, state: PoolState) {
+    state.protocolFeeRatioD3 = BigInt(event.args.protocolFeeRatioD3.toString());
+    return state;
   }
 
   handleRemoveLiquidityEvent(
@@ -309,9 +381,13 @@ export class MaverickV2EventPool extends StatefulEventSubscriber<PoolState> {
   ): [bigint, bigint] {
     try {
       const s = this.state!;
+      // Copy-on-write overlay: estimateSwap only reads ticks by key and
+      // replaces the ones it touches, so a prototype-chained object avoids
+      // copying the whole ticks map on every quote. The estimate path must
+      // never iterate or delete ticks for this to stay correct.
       const tempState: PoolState = {
         ...s,
-        ticks: { ...s.ticks },
+        ticks: Object.create(s.ticks),
       };
 
       const preActiveTick = tempState.activeTick;

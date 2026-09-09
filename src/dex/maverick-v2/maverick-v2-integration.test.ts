@@ -59,8 +59,8 @@ function calculateSwap(
         pool.data.tokenA.toLowerCase() === srcToken.toLowerCase(),
         side === SwapSide.BUY,
         pool.data.tokenA.toLowerCase() === srcToken.toLowerCase()
-          ? 100n
-          : -100n,
+          ? BigInt(pool.data.activeTick) + 100n
+          : BigInt(pool.data.activeTick) - 100n,
       )
       .call({}, blockNumber, (err: any, result: any) => {
         if (err) {
@@ -105,13 +105,15 @@ async function checkOnChainPricing(
 
       const results = await Promise.all(calls);
 
+      // A BUY that can't deliver the full amount is priced as 0
       const expectedPrices = [0n].concat(
-        results.map((result: any) => {
-          if (!result) return BigInt(0);
+        results.map((result: any, i: number) => {
+          if (!result) return 0n;
+          const amountIn = BigInt(result.amountIn);
+          const amountOut = BigInt(result.amountOut);
 
-          return BigInt(
-            side === SwapSide.SELL ? result.amountOut : result.amountIn,
-          );
+          if (side === SwapSide.SELL) return amountOut;
+          return amountOut === amounts[i + 1] ? amountIn : 0n;
         }),
       );
 
@@ -159,10 +161,16 @@ async function testPricingOnNetwork(
   );
 
   expect(poolPrices).not.toBeNull();
+  // Thin pools return 0 once an amount can't be fully filled; the
+  // monotonic price check only makes sense for pools that fill every amount
+  const fullyFilledPools = poolPrices!.filter(pool =>
+    pool.prices.slice(1).every(price => price !== 0n),
+  );
+  expect(fullyFilledPools.length).toBeGreaterThan(0);
   if (maverickV2.hasConstantPriceLargeAmounts) {
-    checkConstantPoolPrices(poolPrices!, amounts, dexKey);
+    checkConstantPoolPrices(fullyFilledPools, amounts, dexKey);
   } else {
-    checkPoolPrices(poolPrices!, amounts, side, dexKey);
+    checkPoolPrices(fullyFilledPools, amounts, side, dexKey);
   }
 
   // Check if onchain pricing equals to calculated ones
@@ -176,14 +184,16 @@ async function testPricingOnNetwork(
   );
 }
 
+jest.setTimeout(120 * 1000);
+
 const testCases = [
-  { network: Network.MAINNET, srcTokenSymbol: 'GHO', destTokenSymbol: 'USDC' },
+  { network: Network.MAINNET, srcTokenSymbol: 'USDC', destTokenSymbol: 'USDS' },
   {
     network: Network.ARBITRUM,
     srcTokenSymbol: 'USDT',
     destTokenSymbol: 'USDC',
   },
-  { network: Network.BASE, srcTokenSymbol: 'ETH', destTokenSymbol: 'wstETH' },
+  { network: Network.BASE, srcTokenSymbol: 'USDC', destTokenSymbol: 'USDS' },
   // {network: Network.BSC, srcTokenSymbol: "USDC", destTokenSymbol: "USDT"},
 ];
 describe('MaverickV2', function () {

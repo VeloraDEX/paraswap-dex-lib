@@ -80,7 +80,6 @@ describe('MaverickV2 EventPool Mainnet', function () {
             pool.feeA,
             pool.feeB,
             pool.tickSpacing,
-            pool.protocolFee,
             pool.lookback,
             pool.activeTick,
             poolAddress,
