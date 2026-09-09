@@ -1,5 +1,5 @@
 import _ from 'lodash';
-import { UnoptimizedRate } from '../types';
+import { UnoptimizedRate, PoolsStorage, PoolReserves } from '../types';
 import { CurveV2 } from './curve-v2/curve-v2';
 import {
   IDexTxBuilder,
@@ -23,7 +23,8 @@ import { DodoV1 } from './dodo-v1/dodo-v1';
 import { DodoV2 } from './dodo-v2';
 import { Nerve } from './nerve/nerve';
 import { IDexHelper } from '../dex-helper';
-import { SwapSide } from '../constants';
+import { PoolReservesRequestError } from '../lib/pools-storage/reserves';
+import { SwapSide, MAX_POOL_RESERVES_BATCH } from '../constants';
 import { Adapters } from '../types';
 import { Lido } from './lido/lido';
 import { WooFiV2 } from './woo-fi-v2/woo-fi-v2';
@@ -397,6 +398,75 @@ export class DexAdapterService {
       throw new Error(`Invalid pool-tracker dex key ${key}`);
 
     return instance as IDexPooltracker;
+  }
+
+  // Every dex that implements `getPoolReserves`, with its storage location
+  // (`null` means enumerated mode: call `getPoolReserves()` without pools).
+  getPoolsStorages(): Record<string, PoolsStorage | null> {
+    const storages: Record<string, PoolsStorage | null> = {};
+    for (const dexKey of this.getPoolTrackerDexKeys()) {
+      const dex = this.dexInstances[dexKey.toLowerCase()] as
+        | Partial<IDexPooltracker>
+        | undefined;
+      if (typeof dex?.getPoolReserves !== 'function') continue;
+      try {
+        storages[dexKey] = dex.getPoolsStorage?.() ?? null;
+      } catch (e) {
+        this.dexHelper
+          .getLogger('DexAdapterService')
+          .error(`${dexKey}: getPoolsStorage failed`, e);
+      }
+    }
+    return storages;
+  }
+
+  // Validates the request against the dex's mode and returns the call to run.
+  // Throws `PoolReservesRequestError` synchronously on a malformed request so
+  // callers can tell a bad request from a dex failure.
+  resolvePoolReservesCall(
+    dexKey: string,
+    pools?: string[],
+  ): () => Promise<PoolReserves[]> {
+    const dex = this.dexInstances[dexKey.toLowerCase()] as
+      | Partial<IDexPooltracker>
+      | undefined;
+    if (!dex || typeof dex.getPoolReserves !== 'function') {
+      throw new PoolReservesRequestError(
+        `${dexKey} does not expose pool reserves on network ${this.network}`,
+      );
+    }
+    const getPoolReserves = dex.getPoolReserves.bind(dex);
+    const storage = dex.getPoolsStorage?.() ?? null;
+
+    if (storage === null) {
+      if (pools !== undefined) {
+        throw new PoolReservesRequestError(
+          `${dexKey} has no pools storage: call without pools`,
+        );
+      }
+      return async () => getPoolReserves();
+    }
+
+    if (!Array.isArray(pools)) {
+      throw new PoolReservesRequestError(
+        `${dexKey} requires pools (storage ${storage.key})`,
+      );
+    }
+    if (pools.length > MAX_POOL_RESERVES_BATCH) {
+      throw new PoolReservesRequestError(
+        `${dexKey}: ${pools.length} pools exceed the batch limit of ${MAX_POOL_RESERVES_BATCH}`,
+      );
+    }
+    if (pools.length === 0) return async () => [];
+
+    return async () => getPoolReserves(pools);
+  }
+
+  getPoolReservesByKey(
+    dexKey: string,
+    pools?: string[],
+  ): Promise<PoolReserves[]> {
+    return this.resolvePoolReservesCall(dexKey, pools)();
   }
 
   getAllDexAdapters(side: SwapSide = SwapSide.SELL) {

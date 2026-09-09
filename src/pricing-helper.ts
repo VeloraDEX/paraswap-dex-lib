@@ -6,15 +6,19 @@ import {
   ExchangePrices,
   UnoptimizedRate,
   TransferFeeParams,
+  PoolsStorage,
+  PoolReserves,
 } from './types';
 import {
   SwapSide,
   SETUP_RETRY_TIMEOUT,
   FETCH_POOL_IDENTIFIER_TIMEOUT,
   FETCH_POOL_PRICES_TIMEOUT,
+  FETCH_POOL_RESERVES_TIMEOUT,
   NULL_ADDRESS,
 } from './constants';
 import { DexAdapterService } from './dex';
+import { PoolReservesRequestError } from './lib/pools-storage/reserves';
 import { IDex, IRouteOptimizer } from './dex/idex';
 import { isSrcTokenTransferFeeToBeExchanged } from './utils';
 
@@ -165,6 +169,37 @@ export class PricingHelper {
       },
       {},
     );
+  }
+
+  public getPoolsStorages(): Record<string, PoolsStorage | null> {
+    return this.dexAdapterService.getPoolsStorages();
+  }
+
+  // Request validation errors (`PoolReservesRequestError`) propagate; a dex
+  // failure or timeout is logged and yields an empty result.
+  public async getPoolReserves(
+    dexKey: string,
+    pools?: string[],
+  ): Promise<PoolReserves[]> {
+    try {
+      const call = this.dexAdapterService.resolvePoolReservesCall(
+        dexKey,
+        pools,
+      );
+      return await new Promise<PoolReserves[]>((resolve, reject) => {
+        const timer = setTimeout(
+          () => reject(new Error(`Timeout`)),
+          FETCH_POOL_RESERVES_TIMEOUT,
+        );
+        call()
+          .then(resolve, reject)
+          .finally(() => clearTimeout(timer));
+      });
+    } catch (e) {
+      if (e instanceof PoolReservesRequestError) throw e;
+      this.logger.error(`Error_${dexKey}_getPoolReserves:`, e);
+      return [];
+    }
   }
 
   // filter out dexes that are restricted

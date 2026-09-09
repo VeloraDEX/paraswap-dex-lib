@@ -87,6 +87,14 @@ export interface ICache {
 
   hgetAll(mapKey: string): Promise<Record<string, string>>;
 
+  // Incremental HSCAN: returns the next cursor ('0' when done) and the
+  // fields read in this step.
+  hscan(
+    mapKey: string,
+    cursor: string,
+    count: number,
+  ): Promise<{ cursor: string; entries: Record<string, string> }>;
+
   publish(channel: string, msg: string): Promise<void>;
 
   subscribe(
