@@ -179,6 +179,28 @@ type TestE2EOptions = {
   assertAmounts?: boolean;
 };
 
+// Tenderly rejects a block it hasn't indexed yet ("Unknown block number");
+// simulating on the route block's successor needs a short wait for it
+async function simulateWhenBlockIsKnown(
+  simulator: TenderlySimulator,
+  request: Parameters<TenderlySimulator['simulateTransaction']>[0],
+  attempts = 15,
+) {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await simulator.simulateTransaction(request);
+    } catch (e: any) {
+      const message = e?.response?.data?.error?.message;
+      if (message !== 'Unknown block number' || attempt >= attempts) {
+        throw new Error(
+          `Tenderly simulation failed: ${message || e?.message || e}`,
+        );
+      }
+      await sleep(2000);
+    }
+  }
+}
+
 export async function testE2E(
   srcToken: Token,
   destToken: Token,
@@ -283,12 +305,16 @@ export async function testE2E(
     to,
     data,
     value,
-    blockNumber: priceRoute.blockNumber,
+    // Tenderly runs the tx as the first of `block_number`, i.e. on the state
+    // after the previous block, so +1 simulates on the route block's state
+    blockNumber: priceRoute.blockNumber + 1,
     stateOverride,
   };
   // simulate the transaction with overrides
-  const { transaction, simulation } =
-    await tenderlySimulator.simulateTransaction(simulationRequest);
+  const { transaction, simulation } = await simulateWhenBlockIsKnown(
+    tenderlySimulator,
+    simulationRequest,
+  );
   // log gas estimation if testing against API
   if (useAPI) {
     const estimatedGas = Number(priceRoute.gasCost);
@@ -404,11 +430,14 @@ export async function testPriceRoute(priceRoute: OptimalRate) {
     to,
     data,
     value,
-    blockNumber: priceRoute.blockNumber,
+    // Tenderly runs the tx as the first of `block_number`, i.e. on the state
+    // after the previous block, so +1 simulates on the route block's state
+    blockNumber: priceRoute.blockNumber + 1,
     stateOverride,
   };
   // simulate the transaction with overrides
-  const { simulation } = await tenderlySimulator.simulateTransaction(
+  const { simulation } = await simulateWhenBlockIsKnown(
+    tenderlySimulator,
     simulationRequest,
   );
   // release
@@ -526,11 +555,14 @@ export const testGasEstimation = async (
     to,
     data,
     value,
-    blockNumber: priceRoute.blockNumber,
+    // Tenderly runs the tx as the first of `block_number`, i.e. on the state
+    // after the previous block, so +1 simulates on the route block's state
+    blockNumber: priceRoute.blockNumber + 1,
     stateOverride,
   };
   // simulate the transaction with overrides
-  const { simulation } = await tenderlySimulator.simulateTransaction(
+  const { simulation } = await simulateWhenBlockIsKnown(
+    tenderlySimulator,
     simulationRequest,
   );
   // compare and assert
