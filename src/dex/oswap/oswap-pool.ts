@@ -10,6 +10,7 @@ import { OSwapPool, OSwapPoolState } from './types';
 import OSwapABI from '../../abi/oswap/oswap.abi.json';
 import ERC20ABI from '../../abi/ERC20.abi.json';
 import ERC4626ABI from '../../abi/ERC4626.json';
+import { getTopicLogDecoder } from '../../lib/topic-log-decoder';
 
 export class OSwapEventPool extends StatefulEventSubscriber<OSwapPoolState> {
   handlers: {
@@ -52,7 +53,7 @@ export class OSwapEventPool extends StatefulEventSubscriber<OSwapPoolState> {
 
   protected parseLog(log: Log) {
     if (log.address.toLowerCase() === this.pool.address) {
-      return this.iOSwap.parseLog(log);
+      return getTopicLogDecoder(this.iOSwap).decode(log);
     }
 
     const erc4626 = this.pool.erc4626;
@@ -62,12 +63,12 @@ export class OSwapEventPool extends StatefulEventSubscriber<OSwapPoolState> {
       log.address.toLowerCase() === erc4626.vaultToken.toLowerCase()
     ) {
       try {
-        return this.iERC4626.parseLog(log);
+        return getTopicLogDecoder(this.iERC4626).decode(log);
       } catch {
         // If it's not an ERC4626 event, fall through to ERC20
       }
     }
-    return this.iERC20.parseLog(log);
+    return getTopicLogDecoder(this.iERC20).decode(log);
   }
 
   /**

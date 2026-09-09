@@ -11,6 +11,7 @@ import type { IDexHelper } from '../../dex-helper/idex-helper';
 import type { PoolState } from './types';
 import StakedStableABI from '../../abi/angle/stagToken.json';
 import ERC20ABI from '../../abi/erc20.json';
+import { getTopicLogDecoder } from '../../lib/topic-log-decoder';
 
 export class AngleStakedStableEventPool extends StatefulEventSubscriber<PoolState> {
   handlers: {
@@ -49,7 +50,9 @@ export class AngleStakedStableEventPool extends StatefulEventSubscriber<PoolStat
     );
 
     this.logDecoder = (log: Log) =>
-      AngleStakedStableEventPool.angleStakedStableIface.parseLog(log);
+      getTopicLogDecoder(
+        AngleStakedStableEventPool.angleStakedStableIface,
+      ).decode(log);
     this.addressesSubscribed = [stakeToken];
 
     // Add handlers

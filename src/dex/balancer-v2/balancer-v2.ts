@@ -86,6 +86,7 @@ import BalancerVaultABI from '../../abi/balancer-v2/vault.json';
 import { BigNumber } from 'ethers';
 import { SpecialDex } from '../../executor/types';
 import { extractReturnAmountPosition } from '../../executor/utils';
+import { getTopicLogDecoder } from '../../lib/topic-log-decoder';
 
 // Fallback pools configuration for when subgraph is unavailable
 const FallbackPoolsConfig: Record<string, Record<number, FallbackPool[]>> = {
@@ -408,7 +409,8 @@ export class BalancerV2EventPool extends StatefulEventSubscriber<PoolStateMap> {
     this.pools[BalancerPoolTypes.Gyro3] = gyro3Pool;
     this.pools[BalancerPoolTypes.GyroE] = gyroEPool;
 
-    this.vaultDecoder = (log: Log) => this.vaultInterface.parseLog(log);
+    this.vaultDecoder = (log: Log) =>
+      getTopicLogDecoder(this.vaultInterface).decode(log);
     this.addressesSubscribed = [vaultAddress];
 
     // Add default handlers

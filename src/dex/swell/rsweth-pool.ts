@@ -6,9 +6,10 @@ import { AsyncOrSync, DeepReadonly } from 'ts-essentials';
 import { RSWETHPoolState } from './type';
 import { getOnChainStateRswETH } from './utils';
 import { BI_POWS } from '../../bigint-constants';
+import { getTopicLogDecoder } from '../../lib/topic-log-decoder';
 
 export class RswethPool extends StatefulEventSubscriber<RSWETHPoolState> {
-  decoder = (log: Log) => this.poolInterface.parseLog(log);
+  decoder = (log: Log) => getTopicLogDecoder(this.poolInterface).decode(log);
 
   constructor(
     parentName: string,

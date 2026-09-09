@@ -27,6 +27,7 @@ import { TickBitMap } from './contract-math/TickBitMap';
 import { uint256ToBigInt } from '../../lib/decoders';
 import { decodeStateMultiCallResultWithRelativeBitmaps } from './utils';
 import { _reduceTickBitmap, _reduceTicks } from './contract-math/utils';
+import { getTopicLogDecoder } from '../../lib/topic-log-decoder';
 
 const FEES_TO_TICK_SPACING: Record<number, bigint> = {
   500: 10n,
@@ -90,7 +91,8 @@ export class SolidlyV3EventPool extends StatefulEventSubscriber<PoolState> {
     this.tickSpacingAsString = tickSpacing.toString();
     this.token0 = token0.toLowerCase();
     this.token1 = token1.toLowerCase();
-    this.logDecoder = (log: Log) => this.poolIface.parseLog(log);
+    this.logDecoder = (log: Log) =>
+      getTopicLogDecoder(this.poolIface).decode(log);
     this.addressesSubscribed = new Array<Address>(1);
 
     // Add handlers

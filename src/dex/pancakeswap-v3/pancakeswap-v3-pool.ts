@@ -30,6 +30,7 @@ import {
   _reduceTicks,
 } from '../uniswap-v3/contract-math/utils';
 import { INACTIVE_POOL_AGE_MS } from './constants';
+import { getTopicLogDecoder } from '../../lib/topic-log-decoder';
 
 export class PancakeSwapV3EventPool extends StatefulEventSubscriber<PoolState> {
   handlers: {
@@ -85,7 +86,8 @@ export class PancakeSwapV3EventPool extends StatefulEventSubscriber<PoolState> {
     this.feeCodeAsString = feeCode.toString();
     this.token0 = token0.toLowerCase();
     this.token1 = token1.toLowerCase();
-    this.logDecoder = (log: Log) => this.poolIface.parseLog(log);
+    this.logDecoder = (log: Log) =>
+      getTopicLogDecoder(this.poolIface).decode(log);
     this.addressesSubscribed = new Array<Address>(1);
 
     // Add handlers

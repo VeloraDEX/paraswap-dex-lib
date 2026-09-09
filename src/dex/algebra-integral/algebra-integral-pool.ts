@@ -31,6 +31,7 @@ import {
 } from './constants';
 import { DecodedStateMultiCallResultIntegral } from './types';
 import { decodeStateMultiCallResultIntegral } from './utils';
+import { getTopicLogDecoder } from '../../lib/topic-log-decoder';
 
 const TRANSFER_TOPIC =
   '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef';
@@ -70,7 +71,8 @@ export class AlgebraIntegralEventPool extends StatefulEventSubscriber<AlgebraInt
     this.token1 = token1.toLowerCase();
     this.poolAddress = poolAddress.toLowerCase();
 
-    this.logDecoder = (log: Log) => this.poolIface.parseLog(log);
+    this.logDecoder = (log: Log) =>
+      getTopicLogDecoder(this.poolIface).decode(log);
     this.addressesSubscribed = [this.poolAddress, this.token0, this.token1];
 
     this.handlers['Fee'] = this.handleNewFee.bind(this);

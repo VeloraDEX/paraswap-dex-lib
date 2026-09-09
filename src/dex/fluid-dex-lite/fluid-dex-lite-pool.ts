@@ -16,6 +16,7 @@ import {
   readFromStorageCall,
 } from './utils';
 import { catchParseLogError } from '../../utils';
+import { getTopicLogDecoder } from '../../lib/topic-log-decoder';
 
 // Storage slot constants from DexLiteSlotsLink
 const DEX_LITE_DEXES_LIST_SLOT = 1;
@@ -25,7 +26,8 @@ const DEX_LITE_RANGE_SHIFT_SLOT = 4;
 const DEX_LITE_THRESHOLD_SHIFT_SLOT = 5;
 
 export class FluidDexLiteEventPool extends StatefulEventSubscriber<PoolState> {
-  decoder = (log: Log) => this.fluidDexLiteIface.parseLog(log);
+  decoder = (log: Log) =>
+    getTopicLogDecoder(this.fluidDexLiteIface).decode(log);
 
   private handlers: {
     [event: string]: (
@@ -52,7 +54,8 @@ export class FluidDexLiteEventPool extends StatefulEventSubscriber<PoolState> {
     super(parentName, `${mapKey}`, dexHelper, logger);
 
     this.poolParams = poolParams;
-    this.logDecoder = (log: Log) => this.fluidDexLiteIface.parseLog(log);
+    this.logDecoder = (log: Log) =>
+      getTopicLogDecoder(this.fluidDexLiteIface).decode(log);
     this.addressesSubscribed = [fluidDexLiteAddress];
 
     // Add handlers for all events that update state

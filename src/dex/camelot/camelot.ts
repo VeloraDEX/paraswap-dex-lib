@@ -53,6 +53,7 @@ import {
 import { hexlify, hexZeroPad, solidityPack } from 'ethers/lib/utils';
 import { BigNumber } from 'ethers';
 import { SpecialDex } from '../../executor/types';
+import { getTopicLogDecoder } from '../../lib/topic-log-decoder';
 
 const DefaultCamelotPoolGasCost = 90 * 1000;
 
@@ -89,7 +90,7 @@ export interface CamelotPair {
 }
 
 export class CamelotEventPool extends StatefulEventSubscriber<CamelotPoolState> {
-  decoder = (log: Log) => this.iface.parseLog(log);
+  decoder = (log: Log) => getTopicLogDecoder(this.iface).decode(log);
 
   constructor(
     parentName: string,

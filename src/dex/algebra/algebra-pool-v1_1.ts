@@ -46,6 +46,7 @@ import {
   TICK_BITMAP_TO_USE,
   TICK_BITMAP_TO_USE_BY_CHAIN,
 } from './constants';
+import { getTopicLogDecoder } from '../../lib/topic-log-decoder';
 
 const BN_ZERO = BigNumber.from(0);
 const MAX_BATCH_SIZE = 100;
@@ -100,7 +101,8 @@ export class AlgebraEventPoolV1_1 extends StatefulEventSubscriber<PoolStateV1_1>
     this.token0 = token0.toLowerCase();
     this.token1 = token1.toLowerCase();
 
-    this.logDecoder = (log: Log) => this.poolIface.parseLog(log);
+    this.logDecoder = (log: Log) =>
+      getTopicLogDecoder(this.poolIface).decode(log);
     this.addressesSubscribed = new Array<Address>(1);
 
     this.handlers['Fee'] = this.handleNewFee.bind(this);

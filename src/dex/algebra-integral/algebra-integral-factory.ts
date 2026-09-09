@@ -10,6 +10,7 @@ import { Pool } from './types';
 import { ETHER_ADDRESS, NULL_ADDRESS, SUBGRAPH_TIMEOUT } from '../../constants';
 import { MIN_USD_TVL_FOR_PRICING } from './constants';
 import { uint256ToBigInt } from '../../lib/decoders';
+import { getTopicLogDecoder } from '../../lib/topic-log-decoder';
 
 export class AlgebraIntegralFactory extends StatefulEventSubscriber<Pool[]> {
   handlers: {
@@ -37,7 +38,8 @@ export class AlgebraIntegralFactory extends StatefulEventSubscriber<Pool[]> {
 
     this.addressesSubscribed = [factoryAddress];
 
-    this.logDecoder = (log: Log) => this.factoryIface.parseLog(log);
+    this.logDecoder = (log: Log) =>
+      getTopicLogDecoder(this.factoryIface).decode(log);
 
     this.handlers['Pool'] = this.handleNewPool.bind(this);
     this.handlers['CustomPool'] = this.handleNewCustomPool.bind(this);

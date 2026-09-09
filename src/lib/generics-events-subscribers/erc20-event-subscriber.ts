@@ -5,6 +5,7 @@ import { IDexHelper } from '../../dex-helper';
 import { StatefulEventSubscriber } from '../../stateful-event-subscriber';
 import { Log, BlockHeader, Address } from '../../types';
 import { erc20Iface } from '../utils-interfaces';
+import { getTopicLogDecoder } from '../topic-log-decoder';
 import {
   decodeERC20Transfer,
   decodeWrappedDeposit,
@@ -19,6 +20,8 @@ import {
 import { ERC20Event, ERC20StateMap, WrappedEvent } from './types';
 import { CACHE_PREFIX } from '../../constants';
 import { catchParseLogError } from '../../utils';
+
+const erc20LogDecoder = getTopicLogDecoder(erc20Iface);
 
 export class ERC20EventSubscriber extends StatefulEventSubscriber<ERC20StateMap> {
   private walletAddresses: Set<string> = new Set<string>();
@@ -123,7 +126,7 @@ export class ERC20EventSubscriber extends StatefulEventSubscriber<ERC20StateMap>
     blockHeader: Readonly<BlockHeader>,
   ): DeepReadonly<ERC20StateMap> | null {
     try {
-      const event = erc20Iface.parseLog(log);
+      const event = erc20LogDecoder.decode(log);
       if (event.name in this.handlers) {
         return this.handlers[event.name](event, state);
       }
