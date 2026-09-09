@@ -7,7 +7,12 @@ import { ERC4626Config } from './config';
 import { Network } from '../../constants';
 import { DummyDexHelper } from '../../dex-helper/index';
 import ERC4626_ABI from '../../abi/ERC4626.json';
-import { DEPOSIT_TOPIC, TRANSFER_TOPIC, WITHDRAW_TOPIC } from './constants';
+import {
+  DEPOSIT_TOPIC,
+  LOG_DERIVABLE_STATE_VAULTS,
+  TRANSFER_TOPIC,
+  WITHDRAW_TOPIC,
+} from './constants';
 import { testEventSubscriber } from '../../../tests/utils-events';
 import { ERC4626PoolState } from './types';
 
@@ -19,7 +24,10 @@ jest.setTimeout(50 * 1000);
 async function fetchPoolState(
   pool: ERC4626EventPool,
   blockNumber: number,
+  strict: boolean,
 ): Promise<ERC4626PoolState> {
+  if (strict) return pool.generateState(blockNumber);
+
   const eventState = pool.getState(blockNumber);
   if (eventState) return eventState;
   const onChainState = await pool.generateState(blockNumber);
@@ -72,6 +80,12 @@ const testBlockNumbers: {
       withdraw: [],
     },
   },
+  sftUSD: {
+    [Network.MAINNET]: {
+      deposit: [25856533, 25884033, 25882464],
+      withdraw: [25885819, 25882223, 25825762],
+    },
+  },
   stcUSD: {
     [Network.MAINNET]: {
       deposit: [21205821, 21198635, 21195019],
@@ -85,7 +99,7 @@ describe('ERC4626 Event Tests', function () {
     describe(`${dexKey}`, function () {
       for (const net of Object.keys(ERC4626Config[dexKey])) {
         const network = Number(net) as Network;
-        const { vault, asset } = ERC4626Config[dexKey][network];
+        const { vault, asset, backingToken } = ERC4626Config[dexKey][network];
 
         // Skip if no test block numbers are defined for this integration
         if (!testBlockNumbers[dexKey]?.[network]) {
@@ -124,12 +138,19 @@ describe('ERC4626 Event Tests', function () {
                 DEPOSIT_TOPIC,
                 WITHDRAW_TOPIC,
                 TRANSFER_TOPIC,
+                false,
+                backingToken,
               );
 
               await testEventSubscriber(
                 pool,
                 pool.addressesSubscribed,
-                (_blockNumber: number) => fetchPoolState(pool, _blockNumber),
+                (_blockNumber: number) =>
+                  fetchPoolState(
+                    pool,
+                    _blockNumber,
+                    LOG_DERIVABLE_STATE_VAULTS.has(dexKey),
+                  ),
                 blockNumber,
                 `${dexKey}_${vaultAddress}`,
                 dexHelper.provider,

@@ -12,6 +12,10 @@ import { Network } from '../../constants';
 export class ERC4626EventPool extends StatefulEventSubscriber<ERC4626PoolState> {
   logDecoder: (log: Log) => any;
 
+  // token whose vault balance backs `totalAssets`: `asset` for vaults holding it
+  // directly, `backingToken` for vaults that immediately convert deposits
+  private assetsToken: Address;
+
   constructor(
     parentName: string,
     network: Network,
@@ -25,9 +29,11 @@ export class ERC4626EventPool extends StatefulEventSubscriber<ERC4626PoolState> 
     private withdrawTopic: string,
     private transferTopic: string,
     private cooldownEnabled: boolean = false,
+    private backingToken?: Address,
   ) {
     super(parentName, poolName, dexHelper, logger);
-    this.addressesSubscribed = [vault, asset];
+    this.addressesSubscribed = [vault, backingToken ?? asset];
+    this.assetsToken = (backingToken ?? asset).toLowerCase();
     this.vault = vault.toLowerCase();
     this.asset = asset.toLowerCase();
     const logDecoder = getTopicLogDecoder(wrapperInterface);
@@ -43,13 +49,17 @@ export class ERC4626EventPool extends StatefulEventSubscriber<ERC4626PoolState> 
 
     try {
       if (topic0 === this.transferTopic) {
-        if (log.address.toLowerCase() !== this.asset) {
+        if (log.address.toLowerCase() !== this.assetsToken) {
           return null;
         }
 
         const event = this.logDecoder(log);
         if (event.args.to.toLowerCase() === this.vault) {
           return this.handleAssetTransferToVault(event, state, log);
+        }
+
+        if (this.backingToken && event.args.from.toLowerCase() === this.vault) {
+          return this.handleAssetTransferFromVault(event, state, log);
         }
 
         return null;
@@ -147,6 +157,17 @@ export class ERC4626EventPool extends StatefulEventSubscriber<ERC4626PoolState> 
     };
   }
 
+  async handleAssetTransferFromVault(
+    event: any,
+    state: DeepReadonly<ERC4626PoolState>,
+    _: Readonly<Log>,
+  ): Promise<DeepReadonly<ERC4626PoolState>> {
+    return {
+      ...state,
+      totalAssets: state.totalAssets - BigInt(event.args.value),
+    };
+  }
+
   async handleWithdraw(
     event: any,
     state: DeepReadonly<ERC4626PoolState>,
@@ -154,7 +175,11 @@ export class ERC4626EventPool extends StatefulEventSubscriber<ERC4626PoolState> 
   ): Promise<DeepReadonly<ERC4626PoolState>> {
     return {
       ...state,
-      totalAssets: BigInt(state.totalAssets) - BigInt(event.args.assets),
+      // with a backing token, `totalAssets` follows its balance, and `Withdraw.assets`
+      // can be net of fees taken from the redeemed amount
+      totalAssets: this.backingToken
+        ? state.totalAssets
+        : BigInt(state.totalAssets) - BigInt(event.args.assets),
       totalShares: BigInt(state.totalShares) - BigInt(event.args.shares),
     };
   }

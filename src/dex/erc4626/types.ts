@@ -27,4 +27,7 @@ export type ERC4626Params = {
   cooldownEnabled?: boolean; // only for sUSDe
   decimals?: number; // for assets with non-18 decimals
   withdrawDisabled?: boolean; // for vaults that that do not support withdraw (yoETH, yoUSD)
+  // for vaults that do not hold `asset` themselves but convert it on deposit and hold the
+  // resulting token instead, which is what `totalAssets` reports (sftUSD holds ftftUSD)
+  backingToken?: Address;
 };

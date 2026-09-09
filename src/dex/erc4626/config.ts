@@ -83,6 +83,14 @@ export const ERC4626Config: DexConfigMap<ERC4626Params> = {
       asset: '0xb1e25689d55734fd3fffc939c4c3eb52dff8a794', // OS
     },
   },
+  sftUSD: {
+    [Network.MAINNET]: {
+      vault: '0xeb48218a4c35C814C7678cBcae88C6Ee037F7625', // sftUSD
+      asset: '0xF7D85EC4E7710f71992752eac2111312e73E9C9C', // ftUSD
+      backingToken: '0xB44a9C40EFc05Eb014EfFEac3CBed6A31F8cB87f', // ftftUSD
+      decimals: 6,
+    },
+  },
   wsuperOETHb: {
     [Network.BASE]: {
       vault: '0x7fcd174e80f264448ebee8c88a7c4476aaf58ea6', // wsuperOETHb
