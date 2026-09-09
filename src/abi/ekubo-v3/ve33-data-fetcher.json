@@ -1,0 +1,47 @@
+[
+  {
+    "type": "function",
+    "name": "getVe33QuoteData",
+    "inputs": [
+      {
+        "name": "poolKeys",
+        "type": "tuple[]",
+        "components": [
+          { "name": "token0", "type": "address" },
+          { "name": "token1", "type": "address" },
+          { "name": "config", "type": "bytes32" }
+        ]
+      },
+      { "name": "minBitmapsSearched", "type": "uint32" }
+    ],
+    "outputs": [
+      {
+        "name": "results",
+        "type": "tuple[]",
+        "components": [
+          {
+            "name": "quoteData",
+            "type": "tuple",
+            "components": [
+              { "name": "tick", "type": "int32" },
+              { "name": "sqrtRatio", "type": "uint96" },
+              { "name": "liquidity", "type": "uint128" },
+              { "name": "minTick", "type": "int32" },
+              { "name": "maxTick", "type": "int32" },
+              {
+                "name": "ticks",
+                "type": "tuple[]",
+                "components": [
+                  { "name": "number", "type": "int32" },
+                  { "name": "liquidityDelta", "type": "int128" }
+                ]
+              }
+            ]
+          },
+          { "name": "swapFee", "type": "uint64" }
+        ]
+      }
+    ],
+    "stateMutability": "view"
+  }
+]

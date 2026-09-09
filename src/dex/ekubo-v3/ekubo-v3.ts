@@ -212,7 +212,7 @@ export class EkuboV3 extends SimpleExchange implements IDex<EkuboData> {
         [data.poolKeyAbi, params, recipient],
       ),
       sendEthButSupportsInsertFromAmount: true,
-      targetExchange: ROUTER_ADDRESS,
+      targetExchange: this.config.router,
       dexFuncHasRecipient: true,
       returnAmountPos: undefined,
       amountsPacked128: true,
