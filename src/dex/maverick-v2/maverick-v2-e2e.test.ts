@@ -11,7 +11,11 @@ import {
 import { Network, ContractMethod, SwapSide } from '../../constants';
 import { StaticJsonRpcProvider } from '@ethersproject/providers';
 import { generateConfig } from '../../config';
-import { ContractMethodV6 } from '@paraswap/sdk';
+import { DummyDexHelper } from '../../dex-helper/index';
+import { Token } from '../../types';
+import { MaverickV2 } from './maverick-v2';
+
+jest.setTimeout(120 * 1000);
 
 /*
   README
@@ -52,6 +56,58 @@ import { ContractMethodV6 } from '@paraswap/sdk';
   (This comment should be removed from the final implementation)
 */
 
+// One initialised dex per network, shared by every test case on that network
+const dexByNetwork = new Map<
+  Network,
+  Promise<{ dex: MaverickV2; blockNumber: number }>
+>();
+
+function getInitializedDex(network: Network, dexKey: string) {
+  let initialized = dexByNetwork.get(network);
+  if (!initialized) {
+    initialized = (async () => {
+      const dexHelper = new DummyDexHelper(network);
+      const dex = new MaverickV2(network, dexKey, dexHelper);
+      const blockNumber = await dexHelper.web3Provider.eth.getBlockNumber();
+      await dex.initializePricing(blockNumber);
+      return { dex, blockNumber };
+    })();
+    dexByNetwork.set(network, initialized);
+  }
+  return initialized;
+}
+
+// The local SDK prices the first pool of the pair, and pools that can't fill
+// the amount price it as 0, so pin the pool with the best full fill
+async function bestPoolIdentifiers(
+  dex: MaverickV2,
+  blockNumber: number,
+  srcToken: Token,
+  destToken: Token,
+  amount: string,
+  side: SwapSide,
+): Promise<{ [dexKey: string]: string[] }> {
+  const poolPrices = await dex.getPricesVolume(
+    srcToken,
+    destToken,
+    [0n, BigInt(amount)],
+    side,
+    blockNumber,
+  );
+  const filled = (poolPrices || []).filter(p => p.prices[1] !== 0n);
+  expect(filled.length).toBeGreaterThan(0);
+
+  filled.sort((a, b) => {
+    const aBetter =
+      side === SwapSide.SELL
+        ? a.prices[1] > b.prices[1]
+        : a.prices[1] < b.prices[1];
+    return aBetter ? -1 : 1;
+  });
+
+  return { [dex.dexKey]: filled[0].poolIdentifiers! };
+}
+
 function testForNetwork(
   network: Network,
   dexKey: string,
@@ -75,34 +131,63 @@ function testForNetwork(
   ]);
 
   describe(`${network}`, () => {
+    let dex: MaverickV2;
+    let blockNumber: number;
+
+    beforeAll(async () => {
+      ({ dex, blockNumber } = await getInitializedDex(network, dexKey));
+    });
+
     sideToContractMethods.forEach((contractMethods, side) =>
       describe(`${side}`, () => {
         contractMethods.forEach((contractMethod: ContractMethod) => {
           describe(`${contractMethod}`, () => {
             it(`${tokenASymbol} -> ${tokenBSymbol}`, async () => {
+              const amount =
+                side === SwapSide.SELL ? tokenAAmount : tokenBAmount;
+              const poolIdentifiers = await bestPoolIdentifiers(
+                dex,
+                blockNumber,
+                tokens[tokenASymbol],
+                tokens[tokenBSymbol],
+                amount,
+                side,
+              );
               await testE2E(
                 tokens[tokenASymbol],
                 tokens[tokenBSymbol],
                 holders[tokenASymbol],
-                side === SwapSide.SELL ? tokenAAmount : tokenBAmount,
+                amount,
                 side,
                 dexKey,
                 contractMethod,
                 network,
                 provider,
+                poolIdentifiers,
               );
             });
             it(`${tokenBSymbol} -> ${tokenASymbol}`, async () => {
+              const amount =
+                side === SwapSide.SELL ? tokenBAmount : tokenAAmount;
+              const poolIdentifiers = await bestPoolIdentifiers(
+                dex,
+                blockNumber,
+                tokens[tokenBSymbol],
+                tokens[tokenASymbol],
+                amount,
+                side,
+              );
               await testE2E(
                 tokens[tokenBSymbol],
                 tokens[tokenASymbol],
                 holders[tokenBSymbol],
-                side === SwapSide.SELL ? tokenBAmount : tokenAAmount,
+                amount,
                 side,
                 dexKey,
                 contractMethod,
                 network,
                 provider,
+                poolIdentifiers,
               );
             });
           });
@@ -116,19 +201,21 @@ describe('MaverickV2 E2E', () => {
   const dexKey = 'MaverickV2';
 
   const testCases = [
+    // The local SDK prices on the state at init time, so prefer pairs that
+    // aren't arbitraged every block
     {
       network: Network.BASE,
-      tokenASymbol: 'USDC',
-      tokenBSymbol: 'ETH',
-      tokenAAmount: '1000000000',
-      tokenBAmount: '1000000000000000000',
+      tokenASymbol: 'DAI',
+      tokenBSymbol: 'USDC',
+      tokenAAmount: '100000000000000000000',
+      tokenBAmount: '100000000',
     },
     {
       network: Network.ARBITRUM,
       tokenASymbol: 'USDC',
       tokenBSymbol: 'ETH',
       tokenAAmount: '1000000',
-      tokenBAmount: '1000000000000000000',
+      tokenBAmount: '100000000000000000',
     },
     {
       network: Network.BSC,
@@ -139,16 +226,16 @@ describe('MaverickV2 E2E', () => {
     },
     {
       network: Network.MAINNET,
-      tokenASymbol: 'GHO',
-      tokenBSymbol: 'USDC',
-      tokenAAmount: '1000000000000000000000',
-      tokenBAmount: '100000000000',
+      tokenASymbol: 'USDC',
+      tokenBSymbol: 'USDS',
+      tokenAAmount: '1000000000',
+      tokenBAmount: '1000000000000000000000',
     },
     {
       network: Network.MAINNET,
       tokenASymbol: 'ETH',
       tokenBSymbol: 'USDC',
-      tokenAAmount: '1000000000000000000',
+      tokenAAmount: '1000000000000000',
       tokenBAmount: '1000000',
     },
   ];

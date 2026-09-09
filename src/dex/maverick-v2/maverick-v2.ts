@@ -84,15 +84,21 @@ export class MaverickV2 extends SimpleExchange implements IDex<MaverickV2Data> {
           BigInt(pool.fee * 1e18),
           BigInt(pool.feeB * 1e18),
           BigInt(pool.tickSpacing),
-          BigInt(0),
           BigInt(pool.lookback),
           BigInt(pool.lowerTick),
           pool.id,
           this.config.poolLensAddress,
         );
 
-        await eventPool.initialize(blockNumber);
-        this.pools[eventPool.address] = eventPool;
+        try {
+          await eventPool.initialize(blockNumber);
+          this.pools[eventPool.address] = eventPool;
+        } catch (e) {
+          this.logger.error(
+            `${this.dexKey}: failed to initialize pool ${pool.id}, skipping`,
+            e,
+          );
+        }
       }),
     );
   }
