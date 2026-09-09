@@ -20,14 +20,16 @@ import { MaverickV2Config } from '../config';
 import { MaverickTickMath } from '../maverick-math/maverick-tick-math';
 import { PoolState } from '../types';
 import { extractSuccessAndValue } from '../../../lib/decoders';
-import { MultiResult } from '../../../lib/multi-wrapper';
+import { MultiCallParams, MultiResult } from '../../../lib/multi-wrapper';
 import QuoterABI from '../../../abi/maverick-v2/MaverickV2Quoter.json';
 import LensABI from '../../../abi/maverick-v2/MaverickV2PoolLens.json';
+import PoolABI from '../../../abi/maverick-v2/MaverickV2Pool.json';
 
 const network = Number(process.argv[2] || 1);
 const dexKey = 'MaverickV2';
 const quoterIface = new Interface(QuoterABI);
 const lensIface = new Interface(LensABI);
+const poolIface = new Interface(PoolABI);
 const MAX_UINT128 = (1n << 128n) - 1n;
 
 const AMOUNT_MULTIPLIERS: [bigint, bigint][] = [
@@ -83,7 +85,7 @@ const decodeTick = decodePair(lensIface, 'getTickSqrtPriceAndL', [
   console.log(`network=${network} block=${blockNumber} pools=${pools.length}`);
 
   // ticks
-  const tickCalls = [];
+  const tickCalls: MultiCallParams<Pair>[] = [];
   const tickExpected: { pool: string; tick: bigint; local: Pair }[] = [];
   for (const pool of pools) {
     const state = pool.getState(blockNumber) as PoolState;
@@ -141,7 +143,7 @@ const decodeTick = decodePair(lensIface, 'getTickSqrtPriceAndL', [
     local: Pair | string;
   };
   const cases: Case[] = [];
-  const quoteCalls = [];
+  const quoteCalls: MultiCallParams<Pair>[] = [];
   for (const pool of pools) {
     const state = pool.getState(blockNumber) as PoolState;
     for (const tokenAIn of [true, false]) {
@@ -196,19 +198,36 @@ const decodeTick = decodePair(lensIface, 'getTickSqrtPriceAndL', [
       }
     }
   }
-  const quoteResults = await dexHelper.multiWrapper.tryAggregate<Pair>(
-    false,
-    quoteCalls,
-    blockNumber,
-    15,
-    false,
-  );
+  // Quoter calls simulate a full swap, so keep multicall batches small and
+  // don't fire all of them at once
+  const QUOTES_PER_BATCH = 15;
+  const BATCHES_IN_FLIGHT = 20;
+  const quoteResults: MultiResult<Pair>[] = [];
+  for (
+    let start = 0;
+    start < quoteCalls.length;
+    start += QUOTES_PER_BATCH * BATCHES_IN_FLIGHT
+  ) {
+    quoteResults.push(
+      ...(await dexHelper.multiWrapper.tryAggregate<Pair>(
+        false,
+        quoteCalls.slice(start, start + QUOTES_PER_BATCH * BATCHES_IN_FLIGHT),
+        blockNumber,
+        QUOTES_PER_BATCH,
+        false,
+      )),
+    );
+  }
 
   let matches = 0;
   let mismatches = 0;
   let onlyLocalThrows = 0;
   let onlyOnchainFails = 0;
   let unfillableBuys = 0;
+  const onchainFailures = new Map<
+    string,
+    { count: number; callData: string }
+  >();
   quoteResults.forEach(({ returnData: onchain }, i) => {
     const c = cases[i];
     const describe = `${c.label} pool=${c.pool} tokenAIn=${c.tokenAIn} exactOutput=${c.exactOutput} amount=${c.amount}`;
@@ -228,7 +247,12 @@ const decodeTick = decodePair(lensIface, 'getTickSqrtPriceAndL', [
     }
     if (!onchain) {
       onlyOnchainFails++;
-      console.log(`ONCHAIN FAILS ${describe} local=[${c.local}]`);
+      const failures = onchainFailures.get(c.pool) || {
+        count: 0,
+        callData: quoteCalls[i].callData,
+      };
+      failures.count++;
+      onchainFailures.set(c.pool, failures);
       return;
     }
     if (c.local![0] !== onchain[0] || c.local![1] !== onchain[1]) {
@@ -244,6 +268,43 @@ const decodeTick = decodePair(lensIface, 'getTickSqrtPriceAndL', [
       matches++;
     }
   });
+
+  // The multicall drops revert data, so re-run one failing call per pool
+  // directly to get the reason
+  for (const [pool, { count, callData }] of onchainFailures) {
+    let reason = 'succeeds when called directly';
+    let revertData: string | undefined;
+    try {
+      // some nodes return the revert payload as the call result
+      const returned = await dexHelper.provider.call(
+        { to: quoterAddress, data: callData },
+        blockNumber,
+      );
+      try {
+        quoterIface.decodeFunctionResult('calculateSwap', returned);
+      } catch {
+        revertData = returned;
+      }
+    } catch (e: any) {
+      revertData = [e, e?.error, e?.error?.error]
+        .map(err => err?.data)
+        .find(d => typeof d === 'string' && d.startsWith('0x'));
+      if (!revertData) reason = e?.message || String(e);
+    }
+    if (revertData) {
+      reason = `revert data ${revertData.slice(0, 10)}`;
+      for (const iface of [poolIface, quoterIface]) {
+        try {
+          const parsed = iface.parseError(revertData);
+          reason = `${parsed.name}(${parsed.args.map(String).join(', ')})`;
+          break;
+        } catch {
+          // not an error of this interface
+        }
+      }
+    }
+    console.log(`ONCHAIN FAILS pool=${pool} calls=${count} reason=${reason}`);
+  }
 
   console.log(
     `RESULT network=${network} block=${blockNumber} ticks=${tickExpected.length} tickMismatches=${tickMismatches} quotes=${cases.length} matches=${matches} mismatches=${mismatches} unfillableBuys=${unfillableBuys} onlyLocalThrows=${onlyLocalThrows} onlyOnchainFails=${onlyOnchainFails}`,
