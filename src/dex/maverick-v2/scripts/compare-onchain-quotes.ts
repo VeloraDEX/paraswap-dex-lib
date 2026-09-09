@@ -208,16 +208,22 @@ const decodeTick = decodePair(lensIface, 'getTickSqrtPriceAndL', [
   let mismatches = 0;
   let onlyLocalThrows = 0;
   let onlyOnchainFails = 0;
+  let unfillableBuys = 0;
   quoteResults.forEach(({ returnData: onchain }, i) => {
     const c = cases[i];
     const describe = `${c.label} pool=${c.pool} tokenAIn=${c.tokenAIn} exactOutput=${c.exactOutput} amount=${c.amount}`;
     if (typeof c.local === 'string') {
-      if (onchain) {
-        onlyLocalThrows++;
-        console.log(
-          `LOCAL THROWS ${describe} local=${c.local} onchain=[${onchain}]`,
-        );
+      if (!onchain) return;
+      // estimateSwap rejects a BUY the pool can't fill, the Quoter returns
+      // the partial fill; swap() prices both as 0
+      if (c.exactOutput && onchain[1] < c.amount) {
+        unfillableBuys++;
+        return;
       }
+      onlyLocalThrows++;
+      console.log(
+        `LOCAL THROWS ${describe} local=${c.local} onchain=[${onchain}]`,
+      );
       return;
     }
     if (!onchain) {
@@ -240,7 +246,7 @@ const decodeTick = decodePair(lensIface, 'getTickSqrtPriceAndL', [
   });
 
   console.log(
-    `RESULT network=${network} block=${blockNumber} ticks=${tickExpected.length} tickMismatches=${tickMismatches} quotes=${cases.length} matches=${matches} mismatches=${mismatches} onlyLocalThrows=${onlyLocalThrows} onlyOnchainFails=${onlyOnchainFails}`,
+    `RESULT network=${network} block=${blockNumber} ticks=${tickExpected.length} tickMismatches=${tickMismatches} quotes=${cases.length} matches=${matches} mismatches=${mismatches} unfillableBuys=${unfillableBuys} onlyLocalThrows=${onlyLocalThrows} onlyOnchainFails=${onlyOnchainFails}`,
   );
   process.exit(mismatches || tickMismatches ? 1 : 0);
 })().catch(e => {
