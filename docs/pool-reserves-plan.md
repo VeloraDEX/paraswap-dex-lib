@@ -1,6 +1,6 @@
 # Pool Reserves API — Design & Implementation Plan
 
-Status: proposal, revision 8 (review rounds 1–4 applied; directional reserve keys; scope cut by volume for storage-mode dexes; all SimpleExchange dexes included in enumerated mode; request-level versioning dropped after PR 1 review)
+Status: proposal, revision 9 (review rounds 1–4 applied; directional reserve keys; scope cut by volume for storage-mode dexes; all SimpleExchange dexes included in enumerated mode; request-level versioning dropped after PR 1 review)
 Repo: `paraswap-dex-lib`
 Date: 2026-09-09
 
@@ -493,3 +493,60 @@ Algebra families).
 | 5. WooFiV2 poller may fetch over RPC when cold               | Rejected         | Matches D6 (RPC when no in-memory state); the poller is warm on slaves.                           |
 | 6. `sDAI` ERC4626 test case used the wrong network           | Confirmed        | Case moved to Gnosis.                                                                             |
 | 7. Deterministic fixtures for state cases                    | Accepted in part | Fixture test added for the cases above; slave-mode helper and exact token-list fixtures left out. |
+
+## 19. PR 2 — implementation notes
+
+- `UniswapV2` owns the whole storage-mode flow; `Solidly` and
+  `UniswapV2RpcPoolTracker` only override three hooks:
+  `parsePoolReservesTarget(descriptor)` (descriptor → `{ id, key, address,
+token0, token1 }`, `null` to skip; `id` is the hash field, `key` the
+  in-memory `pairs` key), `matchesKnownPool(target)` (false when the instance
+  already knows the pool under a different address / tokens) and
+  `getCachedPoolReserves(target)` (in-memory `[reserve0, reserve1]` or `null`
+  for the RPC path). No other UniswapV2 or Solidly fork overrides
+  `getPoolIdentifier`, so every fork key inherits the behaviour unchanged.
+- Ids equal the hash field: the pair identifier for `_pairs` (Solidly keeps
+  the dexKey case, `Aerodrome_<t0>_<t1>S`; UniswapV2 is lowercase — both come
+  from the dex's own `getPoolIdentifier`), the factory index for
+  PancakeSwapV2's `_pools`. Deduplication within a batch is by id.
+- Tokens are re-sorted into on-chain order (`token0 < token1`) before
+  reserves are mapped, so a reversed or mixed-case descriptor cannot swap the
+  two reserves.
+- Skipped: descriptors without `exchange` (known-missing pairs), unparsable
+  JSON, non-address fields, `token0 == token1`, Solidly entries without a
+  boolean `stable`, PancakeSwapV2 entries whose `i` is not a non-negative
+  integer, and any descriptor that contradicts a locally known pair (address)
+  or tracker entry (address and tokens).
+- The RPC path decodes `getReserves()` as `uint256 × 3`: UniswapV2 pairs
+  return `uint112, uint112, uint32` and Solidly pairs `uint256 × 3`, and each
+  value occupies one word either way, so one decoder serves both without the
+  silent masking a `uint112` decode would apply to a wide Solidly reserve.
+- `UniswapV2RpcPoolTracker` (PancakeSwapV2) checks event state first, then
+  the tracker's `pools[i]` only when `reservesUpdatedAt != null`, then RPC.
+  No age filter: `updatedAt` in `_pools` is refreshed by the master only, so
+  a filter on it would switch every pool off once that writer is gone. RPC
+  load for the ~2M-entry hash is bounded by D7 and the consumer's sweep
+  cadence. The master-only writer is untouched.
+- `multicallBalances` is now a thin alias over the generic
+  `multicallValues<T>` in `src/lib/pools-storage/reserves.ts`, which the
+  reserves path uses with `T = [bigint, bigint]`.
+- Tests: `src/dex/pool-reserves-mode-a-fixtures.test.ts` (RPC-free: storage
+  shapes, hit / miss / failed call incl. a discovered-but-unpriced pair,
+  skipped descriptors and dedup, reversed and mixed-case descriptors,
+  address mismatch, Solidly stable vs volatile ids and a reserve above
+  `2^112`, PancakeSwapV2 index ids, hit predicate, index validation and
+  contradiction checks) and `src/dex/pool-reserves-mode-a-integration.test.ts`
+  (CI only: UniswapV2 mainnet hit + miss from the dex's own `_pairs` writes,
+  Aerodrome USDC/USDbC stable and volatile, PancakeSwapV2 wrapped `_pools`
+  descriptors with an empty tracker map).
+
+## 20. PR 2 review — responses
+
+| Finding                                                    | Verdict   | Resolution                                                                                                             |
+| ---------------------------------------------------------- | --------- | ---------------------------------------------------------------------------------------------------------------------- |
+| 1. PancakeSwapV2 reported the pair identifier as `id`      | Confirmed | Target carries `id` (hash field) separately from `key`; tracker sets `id = i`; dedup by id.                            |
+| 2. Reversed descriptor swapped the two reserves            | Confirmed | Tokens re-sorted into on-chain order in the base parser.                                                               |
+| 3. Cache hit not checked against the descriptor's identity | Confirmed | `matchesKnownPool` hook: known pair address / tracker entry must match, otherwise the descriptor is skipped.           |
+| 4. 180-day age filter dropped valid state, master-coupled  | Confirmed | Filter removed entirely (see §19).                                                                                     |
+| 5. Validate `i` as a canonical index                       | Accepted  | `i` must be a non-negative integer (string or number); `updatedAt` is no longer read.                                  |
+| 6. Test gaps                                               | Accepted  | Fixtures added for reversed / mixed-case descriptors, address and index mismatch, unpriced pair, wide Solidly reserve. |

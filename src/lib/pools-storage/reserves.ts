@@ -60,17 +60,17 @@ export function directionalReserves(
 // `null` for the affected calls only. `MultiWrapper.tryAggregate` isolates
 // reverts but runs decoders unguarded and rejects as a whole when any chunk
 // fails, so both are handled here.
-export async function multicallBalances(
+export async function multicallValues<T>(
   multiWrapper: MultiWrapper,
-  calls: MultiCallParams<bigint>[],
+  calls: MultiCallParams<T>[],
   chunkSize: number = multiWrapper.defaultBatchSize,
-): Promise<(bigint | null)[]> {
+): Promise<(T | null)[]> {
   if (!Number.isInteger(chunkSize) || chunkSize <= 0) {
-    throw new Error(`multicallBalances: invalid chunk size ${chunkSize}`);
+    throw new Error(`multicallValues: invalid chunk size ${chunkSize}`);
   }
   if (calls.length === 0) return [];
 
-  const guarded: MultiCallParams<bigint | null>[] = calls.map(call => ({
+  const guarded: MultiCallParams<T | null>[] = calls.map(call => ({
     target: call.target,
     callData: call.callData,
     decodeFunction: (data: MultiResult<BytesLike> | BytesLike) => {
@@ -100,6 +100,14 @@ export async function multicallBalances(
   );
 
   return chunks.flat();
+}
+
+export function multicallBalances(
+  multiWrapper: MultiWrapper,
+  calls: MultiCallParams<bigint>[],
+  chunkSize?: number,
+): Promise<(bigint | null)[]> {
+  return multicallValues(multiWrapper, calls, chunkSize);
 }
 
 // Plain keys with unlimited payout capacity for every listed token: a
