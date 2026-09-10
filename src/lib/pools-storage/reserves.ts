@@ -101,3 +101,12 @@ export async function multicallBalances(
 
   return chunks.flat();
 }
+
+// Plain keys with unlimited payout capacity for every listed token: a
+// mint/convert wrapper that swaps every listed token to every other one.
+export function unlimitedReserves(tokens: Address[]): Record<string, string> {
+  return toReserves(
+    tokens,
+    tokens.map(() => UNLIMITED_RESERVES),
+  );
+}

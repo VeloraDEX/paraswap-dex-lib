@@ -7,12 +7,14 @@ import {
   PoolLiquidity,
   Logger,
   DexExchangeParam,
+  PoolReserves,
 } from '../../types';
 import {
   SwapSide,
   Network,
   UNLIMITED_USD_LIQUIDITY,
   ETHER_ADDRESS,
+  UNLIMITED_RESERVES,
 } from '../../constants';
 import * as CALLDATA_GAS_COST from '../../calldata-gas-cost';
 import { getDexKeysWithNetwork, isETHAddress } from '../../utils';
@@ -24,6 +26,7 @@ import { BI_POWS } from '../../bigint-constants';
 import { NumberAsString } from '@paraswap/core';
 import DELTA_ABI from '../../abi/deth/delta.abi.json';
 import { ethers } from 'ethers';
+import { directionalReserves } from '../../lib/pools-storage/reserves';
 
 const DELTA_INTERFACE = new ethers.utils.Interface(DELTA_ABI);
 
@@ -161,6 +164,32 @@ export class dETH extends SimpleExchange implements IDex<null, DexParams> {
       exchangeData: swapData,
       targetExchange: this.config.deltaAdapter,
     };
+  }
+
+  // ETH or WETH <-> dETH in both directions; ETH <-> WETH itself is not a
+  // supported swap here, hence directional keys.
+  getPoolReserves(): PoolReserves[] {
+    const deth = this.config.wrappedToken.toLowerCase();
+    const weth = this.dexHelper.config.data.wrappedNativeTokenAddress;
+    return [
+      {
+        dex: this.dexKey,
+        id: deth,
+        address: deth,
+        reserves: directionalReserves(
+          [
+            [ETHER_ADDRESS, deth],
+            [weth, deth],
+            [deth, ETHER_ADDRESS],
+            [deth, weth],
+          ].map(([src, dest]) => ({
+            src,
+            dest,
+            capacity: UNLIMITED_RESERVES,
+          })),
+        ),
+      },
+    ];
   }
 
   async getTopPoolsForToken(tokenAddress: Address): Promise<PoolLiquidity[]> {

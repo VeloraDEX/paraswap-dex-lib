@@ -8,6 +8,7 @@ import {
   Logger,
   NumberAsString,
   DexExchangeParam,
+  PoolReserves,
 } from '../../types';
 import { SwapSide, Network } from '../../constants';
 import * as CALLDATA_GAS_COST from '../../calldata-gas-cost';
@@ -27,6 +28,7 @@ import {
   RETURN_AMOUNT_POS_0,
   RETURN_AMOUNT_POS_32,
 } from '../../executor/constants';
+import { directionalReserves } from '../../lib/pools-storage/reserves';
 
 export class AaveGsm extends SimpleExchange implements IDex<AaveGsmData> {
   static readonly gsmInterface = new Interface(GSM_ABI);
@@ -415,6 +417,40 @@ export class AaveGsm extends SimpleExchange implements IDex<AaveGsmData> {
     const blockNumber = await this.dexHelper.web3Provider.eth.getBlockNumber();
 
     await this.initializeEventPools(blockNumber, false);
+  }
+
+  // GHO -> underlying pays out of the GSM's liquidity; underlying -> GHO is
+  // capped by the remaining exposure, converted to GHO with the pricing math
+  // ('0' at the cap). Frozen or seized GSMs are omitted.
+  getPoolReserves(): PoolReserves[] {
+    return Object.values(this.eventPools).flatMap(pool => {
+      const state = pool.isInvalid() ? null : pool.getStaleState();
+      if (!state || state.isFrozen || state.isSeized) return [];
+
+      const remaining =
+        state.exposureCap > state.underlyingLiquidity
+          ? state.exposureCap - state.underlyingLiquidity
+          : 0n;
+      return [
+        {
+          dex: this.dexKey,
+          id: pool.gsm,
+          address: pool.gsm,
+          reserves: directionalReserves([
+            {
+              src: this.config.GHO,
+              dest: pool.underlying,
+              capacity: state.underlyingLiquidity,
+            },
+            {
+              src: pool.underlying,
+              dest: this.config.GHO,
+              capacity: this.getGhoAmountForSellAsset(remaining, state),
+            },
+          ]),
+        },
+      ];
+    });
   }
 
   async getTopPoolsForToken(

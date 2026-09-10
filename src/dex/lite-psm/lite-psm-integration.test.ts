@@ -5,6 +5,10 @@ import { DummyDexHelper } from '../../dex-helper/index';
 import { Network, SwapSide } from '../../constants';
 import { LitePsm } from './lite-psm';
 import { checkPoolPrices, checkPoolsLiquidity } from '../../../tests/utils';
+import {
+  expectPoolReserves,
+  impliedDirections,
+} from '../../../tests/utils-pool-reserves';
 import { Tokens } from '../../../tests/constants-e2e';
 import { BI_POWS } from '../../bigint-constants';
 
@@ -99,5 +103,32 @@ describe('LitePsm', function () {
     );
 
     checkPoolsLiquidity(poolLiquidity, TokenA.address, dexKey);
+  });
+
+  it('getPoolReserves', async function () {
+    const dexHelper = new DummyDexHelper(network);
+    const litePsm = new LitePsm(network, dexKey, dexHelper);
+    const blockNumber = await dexHelper.web3Provider.eth.getBlockNumber();
+    await litePsm.initializePricing(blockNumber);
+
+    const reserves = litePsm.getPoolReserves();
+    console.log('Pool reserves:', JSON.stringify(reserves, null, 2));
+    expectPoolReserves(reserves, dexKey);
+    expect(reserves).toHaveLength(1);
+
+    const usdc = TokenA.address.toLowerCase();
+    const dai = TokenB.address.toLowerCase();
+    const usds = Tokens[network].USDS.address.toLowerCase();
+    expect(impliedDirections(reserves[0].reserves)).toEqual(
+      new Set([
+        `${usdc}_${dai}`,
+        `${dai}_${usdc}`,
+        `${usdc}_${usds}`,
+        `${usds}_${usdc}`,
+      ]),
+    );
+    expect(BigInt(reserves[0].reserves[`${usdc}_${dai}`])).toBeGreaterThan(0n);
+    expect(BigInt(reserves[0].reserves[`${dai}_${usdc}`])).toBeGreaterThan(0n);
+    expect(reserves[0].reserves[`${dai}_${usds}`]).toBeUndefined();
   });
 });

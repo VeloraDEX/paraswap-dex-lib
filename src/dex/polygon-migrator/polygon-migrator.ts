@@ -19,6 +19,7 @@ import {
   PoolPrices,
   SimpleExchangeParam,
   Token,
+  PoolReserves,
 } from '../../types';
 import { IDexHelper } from '../../dex-helper';
 import * as CALLDATA_GAS_COST from '../../calldata-gas-cost';
@@ -26,6 +27,7 @@ import { BI_POWS } from '../../bigint-constants';
 import { POLYGON_MIGRATION_GAS_COST } from './constants';
 import PolygonMigrationAbi from '../../abi/polygon-migration/PolygonMigration.abi.json';
 import { Interface } from 'ethers/lib/utils';
+import { unlimitedReserves } from '../../lib/pools-storage/reserves';
 
 export class PolygonMigrator
   extends SimpleExchange
@@ -188,6 +190,21 @@ export class PolygonMigrator
       targetExchange: this.migratorAddress,
       returnAmountPos: undefined,
     };
+  }
+
+  getPoolReserves(): PoolReserves[] {
+    const pool = this.migratorAddress.toLowerCase();
+    return [
+      {
+        dex: this.dexKey,
+        id: pool,
+        address: pool,
+        reserves: unlimitedReserves([
+          this.maticTokenAddress,
+          this.polTokenAddress,
+        ]),
+      },
+    ];
   }
 
   async getTopPoolsForToken(
