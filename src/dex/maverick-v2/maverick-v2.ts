@@ -9,8 +9,11 @@ import {
   Logger,
   NumberAsString,
   DexExchangeParam,
+  PoolReserves,
+  PoolsStorage,
+  PoolsStorageType,
 } from '../../types';
-import { SwapSide, Network, NULL_ADDRESS } from '../../constants';
+import { SwapSide, Network, NULL_ADDRESS, CACHE_PREFIX } from '../../constants';
 import * as CALLDATA_GAS_COST from '../../calldata-gas-cost';
 import { getBigIntPow, getDexKeysWithNetwork, isTruthy } from '../../utils';
 import { IDex } from '../../dex/idex';
@@ -30,6 +33,13 @@ import MaverickV2PoolABI from '../../abi/maverick-v2/MaverickV2Pool.json';
 import MaverickV2RouterABI from '../../abi/maverick-v2/MaverickV2Router.json';
 import ERC20ABI from '../../abi/erc20.json';
 import { extractReturnAmountPosition } from '../../executor/utils';
+import {
+  PoolsWriter,
+  TokenPoolDescriptor,
+  describesTokens,
+  tokenPoolDescriptor,
+  tokenPoolReserves,
+} from '../../lib/pools-storage';
 
 const POOL_LIST_CACHE_KEY = 'maverickv2-pool-list';
 const POOL_LIST_TTL_SECONDS = 60;
@@ -48,6 +58,11 @@ export class MaverickV2 extends SimpleExchange implements IDex<MaverickV2Data> {
 
   public static erc20Interface = new Interface(ERC20ABI);
 
+  private readonly poolsWriter: PoolsWriter<TokenPoolDescriptor>;
+  // the API inventory as of initialization, re-published on every flush so
+  // pools whose event subscription failed stay listed and are served over RPC
+  private publishedPools: TokenPoolDescriptor[] = [];
+
   constructor(
     readonly network: Network,
     readonly dexKey: string,
@@ -59,10 +74,23 @@ export class MaverickV2 extends SimpleExchange implements IDex<MaverickV2Data> {
   ) {
     super(dexHelper, dexKey);
     this.logger = dexHelper.getLogger(dexKey);
+    this.poolsWriter = new PoolsWriter({
+      cache: dexHelper.cache,
+      key: `${CACHE_PREFIX}_${network}_${dexKey}_pools`.toLowerCase(),
+      logger: this.logger,
+      listPools: () => this.listPoolDescriptors(),
+    });
   }
 
   async initializePricing(blockNumber: number) {
     const pools = await this._queryPoolsAPI();
+
+    // an API failure comes back as an empty list; keep the last inventory then
+    if (pools.length > 0) {
+      this.publishedPools = pools.map(pool =>
+        tokenPoolDescriptor(pool.id, pool.tokenA.address, pool.tokenB.address),
+      );
+    }
 
     await Promise.all(
       pools.map(async pool => {
@@ -101,6 +129,29 @@ export class MaverickV2 extends SimpleExchange implements IDex<MaverickV2Data> {
         }
       }),
     );
+
+    this.poolsWriter.start();
+  }
+
+  releaseResources(): void {
+    this.poolsWriter.release();
+  }
+
+  // The stored API inventory plus any initialized pool it does not list.
+  private *listPoolDescriptors(): Iterable<[string, TokenPoolDescriptor]> {
+    const listed = new Set<string>();
+    for (const descriptor of this.publishedPools) {
+      listed.add(descriptor.a);
+      yield [descriptor.a, descriptor];
+    }
+    for (const pool of Object.values(this.pools)) {
+      const descriptor = tokenPoolDescriptor(
+        pool.address,
+        pool.tokenA.address,
+        pool.tokenB.address,
+      );
+      if (!listed.has(descriptor.a)) yield [descriptor.a, descriptor];
+    }
   }
 
   getAdapters(side: SwapSide): { name: string; index: number }[] | null {
@@ -326,6 +377,41 @@ export class MaverickV2 extends SimpleExchange implements IDex<MaverickV2Data> {
   // to implement this
   async updatePoolState(): Promise<void> {
     return Promise.resolve();
+  }
+
+  getPoolsStorage(): PoolsStorage {
+    return {
+      key: this.poolsWriter.key,
+      type: PoolsStorageType.RedisHash,
+      fieldInValue: true,
+    };
+  }
+
+  getPoolReserves(pools: string[] = []): Promise<PoolReserves[]> {
+    const byAddress = new Map(
+      Object.values(this.pools).map(pool => [pool.address.toLowerCase(), pool]),
+    );
+    return tokenPoolReserves({
+      dexKey: this.dexKey,
+      multiWrapper: this.dexHelper.multiWrapper,
+      descriptors: pools,
+      cached: descriptor => {
+        const pool = byAddress.get(descriptor.a);
+        if (!pool) return null;
+        if (
+          !describesTokens(descriptor, pool.tokenA.address, pool.tokenB.address)
+        ) {
+          return {};
+        }
+        if (pool.isInvalid()) return null;
+        const state = pool.getStaleState();
+        if (!state) return null;
+        return {
+          [pool.tokenA.address.toLowerCase()]: state.reserveA,
+          [pool.tokenB.address.toLowerCase()]: state.reserveB,
+        };
+      },
+    });
   }
 
   // Returns list of top pools based on liquidity. Max

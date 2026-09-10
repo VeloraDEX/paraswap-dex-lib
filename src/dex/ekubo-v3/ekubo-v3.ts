@@ -1,6 +1,11 @@
 import { Interface } from '@ethersproject/abi';
 import * as CALLDATA_GAS_COST from '../../calldata-gas-cost';
-import { ETHER_ADDRESS, Network, SwapSide } from '../../constants';
+import {
+  CACHE_PREFIX,
+  ETHER_ADDRESS,
+  Network,
+  SwapSide,
+} from '../../constants';
 import { IDexHelper } from '../../dex-helper/idex-helper';
 import { IDex } from '../idex';
 import {
@@ -11,6 +16,9 @@ import {
   NumberAsString,
   PoolLiquidity,
   PoolPrices,
+  PoolReserves,
+  PoolsStorage,
+  PoolsStorageType,
   Token,
 } from '../../types';
 import { getBigIntPow, getDexKeysWithNetwork } from '../../utils';
@@ -30,6 +38,10 @@ import RouterABI from '../../abi/ekubo-v3/mev-capture-router.json';
 import { erc20Iface } from '../../lib/tokens/utils';
 import { EkuboV3PoolManager } from './ekubo-v3-pool-manager';
 import { uint8ToNumber } from '../../lib/decoders';
+import { PoolsWriter, toReserves } from '../../lib/pools-storage';
+
+// Storage descriptor: `k` is the pool's string id and the hash field.
+type EkuboPoolDescriptor = { k: string; t0: Address; t1: Address };
 
 // Ekubo Protocol https://ekubo.org/
 export class EkuboV3 extends SimpleExchange implements IDex<EkuboData> {
@@ -48,6 +60,7 @@ export class EkuboV3 extends SimpleExchange implements IDex<EkuboData> {
 
   private readonly poolManager;
   private readonly contracts;
+  private readonly poolsWriter: PoolsWriter<EkuboPoolDescriptor>;
 
   private decimals: Record<string, number> = {
     [ETHER_ADDRESS.toLowerCase()]: 18,
@@ -72,10 +85,34 @@ export class EkuboV3 extends SimpleExchange implements IDex<EkuboData> {
       this.contracts,
       this.config.subgraphId,
     );
+    this.poolsWriter = new PoolsWriter({
+      cache: dexHelper.cache,
+      key: `${CACHE_PREFIX}_${network}_${dexKey}_pools`.toLowerCase(),
+      logger: this.logger,
+      listPools: () => this.listPoolDescriptors(),
+    });
   }
 
   public async initializePricing(blockNumber: number) {
     await this.poolManager.updatePools(blockNumber, true);
+    this.poolsWriter.start();
+  }
+
+  releaseResources(): void {
+    this.poolsWriter.release();
+  }
+
+  private *listPoolDescriptors(): Iterable<[string, EkuboPoolDescriptor]> {
+    for (const [k, pool] of this.poolManager.poolsByString) {
+      yield [
+        k,
+        {
+          k,
+          t0: convertEkuboToParaSwap(pool.key.token0).toLowerCase(),
+          t1: convertEkuboToParaSwap(pool.key.token1).toLowerCase(),
+        },
+      ];
+    }
   }
 
   public async getPoolIdentifiers(
@@ -249,6 +286,54 @@ export class EkuboV3 extends SimpleExchange implements IDex<EkuboData> {
         this.decimals[address] = result.returnData;
       }
     });
+  }
+
+  getPoolsStorage(): PoolsStorage {
+    return {
+      key: this.poolsWriter.key,
+      type: PoolsStorageType.RedisHash,
+      fieldInValue: true,
+    };
+  }
+
+  // Every pool lives in the shared core contract, so per-pool balances cannot
+  // be read on-chain: reserves are the pool's virtual TVL from in-memory
+  // state and pools without usable state are skipped.
+  getPoolReserves(pools: string[] = []): PoolReserves[] {
+    const result: PoolReserves[] = [];
+    const seen = new Set<string>();
+    for (const raw of pools) {
+      let k: unknown;
+      try {
+        k = JSON.parse(raw)?.k;
+      } catch (e) {
+        continue;
+      }
+      if (typeof k !== 'string' || seen.has(k)) continue;
+      seen.add(k);
+
+      const pool = this.poolManager.poolsByString.get(k);
+      if (!pool || pool.isInvalid()) continue;
+      let tvl: [bigint, bigint];
+      try {
+        tvl = pool.computeTvl();
+      } catch (e) {
+        continue;
+      }
+      result.push({
+        dex: this.dexKey,
+        id: k,
+        address: CORE_ADDRESS.toLowerCase(),
+        reserves: toReserves(
+          [
+            convertEkuboToParaSwap(pool.key.token0),
+            convertEkuboToParaSwap(pool.key.token1),
+          ],
+          tvl,
+        ),
+      });
+    }
+    return result;
   }
 
   public async getTopPoolsForToken(

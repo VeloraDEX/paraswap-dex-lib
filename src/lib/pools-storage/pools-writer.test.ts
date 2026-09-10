@@ -142,12 +142,66 @@ describe('PoolsWriter', () => {
     w.release();
   });
 
-  it('start is idempotent and release clears the timer', () => {
+  it('joins an in-flight flush instead of writing twice', async () => {
+    let release!: () => void;
+    const gate = new Promise<void>(resolve => (release = resolve));
+    const original = cache.hmset.bind(cache);
+    cache.hmset = async (key, mappings) => {
+      await gate;
+      return original(key, mappings);
+    };
+    const w = mkWriter();
+    w.touch('p1', desc);
+    const first = w.flush();
+    w.touch('p2', desc);
+    const second = w.flush();
+    expect(second).toBe(first);
+    release();
+    await first;
+    expect(cache.hmsetCalls).toEqual(1);
+    expect(Object.keys(cache.hashes[key])).toEqual(['p1']);
+    expect(w.pendingCount).toEqual(1);
+  });
+
+  it('keeps touches made during a failing write for the next flush', async () => {
+    let release!: () => void;
+    const gate = new Promise<void>(resolve => (release = resolve));
+    cache.hmset = async () => {
+      cache.hmsetCalls++;
+      await gate;
+      throw new Error('redis down');
+    };
+    const w = mkWriter();
+    w.touch('p1', desc);
+    const first = w.flush();
+    w.touch('p2', { ...desc, a: '0xnewer' });
+    w.release();
+    release();
+    await expect(first).rejects.toThrow('redis down');
+    expect(w.pendingCount).toEqual(2);
+    expect(JSON.parse((w as any).pending.p2).a).toEqual('0xnewer');
+  });
+
+  it('still writes buffered entries when listing pools throws', async () => {
+    const w = mkWriter({
+      listPools: () => {
+        throw new Error('inventory broken');
+      },
+    });
+    w.touch('p1', desc);
+    await w.flush();
+    expect(Object.keys(cache.hashes[key])).toEqual(['p1']);
+    expect(logger.error).toHaveBeenCalled();
+  });
+
+  it('start is idempotent and release clears the timer', async () => {
     jest.useFakeTimers();
     try {
       const w = mkWriter({ flushIntervalMs: 1000 });
       w.start();
       w.start();
+      // let the immediate start-up flush settle before the interval fires
+      await w.flush();
       w.touch('p1', desc);
       jest.advanceTimersByTime(1000);
       expect(cache.hmsetCalls).toEqual(1);

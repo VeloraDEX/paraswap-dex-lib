@@ -1,6 +1,6 @@
 # Pool Reserves API — Design & Implementation Plan
 
-Status: proposal, revision 9 (review rounds 1–4 applied; directional reserve keys; scope cut by volume for storage-mode dexes; all SimpleExchange dexes included in enumerated mode; request-level versioning dropped after PR 1 review)
+Status: proposal, revision 10 (review rounds 1–4 applied; directional reserve keys; scope cut by volume for storage-mode dexes; all SimpleExchange dexes included in enumerated mode; request-level versioning dropped after PR 1 review)
 Repo: `paraswap-dex-lib`
 Date: 2026-09-09
 
@@ -550,3 +550,82 @@ token0, token1 }`, `null` to skip; `id` is the hash field, `key` the
 | 4. 180-day age filter dropped valid state, master-coupled  | Confirmed | Filter removed entirely (see §19).                                                                                     |
 | 5. Validate `i` as a canonical index                       | Accepted  | `i` must be a non-negative integer (string or number); `updatedAt` is no longer read.                                  |
 | 6. Test gaps                                               | Accepted  | Fixtures added for reversed / mixed-case descriptors, address and index mismatch, unpriced pair, wide Solidly reserve. |
+
+## 21. PR 3 — implementation notes
+
+- All four dexes publish a new hash `${CACHE_PREFIX}_${network}_${dexKey}_pools`
+  through `PoolsWriter` with a `listPools` iterator, started from
+  `initializePricing` on every instance and released in `releaseResources`
+  (added to EkuboV3 and MaverickV2, extended in Algebra and AlgebraIntegral).
+  `PoolsWriter.start()` now flushes immediately and then on the interval, so a
+  freshly started instance publishes its pools without waiting a minute. A
+  `flush()` requested while one is running joins it (one in-flight promise),
+  and a throwing `listPools` iterator is logged without holding back what is
+  already buffered.
+- The shared driver decodes `balanceOf` strictly: an address without code
+  answers with `0x`, which must drop the pool rather than report a zero
+  balance.
+- AlgebraIntegral's published set is the factory list cut at
+  `MIN_USD_TVL_FOR_PRICING`, not the whole factory. Per instance that is
+  `N` entries rewritten per minute and, for an uncached consumer sweep, `2N`
+  `balanceOf` calls; `N` should be measured before the consumer's sweep
+  cadence is fixed.
+- Three of them share one descriptor shape and one driver:
+  `{ a, t0, t1 }` (pool address = hash field = id) and
+  `tokenPoolReserves()` in `src/lib/pools-storage/token-pools.ts`, which
+  parses and dedups, asks the dex for in-memory balances by token
+  (`cached(descriptor)`), fetches `balanceOf(a)` on both tokens for the
+  rest, and skips a descriptor whose tokens contradict the pool this instance
+  knows at that address. MaverickV2 uses this shape too (`tA/tB` from the
+  original table became `t0/t1`).
+- Sources per dex:
+  - EkuboV3: `{ k, t0, t1 }`, `k` = `PoolKey.stringId`; reserves =
+    `pool.computeTvl()` (virtual TVL from liquidity math), native token
+    reported as `ETHER_ADDRESS`, address = the core contract. No RPC fallback:
+    every pool shares the core's balances. Publishing goes through
+    `listPools` over `poolManager.poolsByString` rather than a hook in
+    `setPool()`: a pool added by `PoolInitialized` shows up at the next flush,
+    within one interval, without coupling the manager to the writer.
+  - MaverickV2: the API inventory as of initialization is kept and
+    re-published on every flush together with any initialized pool it does
+    not list, so pools whose event subscription failed stay listed and are
+    served over RPC. A failed API refresh (which `_queryPoolsAPI` reports as
+    an empty list) keeps the previous inventory. Reserves =
+    `state.reserveA/reserveB`, which the pool math keeps up to date on swaps
+    and liquidity events.
+  - Algebra: `eventPools` entries that have state (a pool whose init failed
+    only has an unverified CREATE2 address and is not published); reserves =
+    `state.balance0/balance1`.
+  - AlgebraIntegral: the factory's pool list cut at `MIN_USD_TVL_FOR_PRICING`,
+    i.e. exactly the routable set, so unpriced pools are published and served
+    over RPC — completeness "full" rather than the table's "observed".
+    Inherited unchanged by BlackholeCL / Supernova.
+- `IEkuboPool` gained `isInvalid()`, which every concrete pool already had
+  through `StatefulEventSubscriber`.
+- Tests: `src/lib/pools-storage/token-pools.test.ts` (descriptor parsing,
+  driver hit / miss / contradiction / failure),
+  `src/dex/pool-reserves-mode-a-amm-fixtures.test.ts` (real constructors on a
+  DummyDexHelper with faked pool maps and multicall: storage keys, writer
+  output per dex, reserves per source) and
+  `src/dex/pool-reserves-mode-a-amm-integration.test.ts` (CI only: each dex
+  initialized live, descriptors read back from the writer's hash and fed to
+  `getPoolReserves`).
+
+## 22. PR 3 review — responses
+
+| Finding                                                        | Verdict   | Resolution                                                                                                 |
+| -------------------------------------------------------------- | --------- | ---------------------------------------------------------------------------------------------------------- |
+| 1. Empty `balanceOf` return decoded as a zero balance          | Confirmed | Strict uint256 decoder in the shared driver; empty or truncated data drops the pool.                       |
+| 2. Algebra's checksummed lazy address bypassed the token check | Confirmed | Address index lowercased.                                                                                  |
+| 3. A throwing `listPools` iterator blocked the whole flush     | Accepted  | Iteration wrapped in `PoolsWriter.flush`; buffered entries still written, error logged.                    |
+| 4. Maverick pools that failed to subscribe pruned after 30 d   | Accepted  | The init-time API inventory is kept and re-touched on every flush.                                         |
+| 5. `flush()` returned early while a flush was in flight        | Accepted  | Single in-flight promise returned to every caller.                                                         |
+| 6. Measure AlgebraIntegral publication and RPC cost            | Accepted  | Noted in §21; no code change.                                                                              |
+| 7. Test gaps                                                   | Accepted  | Decoder cases, hex-letter addresses, contradiction on invalid pool, checksummed address, writer lifecycle. |
+
+Round 2: findings 1–5 and 7 confirmed resolved; one regression found —
+re-running `initializePricing` after an API failure replaced the stored
+MaverickV2 inventory with an empty list. Fixed by keeping the previous
+inventory on an empty response and by listing initialized pools alongside it;
+covered by a test that drives `initializePricing` with a stubbed API and a
+failing subscription.

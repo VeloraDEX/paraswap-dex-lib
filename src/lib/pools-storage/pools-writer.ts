@@ -36,7 +36,7 @@ export class PoolsWriter<D extends object> {
   private pending: Record<string, string> = {};
   private timer?: NodeJS.Timeout;
   private lastPruneAt = 0;
-  private flushing = false;
+  private inFlight?: Promise<void>;
 
   constructor(options: PoolsWriterOptions<D>) {
     this.cache = options.cache;
@@ -52,14 +52,16 @@ export class PoolsWriter<D extends object> {
     this.now = options.now ?? Date.now;
   }
 
+  // Publishes what is pending right away, then on every interval.
   start(): void {
     if (this.timer) return;
     this.lastPruneAt = this.now();
-    this.timer = setInterval(() => {
+    const run = () =>
       this.flush().catch(e =>
         this.logger.error(`PoolsWriter(${this.key}): flush failed`, e),
       );
-    }, this.flushIntervalMs);
+    this.timer = setInterval(run, this.flushIntervalMs);
+    void run();
   }
 
   touch(field: string, descriptor: D): void {
@@ -70,33 +72,43 @@ export class PoolsWriter<D extends object> {
     return Object.keys(this.pending).length;
   }
 
-  async flush(): Promise<void> {
-    if (this.flushing) return;
-    this.flushing = true;
-    try {
-      if (this.listPools) {
+  // A flush requested while one is running joins it instead of starting a
+  // second write; touches made in the meantime go out with the next one.
+  flush(): Promise<void> {
+    if (!this.inFlight) {
+      this.inFlight = this.doFlush().finally(() => {
+        this.inFlight = undefined;
+      });
+    }
+    return this.inFlight;
+  }
+
+  private async doFlush(): Promise<void> {
+    if (this.listPools) {
+      // a failing iterator must not hold back what is already buffered
+      try {
         for (const [field, descriptor] of this.listPools()) {
           this.touch(field, descriptor);
         }
+      } catch (e) {
+        this.logger.error(`PoolsWriter(${this.key}): listing pools failed`, e);
       }
+    }
 
-      const batch = this.pending;
-      this.pending = {};
-      if (Object.keys(batch).length > 0) {
-        try {
-          await this.cache.hmset(this.key, batch);
-        } catch (e) {
-          this.pending = { ...batch, ...this.pending };
-          throw e;
-        }
+    const batch = this.pending;
+    this.pending = {};
+    if (Object.keys(batch).length > 0) {
+      try {
+        await this.cache.hmset(this.key, batch);
+      } catch (e) {
+        this.pending = { ...batch, ...this.pending };
+        throw e;
       }
+    }
 
-      if (this.now() - this.lastPruneAt >= this.pruneIntervalMs) {
-        this.lastPruneAt = this.now();
-        await this.prune();
-      }
-    } finally {
-      this.flushing = false;
+    if (this.now() - this.lastPruneAt >= this.pruneIntervalMs) {
+      this.lastPruneAt = this.now();
+      await this.prune();
     }
   }
 

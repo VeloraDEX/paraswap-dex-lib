@@ -16,6 +16,9 @@ import {
   DexExchangeParam,
   GetDexParamOptions,
   NumberAsString,
+  PoolReserves,
+  PoolsStorage,
+  PoolsStorageType,
 } from '../../types';
 import { SwapSide, Network, CACHE_PREFIX } from '../../constants';
 import * as CALLDATA_GAS_COST from '../../calldata-gas-cost';
@@ -54,6 +57,13 @@ import { AlgebraFactory, OnPoolCreatedCallback } from './algebra-factory';
 import { applyTransferFee } from '../../lib/token-transfer-fee';
 import { AlgebraEventPoolV1_9_bidirectional_fee } from './algebra-pool-v1_9_bidirectional_fee';
 import { extractReturnAmountPosition } from '../../executor/utils';
+import {
+  PoolsWriter,
+  TokenPoolDescriptor,
+  describesTokens,
+  tokenPoolDescriptor,
+  tokenPoolReserves,
+} from '../../lib/pools-storage';
 
 type PoolPairsInfo = {
   token0: Address;
@@ -106,6 +116,8 @@ export class Algebra extends SimpleExchange implements IDex<AlgebraData> {
 
   private notExistingPoolSetKey: string;
 
+  private readonly poolsWriter: PoolsWriter<TokenPoolDescriptor>;
+
   private AlgebraPoolImplem:
     | typeof AlgebraEventPoolV1_1
     | typeof AlgebraEventPoolV1_9
@@ -144,6 +156,12 @@ export class Algebra extends SimpleExchange implements IDex<AlgebraData> {
 
     this.notExistingPoolSetKey =
       `${CACHE_PREFIX}_${network}_${dexKey}_not_existings_pool_set`.toLowerCase();
+    this.poolsWriter = new PoolsWriter({
+      cache: dexHelper.cache,
+      key: `${CACHE_PREFIX}_${network}_${dexKey}_pools`.toLowerCase(),
+      logger: this.logger,
+      listPools: () => this.listPoolDescriptors(),
+    });
 
     this.AlgebraPoolImplem =
       config.version === 'v1.1'
@@ -173,6 +191,7 @@ export class Algebra extends SimpleExchange implements IDex<AlgebraData> {
   async initializePricing(blockNumber: number) {
     // Init listening to new pools creation
     await this.factory.initialize(blockNumber);
+    this.poolsWriter.start();
 
     if (!this.dexHelper.config.isSlave) {
       const cleanExpiredNotExistingPoolsKeys = async () => {
@@ -968,6 +987,52 @@ export class Algebra extends SimpleExchange implements IDex<AlgebraData> {
     };
   }
 
+  // Only pools with state are published: a pool whose initialization failed
+  // has an unverified computed address.
+  private *listPoolDescriptors(): Iterable<[string, TokenPoolDescriptor]> {
+    for (const pool of Object.values(this.eventPools)) {
+      if (!pool || !pool.getStaleState()) continue;
+      const descriptor = tokenPoolDescriptor(
+        pool.poolAddress,
+        pool.token0,
+        pool.token1,
+      );
+      yield [descriptor.a, descriptor];
+    }
+  }
+
+  getPoolsStorage(): PoolsStorage {
+    return {
+      key: this.poolsWriter.key,
+      type: PoolsStorageType.RedisHash,
+      fieldInValue: true,
+    };
+  }
+
+  getPoolReserves(pools: string[] = []): Promise<PoolReserves[]> {
+    const byAddress = new Map<string, IAlgebraEventPool>();
+    for (const pool of Object.values(this.eventPools)) {
+      if (pool) byAddress.set(pool.poolAddress.toLowerCase(), pool);
+    }
+    return tokenPoolReserves({
+      dexKey: this.dexKey,
+      multiWrapper: this.dexHelper.multiWrapper,
+      descriptors: pools,
+      cached: descriptor => {
+        const pool = byAddress.get(descriptor.a);
+        if (!pool) return null;
+        if (!describesTokens(descriptor, pool.token0, pool.token1)) return {};
+        if (pool.isInvalid()) return null;
+        const state = pool.getStaleState();
+        if (!state) return null;
+        return {
+          [pool.token0]: state.balance0,
+          [pool.token1]: state.balance1,
+        };
+      },
+    });
+  }
+
   async getTopPoolsForToken(
     tokenAddress: Address,
     limit: number,
@@ -1199,5 +1264,6 @@ export class Algebra extends SimpleExchange implements IDex<AlgebraData> {
       clearInterval(this.intervalTask);
       this.intervalTask = undefined;
     }
+    this.poolsWriter.release();
   }
 }
