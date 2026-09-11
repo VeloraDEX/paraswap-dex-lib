@@ -130,7 +130,7 @@ export class MaverickV2 extends SimpleExchange implements IDex<MaverickV2Data> {
       }),
     );
 
-    this.poolsWriter.start();
+    if (this.dexHelper.config.isSlave) this.poolsWriter.start();
   }
 
   releaseResources(): void {

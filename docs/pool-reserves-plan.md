@@ -811,3 +811,53 @@ production backfill.
 - Option D is independent and free: raise `POOLS_STORAGE_FLUSH_INTERVAL_MS`
   from 60 s to 5–10 min; the only requirement is that `u` is refreshed well
   within the 30-day prune horizon.
+
+## 24. Writer role — slaves only
+
+Decided 2026-09-11 with the service owner and reviewed by Codex Architect
+(gpt-6-astra, "do it with changes"). PR 3 started `PoolsWriter` on every
+instance; D11 always said storages are written by slaves, so this aligns the
+code with the plan.
+
+Why: the API (slave) prices the traffic and serves the new Hopper reserve
+endpoints, so it knows at least the pools it can answer for; Algebra pools
+in particular are created lazily while pricing. Publishing from the master
+(`paraswap-initialization-service`) duplicated the writes and coupled that
+service to the feature for no coverage gain. A dex fully delegated to the Go
+aggregator is neither initialized nor served by the API, so publishing
+nothing for it is consistent with the Hopper endpoint filter.
+
+Changes:
+
+- `EkuboV3`, `MaverickV2`, `Algebra`: `if (isSlave) poolsWriter.start()`.
+  `AlgebraIntegral`: start moved into the slave block after the first
+  `updatePoolsTvl()`. `releaseResources` unchanged.
+- `POOLS_STORAGE_FLUSH_INTERVAL_MS` 60 s → 10 min. Algebra keeps 60 s via the
+  writer option: the interval is the publication delay of newly discovered
+  pools, not only the retention heartbeat.
+- `ICache.hscan` optional; `PoolsWriter.prune` skips with a warning when the
+  cache lacks it. Only services that run the writer need it, today the API.
+
+What the writer can and cannot do to a storage (owner's question): `touch`
+upserts, an empty inventory sends no command, fields are removed only by the
+6-hourly prune of entries nobody touched for 30 days, and Maverick keeps
+its last non-empty API inventory in memory. A broken publisher goes quiet;
+it does not wipe the hash. Prune can empty a hash only if every entry is
+stale, i.e. no publisher has been alive for 30 days.
+
+Accepted trade-offs from the review:
+
+- Coverage becomes the union of pools initialized on API replicas. Pools the
+  master kept alive through `dl_poolsRegistry` replay but no slave priced
+  for 30 days drop out of the storage; they are, by construction, pools
+  nobody quoted for a month.
+- Pruning runs at most every 6 h per process and `start()` resets the clock,
+  so replicas that live less than 6 h never prune; retention is best effort.
+- There is a benign race between prune on one replica and re-touch on
+  another; the next flush repairs it. No cross-replica coordination is
+  added for that.
+- A rolling deploy needs no migration: old and new replicas upsert the same
+  fields; the master simply stops writing when upgraded.
+- Companion change in `paraswap-api`: `Cache.hscan` reading from the
+  primary, and the same dex eligibility predicate for the reserve endpoints
+  as for `listDexs`.

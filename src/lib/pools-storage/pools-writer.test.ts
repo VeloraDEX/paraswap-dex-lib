@@ -194,6 +194,42 @@ describe('PoolsWriter', () => {
     expect(logger.error).toHaveBeenCalled();
   });
 
+  it('publishes without pruning when the cache has no hscan', async () => {
+    // shadow the prototype method: an ICache implementation without hscan
+    (cache as unknown as { hscan?: unknown }).hscan = undefined;
+    cache.hashes[key] = { old: JSON.stringify({ ...desc, u: now - 40 * DAY }) };
+    const w = mkWriter({ pruneIntervalMs: 0 });
+    w.touch('p1', desc);
+    await w.flush();
+    expect(Object.keys(cache.hashes[key]).sort()).toEqual(['old', 'p1']);
+    expect(await w.prune()).toEqual(0);
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.stringContaining('no hscan'),
+    );
+  });
+
+  it('flushes immediately on start and then every 10 minutes by default', async () => {
+    jest.useFakeTimers();
+    try {
+      const pools = new Map<string, Desc>([['p1', desc]]);
+      const w = mkWriter({ listPools: () => pools.entries() });
+      w.start();
+      await w.flush();
+      expect(cache.hmsetCalls).toEqual(1);
+
+      // a pool discovered after start is published on the next tick
+      pools.set('p2', { ...desc, a: '0xpool2' });
+      jest.advanceTimersByTime(10 * 60 * 1000 - 1);
+      expect(cache.hmsetCalls).toEqual(1);
+      jest.advanceTimersByTime(1);
+      await w.flush();
+      expect(cache.hmsetCalls).toEqual(2);
+      expect(Object.keys(cache.hashes[key]).sort()).toEqual(['p1', 'p2']);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
   it('start is idempotent and release clears the timer', async () => {
     jest.useFakeTimers();
     try {

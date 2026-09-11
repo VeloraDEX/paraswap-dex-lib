@@ -161,6 +161,8 @@ export class Algebra extends SimpleExchange implements IDex<AlgebraData> {
       key: `${CACHE_PREFIX}_${network}_${dexKey}_pools`.toLowerCase(),
       logger: this.logger,
       listPools: () => this.listPoolDescriptors(),
+      // pools are discovered lazily while pricing: publish them promptly
+      flushIntervalMs: 60 * 1000,
     });
 
     this.AlgebraPoolImplem =
@@ -191,7 +193,7 @@ export class Algebra extends SimpleExchange implements IDex<AlgebraData> {
   async initializePricing(blockNumber: number) {
     // Init listening to new pools creation
     await this.factory.initialize(blockNumber);
-    this.poolsWriter.start();
+    if (this.dexHelper.config.isSlave) this.poolsWriter.start();
 
     if (!this.dexHelper.config.isSlave) {
       const cleanExpiredNotExistingPoolsKeys = async () => {

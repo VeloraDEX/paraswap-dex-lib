@@ -95,7 +95,8 @@ export class EkuboV3 extends SimpleExchange implements IDex<EkuboData> {
 
   public async initializePricing(blockNumber: number) {
     await this.poolManager.updatePools(blockNumber, true);
-    this.poolsWriter.start();
+    // slaves price the traffic and serve pool reserves; they own the storage
+    if (this.dexHelper.config.isSlave) this.poolsWriter.start();
   }
 
   releaseResources(): void {

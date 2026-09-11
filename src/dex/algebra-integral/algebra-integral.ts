@@ -132,7 +132,6 @@ export class AlgebraIntegral
 
   async initializePricing(blockNumber: number) {
     await this.factory.initialize(blockNumber);
-    this.poolsWriter.start();
 
     this.logger.info(
       `${this.dexKey}: factory initialized with ${
@@ -162,6 +161,10 @@ export class AlgebraIntegral
           }
         }, POOL_TVL_UPDATE_INTERVAL * 1000);
       }
+
+      // after the first TVL refresh so the initial publication already
+      // reflects which pools clear MIN_USD_TVL_FOR_PRICING
+      this.poolsWriter.start();
 
       if (!this.feeUpdateIntervalTask) {
         void this.updateAllPoolFees();

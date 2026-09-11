@@ -88,8 +88,9 @@ export interface ICache {
   hgetAll(mapKey: string): Promise<Record<string, string>>;
 
   // Incremental HSCAN: returns the next cursor ('0' when done) and the
-  // fields read in this step.
-  hscan(
+  // fields read in this step. Optional: a cache without it still publishes
+  // pool descriptors, but never prunes them (PoolsWriter).
+  hscan?(
     mapKey: string,
     cursor: string,
     count: number,

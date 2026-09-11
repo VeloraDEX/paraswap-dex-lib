@@ -351,3 +351,86 @@ describe('pool reserves fixtures: AlgebraIntegral', () => {
     expect(tryAggregate.mock.calls[0][1]).toHaveLength(2);
   });
 });
+
+// The storages are owned by the instances that price and serve reserves:
+// the writer starts on slaves only, the master keeps its other duties.
+describe('pool reserves fixtures: writer runs on slaves only', () => {
+  type Case = {
+    name: string;
+    build: (dexHelper: DummyDexHelper) => any;
+    stub: (dex: any, calls: string[]) => void;
+  };
+  const cases: Case[] = [
+    {
+      name: 'EkuboV3',
+      build: h => new EkuboV3(Network.MAINNET, 'EkuboV3', h),
+      stub: dex => {
+        dex.poolManager.updatePools = async () => {};
+      },
+    },
+    {
+      name: 'MaverickV2',
+      build: h => new MaverickV2(Network.BASE, 'MaverickV2', h),
+      stub: dex => {
+        dex._queryPoolsAPI = async () => [];
+      },
+    },
+    {
+      name: 'Algebra',
+      build: h => new Algebra(Network.POLYGON, 'QuickSwapV3', h),
+      stub: dex => {
+        dex.factory.initialize = async () => {};
+      },
+    },
+    {
+      name: 'AlgebraIntegral',
+      build: h => new AlgebraIntegral(Network.BASE, 'QuickSwapV4', h),
+      stub: (dex, calls) => {
+        dex.factory = {
+          initialize: async () => {},
+          getAllPools: () => [],
+          updatePoolsTvl: async () => {
+            calls.push('updatePoolsTvl');
+          },
+        };
+        dex.updateAllPoolFees = async () => {};
+      },
+    },
+  ];
+
+  for (const { name, build, stub } of cases) {
+    for (const isSlave of [false, true]) {
+      it(`${name}: ${
+        isSlave ? 'slave starts' : 'master does not start'
+      } the writer`, async () => {
+        const dexHelper = new DummyDexHelper(Network.MAINNET);
+        dexHelper.config.isSlave = isSlave;
+        const dex = build(dexHelper);
+        const calls: string[] = [];
+        stub(dex, calls);
+        const start = jest
+          .spyOn(dex.poolsWriter, 'start')
+          .mockImplementation(() => calls.push('start'));
+        try {
+          await dex.initializePricing(1);
+          expect(start).toHaveBeenCalledTimes(isSlave ? 1 : 0);
+          if (isSlave && name === 'AlgebraIntegral') {
+            // the first publication must see the refreshed TVL cut
+            expect(calls).toEqual(['updatePoolsTvl', 'start']);
+          }
+        } finally {
+          dex.releaseResources();
+        }
+      });
+    }
+  }
+
+  it('Algebra publishes lazily discovered pools every minute', () => {
+    const dex = new Algebra(
+      Network.POLYGON,
+      'QuickSwapV3',
+      new DummyDexHelper(Network.POLYGON),
+    ) as any;
+    expect(dex.poolsWriter.flushIntervalMs).toEqual(60 * 1000);
+  });
+});

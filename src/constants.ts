@@ -83,6 +83,9 @@ export const UNLIMITED_USD_LIQUIDITY = 1234567890;
 export const UNLIMITED_RESERVES = 'unlimited';
 export const MAX_POOL_RESERVES_BATCH = 1000;
 export const FETCH_POOL_RESERVES_TIMEOUT = 10 * 1000; // 10s
-export const POOLS_STORAGE_FLUSH_INTERVAL_MS = 60 * 1000; // 60s
+// Publication cadence of pool descriptors. Inventories known up front only
+// need to beat the 30-day prune; dexes that discover pools lazily pass a
+// shorter interval to their writer.
+export const POOLS_STORAGE_FLUSH_INTERVAL_MS = 10 * 60 * 1000; // 10min
 export const POOLS_STORAGE_PRUNE_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6h
 export const POOLS_STORAGE_PRUNE_AGE_MS = 30 * 24 * 60 * 60 * 1000; // 30d

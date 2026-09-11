@@ -116,6 +116,12 @@ export class PoolsWriter<D extends object> {
   // parsable `u` are kept: they were written by something else. Deletion
   // happens after the scan completes so the hash is not mutated mid-iteration.
   async prune(): Promise<number> {
+    if (typeof this.cache.hscan !== 'function') {
+      this.logger.warn(
+        `PoolsWriter(${this.key}): cache has no hscan, skipping prune`,
+      );
+      return 0;
+    }
     const threshold = this.now() - this.pruneAgeMs;
     const stale: string[] = [];
     let cursor = '0';
