@@ -1,6 +1,6 @@
 # Pool Reserves API — Design & Implementation Plan
 
-Status: proposal, revision 10 (review rounds 1–4 applied; directional reserve keys; scope cut by volume for storage-mode dexes; all SimpleExchange dexes included in enumerated mode; request-level versioning dropped after PR 1 review)
+Status: proposal, revision 11 (review rounds 1–4 applied; directional reserve keys; scope cut by volume for storage-mode dexes; all SimpleExchange dexes included in enumerated mode; request-level versioning dropped after PR 1 review; §23 follow-up on Redis read traffic of the UniswapV2-family storages)
 Repo: `paraswap-dex-lib`
 Date: 2026-09-09
 
@@ -237,7 +237,7 @@ Consumer flow:
 | `src/constants.ts`                       | `UNLIMITED_RESERVES = 'unlimited'`, `MAX_POOL_RESERVES_BATCH = 1000`, `POOLS_STORAGE_PRUNE_AGE_MS = 30d`, `POOLS_STORAGE_FLUSH_INTERVAL_MS = 60s`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | `src/dex/index.ts` (`DexAdapterService`) | `getPoolsStorages()`, `resolvePoolReservesCall(dexKey, pools?)` (synchronous validation, throws `PoolReservesRequestError`), `getPoolReservesByKey(dexKey, pools?)` with the mode rules above                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | `src/pricing-helper.ts`                  | thin wrappers with timeout + try/catch                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| `src/dex-helper/icache.ts` + impls       | `hscan(key, cursor, count)`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `src/dex-helper/icache.ts` + impls       | `hscan?(key, cursor, count)` (optional; without it the writer publishes but never prunes)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | `src/lib/pools-storage/pools-writer.ts`  | `PoolsWriter { touch, flush, prune, release }`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | `src/lib/pools-storage/reserves.ts`      | `toReserves(tokens, balances)` (plain keys); `directionalReserves([{ src, dest, capacity: bigint \| 'unlimited' }])` (directional keys, D17); `multicallBalances(multiWrapper, calls, chunkSize)` returning `(bigint \| null)[]` — chunks locally and calls `tryAggregate(false)` **per chunk inside its own try/catch** (a failed RPC chunk yields `null` for its calls only, since `MultiWrapper.tryAggregate` rejects as a whole when any chunk fails), and **each `decodeFunction` is wrapped in its own try/catch**, because `tryAggregate` (`src/lib/multi-wrapper.ts:112`) only isolates reverts and lets a decoder exception on one successful-but-malformed return propagate for the whole batch; `PoolReservesRequestError` for malformed requests |
 | `src/index.ts`                           | export new types                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
@@ -448,15 +448,15 @@ Algebra families).
 
 ## 16. PR 1 review — responses
 
-| Finding                                                                                            | Verdict                     | Resolution                                                                                                                                                    |
-| -------------------------------------------------------------------------------------------------- | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1. One failed RPC chunk discards the whole batch (`tryAggregate` uses `Promise.all` across chunks) | Confirmed                   | `multicallBalances` chunks locally and isolates each chunk; failed chunk → `null` per call.                                                                   |
-| 2. Request-level `version` rejected valid batches during rollouts                                  | Confirmed, then generalised | Versioning removed entirely (D3): the hash mixes descriptor shapes per entry, so a per-request version cannot help; incompatible changes get a new Redis key. |
-| 3. Throwing `getPoolsStorage()` escaped the error boundary                                         | Confirmed                   | Per-dex try/catch in `getPoolsStorages()`; `PricingHelper.getPoolReserves` resolves inside its try and rethrows only `PoolReservesRequestError`.              |
-| 4. Test helper regex coerced numeric values                                                        | Confirmed                   | `typeof value === 'string'` asserted.                                                                                                                         |
-| 5. Invalid `chunkSize` silently returned `[]`                                                      | Confirmed                   | Positive-integer guard in `multicallBalances`.                                                                                                                |
-| 6. Prune count log is analytics-style                                                              | Confirmed                   | Removed.                                                                                                                                                      |
-| 7. `hscan` on `ICache` is a breaking interface change                                              | Accepted                    | Backend Redis cache must implement it before adopting this version.                                                                                           |
+| Finding                                                                                            | Verdict                      | Resolution                                                                                                                                                                                                                                      |
+| -------------------------------------------------------------------------------------------------- | ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. One failed RPC chunk discards the whole batch (`tryAggregate` uses `Promise.all` across chunks) | Confirmed                    | `multicallBalances` chunks locally and isolates each chunk; failed chunk → `null` per call.                                                                                                                                                     |
+| 2. Request-level `version` rejected valid batches during rollouts                                  | Confirmed, then generalised  | Versioning removed entirely (D3): the hash mixes descriptor shapes per entry, so a per-request version cannot help; incompatible changes get a new Redis key.                                                                                   |
+| 3. Throwing `getPoolsStorage()` escaped the error boundary                                         | Confirmed                    | Per-dex try/catch in `getPoolsStorages()`; `PricingHelper.getPoolReserves` resolves inside its try and rethrows only `PoolReservesRequestError`.                                                                                                |
+| 4. Test helper regex coerced numeric values                                                        | Confirmed                    | `typeof value === 'string'` asserted.                                                                                                                                                                                                           |
+| 5. Invalid `chunkSize` silently returned `[]`                                                      | Confirmed                    | Positive-integer guard in `multicallBalances`.                                                                                                                                                                                                  |
+| 6. Prune count log is analytics-style                                                              | Confirmed                    | Removed.                                                                                                                                                                                                                                        |
+| 7. `hscan` on `ICache` is a breaking interface change                                              | Accepted, then relaxed (§24) | `hscan` is optional: a cache without it compiles and publishes, and `PoolsWriter.prune` logs and skips. The API cache implements it (on the primary, so replication lag cannot create deletion candidates); the master service needs no change. |
 
 ## 17. PR 4 — implementation notes
 
@@ -555,10 +555,14 @@ token0, token1 }`, `null` to skip; `id` is the hash field, `key` the
 
 - All four dexes publish a new hash `${CACHE_PREFIX}_${network}_${dexKey}_pools`
   through `PoolsWriter` with a `listPools` iterator, started from
-  `initializePricing` on every instance and released in `releaseResources`
-  (added to EkuboV3 and MaverickV2, extended in Algebra and AlgebraIntegral).
-  `PoolsWriter.start()` now flushes immediately and then on the interval, so a
-  freshly started instance publishes its pools without waiting a minute. A
+  `initializePricing` **on slaves only** (`dexHelper.config.isSlave`, see
+  §24) and released unconditionally in `releaseResources` (added to EkuboV3
+  and MaverickV2, extended in Algebra and AlgebraIntegral). AlgebraIntegral
+  starts it after its first TVL refresh so the initial publication already
+  reflects the `MIN_USD_TVL_FOR_PRICING` cut. `PoolsWriter.start()` flushes
+  immediately and then every `POOLS_STORAGE_FLUSH_INTERVAL_MS` (10 min);
+  Algebra passes 60 s because its pools are discovered lazily while pricing
+  and the flush cadence is what bounds their publication delay. A
   `flush()` requested while one is running joins it (one in-flight promise),
   and a throwing `listPools` iterator is logged without holding back what is
   already buffered.
@@ -629,3 +633,181 @@ MaverickV2 inventory with an empty list. Fixed by keeping the previous
 inventory on an empty response and by listing initialized pools alongside it;
 covered by a test that drives `initializePricing` with a stubbed API and a
 failing subscription.
+
+## 23. Follow-up — Redis read traffic of the UniswapV2-family storages
+
+Not part of PRs 1–4. Written 2026-09-11 after the first consumer run on a
+copy of the production Redis (`docs/pool-reserves-consumer-sim-plan.md` §8,
+§11) and an architecture review (Codex Architect, gpt-6-astra). Intended as
+the source for an improvement ticket.
+
+### 23.1 Problem
+
+PR 2 points `getPoolsStorage()` of every UniswapV2 and Solidly fork at the
+pricing cache `dl_<network>_<dexKey>_pairs`. That hash is written by
+`UniswapV2._findPair` / `Solidly._findSolidlyPairs` on **every instance that
+prices** (the write is not gated by `isSlave`) and holds two kinds of
+records:
+
+- existing pools: `{ token0, token1, exchange }` — never rewritten once
+  stored;
+- placeholders for pairs the factory does not have: `{ token0, token1,
+checkExistenceAfter }` — a negative cache re-checked after 3 days, only
+  when the pair is not already in the instance's memory, so entries can
+  live indefinitely.
+
+`token0` / `token1` are the full `Token` objects the backend passes into
+pricing (`symbol`, `img`, `connectors`, `mainConnector`, `isLending`,
+`network`, `tokenType`), serialized whole by `{ ...pair }`. Pricing reads
+back only `address`, `decimals`, `exchange`, `checkExistenceAfter`
+(verified across `src/dex/uniswap-v2`, `src/dex/solidly`, the forks and the
+event-pool constructor). Result: ~570 B per field, and 89–99.99 % of the
+fields are placeholders the consumer must read and the dex then drops.
+
+Measured on the 2026-09-10 dump (filtered to chains 1 and 8453):
+
+| storage                   |    fields | existing pools | Redis memory |
+| ------------------------- | --------: | -------------: | -----------: |
+| `dl_1_uniswapv2_pairs`    |   452 980 |         50 526 |       295 MB |
+| `dl_1_sushiswap_pairs`    |   493 749 |          2 308 |       315 MB |
+| `dl_1_verse_pairs`        |   493 736 |             29 |       307 MB |
+| `dl_8453_alien_pairs`     | 1 473 412 |            400 |       874 MB |
+| `dl_8453_aerodrome_pairs` |   921 696 |          5 151 |       645 MB |
+| `dl_8453_uniswapv2_pairs` |   452 307 |         29 455 |       292 MB |
+
+One full consumer sweep reads ≈ 1.6 GB on Mainnet and ≈ 2.1 GB on Base
+(2 833 539 and 3 769 051 fields). At a 5-minute cadence that is ≈ 460 GB
+and ≈ 600 GB per day from a Redis Cluster, to obtain 53 461 + 35 300 pools.
+Command counts are modest (≈ 130/s during a sweep); bytes are the problem.
+
+PancakeSwapV2 (`rpc-pool-tracker.ts`) is a different case: its storage
+`dl_<network>_<dexKey>_pools` holds only real pools (≈ 250 B each), but BSC
+has 2 934 575 of them (872 MB), so a sweep there is ≈ 250 GB/day at 5
+minutes regardless of the change below.
+
+### 23.2 Options considered
+
+| option                                                                         | sweep traffic after                                                                                                                                                               | existing production `_pairs` data                                                                                                                                                |
+| ------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **A. Existing-pools-only hash** (recommended)                                  | Mainnet ≈ 18–20 MB, Base ≈ 11–12 MB per sweep                                                                                                                                     | untouched; one-off backfill copies positives into the new hash                                                                                                                   |
+| B. Per-dex sweep cadence in the consumer                                       | bytes per sweep unchanged; 5 → 30 min cuts the daily total 6×                                                                                                                     | untouched; the only lever for PancakeSwapV2 on BSC                                                                                                                               |
+| C. Slim the `_findPair` record to `{ address, decimals }` tokens               | ≈ 2–3× less, and only after a one-off rewrite of all existing fields, because positives are never rewritten and negatives may never expire                                        | 6.6 M fields would need a conditional online rewrite (compare-and-set per field, never blind `HSET` of a scanned value: it can resurrect a placeholder removed by `PairCreated`) |
+| D. Raise `POOLS_STORAGE_FLUSH_INTERVAL_MS` / slaves flush only pending         | no effect on the sweeps; ≈ 10× fewer small writes from `PoolsWriter`. Done in §24 (10 min default, 60 s for Algebra whose lazily discovered pools wait one flush to be published) | n/a; a pending-only mode needs another heartbeat or the 30-day prune removes valid pools                                                                                         |
+| E. Incremental inventory (sorted set of `(timestamp, key)`, stateful consumer) | discovery reads shrink to new descriptors only                                                                                                                                    | untouched; needs a bootstrap, durable checkpoints, deletion handling and a new discovery convention outside the `PoolsStorage` contract                                          |
+
+C was the first idea and is ranked below A because it leaves the
+placeholders in the sweep and cannot compact existing data without a
+rewrite job of its own.
+
+### 23.3 Recommended design (option A)
+
+New storage per UniswapV2/Solidly fork: `dl_<network>_<dexKey>_reserve_pools_v1`,
+`type: redis-hash`, `fieldInValue: true`, field = the same pool identifier
+as in `_pairs` (UniswapV2 lowercased; Solidly keeps dex-key case and the
+`S`/`U` suffix), value:
+
+```json
+{
+  "token0": { "address": "0x…" },
+  "token1": { "address": "0x…" },
+  "exchange": "0x…"
+}
+```
+
+plus `"stable": true|false` for Solidly. ≈ 190–205 B, no placeholders. The
+current `parsePoolReservesTarget` / `matchesKnownPool` / `getPoolReserves`
+already accept this shape, so readers need no change and both shapes can
+coexist.
+
+Code changes (`feat/pool-tracker-deprecation` or a branch off it):
+
+1. `src/dex/uniswap-v2/pool-reserves-descriptor.ts` (new): build and
+   validate the descriptor (lowercase addresses, reject zero `exchange`,
+   identical tokens, non-boolean `stable`).
+2. `uniswap-v2.ts` `_findPair`: publish the descriptor with `HSET` on a
+   positive factory result **and** on a positive Redis cache hit, before the
+   pair is installed in `this.pairs`, so a failed publication surfaces as a
+   retryable discovery error instead of being lost behind the in-memory fast
+   path. Negative results, in-memory hits and reserve sweeps write nothing.
+   Cost: one small `HSET` per pair per process, not per quote.
+3. `solidly.ts` `_findSolidlyPairs`: same for both variants in one `HMSET`;
+   the existing `.some()` short-circuit must not become the publication
+   loop. Pricing cache values and expiry semantics unchanged.
+4. `PairCreated` handler: keep the `_pairs` `HDEL` and `newlyCreatedPoolKeys`;
+   **do not** delete from the new hash — the pool stays known, the next
+   discovery upserts its descriptor. Do not publish from `addPool()` only:
+   that misses discovered-but-unpriced pools.
+5. `rpc-pool-tracker.ts`: override publication as a no-op; PancakeSwapV2
+   keeps its `_pools` storage, `fieldInValue: false`, index ids.
+6. `getPoolsStorage()` → new key, **in a separate release** (§23.4 step 6).
+7. `scripts/pool-reserves-backfill.ts` (new): standalone, Cluster-aware,
+   `HSCAN COUNT 1000` → validate → `HSETNX` into the destination; allowlist
+   of chains/dexes, dry run, rate limit, progress/completion manifest kept
+   **outside** the pool hash (a status field inside it would be scanned as a
+   descriptor). Never invoked from `initializePricing` or any restart hook.
+8. Tests: old/new descriptor compatibility, both Solidly variants, negative
+   exclusion, publication on cache hit, failed-write retry, `PairCreated`
+   interleavings, duplicate scans, newer destination value preserved.
+   Docs: §5, §8, §19 of this plan and the consumer plan/README.
+
+### 23.4 Production rollout and existing data
+
+The existing `_pairs` fields are **kept as they are**: not deleted, not
+rewritten, not renamed. They remain the pricing cache; `PairCreated`
+deletions keep working; rollback needs no data restoration.
+
+1. **Preflight.** Count positive fields per `_pairs` hash on the live
+   Redis, measure real HSCAN wire bytes (the numbers above are Redis memory,
+   not wire size), confirm write access to the new keys through the backend
+   cache. No data changes.
+2. **Release A** to every instance that prices (all write `_pairs`):
+   publishes the new hash, still advertises `_pairs`. Wait until no old
+   version is running, otherwise an old instance can discover a pair that
+   never reaches the new hash.
+3. **Backfill**, once per source hash, from the script: copies only valid
+   positives with `HSETNX`, so reruns are harmless and a descriptor already
+   published by release A is never overwritten by scanned legacy data.
+   Never touches `_pairs`. Cost for chains 1 + 8453: two full reads of the
+   source hashes (≈ 7.4 GB), ≈ 89 000 small writes, ≈ 11 min per pass at a
+   throttled 10 000 fields/s.
+4. **Progress manifest** per chain/dex: source and destination keys, schema
+   version, release-A completion, counts, validation status. Completed
+   destinations are skipped on later invocations unless a rebuild is
+   requested.
+5. **Verify** with a second source pass and batched destination lookups:
+   every valid positive present, no placeholders in the destination,
+   address conflicts reported rather than overwritten; compare
+   `getPoolReserves` ids/results through both reader versions, including
+   stable and volatile Solidly pools.
+6. **Release B**: `getPoolsStorage()` returns the new key. During the
+   rolling deploy old instances advertise `_pairs`, new ones the new hash,
+   both read both shapes. The consumer must take the storage once per sweep
+   and keep it for the whole sweep; a partially populated hash must never
+   be advertised, because the stateless consumer would publish a partial
+   sweep as complete.
+7. **Rollback** = advertise `_pairs` again; keep the new hashes; if
+   publication-capable writers are rolled back, reconcile again before
+   re-activating.
+8. **Disappearance policy** for the new hash: no pruning by age, inactivity,
+   zero reserves, one failed RPC or absence from `_pairs` (which can mean a
+   creation-triggered invalidation). A proven wrong entry is repaired
+   deliberately, not by bulk pruning. Losing the hash means re-running the
+   backfill; there is no periodic full re-publication.
+
+### 23.5 Effort and risks
+
+Medium: about two engineering days plus two deploy windows and a throttled
+production backfill.
+
+- Publication adds a Redis dependency to the discovery path of a new pair;
+  retries and error monitoring are required, a silently dropped write
+  means an incomplete inventory.
+- The change does not fix pre-existing gaps: Solidly creation tracking
+  (inherited UniswapV2 factory ABI without `stable`), cross-process
+  negative-cache races.
+- BSC PancakeSwapV2 stays at ≈ 250 GB/day at a 5-minute cadence; only a
+  longer cadence (option B, 30 min → ≈ 42 GB/day) or a consumer-side
+  inventory helps there.
+- Option D is independent and free: raise `POOLS_STORAGE_FLUSH_INTERVAL_MS`
+  from 60 s to 5–10 min; the only requirement is that `u` is refreshed well
+  within the 30-day prune horizon.
