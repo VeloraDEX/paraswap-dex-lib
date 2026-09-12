@@ -1,4 +1,4 @@
-import { UniswapV2 } from '../uniswap-v2/uniswap-v2';
+import { UniswapV2, UniswapV2ReservesTarget } from '../uniswap-v2/uniswap-v2';
 import {
   Network,
   NULL_ADDRESS,
@@ -538,6 +538,19 @@ export class Solidly extends UniswapV2 {
       this.logger.error(`Error_getPrices:`, e);
       return null;
     }
+  }
+
+  // The `_pairs` field embeds the `stable` flag, so a descriptor without it
+  // cannot be mapped to a pool.
+  protected parsePoolReservesTarget(
+    descriptor: unknown,
+  ): UniswapV2ReservesTarget | null {
+    const stable = (descriptor as Partial<SolidlyPair> | null)?.stable;
+    if (typeof stable !== 'boolean') return null;
+    const target = super.parsePoolReservesTarget(descriptor);
+    if (!target) return null;
+    const key = this.getPoolIdentifier(target.token0, target.token1, stable);
+    return { ...target, id: key, key };
   }
 
   async getTopPoolsForToken(

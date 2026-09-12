@@ -7,8 +7,14 @@ import {
   generalDecoder,
 } from '../../lib/decoders';
 import { MultiCallParams, MultiResult } from '../../lib/multi-wrapper';
-import { Address, PoolLiquidity, Token } from '../../types';
-import { UniswapV2 } from './uniswap-v2';
+import {
+  Address,
+  PoolLiquidity,
+  PoolsStorage,
+  PoolsStorageType,
+  Token,
+} from '../../types';
+import { UniswapV2, UniswapV2ReservesTarget } from './uniswap-v2';
 import { BytesLike } from 'ethers';
 
 type CachedPool = {
@@ -541,6 +547,59 @@ export class UniswapV2RpcPoolTracker extends UniswapV2 {
       pool.reserve1 = reserve1;
       pool.reservesUpdatedAt = Date.now();
     }
+  }
+
+  getPoolsStorage(): PoolsStorage {
+    return {
+      key: this.cacheKey,
+      type: PoolsStorageType.RedisHash,
+      fieldInValue: false,
+    };
+  }
+
+  // Descriptor: `{ i: <factory index>, ...CachedPool }`; the index is the
+  // hash field and therefore the id.
+  protected parsePoolReservesTarget(
+    descriptor: unknown,
+  ): UniswapV2ReservesTarget | null {
+    const pool = descriptor as (Partial<CachedPool> & { i?: unknown }) | null;
+    const index = pool?.i;
+    if (
+      (typeof index !== 'string' || !/^\d+$/.test(index)) &&
+      !(typeof index === 'number' && Number.isInteger(index) && index >= 0)
+    ) {
+      return null;
+    }
+    const target = super.parsePoolReservesTarget({
+      token0: pool?.token0,
+      token1: pool?.token1,
+      exchange: pool?.address,
+    });
+    return target && { ...target, id: String(index) };
+  }
+
+  protected matchesKnownPool(target: UniswapV2ReservesTarget): boolean {
+    if (!super.matchesKnownPool(target)) return false;
+    const known = this.pools[target.id];
+    return (
+      !known ||
+      (known.address.toLowerCase() === target.address &&
+        known.token0Address.toLowerCase() === target.token0 &&
+        known.token1Address.toLowerCase() === target.token1)
+    );
+  }
+
+  // Event state first; then the tracker's polled reserves, which exist only
+  // for entries whose reserves were actually fetched (the map is usually
+  // empty on slaves). Anything else falls back to RPC.
+  protected getCachedPoolReserves(
+    target: UniswapV2ReservesTarget,
+  ): [bigint, bigint] | null {
+    const fromEvents = super.getCachedPoolReserves(target);
+    if (fromEvents) return fromEvents;
+    const pool = this.pools[target.id];
+    if (!pool || pool.reservesUpdatedAt == null) return null;
+    return [pool.reserve0, pool.reserve1];
   }
 
   async getTopPoolsForToken(

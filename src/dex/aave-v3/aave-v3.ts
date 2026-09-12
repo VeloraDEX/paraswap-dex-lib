@@ -9,6 +9,7 @@ import {
   PoolLiquidity,
   Logger,
   DexExchangeParam,
+  PoolReserves,
 } from '../../types';
 import {
   SwapSide,
@@ -28,12 +29,14 @@ import {
   getATokenIfAaveV3Pair,
   setTokensOnNetwork,
   TokensByAddress,
+  Tokens,
 } from './tokens';
 
 import WETH_GATEWAY_ABI from '../../abi/aave-v3-weth-gateway.json';
 import POOL_ABI from '../../abi/AaveV3_lending_pool.json';
 import { fetchTokenList } from './utils';
 import { NumberAsString } from '@paraswap/core';
+import { unlimitedReserves } from '../../lib/pools-storage/reserves';
 
 const REF_CODE = 1;
 export const TOKEN_LIST_CACHE_KEY = 'token-list';
@@ -339,6 +342,18 @@ export class AaveV3 extends SimpleExchange implements IDex<Data, Param> {
 
   async updatePoolState(): Promise<void> {
     await this.initializeTokens();
+  }
+
+  // One pool per reserve; supply and withdraw are 1:1 with no cap tracked.
+  getPoolReserves(): PoolReserves[] {
+    return Object.values(Tokens[this.network]?.[this.dexKey] ?? {}).map(
+      token => ({
+        dex: this.dexKey,
+        id: token.aAddress,
+        address: token.aAddress,
+        reserves: unlimitedReserves([token.address, token.aAddress]),
+      }),
+    );
   }
 
   async getTopPoolsForToken(

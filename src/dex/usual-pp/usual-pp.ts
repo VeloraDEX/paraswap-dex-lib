@@ -8,8 +8,14 @@ import {
   PoolLiquidity,
   DexExchangeParam,
   NumberAsString,
+  PoolReserves,
 } from '../../types';
-import { SwapSide, Network, UNLIMITED_USD_LIQUIDITY } from '../../constants';
+import {
+  SwapSide,
+  Network,
+  UNLIMITED_USD_LIQUIDITY,
+  UNLIMITED_RESERVES,
+} from '../../constants';
 import * as CALLDATA_GAS_COST from '../../calldata-gas-cost';
 import { IDex } from '../idex';
 import { IDexHelper } from '../../dex-helper/idex-helper';
@@ -21,6 +27,7 @@ import { Interface } from '@ethersproject/abi';
 import UsualPoolAbi from '../../abi/usual-pp/abi.json';
 import { Config } from './config';
 import { getDexKeysWithNetwork } from '../../utils';
+import { directionalReserves } from '../../lib/pools-storage/reserves';
 
 export class UsualPP extends SimpleExchange implements IDex<UsualPPData> {
   readonly hasConstantPriceLargeAmounts = false;
@@ -158,6 +165,25 @@ export class UsualPP extends SimpleExchange implements IDex<UsualPPData> {
       payload,
       networkFee: '0',
     };
+  }
+
+  // Only USD0++ -> USD0 is priced (SELL, at the floor price).
+  getPoolReserves(): PoolReserves[] {
+    const pool = this.config.USD0PP.address.toLowerCase();
+    return [
+      {
+        dex: this.dexKey,
+        id: pool,
+        address: pool,
+        reserves: directionalReserves([
+          {
+            src: this.config.USD0PP.address,
+            dest: this.config.USD0.address,
+            capacity: UNLIMITED_RESERVES,
+          },
+        ]),
+      },
+    ];
   }
 
   async getTopPoolsForToken(

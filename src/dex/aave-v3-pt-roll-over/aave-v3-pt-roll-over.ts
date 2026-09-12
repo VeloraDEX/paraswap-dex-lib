@@ -7,6 +7,7 @@ import {
   PoolLiquidity,
   Logger,
   NumberAsString,
+  PoolReserves,
 } from '../../types';
 import {
   SwapSide,
@@ -14,6 +15,7 @@ import {
   NULL_ADDRESS,
   NO_USD_LIQUIDITY,
   UNLIMITED_USD_LIQUIDITY,
+  UNLIMITED_RESERVES,
 } from '../../constants';
 import * as CALLDATA_GAS_COST from '../../calldata-gas-cost';
 import { getDexKeysWithNetwork } from '../../utils';
@@ -32,6 +34,7 @@ import {
 import { BI_POWS } from '../../bigint-constants';
 import { MultiCallParams } from '../../lib/multi-wrapper';
 import { oracleStateDecoder, ptToAssetRateDecoder } from './utils';
+import { directionalReserves } from '../../lib/pools-storage/reserves';
 
 export class AaveV3PtRollOver
   extends SimpleExchange
@@ -349,6 +352,25 @@ export class AaveV3PtRollOver
       payload,
       networkFee: '0',
     };
+  }
+
+  // Only old PT -> new PT is priced, at an oracle rate with no depth.
+  getPoolReserves(): PoolReserves[] {
+    const market = this.config.oldMarketAddress.toLowerCase();
+    return [
+      {
+        dex: this.dexKey,
+        id: market,
+        address: market,
+        reserves: directionalReserves([
+          {
+            src: this.config.oldPendleToken.address,
+            dest: this.config.newPendleToken.address,
+            capacity: UNLIMITED_RESERVES,
+          },
+        ]),
+      },
+    ];
   }
 
   async getTopPoolsForToken(

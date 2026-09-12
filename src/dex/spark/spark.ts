@@ -15,6 +15,7 @@ import {
   PoolPrices,
   SimpleExchangeParam,
   Token,
+  PoolReserves,
 } from '../../types';
 import { IDexHelper } from '../../dex-helper';
 import * as CALLDATA_GAS_COST from '../../calldata-gas-cost';
@@ -23,6 +24,7 @@ import { calcChi, RAY, SparkSDaiEventPool } from './spark-sdai-pool';
 import { BI_POWS } from '../../bigint-constants';
 import { SDAI_DEPOSIT_GAS_COST } from './constants';
 import { extractReturnAmountPosition } from '../../executor/utils';
+import { unlimitedReserves } from '../../lib/pools-storage/reserves';
 
 export class Spark
   extends SimpleExchange
@@ -155,6 +157,27 @@ export class Spark
   // Returns estimated gas cost of calldata for this DEX in multiSwap
   getCalldataGasCost(poolPrices: PoolPrices<SparkData>): number | number[] {
     return CALLDATA_GAS_COST.DEX_NO_PAYLOAD;
+  }
+
+  // Every supported token converts to every other one with no cap.
+  protected getPoolReservesTokens(): { address: Address; tokens: Address[] } {
+    return {
+      address: this.sdaiAddress,
+      tokens: [this.daiAddress, this.sdaiAddress],
+    };
+  }
+
+  getPoolReserves(): PoolReserves[] {
+    const { address, tokens } = this.getPoolReservesTokens();
+    const pool = address.toLowerCase();
+    return [
+      {
+        dex: this.dexKey,
+        id: pool,
+        address: pool,
+        reserves: unlimitedReserves(tokens),
+      },
+    ];
   }
 
   async getTopPoolsForToken(

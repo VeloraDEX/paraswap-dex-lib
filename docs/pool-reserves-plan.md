@@ -1,0 +1,863 @@
+# Pool Reserves API — Design & Implementation Plan
+
+Status: proposal, revision 11 (review rounds 1–4 applied; directional reserve keys; scope cut by volume for storage-mode dexes; all SimpleExchange dexes included in enumerated mode; request-level versioning dropped after PR 1 review; §23 follow-up on Redis read traffic of the UniswapV2-family storages)
+Repo: `paraswap-dex-lib`
+Date: 2026-09-09
+
+## 1. Goal
+
+Expose, for every supported DEX, the set of pools that are currently usable for
+swaps together with their per-token reserves, so that an external service can
+build and refresh a reserves dataset (e.g. `{ "0xtoken": "12345", ... }` per pool).
+
+The external consumer must be able to:
+
+1. Discover **all known pools** of a DEX cheaply, without going through the
+   pricing API.
+2. Ask the pricing API for **reserves of an arbitrary subset of those pools**,
+   choosing its own cadence and batch size.
+3. For DEXes with a handful of pools, get **all pools with reserves in one
+   call**, with no discovery step.
+
+Precision requirement: **approximate reserves are acceptable.** The dataset is
+used for liquidity analysis, not for pricing. A pool that is a few blocks stale,
+or a pool that is missing from one response, is fine. Wrong units or reserves
+attributed to the wrong pool are not.
+
+## 2. Scope selection by volume
+
+Source: `docs/dex-volumes-by-exchange-by-chain-2m-2026-09-09.json` (Redshift
+`psa_volumes`, 2026-07-09 → 2026-09-09, per chain and exchange key).
+
+Rules applied:
+
+- Exchange keys written entirely in lowercase (`uniswapv3`, `pancakeswapv3`,
+  `curvev1stableng`, `fluiddex`, `metric`, `aerodromeslipstream`, …) are served
+  by a different service and are **not counted at all**. Remaining dex-lib
+  volume for the period: **1 456 M$**.
+- Volume is aggregated per **dex-lib class**, not per dex key: one
+  implementation in `UniswapV2` or `Solidly` covers every fork key for free.
+- **Threshold for storage-mode classes (§5, mode A): ≥ 5 M$ per 2 months per
+  class** (≈ 0.34 % of dex-lib volume). Classes below it are not implemented
+  now; they can be added later with the same interface.
+- **Enumerated-mode classes (§5, mode B) are included regardless of volume.**
+  They are `SimpleExchange` dexes with a config-defined pool set, and their
+  `getTopPoolsForToken` already encodes the reserve semantics
+  (`UNLIMITED_USD_LIQUIDITY` / `NO_USD_LIQUIDITY` / a real number), so the
+  implementation is a few lines each.
+- Classes whose pools come from a protocol API (Curve, Balancer V3) or are
+  handled elsewhere (RFQ) are excluded regardless of volume.
+
+### 2.1 In scope — storage mode (mode A, ≥ 5 M$)
+
+| Class            | Keys                                                                                             | Volume, M$ | Share |
+| ---------------- | ------------------------------------------------------------------------------------------------ | ---------: | ----: |
+| EkuboV3          | EkuboV3                                                                                          |       78.1 | 5.4 % |
+| MaverickV2       | MaverickV2                                                                                       |       27.3 | 1.9 % |
+| Algebra          | SwaprV3, CamelotV3, QuickSwapV3                                                                  |       17.9 | 1.2 % |
+| UniswapV2 family | UniswapV2, RingV2, PancakeSwapV2, SushiSwap, QuickSwap, PangolinSwap, TraderJoe, + 10 minor keys |       13.0 | 0.9 % |
+| AlgebraIntegral  | BlackholeCL, QuickSwapV4, Supernova                                                              |       10.4 | 0.7 % |
+| Solidly family   | Aerodrome, VelodromeV2, + 6 minor keys                                                           |        7.4 | 0.5 % |
+
+### 2.2 In scope — enumerated mode (mode B, all volumes)
+
+| Class                      | Keys                                                                                                         | Volume, M$ | Reserve semantics today (`getTopPoolsForToken`)                  |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------ | ---------: | ---------------------------------------------------------------- |
+| LitePsm                    | LitePsm                                                                                                      |      716.3 | real: `min(gemBalance, daiBalance)` per side                     |
+| Weth                       | Weth, Wxdai, Wbnb, Wavax, Wmatic, wS, Wxpl                                                                   |       41.6 | returns `[]`; both directions unlimited by construction          |
+| wstETH                     | wstETH                                                                                                       |       34.2 | `UNLIMITED`                                                      |
+| ERC4626                    | sUSDe, sDAI, wsuperOETHb, stcUSD, yoETH, yoUSD, wOUSD, wUSDL, wOETH, wOS, sftUSD, fUSDT0, eUSDT0, waPlaUSDT0 |       30.8 | `UNLIMITED` / `NO` gated by deposit/redeem allowed               |
+| Spark                      | Spark, sUSDS                                                                                                 |       24.3 | `UNLIMITED`                                                      |
+| WooFiV2                    | WooFiV2                                                                                                      |       19.1 | real: poller `tokenInfos[t].reserve`                             |
+| OSwap                      | OSwap                                                                                                        |        8.3 | real: `balance0/balance1`                                        |
+| AaveV3                     | AaveV3                                                                                                       |        7.7 | `UNLIMITED`                                                      |
+| SkyConverter               | DaiUsds, MkrSky                                                                                              |        7.6 | `UNLIMITED` / `NO` per configured direction                      |
+| UsdcTransmuter             | UsdcTransmuter                                                                                               |        4.7 | `UNLIMITED`                                                      |
+| SparkPsm                   | SparkPsm                                                                                                     |        3.3 | `UNLIMITED`                                                      |
+| Cap                        | Cap                                                                                                          |        1.0 | `UNLIMITED` for every vault/asset pair                           |
+| Usual family               | UsualBond, UsdcUsualUSDC, UsualUSDCUsd0, UsualMWrappedM, UsualMUsd0, MWrappedM, WrappedMM                    |        0.4 | `UNLIMITED` one way, `NO` reverse                                |
+| AngleTransmuter            | AngleTransmuter                                                                                              |       0.04 | real USD sum for the stablecoin side, `UNLIMITED` for collateral |
+| PolygonMigrator            | PolygonMigrator                                                                                              |       0.01 | returns `[]`; both directions unlimited                          |
+| Swell                      | Swell                                                                                                        |      0.003 | returns `[]`; one-way mint                                       |
+| dETH                       | dETH, dBNB, dPOL                                                                                             |      0.002 | `UNLIMITED`                                                      |
+| AaveV3Stata, AaveV3StataV2 | AaveV3Stata, AaveV3StataV2                                                                                   |          0 | `UNLIMITED`                                                      |
+| StkGHO                     | StkGHO                                                                                                       |          0 | `UNLIMITED` GHO→stkGHO, `NO` reverse                             |
+| FxProtocolRusd             | FxProtocolRusd                                                                                               |          0 | `UNLIMITED`                                                      |
+| AaveV3PtRollOver           | AaveV3Pendle                                                                                                 |          0 | `UNLIMITED` / `NO` per direction, per PT market                  |
+| UsualPP                    | UsualPP                                                                                                      |          0 | `UNLIMITED`                                                      |
+| AaveGsm                    | AaveGsm                                                                                                      |          0 | real: `underlyingLiquidity`                                      |
+| MiroMigrator               | MiroMigrator                                                                                                 |          0 | hardcoded 1e9 / `NO`; state holds real `balance`                 |
+| AngleStakedStable          | AngleStakedStableUSD, AngleStakedStableEUR                                                                   |          0 | `UNLIMITED`                                                      |
+
+Total covered by both modes: **1 062 M$ ≈ 73 % of dex-lib volume**.
+
+### 2.3 Dropped by volume (storage-mode candidates < 5 M$ / 2 months)
+
+BalancerV2 2.5, Ekubo (v1) 1.7, Nerve family (Synapse, IronV2, Nerve) 1.1,
+SolidlyV3 1.0, BalancerV1 0.2, Camelot (v2) 0.1, MaverickV1 0.
+
+### 2.4 Excluded regardless of volume
+
+- Served by another service (lowercase keys): Uniswap V3/V4 and all forks,
+  Curve StableNg, FluidDex, FluidDexLite, Metric, PancakeSwapInfinity, Tessera,
+  Velodrome/Aerodrome Slipstream, Pharaoh V3, Pangolin V3, Okutrade, Kipseli, …
+- Protocol API is the source: CurveV1, CurveV1Factory, CurveV2 (Curve API);
+  Balancer V3 (`api-v3.balancer.fi`, `poolGetPools { poolTokens { address balance } }`
+  — verified 2026-09-09 to return per-token balances for `protocolVersion: 3`).
+- RFQ / off-chain: Native, Dexalot, Hashflow, Bebop, SwaapV2, GenericRFQ
+  (ParaSwapPool\*), ParaSwapLimitOrders, AugustusRFQ.
+- Tx-builder-only legacy classes that do not implement `IDex` and have no
+  `getTopPoolsForToken`: Lido (7.1 M$), EtherFi, StablePool, DodoV1,
+  TraderJoeV2.2. Lido would be a one-line `UNLIMITED` mode-B adapter if it is
+  ever migrated to `IDex`.
+
+## 3. Background: how state lives today
+
+- Pricing runs on **slave** instances (`dexHelper.config.isSlave === true`)
+  behind a load balancer. A master (initialization) service exists today but
+  is scheduled for removal, so nothing new may depend on it.
+- Event-based DEXes keep pool state in memory via `StatefulEventSubscriber`
+  (`src/stateful-event-subscriber.ts`): `getState(bn)`, `getStaleState()`,
+  `getStateBlockNumber()`, `isInvalid()`.
+- Most AMMs create pool objects **lazily**: a pair/pool exists in memory only
+  after it was priced at least once on that instance (`UniswapV2.pairs`,
+  `Solidly.pairs`, `Algebra.eventPools`, `AlgebraIntegral.eventPools`).
+- `UniswapV2RpcPoolTracker` (PancakeSwapV2, ~2M pools) tracks every factory
+  pool; `SolidlyRpcPoolTracker` (VelodromeV2, Equalizer, PharaohV1, Blackhole)
+  populates its list only in `updatePoolState`, i.e. on the pool-tracker
+  service, and is empty on slaves.
+- Existing Redis pool lists:
+  - `UniswapV2` (and Solidly + all Solidly forks, which reuse it): hash
+    `${CACHE_PREFIX}_${network}_${dexKey}_pairs`, field = pool identifier,
+    value = `{ token0, token1, exchange, checkExistenceAfter }`, `exchange`
+    is the pair address or `null` (`src/dex/uniswap-v2/uniswap-v2.ts:291`,
+    `src/dex/solidly/solidly.ts:201,276`). Written by every instance.
+  - `UniswapV2RpcPoolTracker` (PancakeSwapV2): hash
+    `${CACHE_PREFIX}_${network}_${dexKey}_pools`, field = factory index,
+    value = `CachedPool { address, updatedAt, token0, token1 }` — **no
+    reserves** (`src/dex/uniswap-v2/rpc-pool-tracker.ts:14`). In-memory
+    entries start with `reserve0 = reserve1 = 0n`, `reservesUpdatedAt = null`;
+    reserves are refreshed only for the top 2000 pools. Writer runs on master.
+- `getTopPoolsForToken` / `updatePoolState` run on the pool-tracker service
+  without `blockManager` or event state (CLAUDE.md Fix Log), so they cannot
+  source reserves.
+- `MultiWrapper.tryAggregate(mandatory, calls)` (`src/lib/multi-wrapper.ts:54`)
+  gives non-reverting multicall with per-call success flags.
+
+## 4. Rejected alternative
+
+A single zero-argument `getPoolReserves()` for **every** dex was rejected:
+PancakeSwapV2 alone has ~2M pools, the consumer would have no control over
+cadence or batch size, and lazy dexes would return a partial,
+instance-dependent set. The zero-argument form is kept only for dexes with a
+small, config-defined pool set (§5, mode B).
+
+## 5. Decisions
+
+| #   | Decision                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | Rationale                                                                                                                                                                                                                                       |
+| --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| D1  | One optional method `getPoolReserves(pools?)` with two modes selected by `getPoolsStorage()`. **Mode A (storage):** `getPoolsStorage()` returns a Redis location; `getPoolReserves(pools)` computes reserves for the given descriptors. **Mode B (enumerated):** `getPoolsStorage()` is absent or returns `null`; `getPoolReserves()` with no arguments returns every pool.                                                                                                                                                                                                                                                                                                                                                                                                   | Large / lazy pool sets need consumer-driven batching; wrappers with a handful of pools do not need discovery at all.                                                                                                                            |
+| D2  | Mode A pool lists live in **Redis**, read by the consumer directly. The API only publishes `{ key, type, fieldInValue }`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | Avoids paginating millions of pools through the API.                                                                                                                                                                                            |
+| D3  | Storage is **typed** (`PoolsStorageType`, currently `redis-hash`) but **not versioned**. An incompatible descriptor change is published under a **new Redis key**; the consumer follows whatever key `/pools-storages` advertises. Descriptors that do not parse are skipped (D8).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | A request-level version cannot help: during a rollout old and new instances write into the same hash, so any batch mixes shapes regardless of the number the consumer echoes. Both services ship from this repo; the key is the version.        |
+| D4  | Hash values are **dex-owned opaque JSON descriptors**, strictly minimal. The consumer passes them back verbatim.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | Pool identity differs per protocol; schema stays local to the dex.                                                                                                                                                                              |
+| D5  | Reuse existing Redis structures (`_pairs`, `_pools`). New structures only where nothing exists.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | No duplicated writes; no new master responsibilities.                                                                                                                                                                                           |
+| D6  | Runs on **slave instances only**. Sources: in-memory state when the pool exists on this instance and is not invalid; otherwise batched non-reverting multicall (mode A) or direct multicall (mode B wrappers without state). No master state.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | Master is being deprecated.                                                                                                                                                                                                                     |
+| D7  | `MAX_POOL_RESERVES_BATCH = 1000` descriptors per mode-A call, enforced centrally; multicalls chunked. Mode B is bounded by config size (≤ ~50 pools).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | RPC quota is shared across instances.                                                                                                                                                                                                           |
+| D8  | Per-pool failure isolation: unknown, unparsable, `exchange: null`, invalid-state or RPC-failed pools are **skipped**; `tryAggregate(false, …)` with per-pool decode.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | One reverting token must not lose the batch.                                                                                                                                                                                                    |
+| D9  | No `block` / `updatedAt` in responses. Stale-but-valid in-memory state is returned as-is.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | Approximate reserves acceptable; caller stamps.                                                                                                                                                                                                 |
+| D10 | Each result carries `id` (mode A: the hash field; mode B: pool address or a dex-defined stable id) plus `address`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | Ekubo pools share one core contract; skipped descriptors break positional mapping.                                                                                                                                                              |
+| D11 | Mode A storages are written by slaves: known-up-front sets in `initializePricing` and on every runtime refresh; lazily created pools through a shared buffered writer (`hmset`, periodic flush). Entries carry last-seen `u`; the writer re-touches all in-memory pools each flush and prunes entries older than 30 days (`hscan` + `hdel`).                                                                                                                                                                                                                                                                                                                                                                                                                                  | No per-call Redis writes; bounded growth.                                                                                                                                                                                                       |
+| D12 | Writer/pruner cross-instance races are **accepted** (self-healing via re-touch; `u` drift ≤ one flush interval against a 30-day threshold).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | Low probability; precision not required.                                                                                                                                                                                                        |
+| D13 | Reserve semantics per adapter = the **simplest correct-units** definition. Hit and miss paths may differ slightly.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | Precision not required; complexity is the cost.                                                                                                                                                                                                 |
+| D14 | Storage-mode scope is cut by volume as in §2; every `SimpleExchange` dex is included in enumerated mode; lowercase keys are ignored entirely.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | Effort goes where the volume is; enumerated adapters cost a few lines each.                                                                                                                                                                     |
+| D15 | A reserve value is **the payout capacity of the output token of a supported swap**. Three values: a raw balance string; `UNLIMITED_RESERVES` when the swap is a mint/convert with no cap; `'0'` when the swap is supported but currently has nothing to pay out (e.g. GSM at `exposureCap`). Unsupported swaps are never represented by a value — they are absent (D17). The key shape (plain token or `src_dest`) is defined in D17. The existing tracker is only a hint: `getTopPoolsForToken(in).liquidityUSD` describes swaps **from** `in`, so its `UNLIMITED` belongs to the swap `in → connector`, and several trackers are wrong about direction support (UsualPP, Stata). The **pricing guards in `getPricesVolume`** are the source of truth for which swaps exist. | One rule for all dexes; `'0'` and "absent" carry different information.                                                                                                                                                                         |
+| D16 | `UNLIMITED_RESERVES` is a dedicated string constant (`'unlimited'`), not the numeric `UNLIMITED_USD_LIQUIDITY` (1234567890).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | `reserves` values are raw token units; a numeric magic value could collide with a real balance.                                                                                                                                                 |
+| D17 | `reserves` keys come in two shapes, never mixed within one pool. **Plain** `token` keys mean every listed token can be swapped to every other listed token in both directions, and the value is the payout capacity of that token (classic AMM). **Directional** `src_dest` keys enumerate exactly the supported swaps, and the value is the payout capacity of `dest` for that swap. A direction that is not supported simply has no key.                                                                                                                                                                                                                                                                                                                                    | One-way and partially-connected pools (Usual, SkyConverter, LitePsm `dai ↔ usds`, ERC4626 with redeem disabled) cannot be expressed with per-token values; a missing key is unambiguous where `'0'` is not (GSM at cap is supported but empty). |
+
+## 6. Public contract
+
+```ts
+// src/types.ts
+export enum PoolsStorageType {
+  RedisHash = 'redis-hash',
+}
+
+export type PoolsStorage = {
+  key: string;             // Redis key
+  type: PoolsStorageType;  // how to read it
+  fieldInValue: boolean;   // true: the dex can derive the hash field from the value;
+                           // false: consumer must send `{ i: field, ...value }`
+};
+
+// src/constants.ts
+export const UNLIMITED_RESERVES = 'unlimited';
+
+export type PoolReserves = {
+  dex: string;                        // dexKey
+  id: string;                         // mode A: hash field; mode B: dex-defined stable id
+  address: Address;                   // pool / contract address (lowercase)
+  reserves: Record<string, string>;   // key: `token` (plain, bidirectional among all listed tokens)
+                                      //   or `srcToken_destToken` (directional, exactly this swap)
+                                      // value: raw payout capacity of the output token
+                                      //   (decimal string), UNLIMITED_RESERVES, or '0'
+};
+
+// Plain example (AMM pair): { "0xa…": "123", "0xb…": "456" }
+// Directional example (one-way converter): { "0xa…_0xb…": "unlimited" }
+// Directional example (PSM): { "0xgem_0xdai": "…", "0xdai_0xgem": "…", "0xgem_0xusds": "…", "0xusds_0xgem": "…" }
+
+// src/dex/idex.ts — added to IDexPooltracker
+getPoolsStorage?(): PoolsStorage | null;
+getPoolReserves?(pools?: string[]): AsyncOrSync<PoolReserves[]>;
+```
+
+`DexAdapterService.getPoolReservesByKey(dexKey, pools?)`:
+
+- dex has a non-null storage → `pools` is required, batch size is validated,
+  call is forwarded;
+- dex has no storage → `pools` must be absent, `getPoolReserves()` is called.
+
+Consumer flow:
+
+1. `GET /pools-storages` → `{ [dexKey]: PoolsStorage | null }` for every dex
+   implementing `getPoolReserves`. `null` means "call without pools".
+2. Mode A: `HSCAN key`, then `POST /pool-reserves { dexKey, pools }` in
+   batches ≤ 1000. Missing `id`s in the response mean "skipped".
+3. Mode B: `POST /pool-reserves { dexKey }`.
+4. Consumer stores results with its own timestamp / block.
+
+## 7. Implementation plan
+
+### PR 1 — core (no dex changes)
+
+| File                                     | Change                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `src/types.ts`                           | `PoolsStorageType`, `PoolsStorage`, `PoolReserves`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| `src/dex/idex.ts`                        | two optional methods on `IDexPooltracker`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `src/constants.ts`                       | `UNLIMITED_RESERVES = 'unlimited'`, `MAX_POOL_RESERVES_BATCH = 1000`, `POOLS_STORAGE_PRUNE_AGE_MS = 30d`, `POOLS_STORAGE_FLUSH_INTERVAL_MS = 60s`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `src/dex/index.ts` (`DexAdapterService`) | `getPoolsStorages()`, `resolvePoolReservesCall(dexKey, pools?)` (synchronous validation, throws `PoolReservesRequestError`), `getPoolReservesByKey(dexKey, pools?)` with the mode rules above                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| `src/pricing-helper.ts`                  | thin wrappers with timeout + try/catch                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| `src/dex-helper/icache.ts` + impls       | `hscan?(key, cursor, count)` (optional; without it the writer publishes but never prunes)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `src/lib/pools-storage/pools-writer.ts`  | `PoolsWriter { touch, flush, prune, release }`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| `src/lib/pools-storage/reserves.ts`      | `toReserves(tokens, balances)` (plain keys); `directionalReserves([{ src, dest, capacity: bigint \| 'unlimited' }])` (directional keys, D17); `multicallBalances(multiWrapper, calls, chunkSize)` returning `(bigint \| null)[]` — chunks locally and calls `tryAggregate(false)` **per chunk inside its own try/catch** (a failed RPC chunk yields `null` for its calls only, since `MultiWrapper.tryAggregate` rejects as a whole when any chunk fails), and **each `decodeFunction` is wrapped in its own try/catch**, because `tryAggregate` (`src/lib/multi-wrapper.ts:112`) only isolates reverts and lets a decoder exception on one successful-but-malformed return propagate for the whole batch; `PoolReservesRequestError` for malformed requests |
+| `src/index.ts`                           | export new types                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| Tests                                    | unit: writer touch/flush/prune/release, `toReserves`, `directionalReserves`, `multicallBalances` with (a) one reverting call and (b) one successful call returning malformed data among valid calls, (c) one failed RPC chunk among successful chunks, mode selection in `DexAdapterService`, `PricingHelper` error boundary (request errors propagate, dex errors and timeouts → `[]`); shared `expectPoolReserves()` helper that also validates key shape (all plain or all directional per pool)                                                                                                                                                                                                                                                          |
+
+### PR 2 — UniswapV2 + Solidly families (mode A, ~25 keys)
+
+Storage: existing `_pairs` hash, `fieldInValue: true` (field is the
+pool identifier derived from `token0`/`token1`). Solidly and all Solidly forks
+inherit the storage but **override id derivation**: `Solidly.getPoolIdentifier`
+(`src/dex/solidly/solidly.ts:714`) takes `(token0, token1, stable)` and the
+hash field embeds the flag, so the descriptor's `stable` must be passed
+through or a stable pool would resolve to the volatile pool's id and state.
+For the Solidly RPC-tracker forks this storage contains only pairs that were
+priced at least once; accepted (their volume is negligible).
+
+`getPoolReserves(descs)` in `src/dex/uniswap-v2/uniswap-v2.ts`:
+
+1. Parse; skip `exchange == null`; `id` = `this.getPoolIdentifier(...)` with
+   the descriptor's fields (UniswapV2: `token0`, `token1`; Solidly: plus
+   `stable`).
+2. Hit: `this.pairs[key]?.pool` exists and `!isInvalid()` → `getStaleState()`
+   → `reserves0/reserves1`.
+3. Miss: `multicallBalances` on `pair.getReserves()`; failures skipped.
+4. `toReserves([token0, token1], [r0, r1])`.
+
+Overrides:
+
+- `UniswapV2RpcPoolTracker` (PancakeSwapV2): `getPoolsStorage()` → existing
+  `_pools` hash with `fieldInValue: false` (field = factory index). Hit only
+  when the entry exists **and** has reserves:
+  `const p = this.pools[idx]; if (p && p.reservesUpdatedAt != null)` — on
+  slaves the tracker map is usually empty, and `undefined !== null` would
+  otherwise count a missing entry as a hit. Otherwise parent miss path.
+  Master-gated writer untouched.
+- `BiSwap`, `RingV2`: inherit.
+
+### PR 3 — storage-mode AMMs
+
+| Dex              | Storage                                                                                                                                                                                                                                                                                                                                                                                             | In-memory hit       | Miss / fallback | Completeness |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------- | --------------- | ------------ |
+| ekubo-v3         | new `_pools` hash; `{ k: stringId, t0, t1 }`, `fieldInValue: true` (`k` is the field). Written from `EkuboV3PoolManager.setPool()` (`ekubo-v3-pool-manager.ts:815`), which is the single insertion point for both the initial `updatePools` load and runtime `PoolInitialized` events — there is no periodic refresh on pricing instances (`updatePoolState` runs on the pool-tracker service only) | `pool.computeTvl()` | skip            | full         |
+| maverick-v2      | init-time from subgraph list; `{ a, tA, tB }`                                                                                                                                                                                                                                                                                                                                                       | `reserveA/reserveB` | `balanceOf` ×2  | full         |
+| algebra          | lazy via `PoolsWriter`; `{ a, t0, t1 }`                                                                                                                                                                                                                                                                                                                                                             | `balance0/balance1` | `balanceOf` ×2  | observed     |
+| algebra-integral | lazy via `PoolsWriter`; `{ a, t0, t1 }`                                                                                                                                                                                                                                                                                                                                                             | `balance0/balance1` | `balanceOf` ×2  | observed     |
+
+### PR 4 — enumerated mode: every `SimpleExchange` dex (mode B)
+
+All return every pool in one call; nothing is written to Redis. `id` = pool /
+contract address, plus a token suffix where one contract serves several pairs.
+Each adapter follows D15 + D17 with an **explicit direction set** taken from
+its `getPricesVolume` guards (not from `getPoolIdentifiers`, which several
+dexes return unconditionally, and not from `getTopPoolsForToken`, whose flags
+describe the input side). Plain keys are used only when every listed token
+swaps to every other listed token in both directions; otherwise directional
+`src_dest` keys enumerate the supported swaps and unsupported ones have no
+key. `'0'` is reserved for a supported swap with zero capacity right now.
+Pools whose state marks them unusable (frozen, seized, paused) are omitted.
+
+| Dex                                               | Pools                                              | `reserves`                                                                                                                                                                                                                                                                                           | Source                                                                                                                       |
+| ------------------------------------------------- | -------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| lite-psm                                          | one per gem PSM config, `id` = DAI PSM address     | directional: `{ gem_dai: daiBalance, dai_gem: gemBalance, gem_usds: daiBalance, usds_gem: gemBalance }` — the USDS path (`usdsPsm`, `lite-psm.ts:225`) is a 1:1 wrapper over the same DAI PSM, so both stablecoins are paid out of `daiBalance`; `dai ↔ usds` is not a supported pair and has no key | event state + config                                                                                                         |
+| oswap                                             | one per pool config                                | plain: `{ t0: balance0, t1: balance1 }`                                                                                                                                                                                                                                                              | event state; pools this instance has not priced yet are generated once via `updatePoolState` (no `initializePricing` exists) |
+| woo-fi-v2                                         | single pool                                        | plain: `{ t: tokenInfos[t].reserve }` for every token                                                                                                                                                                                                                                                | poller state                                                                                                                 |
+| aave-gsm                                          | one per GSM; omitted when `isFrozen \|\| isSeized` | directional: `{ gho_underlying: underlyingLiquidity, underlying_gho: toGho(max(exposureCap - underlyingLiquidity, 0)) }` — remaining sell capacity converted to GHO units with the same rate math pricing uses; `'0'` at the cap, never `UNLIMITED`                                                  | event state                                                                                                                  |
+| miro-migrator                                     | single pool                                        | directional: `{ psp_vlr: balance, sepsp1_vlr: balance }` — both sources draw on the same VLR balance; BSC has no sePSP1                                                                                                                                                                              | event state                                                                                                                  |
+| erc4626                                           | one per vault key                                  | directional: `{ asset_vault: UNLIMITED, vault_asset: totalAssets if redeemAllowed(state) }`; deposit is always allowed, redeem is gated by the sUSDe cooldown (`withdrawDisabled` only affects BUY, which does not remove the direction)                                                             | event state + config flags                                                                                                   |
+| angle-transmuter                                  | one per stablecoin, `id` = transmuter              | directional: `{ collateral_i_stable: UNLIMITED, stable_collateral_i: collateral_i.balanceOf(transmuter) }` per collateral; a collateral whose balance call fails keeps only the mint key                                                                                                             | `multicallBalances` over `eventPools[fiat].config.collaterals` (the USD sum lives on the pool-tracker service only)          |
+| weth (Weth, Wxdai, Wbnb, Wavax, Wmatic, wS, Wxpl) | single pool                                        | plain: `{ native(0xeeee…): UNLIMITED, wrapped: UNLIMITED }`                                                                                                                                                                                                                                          | config                                                                                                                       |
+| wsteth                                            | single pool                                        | plain: `{ stETH: UNLIMITED, wstETH: UNLIMITED }`                                                                                                                                                                                                                                                     | config                                                                                                                       |
+| spark (Spark, sUSDS)                              | single pool per key                                | plain: `{ asset: UNLIMITED, share: UNLIMITED }`                                                                                                                                                                                                                                                      | config                                                                                                                       |
+| spark-psm                                         | single pool                                        | plain over the 3 PSM3 assets, all `UNLIMITED`                                                                                                                                                                                                                                                        | config                                                                                                                       |
+| aave-v3                                           | one per (underlying, aToken) from `tokens.ts`      | plain: `{ underlying: UNLIMITED, aToken: UNLIMITED }`                                                                                                                                                                                                                                                | token list                                                                                                                   |
+| aave-v3-stata, aave-v3-stata-v2                   | one per stata token                                | directional, four keys: `underlying_stata`, `stata_underlying`, `aToken_stata`, `stata_aToken`, all `UNLIMITED`; **no** `underlying ↔ aToken` (pricing requires one side to be the stata token, `aave-v3-stata-v2.ts:174`)                                                                           | token list                                                                                                                   |
+| aave-v3-pt-roll-over                              | single pool, `id` = old PT market                  | directional: `{ oldPT_newPT: UNLIMITED }` — the only route `isAppropriatePair` accepts                                                                                                                                                                                                               | config                                                                                                                       |
+| sky-converter (DaiUsds, MkrSky)                   | single pool                                        | directional: `old_new: UNLIMITED` if `oldToNewFunctionName`, `new_old: UNLIMITED` if `newToOldFunctionName`                                                                                                                                                                                          | config                                                                                                                       |
+| usdc-transmuter                                   | single pool                                        | plain: `{ usdc: UNLIMITED, usdce: UNLIMITED }`                                                                                                                                                                                                                                                       | config                                                                                                                       |
+| cap                                               | one per (vault, asset), `id` = `vault_asset`       | directional: `{ asset_vault: UNLIMITED, vault_asset: assetSupply[asset] }` — burn pays out of the vault's supply of that asset                                                                                                                                                                       | `AllVaultConfigs` + event state                                                                                              |
+| usual family (7 keys)                             | single pool per key                                | directional: `{ fromToken_toToken: UNLIMITED }` — one-way; the tracker puts `UNLIMITED` on `fromToken` because it describes the input side                                                                                                                                                           | config                                                                                                                       |
+| usual-pp                                          | single pool                                        | directional: `{ USD0++_USD0: UNLIMITED }` — pricing supports only USD0++ → USD0 (`isValidTokens`, SELL only) even though the tracker reports `UNLIMITED` both ways                                                                                                                                   | config                                                                                                                       |
+| stk-gho                                           | single pool                                        | directional: `{ gho_stkGHO: UNLIMITED }`                                                                                                                                                                                                                                                             | config                                                                                                                       |
+| fx-protocol-rusd                                  | single pool, `id` = rUSD                           | plain: `{ weETH: UNLIMITED, rUSD: UNLIMITED }`                                                                                                                                                                                                                                                       | config                                                                                                                       |
+| deth (dETH, dBNB, dPOL)                           | single pool                                        | directional: `eth_d`, `weth_d`, `d_eth`, `d_weth`, all `UNLIMITED` — plain keys would imply `eth <-> weth`, which the dex does not price                                                                                                                                                             | config                                                                                                                       |
+| angle-staked-stable                               | single pool per key                                | directional: `{ ag_stake: UNLIMITED, stake_ag: totalAssets }`                                                                                                                                                                                                                                        | event state                                                                                                                  |
+| polygon-migrator                                  | single pool                                        | plain: `{ matic: UNLIMITED, pol: UNLIMITED }`                                                                                                                                                                                                                                                        | config                                                                                                                       |
+| swell                                             | one per (swETH, rswETH)                            | directional: `{ eth_share: UNLIMITED, weth_share: UNLIMITED }` — `isEligibleSwap` accepts ETH or WETH as source                                                                                                                                                                                      | config                                                                                                                       |
+
+Where the event state holds a real balance or cap that today is only used for
+pricing (aave-gsm, miro-migrator, erc4626 `totalAssets`), the real number is
+reported because it costs nothing. Everything else is a D15 mapping of the
+supported swap directions, with each adapter's table row as the spec.
+
+## 8. Descriptor conventions (mode A)
+
+- JSON object, short keys: `a` = pool address, `t`/`t0`/`t1`/`tA`/`tB` =
+  token addresses, `k` = protocol pool key string (Ekubo), `u` = last-seen ms
+  (writer-managed storages only). Addresses lowercase. Nothing else.
+- Each descriptor lets the dex recompute its hash field (`id`) without a
+  Redis read; when it cannot (PancakeSwapV2's index-keyed `_pools`),
+  `fieldInValue: false` tells the consumer to wrap `{ i: field, ...value }`.
+- An incompatible descriptor change is published under a new Redis key (e.g.
+  `_pools_v2`); the old key is left to expire with its writers. Descriptors
+  that do not parse are skipped.
+- Existing structures (`_pairs`, `_pools`) keep their current value shape.
+
+## 9. Risks & accepted trade-offs
+
+| Risk                                                 | Handling                                                                                          |
+| ---------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| Consumer drives RPC load through the API             | D7 batch cap + chunked multicalls; hits served first; mode B bounded by config size.              |
+| One reverting token kills a batch                    | D8.                                                                                               |
+| Stale in-memory state                                | Accepted (D9); invalid state skipped.                                                             |
+| Hit/miss quantity drift                              | Accepted (D13); UniV2 miss uses `getReserves()` so both paths agree anyway.                       |
+| Unbounded growth of lazy storages                    | D11 pruning.                                                                                      |
+| Writer/pruner races                                  | Accepted (D12).                                                                                   |
+| Consumer coupled to Redis schema                     | D3 typed; descriptors opaque; incompatible changes get a new key; unparsable descriptors skipped. |
+| PancakeSwapV2 `_pools` writer is master-only         | Out of scope; read path unaffected; flagged for master deprecation.                               |
+| `HGETALL` on a 2M-entry hash                         | Consumer must `HSCAN`; documented.                                                                |
+| Solidly RPC-tracker forks expose only observed pairs | Accepted; < 0.1 M$ volume.                                                                        |
+
+## 10. Verification
+
+- Each PR: `pnpm checks` and unit tests.
+- Unit: writer touch/flush/prune/release; `toReserves`; `multicallBalances`
+  with one failing call among valid ones and one failed chunk; mode selection.
+- Dex integration tests (CI only) extended with a `getPoolReserves` case:
+  known-liquid pool returns non-zero reserves for both tokens; invalid or
+  unknown descriptor skipped without failing the batch; EkuboV3 returns
+  distinct `id`s for pools sharing the core address; PancakeSwapV2 with
+  `reservesUpdatedAt = null` **and** with a missing `this.pools[idx]` entry
+  both fall back to RPC; Solidly returns distinct ids and reserves for the
+  stable and volatile pools of the same token pair; LitePsm returns the four
+  `gem ↔ dai/usds` keys and no `dai_usds` key; Aave GSM at `exposureCap`
+  returns `underlying_gho: '0'` and a frozen GSM is omitted; EkuboV3
+  publishes a pool inserted through `setPool` after initialization.
+- Mode-B **direction** invariant (independent of capacity): the set of
+  directed pairs implied by `reserves` (plain keys → every ordered pair of
+  listed tokens; directional keys → exactly those keys) equals an **explicit
+  expected set written per adapter in its test**, derived from that adapter's
+  `getPricesVolume` guards. `getPoolIdentifiers` is not used as the oracle:
+  StataV2 (`aave-v3-stata-v2.ts:150`) and ERC4626 return identifiers
+  unconditionally, including for swaps pricing rejects. Each test carries at
+  least one negative case (a pair the adapter must not list: Stata
+  `underlying ↔ aToken`, LitePsm `dai ↔ usds`, Usual reverse, UsualPP
+  `USD0 → USD0++`) and, where the state can disable a direction (ERC4626
+  redeem/deposit flags, GSM frozen), one case asserting the key disappears
+  rather than reading `'0'`. Values are not part of this check.
+- Mode-B **capacity** cases, separate from direction: GSM at `exposureCap`
+  keeps the `underlying_gho` key with value `'0'`; ERC4626 with redeem enabled
+  and `totalAssets = 0` keeps `vault_asset: '0'`.
+- Mode-B **value** check: each adapter's table row in §7 is the spec;
+  `UNLIMITED_RESERVES` appears only where that row says so. No inference from
+  `hasConstantPriceLargeAmounts` (false on UsualPP, AaveGsm, AngleTransmuter
+  even though some of their directions are unlimited).
+- Manual check on a slave: `getPoolsStorages()` lists expected dexes with the
+  right mode; `HSCAN` returns descriptors; a 1000-item batch returns results
+  for most descriptors and never throws; mode-B calls return within one
+  multicall round-trip.
+
+## 11. Delivery order
+
+PR 1 (core) → PR 4 (mode B: LitePsm alone is 49 % of volume, and ~30 adapters
+of a few lines each) → PR 2 (UniswapV2/Solidly) → PR 3 (EkuboV3, MaverickV2,
+Algebra families).
+
+## 12. Review round 1 — responses
+
+| Finding                                        | Verdict                | Resolution                                                                                                                                                                                                                            |
+| ---------------------------------------------- | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. `getStaleState()` bypasses validity         | Confirmed              | Skip pools with `isInvalid()`; stale-but-valid returned as-is (D9).                                                                                                                                                                   |
+| 2. `getManyPoolReserves` loses the whole batch | Confirmed              | `multicallBalances` on `tryAggregate(false)`, per-pool decode, chunked (D8).                                                                                                                                                          |
+| 3. Address does not identify Ekubo pools       | Confirmed              | `id` added to `PoolReserves` (D10); `reserves` keys are token addresses, unaffected.                                                                                                                                                  |
+| 4. Aave GSM units                              | Confirmed              | Underlying side reports `underlyingLiquidity`; GHO side is `UNLIMITED_RESERVES` (mint capacity, D15), never a synthetic converted balance.                                                                                            |
+| 5. Balancer V3 live balances not invertible    | Confirmed              | Balancer V3 removed; consumer uses Balancer API (verified).                                                                                                                                                                           |
+| 6. Hit/miss quantity mismatch                  | Confirmed, accepted    | D13; UniV2 miss → `getReserves()`; Maverick V1 dropped by volume.                                                                                                                                                                     |
+| 7. Startup-only publication                    | Confirmed              | Storages written on runtime refreshes too (D11); completeness column added.                                                                                                                                                           |
+| 8. Writer/pruner races                         | Confirmed, accepted    | D12.                                                                                                                                                                                                                                  |
+| PancakeSwapV2 cached pools have no reserves    | Confirmed (plan error) | §3 corrected; hit requires `reservesUpdatedAt !== null`.                                                                                                                                                                              |
+| Version needs request-side rule                | Superseded             | Request-level versioning was added, then removed after PR 1 review (§16): the hash mixes descriptor shapes per entry during a rollout, so a per-request version cannot select a parser. New key per incompatible change instead (D3). |
+| Expand verification                            | Accepted               | §10.                                                                                                                                                                                                                                  |
+
+## 13. Review round 2 — responses
+
+| Finding                              | Verdict   | Resolution                                                                                                                                                                                                                      |
+| ------------------------------------ | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. Mode-B mapping reverses direction | Confirmed | D15 rewritten as `reserves[out]` = payout capacity for `in → out`; tracker flags populate the connector's entry. Verification switched to a `getPoolIdentifiers(in, out)` invariant. UsualPP row added with USD0++ → USD0 only. |
+| 2. Aave GSM GHO "unlimited"          | Confirmed | `gho = toGho(max(exposureCap - underlyingLiquidity, 0))` via the pricing rate math; `'0'` at cap; frozen/seized GSMs omitted.                                                                                                   |
+| 3. LitePsm omits USDS                | Confirmed | One pool per gem with `{ gem, dai, usds }`; `usds` shares `daiBalance` because `usdsPsm` wraps the DAI PSM.                                                                                                                     |
+| 4. Solidly ids need `stable`         | Confirmed | Solidly overrides id derivation with `getPoolIdentifier(token0, token1, descriptor.stable)`; test covers both pools of one pair.                                                                                                |
+| 5. PancakeSwapV2 hit predicate       | Confirmed | `p && p.reservesUpdatedAt != null`; missing-entry test added.                                                                                                                                                                   |
+| 6. EkuboV3 runtime discovery         | Confirmed | Storage written from `setPool()`, the common insertion point for the initial load and `PoolInitialized` events.                                                                                                                 |
+
+## 14. Review round 3 — responses
+
+| Finding                                                  | Verdict                                                                                                        | Resolution                                                                                                                                                                                                                       |
+| -------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. Direction invariant conflated support with capacity   | Confirmed (GSM keeps returning identifiers at zero GHO capacity; LitePsm has DAI reserves but no `usds → dai`) | Introduced directional keys (D17). The invariant now compares the **set of directed pairs** implied by the keys with `getPoolIdentifiers(in, out, SELL)`, ignoring values. LitePsm and GSM rows rewritten with directional keys. |
+| 2. `hasConstantPriceLargeAmounts` is not a capacity flag | Confirmed (false on UsualPP, AaveGsm, AngleTransmuter)                                                         | Clause removed; `UNLIMITED_RESERVES` is validated only against each adapter's row in §7.                                                                                                                                         |
+| 3. Decoder exceptions escape `tryAggregate`              | Confirmed (`multi-wrapper.ts:112` calls `decodeFunction` unguarded)                                            | `multicallBalances` wraps every decode individually; unit test with a malformed successful return added.                                                                                                                         |
+
+## 15. Review round 4 — responses
+
+| Finding                                                 | Verdict                                                                                        | Resolution                                                                                                                                      |
+| ------------------------------------------------------- | ---------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. Stata needs directional keys                         | Confirmed (`getPricesVolume` requires one side to be stata; `underlying ↔ aToken` unsupported) | Four directional keys per stata token; negative case in test.                                                                                   |
+| 2. `getPoolIdentifiers` is not a valid direction oracle | Confirmed (StataV2 and ERC4626 return ids unconditionally)                                     | Expected direction sets are written explicitly per adapter from `getPricesVolume` guards; disabled-direction and zero-capacity cases separated. |
+| 3. D15 / PR4 intro contradicted D17                     | Confirmed                                                                                      | Both passages rewritten: values exist only for supported swaps; `'0'` = supported with zero capacity; unsupported = absent key.                 |
+
+## 16. PR 1 review — responses
+
+| Finding                                                                                            | Verdict                      | Resolution                                                                                                                                                                                                                                      |
+| -------------------------------------------------------------------------------------------------- | ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. One failed RPC chunk discards the whole batch (`tryAggregate` uses `Promise.all` across chunks) | Confirmed                    | `multicallBalances` chunks locally and isolates each chunk; failed chunk → `null` per call.                                                                                                                                                     |
+| 2. Request-level `version` rejected valid batches during rollouts                                  | Confirmed, then generalised  | Versioning removed entirely (D3): the hash mixes descriptor shapes per entry, so a per-request version cannot help; incompatible changes get a new Redis key.                                                                                   |
+| 3. Throwing `getPoolsStorage()` escaped the error boundary                                         | Confirmed                    | Per-dex try/catch in `getPoolsStorages()`; `PricingHelper.getPoolReserves` resolves inside its try and rethrows only `PoolReservesRequestError`.                                                                                                |
+| 4. Test helper regex coerced numeric values                                                        | Confirmed                    | `typeof value === 'string'` asserted.                                                                                                                                                                                                           |
+| 5. Invalid `chunkSize` silently returned `[]`                                                      | Confirmed                    | Positive-integer guard in `multicallBalances`.                                                                                                                                                                                                  |
+| 6. Prune count log is analytics-style                                                              | Confirmed                    | Removed.                                                                                                                                                                                                                                        |
+| 7. `hscan` on `ICache` is a breaking interface change                                              | Accepted, then relaxed (§24) | `hscan` is optional: a cache without it compiles and publishes, and `PoolsWriter.prune` logs and skips. The API cache implements it (on the primary, so replication lag cannot create deletion candidates); the master service needs no change. |
+
+## 17. PR 4 — implementation notes
+
+- Config-only adapters (Weth, wstETH, Spark, SparkPsm, UsdcTransmuter,
+  PolygonMigrator, Swell, SkyConverter, AaveV3Pendle, StkGHO, the seven Usual
+  keys, UsualPP, FxProtocolRusd, dETH/dBNB/dPOL) are covered by
+  `src/dex/pool-reserves-mode-b.test.ts`, which runs without RPC and holds the
+  explicit expected direction set and a negative case per adapter.
+- State-backed adapters (LitePsm, ERC4626, AaveGsm, OSwap, WooFiV2,
+  MiroMigrator, AngleTransmuter, AngleStakedStable, Cap, AaveV3, AaveV3Stata,
+  AaveV3StataV2) are covered by
+  `src/dex/pool-reserves-mode-b-integration.test.ts` (CI only, hits RPC).
+- A state-backed adapter returns `[]` for a pool whose event state is missing
+  or `isInvalid()`; only OSwap generates missing state itself because it has
+  no `initializePricing`, one pool at a time so a failing pool does not hide
+  the others. Paused (AngleStakedStable), frozen / seized (AaveGsm) pools and
+  WooFiV2 base tokens with an infeasible oracle are omitted.
+- `src/dex/pool-reserves-mode-b-fixtures.test.ts` holds RPC-free fixtures for
+  the state cases that live chains cannot exercise on demand: WooFiV2
+  infeasible token, AngleStakedStable paused, AngleTransmuter invalid state and
+  failed balance call, OSwap partial generation failure, ERC4626 cooldown and
+  empty vault, AaveGsm at cap / frozen / seized.
+- `unlimitedReserves(tokens)` was added to `src/lib/pools-storage/reserves.ts`
+  for the plain-key wrappers.
+
+## 18. PR 4 review — responses
+
+| Finding                                                      | Verdict          | Resolution                                                                                        |
+| ------------------------------------------------------------ | ---------------- | ------------------------------------------------------------------------------------------------- |
+| 1. WooFiV2 listed base tokens whose oracle is infeasible     | Confirmed        | Only the quote token and feasible base tokens are listed; pool omitted below two tokens.          |
+| 2. AngleStakedStable published paused vaults                 | Confirmed        | `state.paused` omits the pool.                                                                    |
+| 3. AngleTransmuter ignored missing / invalid event state     | Confirmed        | Fiats without valid state are skipped before the balance multicall.                               |
+| 4. OSwap lost healthy pools when one pool failed to generate | Confirmed        | Only missing pools are generated, each in its own try/catch.                                      |
+| 5. WooFiV2 poller may fetch over RPC when cold               | Rejected         | Matches D6 (RPC when no in-memory state); the poller is warm on slaves.                           |
+| 6. `sDAI` ERC4626 test case used the wrong network           | Confirmed        | Case moved to Gnosis.                                                                             |
+| 7. Deterministic fixtures for state cases                    | Accepted in part | Fixture test added for the cases above; slave-mode helper and exact token-list fixtures left out. |
+
+## 19. PR 2 — implementation notes
+
+- `UniswapV2` owns the whole storage-mode flow; `Solidly` and
+  `UniswapV2RpcPoolTracker` only override three hooks:
+  `parsePoolReservesTarget(descriptor)` (descriptor → `{ id, key, address,
+token0, token1 }`, `null` to skip; `id` is the hash field, `key` the
+  in-memory `pairs` key), `matchesKnownPool(target)` (false when the instance
+  already knows the pool under a different address / tokens) and
+  `getCachedPoolReserves(target)` (in-memory `[reserve0, reserve1]` or `null`
+  for the RPC path). No other UniswapV2 or Solidly fork overrides
+  `getPoolIdentifier`, so every fork key inherits the behaviour unchanged.
+- Ids equal the hash field: the pair identifier for `_pairs` (Solidly keeps
+  the dexKey case, `Aerodrome_<t0>_<t1>S`; UniswapV2 is lowercase — both come
+  from the dex's own `getPoolIdentifier`), the factory index for
+  PancakeSwapV2's `_pools`. Deduplication within a batch is by id.
+- Tokens are re-sorted into on-chain order (`token0 < token1`) before
+  reserves are mapped, so a reversed or mixed-case descriptor cannot swap the
+  two reserves.
+- Skipped: descriptors without `exchange` (known-missing pairs), unparsable
+  JSON, non-address fields, `token0 == token1`, Solidly entries without a
+  boolean `stable`, PancakeSwapV2 entries whose `i` is not a non-negative
+  integer, and any descriptor that contradicts a locally known pair (address)
+  or tracker entry (address and tokens).
+- The RPC path decodes `getReserves()` as `uint256 × 3`: UniswapV2 pairs
+  return `uint112, uint112, uint32` and Solidly pairs `uint256 × 3`, and each
+  value occupies one word either way, so one decoder serves both without the
+  silent masking a `uint112` decode would apply to a wide Solidly reserve.
+- `UniswapV2RpcPoolTracker` (PancakeSwapV2) checks event state first, then
+  the tracker's `pools[i]` only when `reservesUpdatedAt != null`, then RPC.
+  No age filter: `updatedAt` in `_pools` is refreshed by the master only, so
+  a filter on it would switch every pool off once that writer is gone. RPC
+  load for the ~2M-entry hash is bounded by D7 and the consumer's sweep
+  cadence. The master-only writer is untouched.
+- `multicallBalances` is now a thin alias over the generic
+  `multicallValues<T>` in `src/lib/pools-storage/reserves.ts`, which the
+  reserves path uses with `T = [bigint, bigint]`.
+- Tests: `src/dex/pool-reserves-mode-a-fixtures.test.ts` (RPC-free: storage
+  shapes, hit / miss / failed call incl. a discovered-but-unpriced pair,
+  skipped descriptors and dedup, reversed and mixed-case descriptors,
+  address mismatch, Solidly stable vs volatile ids and a reserve above
+  `2^112`, PancakeSwapV2 index ids, hit predicate, index validation and
+  contradiction checks) and `src/dex/pool-reserves-mode-a-integration.test.ts`
+  (CI only: UniswapV2 mainnet hit + miss from the dex's own `_pairs` writes,
+  Aerodrome USDC/USDbC stable and volatile, PancakeSwapV2 wrapped `_pools`
+  descriptors with an empty tracker map).
+
+## 20. PR 2 review — responses
+
+| Finding                                                    | Verdict   | Resolution                                                                                                             |
+| ---------------------------------------------------------- | --------- | ---------------------------------------------------------------------------------------------------------------------- |
+| 1. PancakeSwapV2 reported the pair identifier as `id`      | Confirmed | Target carries `id` (hash field) separately from `key`; tracker sets `id = i`; dedup by id.                            |
+| 2. Reversed descriptor swapped the two reserves            | Confirmed | Tokens re-sorted into on-chain order in the base parser.                                                               |
+| 3. Cache hit not checked against the descriptor's identity | Confirmed | `matchesKnownPool` hook: known pair address / tracker entry must match, otherwise the descriptor is skipped.           |
+| 4. 180-day age filter dropped valid state, master-coupled  | Confirmed | Filter removed entirely (see §19).                                                                                     |
+| 5. Validate `i` as a canonical index                       | Accepted  | `i` must be a non-negative integer (string or number); `updatedAt` is no longer read.                                  |
+| 6. Test gaps                                               | Accepted  | Fixtures added for reversed / mixed-case descriptors, address and index mismatch, unpriced pair, wide Solidly reserve. |
+
+## 21. PR 3 — implementation notes
+
+- All four dexes publish a new hash `${CACHE_PREFIX}_${network}_${dexKey}_pools`
+  through `PoolsWriter` with a `listPools` iterator, started from
+  `initializePricing` **on slaves only** (`dexHelper.config.isSlave`, see
+  §24) and released unconditionally in `releaseResources` (added to EkuboV3
+  and MaverickV2, extended in Algebra and AlgebraIntegral). AlgebraIntegral
+  starts it after its first TVL refresh so the initial publication already
+  reflects the `MIN_USD_TVL_FOR_PRICING` cut. `PoolsWriter.start()` flushes
+  immediately and then every `POOLS_STORAGE_FLUSH_INTERVAL_MS` (10 min);
+  Algebra passes 60 s because its pools are discovered lazily while pricing
+  and the flush cadence is what bounds their publication delay. A
+  `flush()` requested while one is running joins it (one in-flight promise),
+  and a throwing `listPools` iterator is logged without holding back what is
+  already buffered.
+- The shared driver decodes `balanceOf` strictly: an address without code
+  answers with `0x`, which must drop the pool rather than report a zero
+  balance.
+- AlgebraIntegral's published set is the factory list cut at
+  `MIN_USD_TVL_FOR_PRICING`, not the whole factory. Per instance that is
+  `N` entries rewritten per minute and, for an uncached consumer sweep, `2N`
+  `balanceOf` calls; `N` should be measured before the consumer's sweep
+  cadence is fixed.
+- Three of them share one descriptor shape and one driver:
+  `{ a, t0, t1 }` (pool address = hash field = id) and
+  `tokenPoolReserves()` in `src/lib/pools-storage/token-pools.ts`, which
+  parses and dedups, asks the dex for in-memory balances by token
+  (`cached(descriptor)`), fetches `balanceOf(a)` on both tokens for the
+  rest, and skips a descriptor whose tokens contradict the pool this instance
+  knows at that address. MaverickV2 uses this shape too (`tA/tB` from the
+  original table became `t0/t1`).
+- Sources per dex:
+  - EkuboV3: `{ k, t0, t1 }`, `k` = `PoolKey.stringId`; reserves =
+    `pool.computeTvl()` (virtual TVL from liquidity math), native token
+    reported as `ETHER_ADDRESS`, address = the core contract. No RPC fallback:
+    every pool shares the core's balances. Publishing goes through
+    `listPools` over `poolManager.poolsByString` rather than a hook in
+    `setPool()`: a pool added by `PoolInitialized` shows up at the next flush,
+    within one interval, without coupling the manager to the writer.
+  - MaverickV2: the API inventory as of initialization is kept and
+    re-published on every flush together with any initialized pool it does
+    not list, so pools whose event subscription failed stay listed and are
+    served over RPC. A failed API refresh (which `_queryPoolsAPI` reports as
+    an empty list) keeps the previous inventory. Reserves =
+    `state.reserveA/reserveB`, which the pool math keeps up to date on swaps
+    and liquidity events.
+  - Algebra: `eventPools` entries that have state (a pool whose init failed
+    only has an unverified CREATE2 address and is not published); reserves =
+    `state.balance0/balance1`.
+  - AlgebraIntegral: the factory's pool list cut at `MIN_USD_TVL_FOR_PRICING`,
+    i.e. exactly the routable set, so unpriced pools are published and served
+    over RPC — completeness "full" rather than the table's "observed".
+    Inherited unchanged by BlackholeCL / Supernova.
+- `IEkuboPool` gained `isInvalid()`, which every concrete pool already had
+  through `StatefulEventSubscriber`.
+- Tests: `src/lib/pools-storage/token-pools.test.ts` (descriptor parsing,
+  driver hit / miss / contradiction / failure),
+  `src/dex/pool-reserves-mode-a-amm-fixtures.test.ts` (real constructors on a
+  DummyDexHelper with faked pool maps and multicall: storage keys, writer
+  output per dex, reserves per source) and
+  `src/dex/pool-reserves-mode-a-amm-integration.test.ts` (CI only: each dex
+  initialized live, descriptors read back from the writer's hash and fed to
+  `getPoolReserves`).
+
+## 22. PR 3 review — responses
+
+| Finding                                                        | Verdict   | Resolution                                                                                                 |
+| -------------------------------------------------------------- | --------- | ---------------------------------------------------------------------------------------------------------- |
+| 1. Empty `balanceOf` return decoded as a zero balance          | Confirmed | Strict uint256 decoder in the shared driver; empty or truncated data drops the pool.                       |
+| 2. Algebra's checksummed lazy address bypassed the token check | Confirmed | Address index lowercased.                                                                                  |
+| 3. A throwing `listPools` iterator blocked the whole flush     | Accepted  | Iteration wrapped in `PoolsWriter.flush`; buffered entries still written, error logged.                    |
+| 4. Maverick pools that failed to subscribe pruned after 30 d   | Accepted  | The init-time API inventory is kept and re-touched on every flush.                                         |
+| 5. `flush()` returned early while a flush was in flight        | Accepted  | Single in-flight promise returned to every caller.                                                         |
+| 6. Measure AlgebraIntegral publication and RPC cost            | Accepted  | Noted in §21; no code change.                                                                              |
+| 7. Test gaps                                                   | Accepted  | Decoder cases, hex-letter addresses, contradiction on invalid pool, checksummed address, writer lifecycle. |
+
+Round 2: findings 1–5 and 7 confirmed resolved; one regression found —
+re-running `initializePricing` after an API failure replaced the stored
+MaverickV2 inventory with an empty list. Fixed by keeping the previous
+inventory on an empty response and by listing initialized pools alongside it;
+covered by a test that drives `initializePricing` with a stubbed API and a
+failing subscription.
+
+## 23. Follow-up — Redis read traffic of the UniswapV2-family storages
+
+Not part of PRs 1–4. Written 2026-09-11 after the first consumer run on a
+copy of the production Redis (`docs/pool-reserves-consumer-sim-plan.md` §8,
+§11) and an architecture review (Codex Architect, gpt-6-astra). Intended as
+the source for an improvement ticket.
+
+### 23.1 Problem
+
+PR 2 points `getPoolsStorage()` of every UniswapV2 and Solidly fork at the
+pricing cache `dl_<network>_<dexKey>_pairs`. That hash is written by
+`UniswapV2._findPair` / `Solidly._findSolidlyPairs` on **every instance that
+prices** (the write is not gated by `isSlave`) and holds two kinds of
+records:
+
+- existing pools: `{ token0, token1, exchange }` — never rewritten once
+  stored;
+- placeholders for pairs the factory does not have: `{ token0, token1,
+checkExistenceAfter }` — a negative cache re-checked after 3 days, only
+  when the pair is not already in the instance's memory, so entries can
+  live indefinitely.
+
+`token0` / `token1` are the full `Token` objects the backend passes into
+pricing (`symbol`, `img`, `connectors`, `mainConnector`, `isLending`,
+`network`, `tokenType`), serialized whole by `{ ...pair }`. Pricing reads
+back only `address`, `decimals`, `exchange`, `checkExistenceAfter`
+(verified across `src/dex/uniswap-v2`, `src/dex/solidly`, the forks and the
+event-pool constructor). Result: ~570 B per field, and 89–99.99 % of the
+fields are placeholders the consumer must read and the dex then drops.
+
+Measured on the 2026-09-10 dump (filtered to chains 1 and 8453):
+
+| storage                   |    fields | existing pools | Redis memory |
+| ------------------------- | --------: | -------------: | -----------: |
+| `dl_1_uniswapv2_pairs`    |   452 980 |         50 526 |       295 MB |
+| `dl_1_sushiswap_pairs`    |   493 749 |          2 308 |       315 MB |
+| `dl_1_verse_pairs`        |   493 736 |             29 |       307 MB |
+| `dl_8453_alien_pairs`     | 1 473 412 |            400 |       874 MB |
+| `dl_8453_aerodrome_pairs` |   921 696 |          5 151 |       645 MB |
+| `dl_8453_uniswapv2_pairs` |   452 307 |         29 455 |       292 MB |
+
+One full consumer sweep reads ≈ 1.6 GB on Mainnet and ≈ 2.1 GB on Base
+(2 833 539 and 3 769 051 fields). At a 5-minute cadence that is ≈ 460 GB
+and ≈ 600 GB per day from a Redis Cluster, to obtain 53 461 + 35 300 pools.
+Command counts are modest (≈ 130/s during a sweep); bytes are the problem.
+
+PancakeSwapV2 (`rpc-pool-tracker.ts`) is a different case: its storage
+`dl_<network>_<dexKey>_pools` holds only real pools (≈ 250 B each), but BSC
+has 2 934 575 of them (872 MB), so a sweep there is ≈ 250 GB/day at 5
+minutes regardless of the change below.
+
+### 23.2 Options considered
+
+| option                                                                         | sweep traffic after                                                                                                                                                               | existing production `_pairs` data                                                                                                                                                |
+| ------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **A. Existing-pools-only hash** (recommended)                                  | Mainnet ≈ 18–20 MB, Base ≈ 11–12 MB per sweep                                                                                                                                     | untouched; one-off backfill copies positives into the new hash                                                                                                                   |
+| B. Per-dex sweep cadence in the consumer                                       | bytes per sweep unchanged; 5 → 30 min cuts the daily total 6×                                                                                                                     | untouched; the only lever for PancakeSwapV2 on BSC                                                                                                                               |
+| C. Slim the `_findPair` record to `{ address, decimals }` tokens               | ≈ 2–3× less, and only after a one-off rewrite of all existing fields, because positives are never rewritten and negatives may never expire                                        | 6.6 M fields would need a conditional online rewrite (compare-and-set per field, never blind `HSET` of a scanned value: it can resurrect a placeholder removed by `PairCreated`) |
+| D. Raise `POOLS_STORAGE_FLUSH_INTERVAL_MS` / slaves flush only pending         | no effect on the sweeps; ≈ 10× fewer small writes from `PoolsWriter`. Done in §24 (10 min default, 60 s for Algebra whose lazily discovered pools wait one flush to be published) | n/a; a pending-only mode needs another heartbeat or the 30-day prune removes valid pools                                                                                         |
+| E. Incremental inventory (sorted set of `(timestamp, key)`, stateful consumer) | discovery reads shrink to new descriptors only                                                                                                                                    | untouched; needs a bootstrap, durable checkpoints, deletion handling and a new discovery convention outside the `PoolsStorage` contract                                          |
+
+C was the first idea and is ranked below A because it leaves the
+placeholders in the sweep and cannot compact existing data without a
+rewrite job of its own.
+
+### 23.3 Recommended design (option A)
+
+New storage per UniswapV2/Solidly fork: `dl_<network>_<dexKey>_reserve_pools_v1`,
+`type: redis-hash`, `fieldInValue: true`, field = the same pool identifier
+as in `_pairs` (UniswapV2 lowercased; Solidly keeps dex-key case and the
+`S`/`U` suffix), value:
+
+```json
+{
+  "token0": { "address": "0x…" },
+  "token1": { "address": "0x…" },
+  "exchange": "0x…"
+}
+```
+
+plus `"stable": true|false` for Solidly. ≈ 190–205 B, no placeholders. The
+current `parsePoolReservesTarget` / `matchesKnownPool` / `getPoolReserves`
+already accept this shape, so readers need no change and both shapes can
+coexist.
+
+Code changes (`feat/pool-tracker-deprecation` or a branch off it):
+
+1. `src/dex/uniswap-v2/pool-reserves-descriptor.ts` (new): build and
+   validate the descriptor (lowercase addresses, reject zero `exchange`,
+   identical tokens, non-boolean `stable`).
+2. `uniswap-v2.ts` `_findPair`: publish the descriptor with `HSET` on a
+   positive factory result **and** on a positive Redis cache hit, before the
+   pair is installed in `this.pairs`, so a failed publication surfaces as a
+   retryable discovery error instead of being lost behind the in-memory fast
+   path. Negative results, in-memory hits and reserve sweeps write nothing.
+   Cost: one small `HSET` per pair per process, not per quote.
+3. `solidly.ts` `_findSolidlyPairs`: same for both variants in one `HMSET`;
+   the existing `.some()` short-circuit must not become the publication
+   loop. Pricing cache values and expiry semantics unchanged.
+4. `PairCreated` handler: keep the `_pairs` `HDEL` and `newlyCreatedPoolKeys`;
+   **do not** delete from the new hash — the pool stays known, the next
+   discovery upserts its descriptor. Do not publish from `addPool()` only:
+   that misses discovered-but-unpriced pools.
+5. `rpc-pool-tracker.ts`: override publication as a no-op; PancakeSwapV2
+   keeps its `_pools` storage, `fieldInValue: false`, index ids.
+6. `getPoolsStorage()` → new key, **in a separate release** (§23.4 step 6).
+7. `scripts/pool-reserves-backfill.ts` (new): standalone, Cluster-aware,
+   `HSCAN COUNT 1000` → validate → `HSETNX` into the destination; allowlist
+   of chains/dexes, dry run, rate limit, progress/completion manifest kept
+   **outside** the pool hash (a status field inside it would be scanned as a
+   descriptor). Never invoked from `initializePricing` or any restart hook.
+8. Tests: old/new descriptor compatibility, both Solidly variants, negative
+   exclusion, publication on cache hit, failed-write retry, `PairCreated`
+   interleavings, duplicate scans, newer destination value preserved.
+   Docs: §5, §8, §19 of this plan and the consumer plan/README.
+
+### 23.4 Production rollout and existing data
+
+The existing `_pairs` fields are **kept as they are**: not deleted, not
+rewritten, not renamed. They remain the pricing cache; `PairCreated`
+deletions keep working; rollback needs no data restoration.
+
+1. **Preflight.** Count positive fields per `_pairs` hash on the live
+   Redis, measure real HSCAN wire bytes (the numbers above are Redis memory,
+   not wire size), confirm write access to the new keys through the backend
+   cache. No data changes.
+2. **Release A** to every instance that prices (all write `_pairs`):
+   publishes the new hash, still advertises `_pairs`. Wait until no old
+   version is running, otherwise an old instance can discover a pair that
+   never reaches the new hash.
+3. **Backfill**, once per source hash, from the script: copies only valid
+   positives with `HSETNX`, so reruns are harmless and a descriptor already
+   published by release A is never overwritten by scanned legacy data.
+   Never touches `_pairs`. Cost for chains 1 + 8453: two full reads of the
+   source hashes (≈ 7.4 GB), ≈ 89 000 small writes, ≈ 11 min per pass at a
+   throttled 10 000 fields/s.
+4. **Progress manifest** per chain/dex: source and destination keys, schema
+   version, release-A completion, counts, validation status. Completed
+   destinations are skipped on later invocations unless a rebuild is
+   requested.
+5. **Verify** with a second source pass and batched destination lookups:
+   every valid positive present, no placeholders in the destination,
+   address conflicts reported rather than overwritten; compare
+   `getPoolReserves` ids/results through both reader versions, including
+   stable and volatile Solidly pools.
+6. **Release B**: `getPoolsStorage()` returns the new key. During the
+   rolling deploy old instances advertise `_pairs`, new ones the new hash,
+   both read both shapes. The consumer must take the storage once per sweep
+   and keep it for the whole sweep; a partially populated hash must never
+   be advertised, because the stateless consumer would publish a partial
+   sweep as complete.
+7. **Rollback** = advertise `_pairs` again; keep the new hashes; if
+   publication-capable writers are rolled back, reconcile again before
+   re-activating.
+8. **Disappearance policy** for the new hash: no pruning by age, inactivity,
+   zero reserves, one failed RPC or absence from `_pairs` (which can mean a
+   creation-triggered invalidation). A proven wrong entry is repaired
+   deliberately, not by bulk pruning. Losing the hash means re-running the
+   backfill; there is no periodic full re-publication.
+
+### 23.5 Effort and risks
+
+Medium: about two engineering days plus two deploy windows and a throttled
+production backfill.
+
+- Publication adds a Redis dependency to the discovery path of a new pair;
+  retries and error monitoring are required, a silently dropped write
+  means an incomplete inventory.
+- The change does not fix pre-existing gaps: Solidly creation tracking
+  (inherited UniswapV2 factory ABI without `stable`), cross-process
+  negative-cache races.
+- BSC PancakeSwapV2 stays at ≈ 250 GB/day at a 5-minute cadence; only a
+  longer cadence (option B, 30 min → ≈ 42 GB/day) or a consumer-side
+  inventory helps there.
+- Option D is independent and free: raise `POOLS_STORAGE_FLUSH_INTERVAL_MS`
+  from 60 s to 5–10 min; the only requirement is that `u` is refreshed well
+  within the 30-day prune horizon.
+
+## 24. Writer role — slaves only
+
+Decided 2026-09-11 with the service owner and reviewed by Codex Architect
+(gpt-6-astra, "do it with changes"). PR 3 started `PoolsWriter` on every
+instance; D11 always said storages are written by slaves, so this aligns the
+code with the plan.
+
+Why: the API (slave) prices the traffic and serves the new Hopper reserve
+endpoints, so it knows at least the pools it can answer for; Algebra pools
+in particular are created lazily while pricing. Publishing from the master
+(`paraswap-initialization-service`) duplicated the writes and coupled that
+service to the feature for no coverage gain. A dex fully delegated to the Go
+aggregator is neither initialized nor served by the API, so publishing
+nothing for it is consistent with the Hopper endpoint filter.
+
+Changes:
+
+- `EkuboV3`, `MaverickV2`, `Algebra`: `if (isSlave) poolsWriter.start()`.
+  `AlgebraIntegral`: start moved into the slave block after the first
+  `updatePoolsTvl()`. `releaseResources` unchanged.
+- `POOLS_STORAGE_FLUSH_INTERVAL_MS` 60 s → 10 min. Algebra keeps 60 s via the
+  writer option: the interval is the publication delay of newly discovered
+  pools, not only the retention heartbeat.
+- `ICache.hscan` optional; `PoolsWriter.prune` skips with a warning when the
+  cache lacks it. Only services that run the writer need it, today the API.
+
+What the writer can and cannot do to a storage (owner's question): `touch`
+upserts, an empty inventory sends no command, fields are removed only by the
+6-hourly prune of entries nobody touched for 30 days, and Maverick keeps
+its last non-empty API inventory in memory. A broken publisher goes quiet;
+it does not wipe the hash. Prune can empty a hash only if every entry is
+stale, i.e. no publisher has been alive for 30 days.
+
+Accepted trade-offs from the review:
+
+- Coverage becomes the union of pools initialized on API replicas. Pools the
+  master kept alive through `dl_poolsRegistry` replay but no slave priced
+  for 30 days drop out of the storage; they are, by construction, pools
+  nobody quoted for a month.
+- Pruning runs at most every 6 h per process and `start()` resets the clock,
+  so replicas that live less than 6 h never prune; retention is best effort.
+- There is a benign race between prune on one replica and re-touch on
+  another; the next flush repairs it. No cross-replica coordination is
+  added for that.
+- A rolling deploy needs no migration: old and new replicas upsert the same
+  fields; the master simply stops writing when upgraded.
+- Companion change in `paraswap-api`: `Cache.hscan` reading from the
+  primary, and the same dex eligibility predicate for the reserve endpoints
+  as for `listDexs`.

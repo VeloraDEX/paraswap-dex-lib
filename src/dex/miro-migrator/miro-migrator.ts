@@ -9,6 +9,7 @@ import {
   Logger,
   NumberAsString,
   DexExchangeParam,
+  PoolReserves,
 } from '../../types';
 import { SwapSide, Network, NO_USD_LIQUIDITY } from '../../constants';
 import * as CALLDATA_GAS_COST from '../../calldata-gas-cost';
@@ -23,6 +24,7 @@ import { Interface } from '@ethersproject/abi';
 import MiroMigratorAbi from '../../abi/miro-migrator/MiroMigrator.abi.json';
 import { MIRO_MIGRATION_GAS_COST } from './constants';
 import { MiroMigratorEventPool } from './miro-migrator-pool';
+import { directionalReserves } from '../../lib/pools-storage/reserves';
 
 export class MiroMigrator
   extends SimpleExchange
@@ -223,6 +225,31 @@ export class MiroMigrator
       exchangeData: swapData,
       targetExchange: this.config.migratorAddress,
     };
+  }
+
+  // One-way migration into VLR; both source tokens draw on the same VLR
+  // balance held by the migrator.
+  getPoolReserves(): PoolReserves[] {
+    if (this.eventPool.isInvalid()) return [];
+    const state = this.eventPool.getStaleState();
+    if (!state) return [];
+
+    const migrator = this.config.migratorAddress.toLowerCase();
+    const vlr = this.config.vlrTokenAddress.toLowerCase();
+    const sources = [
+      this.config.pspTokenAddress,
+      this.config.sePsp1TokenAddress,
+    ].filter(t => !!t);
+    return [
+      {
+        dex: this.dexKey,
+        id: migrator,
+        address: migrator,
+        reserves: directionalReserves(
+          sources.map(src => ({ src, dest: vlr, capacity: state.balance })),
+        ),
+      },
+    ];
   }
 
   async getTopPoolsForToken(

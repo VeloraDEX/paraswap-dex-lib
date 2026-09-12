@@ -8,6 +8,7 @@ import {
   Logger,
   DexExchangeParam,
   NumberAsString,
+  PoolReserves,
 } from '../../types';
 import { SwapSide, Network, UNLIMITED_USD_LIQUIDITY } from '../../constants';
 import * as CALLDATA_GAS_COST from '../../calldata-gas-cost';
@@ -21,6 +22,7 @@ import { Interface } from '@ethersproject/abi';
 import UsdcTransmuterAbi from '../../abi/usdc-transmuter/usdc-transmuter.abi.json';
 import { BI_POWS } from '../../bigint-constants';
 import { USDC_TRANSMUTER_GAS_COST } from './constants';
+import { unlimitedReserves } from '../../lib/pools-storage/reserves';
 
 export class UsdcTransmuter
   extends SimpleExchange
@@ -162,6 +164,21 @@ export class UsdcTransmuter
       exchangeData: swapData,
       targetExchange: this.config.usdcTransmuterAddress,
     };
+  }
+
+  getPoolReserves(): PoolReserves[] {
+    const pool = this.config.usdcTransmuterAddress.toLowerCase();
+    return [
+      {
+        dex: this.dexKey,
+        id: pool,
+        address: pool,
+        reserves: unlimitedReserves([
+          this.config.usdcToken.address,
+          this.config.usdceToken.address,
+        ]),
+      },
+    ];
   }
 
   async getTopPoolsForToken(

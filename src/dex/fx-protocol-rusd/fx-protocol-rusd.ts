@@ -8,6 +8,7 @@ import {
   NumberAsString,
   DexExchangeParam,
   PoolLiquidity,
+  PoolReserves,
 } from '../../types';
 import { SwapSide, Network, UNLIMITED_USD_LIQUIDITY } from '../../constants';
 import * as CALLDATA_GAS_COST from '../../calldata-gas-cost';
@@ -26,6 +27,7 @@ import { extractReturnAmountPosition } from '../../executor/utils';
 import { FxProtocolRusdEvent } from './fx-protocol-rusd-event';
 import { BI_POWS } from '../../bigint-constants';
 import { getOnChainState } from './utils';
+import { unlimitedReserves } from '../../lib/pools-storage/reserves';
 
 export class FxProtocolRusd
   extends SimpleExchange
@@ -248,6 +250,21 @@ export class FxProtocolRusd
       };
     }
     throw new Error('LOGIC ERROR');
+  }
+
+  // weETH <-> rUSD mint and redeem, SELL only, no cap tracked.
+  getPoolReserves(): PoolReserves[] {
+    return [
+      {
+        dex: this.dexKey,
+        id: this.config.rUSDAddress,
+        address: this.config.rUSDAddress,
+        reserves: unlimitedReserves([
+          this.config.weETHAddress,
+          this.config.rUSDAddress,
+        ]),
+      },
+    ];
   }
 
   // Returns list of top pools based on liquidity. Max

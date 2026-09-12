@@ -9,8 +9,14 @@ import {
   NumberAsString,
   DexExchangeParam,
   GetDexParamOptions,
+  PoolReserves,
 } from '../../types';
-import { SwapSide, Network, UNLIMITED_USD_LIQUIDITY } from '../../constants';
+import {
+  SwapSide,
+  Network,
+  UNLIMITED_USD_LIQUIDITY,
+  UNLIMITED_RESERVES,
+} from '../../constants';
 import * as CALLDATA_GAS_COST from '../../calldata-gas-cost';
 import { getDexKeysWithNetwork } from '../../utils';
 import { IDex } from '../../dex/idex';
@@ -33,6 +39,7 @@ import { BI_POWS } from '../../bigint-constants';
 import { Interface } from '@ethersproject/abi';
 import CapTokenAbi from '../../abi/cap/CapToken.json';
 import { extractReturnAmountPosition } from '../../executor/utils';
+import { directionalReserves } from '../../lib/pools-storage/reserves';
 
 const RAY_PRECISION = 10n ** 27n;
 
@@ -237,6 +244,36 @@ export class Cap extends SimpleExchange implements IDex<CapData> {
         'amountOut',
       ),
     };
+  }
+
+  // One pool per (vault, asset): minting has no cap, burning pays out of the
+  // vault's supply of that asset. SELL only, but both directions exist.
+  getPoolReserves(): PoolReserves[] {
+    if (this.eventPools.isInvalid()) return [];
+    const states = this.eventPools.getStaleState();
+    if (!states) return [];
+
+    return Object.values(this.configs).flatMap(config => {
+      const vault = config.vault.address.toLowerCase();
+      const vaultState = states[vault];
+      if (!vaultState) return [];
+      return Object.values(config.assets).flatMap(assetToken => {
+        const asset = assetToken.address.toLowerCase();
+        const supply = vaultState.assetSupply[asset];
+        if (supply === undefined) return [];
+        return [
+          {
+            dex: this.dexKey,
+            id: `${vault}_${asset}`,
+            address: vault,
+            reserves: directionalReserves([
+              { src: asset, dest: vault, capacity: UNLIMITED_RESERVES },
+              { src: vault, dest: asset, capacity: supply },
+            ]),
+          },
+        ];
+      });
+    });
   }
 
   // Returns list of top pools based on liquidity. Max
