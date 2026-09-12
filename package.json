@@ -35,6 +35,7 @@
     "eslint-plugin-import": "^2.26.0",
     "express": "^4.18.2",
     "husky": "^8.0.2",
+    "ioredis": "^6.0.0",
     "jest": "^30.2.0",
     "prettier": "^2.8.1",
     "pretty-quick": "^3.1.3",
@@ -46,6 +47,7 @@
   "scripts": {
     "init-integration": "ts-node scripts/dex-integration.ts init",
     "test-integration": "ts-node scripts/dex-integration.ts test",
+    "pool-reserves-server": "TS_NODE_PREFER_TS_EXTS=true ts-node -T scripts/pool-reserves-server/server/index.ts",
     "build": "pnpm run check:pq && pnpm run check:es && tsc",
     "watch": "tsc -w",
     "test": "jest",
