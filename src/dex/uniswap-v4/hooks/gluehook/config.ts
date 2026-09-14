@@ -2,10 +2,10 @@ import { HookConfig } from '../types';
 import { HookParams } from './types';
 import { Network } from '../../../../constants';
 
-// GlueHook is deployed via CREATE from a nonce-0 deployer, so it lives at the SAME
+// GlueHook V3 — deployed via CREATE from a nonce-0 deployer, so it lives at the SAME
 // address on every chain (also live on X Layer, World Chain, Soneium, MegaETH and
-// Robinhood beyond the networks configured here).
-const GLUEHOOK_ADDRESS = '0x0f41715dc432692b66a5adf8dcfef6ac407b20c8';
+// Robinhood beyond the networks configured here). Permission bits 0x2040.
+const GLUEHOOK_ADDRESS = '0xbb021554c5294328b04fa313669715bd201ba040';
 
 export const GlueHookConfig: HookConfig<HookParams> = {
   [Network.MAINNET]: { hookAddress: GLUEHOOK_ADDRESS },

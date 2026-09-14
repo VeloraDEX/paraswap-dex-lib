@@ -12,13 +12,13 @@ import {
 
 /**
  * GlueHook (https://gluehook.trade) — a free, keyless, general-purpose hook that gives a
- * pool a permissionless buyback pot (it buys after buys and can absorb sells) plus a
- * self-compounding LP position owned by the hook itself.
+ * pool a permissionless buyback pot (it buys main behind every swap, in both directions,
+ * with the pot's own balance) plus a self-compounding LP position owned by the hook itself.
  *
  * Quoting is a pure passthrough — the hook NEVER changes the swapper's amounts:
- *  - Pump executes after the swap, spending the pot's own balance;
- *  - Shield absorbs a sell while paying the seller the pool's EXACT output
- *    (fee and tick impact included), so the quoted output is identical either way;
+ *  - the hook has no `beforeSwap` and returns no delta, so the swapper's trade is the
+ *    pool's plain execution;
+ *  - the pump is the hook's own swap in `afterSwap`, run through a try/catch self-call;
  *  - auto-harvest / compound only moves the hook's own LP fees.
  *
  * Every hook action on-chain is wrapped in try/catch — a swap can never revert on hook
@@ -49,7 +49,7 @@ export class GlueHook implements IBaseHook {
   }
 
   getHookPermissions(): HooksPermissions {
-    // mirrors the on-chain flag bitmask 0x20C8
+    // mirrors the on-chain flag bitmask 0x2040 (beforeInitialize | afterSwap)
     return {
       beforeInitialize: true,
       afterInitialize: false,
@@ -57,11 +57,11 @@ export class GlueHook implements IBaseHook {
       afterAddLiquidity: false,
       beforeRemoveLiquidity: false,
       afterRemoveLiquidity: false,
-      beforeSwap: true,
+      beforeSwap: false,
       afterSwap: true,
       beforeDonate: false,
       afterDonate: false,
-      beforeSwapReturnDelta: true,
+      beforeSwapReturnDelta: false,
       afterSwapReturnDelta: false,
       afterAddLiquidityReturnDelta: false,
       afterRemoveLiquidityReturnDelta: false,
