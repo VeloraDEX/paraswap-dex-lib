@@ -5,7 +5,7 @@ dotenv.config();
 process.env.API_KEY_NATIVE = process.env.API_KEY_NATIVE || 'test-native-key';
 
 import { DummyDexHelper } from '../../dex-helper';
-import { Network, SwapSide, CACHE_PREFIX } from '../../constants';
+import { Network, SwapSide } from '../../constants';
 import { Native } from './native';
 import { Tokens } from '../../../tests/constants-e2e';
 import { BI_POWS } from '../../bigint-constants';
@@ -19,8 +19,6 @@ describe('Native Integration (unit cache based)', () => {
 
   const weth = tokens.WETH;
   const usdc = tokens.USDC;
-
-  const orderbookCacheKey = `${CACHE_PREFIX}_${network}_${dexKey}_orderbook`;
 
   beforeAll(async () => {
     const mockOrderbook = [
@@ -39,10 +37,12 @@ describe('Native Integration (unit cache based)', () => {
       },
     ];
 
-    await dexHelper.cache.rawset(
-      orderbookCacheKey,
-      JSON.stringify(mockOrderbook),
+    await dexHelper.cache.setex(
+      dexKey,
+      network,
+      'orderbook',
       60,
+      JSON.stringify(mockOrderbook),
     );
   });
 
@@ -137,15 +137,13 @@ describe('Native Integration (unit cache based)', () => {
 
     // Mock WETH price at $3200 USD per token
     const wethPriceUsd = 3200;
-    dexHelper.getTokenUSDPrice = async (token, amount) => {
-      if (token.address.toLowerCase() === weth.address.toLowerCase()) {
-        // Return USD value: for 1 WETH (10^18 wei), return $3200
-        const normalizedAmount = Number(amount / BigInt(10 ** token.decimals));
-        return normalizedAmount * wethPriceUsd;
-      }
-      // Default behavior for other tokens
-      return Number(amount / BigInt(10 ** token.decimals));
-    };
+    dexHelper.getUsdTokenAmounts = async tokenAmounts =>
+      tokenAmounts.map(([token, amount]) => {
+        const isWeth = token.toLowerCase() === weth.address.toLowerCase();
+        const decimals = isWeth ? weth.decimals : usdc.decimals;
+        const usdPrice = isWeth ? wethPriceUsd : 1;
+        return Number(amount! / BigInt(10 ** decimals)) * usdPrice;
+      });
 
     const pools = await native.getTopPoolsForToken(weth.address, 10);
 
