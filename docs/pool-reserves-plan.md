@@ -129,9 +129,12 @@ SolidlyV3 1.0, BalancerV1 0.2, Camelot (v2) 0.1, MaverickV1 0.
 - Existing Redis pool lists:
   - `UniswapV2` (and Solidly + all Solidly forks, which reuse it): hash
     `${CACHE_PREFIX}_${network}_${dexKey}_pairs`, field = pool identifier,
-    value = `{ token0, token1, exchange, checkExistenceAfter }`, `exchange`
-    is the pair address or `null` (`src/dex/uniswap-v2/uniswap-v2.ts:291`,
-    `src/dex/solidly/solidly.ts:201,276`). Written by every instance.
+    value = `UniswapV2PairCacheRecord { exchange?, checkExistenceAfter }`,
+    `exchange` absent for a pair that does not exist (`uniswap-v2.ts:176`,
+    written in `uniswap-v2.ts:575`, `solidly.ts:281`). Written by every
+    instance. The tokens live in the field only — they were dropped from the
+    value by `perf: store only exchange and expiry in uniswap-v2 pairs cache`,
+    since placeholder records dominate these hashes.
   - `UniswapV2RpcPoolTracker` (PancakeSwapV2): hash
     `${CACHE_PREFIX}_${network}_${dexKey}_pools`, field = factory index,
     value = `CachedPool { address, updatedAt, token0, token1 }` — **no
@@ -245,20 +248,24 @@ Consumer flow:
 
 ### PR 2 — UniswapV2 + Solidly families (mode A, ~25 keys)
 
-Storage: existing `_pairs` hash, `fieldInValue: true` (field is the
-pool identifier derived from `token0`/`token1`). Solidly and all Solidly forks
+Storage: existing `_pairs` hash, `fieldInValue: false` — the trimmed value
+holds only `exchange` and the recheck expiry, so the pair is read back from
+the hash field (the consumer wraps each entry as `{ i: field, ...value }`).
+`parsePoolIdentifier` inverts `getPoolIdentifier`: the two token segments are
+taken from the end, so a dexKey containing `_` still parses, and the remaining
+prefix must match the instance's own key. Solidly and all Solidly forks
 inherit the storage but **override id derivation**: `Solidly.getPoolIdentifier`
-(`src/dex/solidly/solidly.ts:714`) takes `(token0, token1, stable)` and the
-hash field embeds the flag, so the descriptor's `stable` must be passed
-through or a stable pool would resolve to the volatile pool's id and state.
+takes `(token0, token1, stable)` and appends `poolPostfix`, so `stable` is
+recovered from that suffix (`parsePoolPostfix`) — otherwise a stable pool
+would resolve to the volatile pool's id and state.
 For the Solidly RPC-tracker forks this storage contains only pairs that were
 priced at least once; accepted (their volume is negligible).
 
 `getPoolReserves(descs)` in `src/dex/uniswap-v2/uniswap-v2.ts`:
 
-1. Parse; skip `exchange == null`; `id` = `this.getPoolIdentifier(...)` with
-   the descriptor's fields (UniswapV2: `token0`, `token1`; Solidly: plus
-   `stable`).
+1. Parse the field into a pair; skip `exchange == null`; `id` =
+   `this.getPoolIdentifier(...)` (UniswapV2: `token0`, `token1`; Solidly: plus
+   the `stable` flag recovered from the postfix).
 2. Hit: `this.pairs[key]?.pool` exists and `!isInvalid()` → `getStaleState()`
    → `reserves0/reserves1`.
 3. Miss: `multicallBalances` on `pair.getReserves()`; failures skipped.
@@ -335,13 +342,16 @@ supported swap directions, with each adapter's table row as the spec.
 - JSON object, short keys: `a` = pool address, `t`/`t0`/`t1`/`tA`/`tB` =
   token addresses, `k` = protocol pool key string (Ekubo), `u` = last-seen ms
   (writer-managed storages only). Addresses lowercase. Nothing else.
-- Each descriptor lets the dex recompute its hash field (`id`) without a
-  Redis read; when it cannot (PancakeSwapV2's index-keyed `_pools`),
+- Where a descriptor lets the dex recompute its hash field (`id`) without a
+  Redis read, `fieldInValue: true`; when it cannot — PancakeSwapV2's
+  index-keyed `_pools`, and the UniswapV2/Solidly `_pairs` hashes since their
+  values were trimmed to `{ exchange, checkExistenceAfter }` —
   `fieldInValue: false` tells the consumer to wrap `{ i: field, ...value }`.
 - An incompatible descriptor change is published under a new Redis key (e.g.
   `_pools_v2`); the old key is left to expire with its writers. Descriptors
   that do not parse are skipped.
-- Existing structures (`_pairs`, `_pools`) keep their current value shape.
+- Existing structures (`_pairs`, `_pools`) keep their current value shape;
+  the reserves API adapts to it rather than adding fields for its own sake.
 
 ## 9. Risks & accepted trade-offs
 
@@ -714,10 +724,14 @@ as in `_pairs` (UniswapV2 lowercased; Solidly keeps dex-key case and the
 }
 ```
 
-plus `"stable": true|false` for Solidly. ≈ 190–205 B, no placeholders. The
-current `parsePoolReservesTarget` / `matchesKnownPool` / `getPoolReserves`
-already accept this shape, so readers need no change and both shapes can
-coexist.
+plus `"stable": true|false` for Solidly. ≈ 190–205 B, no placeholders. Since
+`_pairs` values were trimmed, `parsePoolReservesTarget` reads the pair from
+the hash field, so this shape needs a reader of its own: it can call
+`buildPoolReservesTarget(token0, token1, exchange)`, which is the
+field-independent half of the current parse and already feeds
+`matchesKnownPool` / `getPoolReserves` unchanged. Alternatively drop the
+tokens here too and keep `fieldInValue: false`, since this hash's field is
+the same pool identifier.
 
 Code changes (`feat/pool-tracker-deprecation` or a branch off it):
 

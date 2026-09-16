@@ -570,11 +570,11 @@ export class UniswapV2RpcPoolTracker extends UniswapV2 {
     ) {
       return null;
     }
-    const target = super.parsePoolReservesTarget({
-      token0: pool?.token0,
-      token1: pool?.token1,
-      exchange: pool?.address,
-    });
+    const target = this.buildPoolReservesTarget(
+      pool?.token0?.address,
+      pool?.token1?.address,
+      pool?.address,
+    );
     return target && { ...target, id: String(index) };
   }
 

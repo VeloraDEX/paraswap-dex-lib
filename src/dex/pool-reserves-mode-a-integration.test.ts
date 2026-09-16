@@ -26,6 +26,13 @@ async function storedDescriptors(
   return dexHelper.cache.hgetAll(key);
 }
 
+// the `_pairs` value alone does not identify the pair, so the consumer sends
+// `{ i: field, ...value }`
+const withField = (stored: Record<string, string>) =>
+  Object.entries(stored).map(([i, value]) =>
+    JSON.stringify({ i, ...JSON.parse(value) }),
+  );
+
 describe('pool reserves: storage mode (UniswapV2 / Solidly)', () => {
   it('UniswapV2: event-state hit and RPC miss from _pairs descriptors', async () => {
     const network = Network.MAINNET;
@@ -49,11 +56,12 @@ describe('pool reserves: storage mode (UniswapV2 / Solidly)', () => {
     await dex.findPair(WETH, DAI);
 
     const storage = dex.getPoolsStorage();
+    expect(storage.fieldInValue).toBeFalsy();
     const stored = await storedDescriptors(dexHelper, storage.key);
     const fields = Object.keys(stored);
     expect(fields).toHaveLength(2);
 
-    const reserves = await dex.getPoolReserves(Object.values(stored));
+    const reserves = await dex.getPoolReserves(withField(stored));
     expectPoolReserves(reserves, dexKey);
     expect(reserves).toHaveLength(2);
     expect(new Set(reserves.map(r => r.id))).toEqual(new Set(fields));
@@ -82,7 +90,7 @@ describe('pool reserves: storage mode (UniswapV2 / Solidly)', () => {
       dexHelper,
       dex.getPoolsStorage().key,
     );
-    const reserves = await dex.getPoolReserves(Object.values(stored));
+    const reserves = await dex.getPoolReserves(withField(stored));
     expectPoolReserves(reserves, dexKey);
     expect(reserves).toHaveLength(existing.length);
 

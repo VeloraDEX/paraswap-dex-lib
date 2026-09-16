@@ -35,6 +35,11 @@ import { NumberAsString, SwapSide } from '@paraswap/core';
 import { Interface, AbiCoder } from '@ethersproject/abi';
 import { SolidlyStablePool } from '../solidly/solidly-stable-pool';
 import { Uniswapv2ConstantProductPool } from '../uniswap-v2/uniswap-v2-constant-product-pool';
+import {
+  isPairCacheRecordFresh,
+  parsePairCacheRecord,
+  UniswapV2PairCacheRecord,
+} from '../uniswap-v2/uniswap-v2';
 import { CamelotPoolState, CamelotPoolOrderedParams } from './types';
 import { CamelotConfig, Adapters } from './config';
 import { Contract } from 'web3-eth-contract';
@@ -430,21 +435,17 @@ export class Camelot
     token0: Token,
     token1: Token,
   ): Promise<CamelotPair | null> {
-    const cachedPairRaw = await this.dexHelper.cache.hget(
-      this.pairsHashCacheKey,
-      key,
+    const cachedRecord = parsePairCacheRecord(
+      await this.dexHelper.cache.hget(this.pairsHashCacheKey, key),
     );
 
-    const cachedPair = cachedPairRaw
-      ? (JSON.parse(cachedPairRaw) as CamelotPair)
-      : null;
-
-    if (
-      cachedPair &&
-      (cachedPair.exchange ||
-        (cachedPair.checkExistenceAfter &&
-          cachedPair.checkExistenceAfter > Date.now()))
-    ) {
+    if (cachedRecord && isPairCacheRecordFresh(cachedRecord)) {
+      const cachedPair: CamelotPair = {
+        token0,
+        token1,
+        ...(cachedRecord.exchange ? { exchange: cachedRecord.exchange } : {}),
+        checkExistenceAfter: cachedRecord.checkExistenceAfter,
+      };
       this.pairs[key] = cachedPair;
       return cachedPair;
     }
@@ -468,14 +469,15 @@ export class Camelot
       return null;
     }
 
+    const record: UniswapV2PairCacheRecord = {
+      ...(pair.exchange ? { exchange: pair.exchange } : {}),
+      checkExistenceAfter: Date.now() + CAMELOT_RECHECK_PAIR_EXISTENCE_AFTER_MS,
+    };
+
     await this.dexHelper.cache.hset(
       this.pairsHashCacheKey,
       key,
-      JSON.stringify({
-        ...pair,
-        checkExistenceAfter:
-          Date.now() + CAMELOT_RECHECK_PAIR_EXISTENCE_AFTER_MS,
-      }),
+      JSON.stringify(record),
     );
 
     this.pairs[key] = pair;

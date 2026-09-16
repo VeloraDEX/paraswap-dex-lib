@@ -51,18 +51,18 @@ const fakeMultiWrapper = (
 };
 
 const desc = (fields: object) => JSON.stringify(fields);
-const pairDesc = (token0: string, token1: string, exchange?: string) =>
-  desc({
-    token0: { address: token0, decimals: 18 },
-    token1: { address: token1, decimals: 18 },
-    exchange,
-    checkExistenceAfter: 1,
-  });
 
 describe('pool reserves fixtures: UniswapV2 storage mode', () => {
   const tryAggregate = jest.fn();
   const dexKey = 'UniswapV2';
   const key = (t0: string, t1: string) => `${dexKey}_${t0}_${t1}`.toLowerCase();
+
+  // the consumer wraps each hash entry as `{ i: field, ...value }`; the stored
+  // record itself carries only `exchange` and the negative-record expiry
+  const idDesc = (i: string, exchange?: string) =>
+    desc({ i, exchange, checkExistenceAfter: 1 });
+  const pairDesc = (token0: string, token1: string, exchange?: string) =>
+    idDesc(key(token0, token1), exchange);
 
   const uni = (pairs: object, onChain: Record<string, [bigint, bigint]> = {}) =>
     build(UniswapV2, {
@@ -74,11 +74,11 @@ describe('pool reserves fixtures: UniswapV2 storage mode', () => {
 
   beforeEach(() => tryAggregate.mockReset());
 
-  it('publishes the _pairs hash with the field derivable from the value', () => {
+  it('publishes the _pairs hash, whose field carries the token pair', () => {
     expect(uni({}).getPoolsStorage()).toEqual({
       key: 'dexlib_1_uniswapv2_pairs',
       type: PoolsStorageType.RedisHash,
-      fieldInValue: true,
+      fieldInValue: false,
     });
   });
 
@@ -142,12 +142,10 @@ describe('pool reserves fixtures: UniswapV2 storage mode', () => {
       'not json',
       'null',
       '42',
-      desc({
-        token0: { address: 'weth' },
-        token1: { address: B },
-        exchange: POOL,
-      }),
-      desc({ token0: { address: A }, token1: { address: A }, exchange: POOL }),
+      desc({ exchange: POOL, checkExistenceAfter: 1 }),
+      idDesc(`${dexKey}_weth_${B}`.toLowerCase(), POOL),
+      idDesc(`OtherDex_${A}_${B}`.toLowerCase(), POOL),
+      pairDesc(A, A, POOL),
       pairDesc(A, B, POOL),
       pairDesc(B, A, POOL),
     ]);
@@ -166,7 +164,7 @@ describe('pool reserves fixtures: UniswapV2 storage mode', () => {
       { [POOL2]: [30n, 40n] },
     );
     const reserves = await dex.getPoolReserves([
-      pairDesc(mixedCase(B), mixedCase(A), POOL),
+      idDesc(`${dexKey}_${mixedCase(B)}_${mixedCase(A)}`, POOL),
       pairDesc(C, A, POOL2),
     ]);
     expectPoolReserves(reserves, dexKey);
@@ -222,12 +220,14 @@ describe('pool reserves fixtures: Solidly storage mode', () => {
   // Solidly keeps the dexKey case in its identifiers
   const key = (t0: string, t1: string, stable: boolean) =>
     `${dexKey}_${t0.toLowerCase()}_${t1.toLowerCase()}${stable ? 'S' : 'U'}`;
+  // an identifier without the postfix cannot be mapped to a pool
   const solidlyDesc = (exchange: string, stable?: boolean) =>
     desc({
-      token0: { address: A, decimals: 18 },
-      token1: { address: B, decimals: 6 },
+      i:
+        stable === undefined
+          ? `${dexKey}_${A}_${B}`.toLowerCase()
+          : key(A, B, stable),
       exchange,
-      stable,
     });
 
   beforeEach(() => tryAggregate.mockReset());

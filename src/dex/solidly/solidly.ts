@@ -1,4 +1,11 @@
-import { UniswapV2, UniswapV2ReservesTarget } from '../uniswap-v2/uniswap-v2';
+import {
+  isPairCacheRecordFresh,
+  pairFromCacheRecord,
+  parsePairCacheRecord,
+  UniswapV2,
+  UniswapV2PairCacheRecord,
+  UniswapV2ReservesTarget,
+} from '../uniswap-v2/uniswap-v2';
 import {
   Network,
   NULL_ADDRESS,
@@ -198,34 +205,31 @@ export class Solidly extends UniswapV2 {
     pairKeys: string[],
     pairs: SolidlyPair[],
   ): Promise<SolidlyPair[]> {
-    const cachedPairsRaw = await this.dexHelper.cache.hmget(
+    const cachedRecordsRaw = await this.dexHelper.cache.hmget(
       this.pairsHashCacheKey,
       pairKeys,
     );
 
-    const cachedPairs = cachedPairsRaw.map(p =>
-      p ? (JSON.parse(p) as SolidlyPair) : null,
-    );
+    const cachedRecords = cachedRecordsRaw.map(parsePairCacheRecord);
 
-    const shouldFetchFromRpc = cachedPairs.some(
-      (cachedPair, i): cachedPair is SolidlyPair => {
-        if (
-          cachedPair &&
-          (cachedPair.exchange ||
-            (cachedPair.checkExistenceAfter &&
-              cachedPair.checkExistenceAfter > Date.now()))
-        ) {
-          // prevent wiping initialized pool
-          if (!pairs[i]?.pool) {
-            pairs[i] = cachedPair;
-            this.pairs[pairKeys[i]] = cachedPair;
-          }
-          return false;
+    const shouldFetchFromRpc = cachedRecords.some((cachedRecord, i) => {
+      if (cachedRecord && isPairCacheRecordFresh(cachedRecord)) {
+        // prevent wiping initialized pool
+        if (!pairs[i]?.pool) {
+          // token0/token1/stable are known by the caller, only `exchange` and
+          // `checkExistenceAfter` are kept in the cache
+          const cachedPair: SolidlyPair = {
+            ...pairFromCacheRecord(token0, token1, cachedRecord),
+            stable: stableValues[i],
+          };
+          pairs[i] = cachedPair;
+          this.pairs[pairKeys[i]] = cachedPair;
         }
+        return false;
+      }
 
-        return true;
-      },
-    );
+      return true;
+    });
 
     if (!shouldFetchFromRpc) return pairs;
 
@@ -276,7 +280,16 @@ export class Solidly extends UniswapV2 {
     await this.dexHelper.cache.hmset(
       this.pairsHashCacheKey,
       Object.fromEntries(
-        pairsToCache.map(([key, pair]) => [key, JSON.stringify(pair)]),
+        pairsToCache.map(([key, pair]) => {
+          const record: UniswapV2PairCacheRecord = {
+            ...(pair.exchange ? { exchange: pair.exchange } : {}),
+            checkExistenceAfter:
+              pair.checkExistenceAfter ??
+              Date.now() + SOLIDLY_RECHECK_PAIR_EXISTENCE_AFTER_MS,
+          };
+
+          return [key, JSON.stringify(record)];
+        }),
       ),
     );
 
@@ -540,16 +553,45 @@ export class Solidly extends UniswapV2 {
     }
   }
 
-  // The `_pairs` field embeds the `stable` flag, so a descriptor without it
-  // cannot be mapped to a pool.
+  // Inverse of `poolPostfix`: recovers the `stable` flag a pool identifier was
+  // built with, along with the pair identifier it was appended to.
+  protected parsePoolPostfix(
+    identifier: string,
+  ): { stable: boolean; pairIdentifier: string } | null {
+    for (const stable of [false, true]) {
+      const postfix = this.poolPostfix(stable);
+      if (postfix && identifier.endsWith(postfix)) {
+        return {
+          stable,
+          pairIdentifier: identifier.slice(0, -postfix.length),
+        };
+      }
+    }
+    return null;
+  }
+
+  // A pool identifier embeds the `stable` flag, so one that does not carry a
+  // postfix cannot be mapped to a pool.
   protected parsePoolReservesTarget(
     descriptor: unknown,
   ): UniswapV2ReservesTarget | null {
-    const stable = (descriptor as Partial<SolidlyPair> | null)?.stable;
-    if (typeof stable !== 'boolean') return null;
-    const target = super.parsePoolReservesTarget(descriptor);
+    const identifier = (descriptor as { i?: unknown } | null)?.i;
+    if (typeof identifier !== 'string') return null;
+
+    const parsed = this.parsePoolPostfix(identifier);
+    if (!parsed) return null;
+
+    const target = super.parsePoolReservesTarget({
+      ...(descriptor as object),
+      i: parsed.pairIdentifier,
+    });
     if (!target) return null;
-    const key = this.getPoolIdentifier(target.token0, target.token1, stable);
+
+    const key = this.getPoolIdentifier(
+      target.token0,
+      target.token1,
+      parsed.stable,
+    );
     return { ...target, id: key, key };
   }
 
