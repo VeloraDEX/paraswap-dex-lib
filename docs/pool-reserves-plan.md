@@ -942,18 +942,24 @@ long-lived liquid pools.
 Measured on staging BSC (2026-09-17, `5.1.18-pt-deprecation.1`, same
 3 032 batches, forced run right after the previous one):
 
-|                                  | before (14:07Z) | after (15:06Z)                              |
-| -------------------------------- | --------------- | ------------------------------------------- |
-| run                              | 16m50s          | 5m55s                                       |
-| pools read over RPC              | 3 031 014       | 894 183 (2 137 774 skipped, 70 %)           |
-| API time / batch                 | 0.96 s          | 0.33 s                                      |
-| slowest batch                    | 2.7 s           | 0.8 s                                       |
-| received from API                | 670 MB          | 188 MB                                      |
-| pools written                    | 40 039          | 32 133 (the rest kept their previous value) |
-| Redis replica read / sent to API | 714 MB / 741 MB | unchanged                                   |
+|                                  | no skip (14:07Z) | 180 days (15:06Z)      | 90 days (16:30Z, `.2`)                      |
+| -------------------------------- | ---------------- | ---------------------- | ------------------------------------------- |
+| run                              | 16m50s           | 5m55s                  | 3m59s                                       |
+| pools read over RPC              | 3 031 014        | 894 183 (70 % skipped) | 737 237 (76 % skipped)                      |
+| API time / batch                 | 0.96 s           | 0.33 s                 | 0.23 s                                      |
+| slowest batch                    | 2.7 s            | 0.8 s                  | 0.6 s                                       |
+| received from API                | 670 MB           | 188 MB                 | 152 MB                                      |
+| pools written                    | 40 039           | 32 133                 | 30 870 (the rest kept their previous value) |
+| Redis replica read / sent to API | 714 MB / 741 MB  | unchanged              | unchanged                                   |
 
-The remaining 6 minutes are the 894 k pools that traded in the last 180
-days plus the unchanged sweep bytes (the skip is API-side; the consumer
+The 90-day run also carries the consumer's descriptor-splice change
+(go-route-advisor `7f795bb`), which halved the consumer's allocation; its
+peak stayed at ≈ 800 MB heap / 830 MB system on the 1 GB task in both the
+5m42s and the 3m59s runs, so the peak is now GC pacing rather than sweep
+speed.
+
+The remaining minutes are the pools that traded inside the cutoff plus
+the unchanged sweep bytes (the skip is API-side; the consumer
 still ships every descriptor). A first sample of 3 002 fields in HSCAN
 order had suggested 87 % idle; the full index is 70 %. Consumer peak memory
 was 968 MB system / 933 MB heap against a 1 024 MB task, higher than the
