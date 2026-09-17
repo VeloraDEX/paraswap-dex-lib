@@ -591,9 +591,11 @@ export class UniswapV2RpcPoolTracker extends UniswapV2 {
   // (`getCachedPools`, VALID_POOLS_AGE): a pool whose last reserve change is
   // older than 180 days is not read over RPC. `updatedAt` is the pair's
   // `blockTimestampLast`, so unchanged means the reserves have not moved
-  // either, and the consumer's previous value (if any) is still exact. A pool
-  // that trades again is picked up once the master's daily age sweep rewrites
-  // its `updatedAt`. A descriptor without a usable `updatedAt` is read. Pools
+  // either, and the consumer's previous value (if any) is still exact. Note
+  // the master's daily age sweep only re-reads pools it still holds in memory,
+  // i.e. those that were fresh when it loaded them, so a pool that crossed the
+  // threshold is not re-aged if it trades again: it stays out of pricing and
+  // out of this sweep alike. A descriptor without a usable `updatedAt` is read. Pools
   // with event state or polled reserves never reach this check. On staging
   // BSC this skipped 70 % of PancakeSwapV2's 3 M-pool factory index and cut
   // the sweep from 16m50s to 5m55s (2026-09-17).

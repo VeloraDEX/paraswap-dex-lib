@@ -919,8 +919,22 @@ What the PR 2 review objected to and how this differs (§20, finding 4):
   so a storage that stops carrying the field falls back to the old
   behaviour instead of skipping everything.
 
-Latency: a revived pool is read again on the first sweep after the master's
-next age sweep, ≤ 24 h + the 12 h cadence.
+Revived pools: the master's daily `updatePoolsAge` re-reads only the pools
+it holds in memory, and `getCachedPools` loads only those under the age
+limit, so a pool whose `updatedAt` has crossed 180 days is never re-aged,
+even if it trades again. It stays out of the tracker's pricing and, with
+this rule, out of the reserve sweep too; the consumer keeps its last
+written value. This is pre-existing tracker behaviour, not introduced here,
+but it means the skip is one-way for a given pool until the index is
+rebuilt.
+
+What "fresh" means in practice (staging sample of 6 003 fields,
+2026-09-17): 79 % of the pools under the age limit have a factory index in
+the newest 900 k, i.e. they were created in roughly the last six months,
+and 41 % of them last changed reserves 3–6 months ago. Of the 894 k pools
+read, 31.9 k had a side above the consumer's $1 000 threshold. The
+"active" set is mostly recently launched tokens that traded briefly, not
+long-lived liquid pools.
 
 Measured on staging BSC (2026-09-17, `5.1.18-pt-deprecation.1`, same
 3 032 batches, forced run right after the previous one):
