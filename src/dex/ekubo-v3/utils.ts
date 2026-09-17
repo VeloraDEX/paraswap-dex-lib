@@ -17,8 +17,10 @@ import {
   BOOSTED_FEES_DATA_FETCHER_ADDRESS,
   CORE_ADDRESS,
   QUOTE_DATA_FETCHER_ADDRESS,
-  TWAMM_ADDRESS,
-  TWAMM_DATA_FETCHER_ADDRESS,
+  TWAMM_V2_ADDRESS,
+  TWAMM_V1_ADDRESS,
+  TWAMM_V1_DATA_FETCHER_ADDRESS,
+  TWAMM_V2_DATA_FETCHER_ADDRESS,
 } from './config';
 
 export const NATIVE_TOKEN_ADDRESS = 0x0000000000000000000000000000000000000000n;
@@ -56,13 +58,23 @@ export function ekuboContracts(provider: Provider): EkuboContracts {
       ),
     },
     twamm: {
-      contract: new Contract(TWAMM_ADDRESS, TwammABI, provider),
+      v1: {
+        address: TWAMM_V1_ADDRESS,
+        quoteDataFetcher: new Contract(
+          TWAMM_V1_DATA_FETCHER_ADDRESS,
+          TwammDataFetcherABI,
+          provider,
+        ),
+      },
+      v2: {
+        address: TWAMM_V2_ADDRESS,
+        quoteDataFetcher: new Contract(
+          TWAMM_V2_DATA_FETCHER_ADDRESS,
+          TwammDataFetcherABI,
+          provider,
+        ),
+      },
       interface: new Interface(TwammABI),
-      quoteDataFetcher: new Contract(
-        TWAMM_DATA_FETCHER_ADDRESS,
-        TwammDataFetcherABI,
-        provider,
-      ),
     },
     boostedFees: {
       contract: new Contract(

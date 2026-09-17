@@ -14,7 +14,8 @@ import {
   DEX_KEY,
   EKUBO_V3_CONFIG,
   EkuboSupportedNetwork,
-  TWAMM_ADDRESS,
+  TWAMM_V1_ADDRESS,
+  TWAMM_V2_ADDRESS,
 } from './config';
 import {
   ConcentratedPool,
@@ -184,11 +185,21 @@ const eventFixtures: Record<
       ),
     );
 
-    const twammEthUsdcPoolKey = new PoolKey(
+    const twammV1EthUsdcPoolKey = new PoolKey(
       NATIVE_TOKEN_ADDRESS,
       USDC,
       new PoolConfig(
-        BigInt(TWAMM_ADDRESS),
+        BigInt(TWAMM_V1_ADDRESS),
+        55340232221128654n,
+        StableswapPoolTypeConfig.fullRangeConfig(),
+      ),
+    );
+
+    const twammV2EthEkuboPoolKey = new PoolKey(
+      NATIVE_TOKEN_ADDRESS,
+      EKUBO,
+      new PoolConfig(
+        BigInt(TWAMM_V2_ADDRESS),
         55340232221128654n,
         StableswapPoolTypeConfig.fullRangeConfig(),
       ),
@@ -208,21 +219,19 @@ const eventFixtures: Record<
       poolStateEvents: {
         Swapped: [
           [newPool(ConcentratedPool, clEthUsdcPoolKey), 24175246], // https://etherscan.io/tx/0xee56e1f3bad803bd857fb118e55d7eabb5368a94ae8f11e83724278f474294ca
-          [newPool(TwammPool, twammEthUsdcPoolKey), 24175264], // https://etherscan.io/tx/0x01c02e32ac563e3a761382cb8ef278cfed9ed9dc758b5a95f38dd44978e87b2e
+          [newPool(TwammPool, twammV1EthUsdcPoolKey), 24175264], // https://etherscan.io/tx/0x01c02e32ac563e3a761382cb8ef278cfed9ed9dc758b5a95f38dd44978e87b2e
         ],
         PositionUpdated: [
           [newPool(ConcentratedPool, clEthUsdcPoolKey), 24169215], // Add liquidity https://etherscan.io/tx/0x52f469327de230f3da91eb7b77069852757d383450943307f5da63016476c0fb
           [newPool(ConcentratedPool, clEthUsdcPoolKey), 24169222], // Withdraw liquidity https://etherscan.io/tx/0x00cfe35092d58aab347abc58345878092f87d37c7f0f0126fb1c890c791cdc02
-          [newPool(TwammPool, twammEthUsdcPoolKey), 24169228], // Add liquidity https://etherscan.io/tx/0x5fceec2c8fce56c7a73b8e3efca77f9ef8561b40a08b05785e9084cba684b5f8
-          [newPool(TwammPool, twammEthUsdcPoolKey), 24169235], // Withdraw liquidity https://etherscan.io/tx/0x920f865071397a145e2e9558dfaedb7e138456d8fe43c1899187778a16b00c8b
+          [newPool(TwammPool, twammV1EthUsdcPoolKey), 24169228], // Add liquidity https://etherscan.io/tx/0x5fceec2c8fce56c7a73b8e3efca77f9ef8561b40a08b05785e9084cba684b5f8
+          [newPool(TwammPool, twammV1EthUsdcPoolKey), 24169235], // Withdraw liquidity https://etherscan.io/tx/0x920f865071397a145e2e9558dfaedb7e138456d8fe43c1899187778a16b00c8b
         ],
-        OrderUpdated: [
-          [newPool(TwammPool, twammEthUsdcPoolKey), 24169245], // Create order https://etherscan.io/tx/0x67bb5ba44397d8b9d9ffe753e9c7f1b478eadfac22464a39521bdd3541f6a68f
-          [newPool(TwammPool, twammEthUsdcPoolKey), 24169249], // Stop order https://etherscan.io/tx/0xde6812e959a49e245f15714d1b50571f43ca7711c91d2df1087178a38bc554b7
-        ],
-        VirtualOrdersExecuted: [
-          [newPool(TwammPool, twammEthUsdcPoolKey), 24169245], // Create order https://etherscan.io/tx/0x67bb5ba44397d8b9d9ffe753e9c7f1b478eadfac22464a39521bdd3541f6a68f
-          [newPool(TwammPool, twammEthUsdcPoolKey), 24169249], // Stop order https://etherscan.io/tx/0xde6812e959a49e245f15714d1b50571f43ca7711c91d2df1087178a38bc554b7
+        VirtualOrdersExecutedAndOrderUpdated: [
+          [newPool(TwammPool, twammV1EthUsdcPoolKey), 24169245], // Create order https://etherscan.io/tx/0x67bb5ba44397d8b9d9ffe753e9c7f1b478eadfac22464a39521bdd3541f6a68f
+          [newPool(TwammPool, twammV1EthUsdcPoolKey), 24169249], // Stop order https://etherscan.io/tx/0xde6812e959a49e245f15714d1b50571f43ca7711c91d2df1087178a38bc554b7
+          [newPool(TwammPool, twammV2EthEkuboPoolKey), 25167059], // Create order https://etherscan.io/tx/0x32de015a5cd9a2a3f7fab3e19ad6bed01af3f91aeeb49d936831d97919504ed9
+          [newPool(TwammPool, twammV2EthEkuboPoolKey), 25178860], // Stop order https://etherscan.io/tx/0x43ba3ba3afde750748fdc6ee47a7c3e7592924eb419c482d61490410dbf5045a
         ],
         PoolBoosted: [
           [newPool(BoostedFeesPool, boostedFeesEkuboUsdcPoolKey), 24486286], // https://etherscan.io/tx/0xe8b84a98592609c8b49bfaeafa76b0187bd6afd90b8df27469f9435f4b17318e#eventlog#235

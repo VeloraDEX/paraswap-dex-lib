@@ -22,7 +22,8 @@ import {
   CORE_ADDRESS,
   MEV_CAPTURE_ADDRESS,
   ORACLE_ADDRESS,
-  TWAMM_ADDRESS,
+  TWAMM_V2_ADDRESS,
+  TWAMM_V1_ADDRESS,
 } from './config';
 import { FullRangePool, FullRangePoolState } from './pools/full-range';
 import { StableswapPool } from './pools/stableswap';
@@ -35,14 +36,16 @@ import { ExtensionType, extensionType } from './extension-type';
 
 export const EVENT_EMITTERS = [
   CORE_ADDRESS,
-  TWAMM_ADDRESS,
+  TWAMM_V2_ADDRESS,
+  TWAMM_V1_ADDRESS,
   BOOSTED_FEES_CONCENTRATED_ADDRESS,
 ];
 
 const SUBGRAPH_PAGE_SIZE = 1000;
 const SUBGRAPH_EXTENSIONS = [
   ORACLE_ADDRESS,
-  TWAMM_ADDRESS,
+  TWAMM_V2_ADDRESS,
+  TWAMM_V1_ADDRESS,
   MEV_CAPTURE_ADDRESS,
   BOOSTED_FEES_CONCENTRATED_ADDRESS,
 ];
@@ -146,7 +149,7 @@ export class EkuboV3PoolManager implements EventSubscriber {
   ) {
     const {
       core: { contract: coreContract, interface: coreIface },
-      twamm: { contract: twammContract, interface: twammIface },
+      twamm: { v1: twammV1, v2: twammV2, interface: twammIface },
       boostedFees: {
         contract: boostedFeesContract,
         interface: boostedFeesIface,
@@ -164,25 +167,6 @@ export class EkuboV3PoolManager implements EventSubscriber {
           parsePoolIdByLogDataOffsetFn(32),
         ],
       ]),
-      [twammContract.address]: new Map<
-        string,
-        (data: string) => bigint | string
-      >([
-        ['', parsePoolIdByLogDataOffsetFn(0)],
-        [
-          twammIface.getEventTopic('OrderUpdated'),
-          data =>
-            new PoolKey(
-              BigInt(hexDataSlice(data, 64, 96)),
-              BigInt(hexDataSlice(data, 96, 128)),
-              new PoolConfig(
-                BigInt(TWAMM_ADDRESS),
-                BigInt(hexDataSlice(data, 128, 136)),
-                StableswapPoolTypeConfig.fullRangeConfig(),
-              ),
-            ).stringId,
-        ],
-      ]),
       [boostedFeesContract.address]: new Map([
         ['', parsePoolIdByLogDataOffsetFn(0)],
         [
@@ -190,6 +174,27 @@ export class EkuboV3PoolManager implements EventSubscriber {
           parsePoolIdByLogDataOffsetFn(0),
         ],
       ]),
+      ...Object.fromEntries(
+        [twammV1.address, twammV2.address].map(address => [
+          address,
+          new Map<string, (data: string) => bigint | string>([
+            ['', parsePoolIdByLogDataOffsetFn(0)],
+            [
+              twammIface.getEventTopic('OrderUpdated'),
+              data =>
+                new PoolKey(
+                  BigInt(hexDataSlice(data, 64, 96)),
+                  BigInt(hexDataSlice(data, 96, 128)),
+                  new PoolConfig(
+                    BigInt(address),
+                    BigInt(hexDataSlice(data, 128, 136)),
+                    StableswapPoolTypeConfig.fullRangeConfig(),
+                  ),
+                ).stringId,
+            ],
+          ]),
+        ]),
+      ),
     };
   }
 
