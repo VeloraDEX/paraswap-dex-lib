@@ -318,16 +318,20 @@ describe('pool reserves fixtures: PancakeSwapV2 (UniswapV2RpcPoolTracker)', () =
   const tryAggregate = jest.fn();
   const dexKey = 'PancakeSwapV2';
   const key = (t0: string, t1: string) => `${dexKey}_${t0}_${t1}`.toLowerCase();
+  const DAY = 24 * 60 * 60 * 1000;
+  // `updatedAt` defaults to "traded recently"; the tracker skips the RPC read
+  // for pools last updated more than 180 days ago
   const trackerDesc = (
     i: unknown,
     address: string,
     token0: string,
     token1: string,
+    updatedAt: unknown = Date.now() - DAY,
   ) =>
     desc({
       i,
       address,
-      updatedAt: 1,
+      updatedAt,
       token0: { address: token0, decimals: 18 },
       token1: { address: token1, decimals: 18 },
     });
@@ -421,6 +425,44 @@ describe('pool reserves fixtures: PancakeSwapV2 (UniswapV2RpcPoolTracker)', () =
     ]);
     expect(reserves).toEqual([]);
     expect(tryAggregate).not.toHaveBeenCalled();
+  });
+
+  it('does not read pools idle for more than 180 days over RPC, unless state or a fresher tracker entry exists', async () => {
+    const stale = Date.now() - 181 * DAY;
+    const fresh = Date.now() - 179 * DAY;
+    const dex = tracker(
+      {
+        // tracker knows a newer reserve change than the descriptor
+        '2': { ...trackerPool(POOL3, A, C, null), updatedAt: fresh },
+        // polled reserves are served whatever the age
+        '3': trackerPool(POOL4, A, D, [5n, 6n]),
+      },
+      {
+        // event state is served whatever the age
+        [key(B, C)]: {
+          exchange: POOL2,
+          pool: eventPool({ reserves0: '30', reserves1: '40' }),
+        },
+      },
+      { [POOL]: [1n, 2n], [POOL3]: [7n, 8n] },
+    );
+    const reserves = await dex.getPoolReserves([
+      trackerDesc('0', POOL, A, B, stale),
+      trackerDesc('1', POOL2, B, C, stale),
+      trackerDesc('2', POOL3, A, C, stale),
+      trackerDesc('3', POOL4, A, D, stale),
+      trackerDesc('4', POOL, A, B, fresh),
+      trackerDesc('5', POOL, A, B, undefined),
+      trackerDesc('6', POOL, A, B, 'yesterday'),
+    ]);
+    expect(reserves.map(r => r.id)).toEqual(['1', '2', '3', '4', '5', '6']);
+    expect(tryAggregate).toHaveBeenCalledTimes(1);
+    expect(tryAggregate.mock.calls[0][1].map((c: any) => c.target)).toEqual([
+      POOL3,
+      POOL,
+      POOL,
+      POOL,
+    ]);
   });
 
   it('collapses duplicate indices to one pool', async () => {

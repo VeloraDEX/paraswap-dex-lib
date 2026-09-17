@@ -533,10 +533,10 @@ token0, token1 }`, `null` to skip; `id` is the hash field, `key` the
   silent masking a `uint112` decode would apply to a wide Solidly reserve.
 - `UniswapV2RpcPoolTracker` (PancakeSwapV2) checks event state first, then
   the tracker's `pools[i]` only when `reservesUpdatedAt != null`, then RPC.
-  No age filter: `updatedAt` in `_pools` is refreshed by the master only, so
-  a filter on it would switch every pool off once that writer is gone. RPC
-  load for the ~2M-entry hash is bounded by D7 and the consumer's sweep
-  cadence. The master-only writer is untouched.
+  The PR 2 review removed an age filter from this path (it sat in the
+  parser and dropped pools that had state); §25 reinstates it on the RPC
+  fallback only, after the staging measurements. The master-only writer is
+  untouched.
 - `multicallBalances` is now a thin alias over the generic
   `multicallValues<T>` in `src/lib/pools-storage/reserves.ts`, which the
   reserves path uses with `T = [bigint, bigint]`.
@@ -875,3 +875,54 @@ Accepted trade-offs from the review:
 - Companion change in `paraswap-api`: `Cache.hscan` reading from the
   primary, and the same dex eligibility predicate for the reserve endpoints
   as for `listDexs`.
+
+## 25. PancakeSwapV2 — skip idle pools on the RPC fallback
+
+Added 2026-09-17 after two measured BSC sweeps on staging (consumer plan
+§13): 3 031 batches of 1 000 `getReserves` calls, ≈ 1 s each on the API,
+16m50s–17m54s per run, 741 MB sent / 670 MB received over HTTP, for
+40 039 pools kept by the consumer's liquidity filter. 2 991 225 of the
+3 031 014 pools fetched were below the $1 000 threshold; the storage is the
+factory's full index and nothing in the pipeline pruned it before the RPC.
+
+Rule (`rpc-pool-tracker.ts`, `shouldFetchReserves`): a descriptor whose
+`updatedAt` — the pair's `blockTimestampLast`, taken as the newer of the
+stored value and the tracker's in-memory entry — is older than
+`VALID_POOLS_AGE` (180 days) is not read over RPC and is left out of the
+answer. The consumer counts it as skipped and, under its storage-based
+prune rule, keeps whatever value it already holds. This is the rule the
+tracker already applies when it loads pools for pricing (`getCachedPools`),
+so the reserve graph stops advertising liquidity the pricer would not
+quote anyway.
+
+Why it is exact rather than approximate: reserves only change through the
+pair's `_update`, which also sets `blockTimestampLast`. An unchanged
+`updatedAt` therefore means unchanged reserves, and a value the consumer
+wrote earlier is still correct; a pool that was never written (idle since
+before the first sweep) is one nobody has traded in six months.
+
+What the PR 2 review objected to and how this differs (§20, finding 4):
+
+- _Dropped valid state._ The old filter sat in `parsePoolReservesTarget`,
+  before the in-memory lookups, so a pool with event state or polled
+  reserves was skipped because the storage said it was old. The new hook
+  runs only for pools with no in-memory reserves; state is served whatever
+  the age (fixture `does not read pools idle for more than 180 days …`).
+- _Master-coupled._ `updatedAt` is rewritten by the master's daily
+  `updatePoolsAge`; if that writer disappears, every pool crosses the
+  threshold within 180 days and the sweep goes quiet for this dex. That
+  coupling already exists for pricing (the same field gates
+  `getCachedPools`), and the consumer keeps the last written reserves rather
+  than deleting them. Retiring the master therefore has to move the age
+  sweep with it, which is true with or without this rule; it is recorded
+  here so that work knows. A descriptor with no usable `updatedAt` is read,
+  so a storage that stops carrying the field falls back to the old
+  behaviour instead of skipping everything.
+
+Latency: a revived pool is read again on the first sweep after the master's
+next age sweep, ≤ 24 h + the 12 h cadence.
+
+Expected effect on BSC: ≈ 99 % fewer RPC reads per sweep (the below-threshold
+pools are overwhelmingly the idle ones), so the run should drop from ≈ 17 min
+to well under a minute of API time. To be re-measured on staging after the
+next dex-lib prerelease is deployed to the API.

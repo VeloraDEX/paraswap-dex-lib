@@ -135,6 +135,9 @@ export interface UniswapV2ReservesTarget {
   // canonical (on-chain) order: token0 < token1
   token0: Address;
   token1: Address;
+  // ms timestamp of the pool's last reserve change as the storage knows it;
+  // undefined when the storage does not carry one
+  updatedAt?: number;
 }
 
 export const directUniswapFunctionName = [
@@ -940,6 +943,13 @@ export class UniswapV2
     return [BigInt(state.reserves0), BigInt(state.reserves1)];
   }
 
+  // Whether a pool without in-memory reserves is worth an RPC read. False
+  // skips it: the pool is left out of the answer and the consumer keeps its
+  // previous value. The base class always reads.
+  protected shouldFetchReserves(_target: UniswapV2ReservesTarget): boolean {
+    return true;
+  }
+
   async getPoolReserves(pools: string[] = []): Promise<PoolReserves[]> {
     const targets: UniswapV2ReservesTarget[] = [];
     const seen = new Set<string>();
@@ -963,7 +973,7 @@ export class UniswapV2
     for (const target of targets) {
       const cached = this.getCachedPoolReserves(target);
       if (cached) reserves.set(target.id, cached);
-      else misses.push(target);
+      else if (this.shouldFetchReserves(target)) misses.push(target);
     }
 
     if (misses.length > 0) {
