@@ -922,7 +922,23 @@ What the PR 2 review objected to and how this differs (§20, finding 4):
 Latency: a revived pool is read again on the first sweep after the master's
 next age sweep, ≤ 24 h + the 12 h cadence.
 
-Expected effect on BSC: ≈ 99 % fewer RPC reads per sweep (the below-threshold
-pools are overwhelmingly the idle ones), so the run should drop from ≈ 17 min
-to well under a minute of API time. To be re-measured on staging after the
-next dex-lib prerelease is deployed to the API.
+Measured on staging BSC (2026-09-17, `5.1.18-pt-deprecation.1`, same
+3 032 batches, forced run right after the previous one):
+
+|                                  | before (14:07Z) | after (15:06Z)                              |
+| -------------------------------- | --------------- | ------------------------------------------- |
+| run                              | 16m50s          | 5m55s                                       |
+| pools read over RPC              | 3 031 014       | 894 183 (2 137 774 skipped, 70 %)           |
+| API time / batch                 | 0.96 s          | 0.33 s                                      |
+| slowest batch                    | 2.7 s           | 0.8 s                                       |
+| received from API                | 670 MB          | 188 MB                                      |
+| pools written                    | 40 039          | 32 133 (the rest kept their previous value) |
+| Redis replica read / sent to API | 714 MB / 741 MB | unchanged                                   |
+
+The remaining 6 minutes are the 894 k pools that traded in the last 180
+days plus the unchanged sweep bytes (the skip is API-side; the consumer
+still ships every descriptor). A first sample of 3 002 fields in HSCAN
+order had suggested 87 % idle; the full index is 70 %. Consumer peak memory
+was 968 MB system / 933 MB heap against a 1 024 MB task, higher than the
+slower run before it (836 MB): the faster sweep gives the GC less slack, so
+the task size question in the consumer plan §13 stands.

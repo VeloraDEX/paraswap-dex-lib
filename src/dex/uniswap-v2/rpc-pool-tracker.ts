@@ -594,8 +594,9 @@ export class UniswapV2RpcPoolTracker extends UniswapV2 {
   // either, and the consumer's previous value (if any) is still exact. A pool
   // that trades again is picked up once the master's daily age sweep rewrites
   // its `updatedAt`. A descriptor without a usable `updatedAt` is read. Pools
-  // with event state or polled reserves never reach this check. On BSC this
-  // removes ~99 % of PancakeSwapV2's 3 M-pool factory index from each sweep.
+  // with event state or polled reserves never reach this check. On staging
+  // BSC this skipped 70 % of PancakeSwapV2's 3 M-pool factory index and cut
+  // the sweep from 16m50s to 5m55s (2026-09-17).
   protected shouldFetchReserves(target: UniswapV2ReservesTarget): boolean {
     const known = this.pools[target.id]?.updatedAt ?? 0;
     const updatedAt = Math.max(target.updatedAt ?? 0, known);
