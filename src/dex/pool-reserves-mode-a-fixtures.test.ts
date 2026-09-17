@@ -320,7 +320,7 @@ describe('pool reserves fixtures: PancakeSwapV2 (UniswapV2RpcPoolTracker)', () =
   const key = (t0: string, t1: string) => `${dexKey}_${t0}_${t1}`.toLowerCase();
   const DAY = 24 * 60 * 60 * 1000;
   // `updatedAt` defaults to "traded recently"; the tracker skips the RPC read
-  // for pools last updated more than 180 days ago
+  // for pools last updated more than 90 days ago
   const trackerDesc = (
     i: unknown,
     address: string,
@@ -427,9 +427,9 @@ describe('pool reserves fixtures: PancakeSwapV2 (UniswapV2RpcPoolTracker)', () =
     expect(tryAggregate).not.toHaveBeenCalled();
   });
 
-  it('does not read pools idle for more than 180 days over RPC, unless state or a fresher tracker entry exists', async () => {
-    const stale = Date.now() - 181 * DAY;
-    const fresh = Date.now() - 179 * DAY;
+  it('does not read pools idle for more than 90 days over RPC, unless state or a fresher tracker entry exists', async () => {
+    const stale = Date.now() - 91 * DAY;
+    const fresh = Date.now() - 89 * DAY;
     const dex = tracker(
       {
         // tracker knows a newer reserve change than the descriptor

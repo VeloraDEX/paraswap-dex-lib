@@ -1,5 +1,9 @@
 import { Interface } from '@ethersproject/abi';
-import { CACHE_PREFIX, Network } from '../../constants';
+import {
+  CACHE_PREFIX,
+  Network,
+  POOL_RESERVES_MAX_IDLE_MS,
+} from '../../constants';
 import { IDexHelper } from '../../dex-helper';
 import {
   addressDecode,
@@ -587,23 +591,23 @@ export class UniswapV2RpcPoolTracker extends UniswapV2 {
     };
   }
 
-  // The same age rule the tracker applies when it loads pools for pricing
-  // (`getCachedPools`, VALID_POOLS_AGE): a pool whose last reserve change is
-  // older than 180 days is not read over RPC. `updatedAt` is the pair's
+  // A pool whose last reserve change is older than POOL_RESERVES_MAX_IDLE_MS
+  // (90 days) is not read over RPC. `updatedAt` is the pair's
   // `blockTimestampLast`, so unchanged means the reserves have not moved
-  // either, and the consumer's previous value (if any) is still exact. Note
-  // the master's daily age sweep only re-reads pools it still holds in memory,
-  // i.e. those that were fresh when it loaded them, so a pool that crossed the
-  // threshold is not re-aged if it trades again: it stays out of pricing and
-  // out of this sweep alike. A descriptor without a usable `updatedAt` is read. Pools
-  // with event state or polled reserves never reach this check. On staging
-  // BSC this skipped 70 % of PancakeSwapV2's 3 M-pool factory index and cut
-  // the sweep from 16m50s to 5m55s (2026-09-17).
+  // either, and the consumer's previous value (if any) is still exact. The
+  // cutoff is tighter than the tracker's own 180-day pricing cutoff
+  // (VALID_POOLS_AGE): a pool idle for 90-180 days is still held in memory
+  // by the master, so its `updatedAt` is re-aged daily and it is read again
+  // if it trades; beyond 180 days the master drops it and it stays out of
+  // pricing and of this sweep alike. A descriptor without a usable
+  // `updatedAt` is read. Pools with event state or polled reserves never
+  // reach this check. Staging BSC, 180-day cutoff: 70 % of PancakeSwapV2's
+  // 3 M-pool factory index skipped, sweep 16m50s -> 5m42s (2026-09-17).
   protected shouldFetchReserves(target: UniswapV2ReservesTarget): boolean {
     const known = this.pools[target.id]?.updatedAt ?? 0;
     const updatedAt = Math.max(target.updatedAt ?? 0, known);
     if (updatedAt <= 0) return true;
-    return updatedAt > Date.now() - VALID_POOLS_AGE;
+    return updatedAt > Date.now() - POOL_RESERVES_MAX_IDLE_MS;
   }
 
   protected matchesKnownPool(target: UniswapV2ReservesTarget): boolean {

@@ -83,6 +83,10 @@ export const UNLIMITED_USD_LIQUIDITY = 1234567890;
 export const UNLIMITED_RESERVES = 'unlimited';
 export const MAX_POOL_RESERVES_BATCH = 1000;
 export const FETCH_POOL_RESERVES_TIMEOUT = 10 * 1000; // 10s
+// Storage-mode reserve sweeps skip the RPC read for a pool whose last
+// reserve change (blockTimestampLast) is older than this; the consumer keeps
+// its previous value. Tighter than the tracker's 180-day pricing cutoff.
+export const POOL_RESERVES_MAX_IDLE_MS = 90 * 24 * 60 * 60 * 1000; // 90d
 // Publication cadence of pool descriptors. Inventories known up front only
 // need to beat the 30-day prune; dexes that discover pools lazily pass a
 // shorter interval to their writer.

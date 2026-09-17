@@ -888,12 +888,13 @@ factory's full index and nothing in the pipeline pruned it before the RPC.
 Rule (`rpc-pool-tracker.ts`, `shouldFetchReserves`): a descriptor whose
 `updatedAt` — the pair's `blockTimestampLast`, taken as the newer of the
 stored value and the tracker's in-memory entry — is older than
-`VALID_POOLS_AGE` (180 days) is not read over RPC and is left out of the
-answer. The consumer counts it as skipped and, under its storage-based
-prune rule, keeps whatever value it already holds. This is the rule the
-tracker already applies when it loads pools for pricing (`getCachedPools`),
-so the reserve graph stops advertising liquidity the pricer would not
-quote anyway.
+`POOL_RESERVES_MAX_IDLE_MS` (90 days; first shipped at 180 days, tightened
+the same day after the sample below) is not read over RPC and is left out
+of the answer. The consumer counts it as skipped and, under its storage-based
+prune rule, keeps whatever value it already holds. The tracker itself keeps pools for
+pricing up to 180 days (`getCachedPools`, `VALID_POOLS_AGE`), so the
+reserve graph is stricter than the pricer: a pool idle for 90–180 days is
+still quotable but not refreshed in the graph until it trades again.
 
 Why it is exact rather than approximate: reserves only change through the
 pair's `_update`, which also sets `blockTimestampLast`. An unchanged
@@ -925,8 +926,10 @@ limit, so a pool whose `updatedAt` has crossed 180 days is never re-aged,
 even if it trades again. It stays out of the tracker's pricing and, with
 this rule, out of the reserve sweep too; the consumer keeps its last
 written value. This is pre-existing tracker behaviour, not introduced here,
-but it means the skip is one-way for a given pool until the index is
-rebuilt.
+but it means the skip is one-way for a pool past 180 days. Between 90 and
+180 days the master still holds the pool and re-ages it daily, so the
+90-day rule is two-way there: a pool that trades again is read on the
+next sweep.
 
 What "fresh" means in practice (staging sample of 6 003 fields,
 2026-09-17): 79 % of the pools under the age limit have a factory index in
