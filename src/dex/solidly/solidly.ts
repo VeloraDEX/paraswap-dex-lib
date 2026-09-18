@@ -4,6 +4,7 @@ import {
   parsePairCacheRecord,
   UniswapV2,
   UniswapV2PairCacheRecord,
+  UniswapV2ReservesTarget,
 } from '../uniswap-v2/uniswap-v2';
 import {
   Network,
@@ -550,6 +551,48 @@ export class Solidly extends UniswapV2 {
       this.logger.error(`Error_getPrices:`, e);
       return null;
     }
+  }
+
+  // Inverse of `poolPostfix`: recovers the `stable` flag a pool identifier was
+  // built with, along with the pair identifier it was appended to.
+  protected parsePoolPostfix(
+    identifier: string,
+  ): { stable: boolean; pairIdentifier: string } | null {
+    for (const stable of [false, true]) {
+      const postfix = this.poolPostfix(stable);
+      if (postfix && identifier.endsWith(postfix)) {
+        return {
+          stable,
+          pairIdentifier: identifier.slice(0, -postfix.length),
+        };
+      }
+    }
+    return null;
+  }
+
+  // A pool identifier embeds the `stable` flag, so one that does not carry a
+  // postfix cannot be mapped to a pool.
+  protected parsePoolReservesTarget(
+    descriptor: unknown,
+  ): UniswapV2ReservesTarget | null {
+    const identifier = (descriptor as { i?: unknown } | null)?.i;
+    if (typeof identifier !== 'string') return null;
+
+    const parsed = this.parsePoolPostfix(identifier);
+    if (!parsed) return null;
+
+    const target = super.parsePoolReservesTarget({
+      ...(descriptor as object),
+      i: parsed.pairIdentifier,
+    });
+    if (!target) return null;
+
+    const key = this.getPoolIdentifier(
+      target.token0,
+      target.token1,
+      parsed.stable,
+    );
+    return { ...target, id: key, key };
   }
 
   async getTopPoolsForToken(

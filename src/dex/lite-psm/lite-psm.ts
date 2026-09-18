@@ -11,6 +11,7 @@ import {
   DexExchangeParam,
   ExchangeTxInfo,
   PreprocessTransactionOptions,
+  PoolReserves,
 } from '../../types';
 import { SwapSide, Network } from '../../constants';
 import * as CALLDATA_GAS_COST from '../../calldata-gas-cost';
@@ -43,6 +44,7 @@ import {
 import { BigNumber } from 'ethers';
 import { LitePsmEventPool } from './lite-psm-event-pool';
 import { extractReturnAmountPosition } from '../../executor/utils';
+import { directionalReserves } from '../../lib/pools-storage/reserves';
 
 const daiPsmInterface = new Interface(DaiPsmABI);
 const usdsPsmInterface = new Interface(UsdsPsmABI);
@@ -492,6 +494,35 @@ export class LitePsm
     const blockNumber = await this.dexHelper.web3Provider.eth.getBlockNumber();
 
     await this.initializeEventPools(blockNumber, false);
+  }
+
+  // One pool per gem PSM. The USDS path is a 1:1 wrapper over the same DAI
+  // PSM, so both stablecoins are paid out of `daiBalance`; `dai <-> usds` is
+  // not a supported swap.
+  getPoolReserves(): PoolReserves[] {
+    return this.poolConfigs.flatMap(config => {
+      const gem = config.gem.address.toLowerCase();
+      const eventPool = this.eventPools[gem];
+      const state = eventPool?.isInvalid()
+        ? null
+        : eventPool?.getStaleState() ?? null;
+      if (!state) return [];
+
+      const psm = config.psmAddress.toLowerCase();
+      return [
+        {
+          dex: this.dexKey,
+          id: psm,
+          address: psm,
+          reserves: directionalReserves([
+            { src: gem, dest: this.dai.address, capacity: state.daiBalance },
+            { src: this.dai.address, dest: gem, capacity: state.gemBalance },
+            { src: gem, dest: this.usds.address, capacity: state.daiBalance },
+            { src: this.usds.address, dest: gem, capacity: state.gemBalance },
+          ]),
+        },
+      ];
+    });
   }
 
   // Returns list of top pools based on liquidity. Max

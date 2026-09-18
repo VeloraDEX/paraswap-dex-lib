@@ -1,5 +1,9 @@
 import { Interface } from '@ethersproject/abi';
-import { CACHE_PREFIX, Network } from '../../constants';
+import {
+  CACHE_PREFIX,
+  Network,
+  POOL_RESERVES_MAX_IDLE_MS,
+} from '../../constants';
 import { IDexHelper } from '../../dex-helper';
 import {
   addressDecode,
@@ -7,8 +11,14 @@ import {
   generalDecoder,
 } from '../../lib/decoders';
 import { MultiCallParams, MultiResult } from '../../lib/multi-wrapper';
-import { Address, PoolLiquidity, Token } from '../../types';
-import { UniswapV2 } from './uniswap-v2';
+import {
+  Address,
+  PoolLiquidity,
+  PoolsStorage,
+  PoolsStorageType,
+  Token,
+} from '../../types';
+import { UniswapV2, UniswapV2ReservesTarget } from './uniswap-v2';
 import { BytesLike } from 'ethers';
 
 type CachedPool = {
@@ -541,6 +551,87 @@ export class UniswapV2RpcPoolTracker extends UniswapV2 {
       pool.reserve1 = reserve1;
       pool.reservesUpdatedAt = Date.now();
     }
+  }
+
+  getPoolsStorage(): PoolsStorage {
+    return {
+      key: this.cacheKey,
+      type: PoolsStorageType.RedisHash,
+      fieldInValue: false,
+    };
+  }
+
+  // Descriptor: `{ i: <factory index>, ...CachedPool }`; the index is the
+  // hash field and therefore the id.
+  protected parsePoolReservesTarget(
+    descriptor: unknown,
+  ): UniswapV2ReservesTarget | null {
+    const pool = descriptor as (Partial<CachedPool> & { i?: unknown }) | null;
+    const index = pool?.i;
+    if (
+      (typeof index !== 'string' || !/^\d+$/.test(index)) &&
+      !(typeof index === 'number' && Number.isInteger(index) && index >= 0)
+    ) {
+      return null;
+    }
+    const target = this.buildPoolReservesTarget(
+      pool?.token0?.address,
+      pool?.token1?.address,
+      pool?.address,
+    );
+    if (!target) return null;
+    const updatedAt = pool?.updatedAt;
+    return {
+      ...target,
+      id: String(index),
+      updatedAt:
+        typeof updatedAt === 'number' && Number.isFinite(updatedAt)
+          ? updatedAt
+          : undefined,
+    };
+  }
+
+  // A pool whose last reserve change is older than POOL_RESERVES_MAX_IDLE_MS
+  // (90 days) is not read over RPC. `updatedAt` is the pair's
+  // `blockTimestampLast`, so unchanged means the reserves have not moved
+  // either, and the consumer's previous value (if any) is still exact. The
+  // cutoff is tighter than the tracker's own 180-day pricing cutoff
+  // (VALID_POOLS_AGE): a pool idle for 90-180 days is still held in memory
+  // by the master, so its `updatedAt` is re-aged daily and it is read again
+  // if it trades; beyond 180 days the master drops it and it stays out of
+  // pricing and of this sweep alike. A descriptor without a usable
+  // `updatedAt` is read. Pools with event state or polled reserves never
+  // reach this check. Staging BSC, 180-day cutoff: 70 % of PancakeSwapV2's
+  // 3 M-pool factory index skipped, sweep 16m50s -> 5m42s (2026-09-17).
+  protected shouldFetchReserves(target: UniswapV2ReservesTarget): boolean {
+    const known = this.pools[target.id]?.updatedAt ?? 0;
+    const updatedAt = Math.max(target.updatedAt ?? 0, known);
+    if (updatedAt <= 0) return true;
+    return updatedAt > Date.now() - POOL_RESERVES_MAX_IDLE_MS;
+  }
+
+  protected matchesKnownPool(target: UniswapV2ReservesTarget): boolean {
+    if (!super.matchesKnownPool(target)) return false;
+    const known = this.pools[target.id];
+    return (
+      !known ||
+      (known.address.toLowerCase() === target.address &&
+        known.token0Address.toLowerCase() === target.token0 &&
+        known.token1Address.toLowerCase() === target.token1)
+    );
+  }
+
+  // Event state first; then the tracker's polled reserves, which exist only
+  // for entries whose reserves were actually fetched (the map is usually
+  // empty on slaves). Anything else falls back to RPC.
+  protected getCachedPoolReserves(
+    target: UniswapV2ReservesTarget,
+  ): [bigint, bigint] | null {
+    const fromEvents = super.getCachedPoolReserves(target);
+    if (fromEvents) return fromEvents;
+    const pool = this.pools[target.id];
+    if (!pool || pool.reservesUpdatedAt == null) return null;
+    return [pool.reserve0, pool.reserve1];
   }
 
   async getTopPoolsForToken(

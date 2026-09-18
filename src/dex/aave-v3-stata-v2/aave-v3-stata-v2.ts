@@ -8,8 +8,14 @@ import {
   Logger,
   NumberAsString,
   DexExchangeParam,
+  PoolReserves,
 } from '../../types';
-import { SwapSide, Network, UNLIMITED_USD_LIQUIDITY } from '../../constants';
+import {
+  SwapSide,
+  Network,
+  UNLIMITED_USD_LIQUIDITY,
+  UNLIMITED_RESERVES,
+} from '../../constants';
 import * as CALLDATA_GAS_COST from '../../calldata-gas-cost';
 import { Utils, getBigIntPow, getDexKeysWithNetwork } from '../../utils';
 import { IDex } from '../../dex/idex';
@@ -36,6 +42,7 @@ import TokenABI from '../../abi/aavev3statav2/Token.json';
 import PoolABI from '../../abi/aavev3statav2/Pool.json';
 import { extractReturnAmountPosition } from '../../executor/utils';
 import { RETURN_AMOUNT_POS_32 } from '../../executor/constants';
+import { directionalReserves } from '../../lib/pools-storage/reserves';
 // import { IStaticATokenLM_ABI } from '@bgd-labs/aave-address-book';
 // slimmed down version of @bgd-labs/aave-address-book
 // required as version of web3-utils used is buggy
@@ -379,6 +386,33 @@ export class AaveV3StataV2
 
   async updatePoolState(): Promise<void> {
     await this.initializeTokens();
+  }
+
+  // Pricing requires one side to be the stata token: underlying <-> stata
+  // and aToken <-> stata are supported, underlying <-> aToken is not.
+  getPoolReserves(): PoolReserves[] {
+    return Object.values(Tokens[this.network] ?? {}).map(token => {
+      const stata = token.address.toLowerCase();
+      const underlying = token.underlying.toLowerCase();
+      const aToken = token.underlyingAToken.toLowerCase();
+      return {
+        dex: this.dexKey,
+        id: stata,
+        address: stata,
+        reserves: directionalReserves(
+          [
+            [underlying, stata],
+            [stata, underlying],
+            [aToken, stata],
+            [stata, aToken],
+          ].map(([src, dest]) => ({
+            src,
+            dest,
+            capacity: UNLIMITED_RESERVES,
+          })),
+        ),
+      };
+    });
   }
 
   async getTopPoolsForToken(

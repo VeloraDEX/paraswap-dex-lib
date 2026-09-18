@@ -22,6 +22,7 @@ export type Quote<StateAfter = undefined> = {
 
 export interface IEkuboPool<C extends PoolTypeConfig> extends EventSubscriber {
   key: PoolKey<C>;
+  isInvalid(): boolean;
   initializationBlockNumber(): number;
   quote(amount: bigint, token: bigint, blockNumber: number): Quote;
   updateState(blockNumber: number): Promise<void>;

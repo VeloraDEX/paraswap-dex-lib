@@ -12,7 +12,12 @@ import type {
   NumberAsString,
   DexExchangeParam,
 } from '../../types';
-import { SwapSide, Network, UNLIMITED_USD_LIQUIDITY } from '../../constants';
+import {
+  SwapSide,
+  Network,
+  UNLIMITED_USD_LIQUIDITY,
+  UNLIMITED_RESERVES,
+} from '../../constants';
 import * as CALLDATA_GAS_COST from '../../calldata-gas-cost';
 import { getDexKeysWithNetwork } from '../../utils';
 import type { IDex } from '../../dex/idex';
@@ -21,6 +26,8 @@ import type { AngleStakedStableData, DexParams } from './types';
 import { SimpleExchange } from '../simple-exchange';
 import { AngleStakedStableConfig, Adapters } from './config';
 import { AngleStakedStableEventPool } from './angle-staked-stable-pool';
+import { PoolReserves } from '../../types';
+import { directionalReserves } from '../../lib/pools-storage/reserves';
 
 // https://dashboard.tenderly.co/paraswap/paraswap/simulator/51688afb-c603-48cf-aa2c-9629c65b1bf9/gas-usage
 const AngleStakedGasCost = 70_000;
@@ -297,6 +304,33 @@ export class AngleStakedStable
         'paused',
         returnData[0],
       )[0] as boolean;
+  }
+
+  // Depositing mints shares with no cap; redeeming pays out of the vault's
+  // `totalAssets`.
+  getPoolReserves(): PoolReserves[] {
+    const eventPool = this.eventPools[this.config.stakeToken];
+    const state = eventPool?.isInvalid() ? null : eventPool?.getStaleState();
+    if (!state || state.paused) return [];
+    return [
+      {
+        dex: this.dexKey,
+        id: this.config.stakeToken,
+        address: this.config.stakeToken,
+        reserves: directionalReserves([
+          {
+            src: this.config.agToken,
+            dest: this.config.stakeToken,
+            capacity: UNLIMITED_RESERVES,
+          },
+          {
+            src: this.config.stakeToken,
+            dest: this.config.agToken,
+            capacity: state.totalAssets,
+          },
+        ]),
+      },
+    ];
   }
 
   // Returns list of top pools based on liquidity. Max

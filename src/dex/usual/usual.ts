@@ -6,12 +6,14 @@ import {
   AdapterExchangeParam,
   Logger,
   PoolLiquidity,
+  PoolReserves,
 } from '../../types';
 import {
   SwapSide,
   Network,
   UNLIMITED_USD_LIQUIDITY,
   NO_USD_LIQUIDITY,
+  UNLIMITED_RESERVES,
 } from '../../constants';
 import * as CALLDATA_GAS_COST from '../../calldata-gas-cost';
 import { IDex } from '../idex';
@@ -19,6 +21,7 @@ import { IDexHelper } from '../../dex-helper/idex-helper';
 import { UsualBondData, DexParams } from './types';
 import { SimpleExchange } from '../simple-exchange';
 import { BI_POWS } from '../../bigint-constants';
+import { directionalReserves } from '../../lib/pools-storage/reserves';
 
 export class Usual extends SimpleExchange implements IDex<UsualBondData> {
   readonly hasConstantPriceLargeAmounts = true;
@@ -136,6 +139,25 @@ export class Usual extends SimpleExchange implements IDex<UsualBondData> {
       payload,
       networkFee: '0',
     };
+  }
+
+  // One-way conversion fromToken -> toToken with no cap.
+  getPoolReserves(): PoolReserves[] {
+    const pool = this.config.toToken.address.toLowerCase();
+    return [
+      {
+        dex: this.dexKey,
+        id: pool,
+        address: pool,
+        reserves: directionalReserves([
+          {
+            src: this.config.fromToken.address,
+            dest: this.config.toToken.address,
+            capacity: UNLIMITED_RESERVES,
+          },
+        ]),
+      },
+    ];
   }
 
   async getTopPoolsForToken(

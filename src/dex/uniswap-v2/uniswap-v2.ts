@@ -17,6 +17,9 @@ import {
   TxInfo,
   TransferFeeParams,
   DexExchangeParam,
+  PoolsStorage,
+  PoolsStorageType,
+  PoolReserves,
 } from '../../types';
 import {
   UniswapData,
@@ -62,8 +65,11 @@ import { applyTransferFee } from '../../lib/token-transfer-fee';
 import _rebaseTokens from '../../rebase-tokens.json';
 import { SpecialDex } from '../../executor/types';
 import { hexZeroPad, hexlify, solidityPack, hexConcat } from 'ethers/lib/utils';
-import { BigNumber } from 'ethers';
+import { BigNumber, BytesLike } from 'ethers';
 import { OnPoolCreatedCallback, UniswapV2Factory } from './uniswap-v2-factory';
+import { MultiResult } from '../../lib/multi-wrapper';
+import { generalDecoder } from '../../lib/decoders';
+import { multicallValues, toReserves } from '../../lib/pools-storage/reserves';
 import { getTopicLogDecoder } from '../../lib/topic-log-decoder';
 
 const UNISWAP_V2_RECHECK_PAIR_EXISTENCE_AFTER_MS = 3 * 24 * 60 * 60 * 1000; // 3 days
@@ -100,6 +106,39 @@ interface UniswapV2PoolState {
 const uniswapV2PoolIface = new Interface(uniswapV2ABI);
 const erc20iface = new Interface(erc20ABI);
 const coder = new AbiCoder();
+
+const ADDRESS_RE = /^0x[0-9a-fA-F]{40}$/;
+const isAddress = (value: unknown): value is Address =>
+  typeof value === 'string' && ADDRESS_RE.test(value);
+
+const getReservesCallData = uniswapV2PoolIface.encodeFunctionData(
+  'getReserves',
+  [],
+);
+// uint256 decoding covers both the uint112 (UniswapV2) and uint256 (Solidly)
+// return layouts: values are one word each either way.
+const decodeReserves = (
+  result: MultiResult<BytesLike> | BytesLike,
+): [bigint, bigint] =>
+  generalDecoder(result, ['uint256', 'uint256', 'uint256'], undefined, res => [
+    res[0].toBigInt(),
+    res[1].toBigInt(),
+  ]);
+
+// A pool resolved from a pools-storage descriptor.
+export interface UniswapV2ReservesTarget {
+  // the storage's hash field, reported back as `PoolReserves.id`
+  id: string;
+  // pool identifier, the `pairs` map key
+  key: string;
+  address: Address;
+  // canonical (on-chain) order: token0 < token1
+  token0: Address;
+  token1: Address;
+  // ms timestamp of the pool's last reserve change as the storage knows it;
+  // undefined when the storage does not carry one
+  updatedAt?: number;
+}
 
 export const directUniswapFunctionName = [
   UniswapV2Functions.swapOnUniswap,
@@ -822,6 +861,148 @@ export class UniswapV2
 
   getAdapters(side: SwapSide): { name: string; index: number }[] | null {
     return this.adapters?.[side] ?? null;
+  }
+
+  getPoolsStorage(): PoolsStorage {
+    return {
+      key: this.pairsHashCacheKey,
+      type: PoolsStorageType.RedisHash,
+      // the `_pairs` value holds only `exchange` and the negative-record
+      // expiry, so the token pair can only be read back from the hash field
+      fieldInValue: false,
+    };
+  }
+
+  // Inverse of `getPoolIdentifier`: `<dexKey>_<token0>_<token1>`. A dexKey may
+  // itself contain `_`, so the pair is taken from the end and whatever
+  // precedes it must be this instance's own key.
+  protected parsePoolIdentifier(
+    identifier: unknown,
+  ): [Address, Address] | null {
+    if (typeof identifier !== 'string') return null;
+    const parts = identifier.split('_');
+    if (parts.length < 3) return null;
+    const [tokenA, tokenB] = parts.slice(-2);
+    if (
+      parts.slice(0, -2).join('_').toLowerCase() !== this.dexKey.toLowerCase()
+    )
+      return null;
+    if (!isAddress(tokenA) || !isAddress(tokenB)) return null;
+    return [tokenA, tokenB];
+  }
+
+  // Tokens are put in on-chain order so `reserve0` maps to the lower address
+  // whatever order the caller used.
+  protected buildPoolReservesTarget(
+    tokenA: unknown,
+    tokenB: unknown,
+    exchange: unknown,
+  ): UniswapV2ReservesTarget | null {
+    if (!isAddress(tokenA) || !isAddress(tokenB) || !isAddress(exchange)) {
+      return null;
+    }
+    const [token0, token1] = [
+      tokenA.toLowerCase(),
+      tokenB.toLowerCase(),
+    ].sort();
+    if (token0 === token1) return null;
+    const key = this.getPoolIdentifier(token0, token1);
+    return { id: key, key, address: exchange.toLowerCase(), token0, token1 };
+  }
+
+  // Descriptor: `{ i: <pool identifier>, ...UniswapV2PairCacheRecord }` as
+  // written by `_findPair` - the hash field carries the pair, the value the
+  // pool address. Entries without `exchange` are known-missing pairs.
+  protected parsePoolReservesTarget(
+    descriptor: unknown,
+  ): UniswapV2ReservesTarget | null {
+    const record = descriptor as
+      | (Partial<UniswapV2PairCacheRecord> & { i?: unknown })
+      | null;
+    const pair = this.parsePoolIdentifier(record?.i);
+    if (!pair) return null;
+    return this.buildPoolReservesTarget(pair[0], pair[1], record?.exchange);
+  }
+
+  // False when this instance already knows the pool under a different
+  // address: cached state must not be attributed to a descriptor that
+  // contradicts it.
+  protected matchesKnownPool(target: UniswapV2ReservesTarget): boolean {
+    const known = this.pairs[target.key]?.exchange;
+    return !known || known.toLowerCase() === target.address;
+  }
+
+  // In-memory reserves for a pool; null means fall back to RPC.
+  protected getCachedPoolReserves(
+    target: UniswapV2ReservesTarget,
+  ): [bigint, bigint] | null {
+    const pool = this.pairs[target.key]?.pool;
+    if (!pool || pool.isInvalid()) return null;
+    const state = pool.getStaleState();
+    if (!state) return null;
+    return [BigInt(state.reserves0), BigInt(state.reserves1)];
+  }
+
+  // Whether a pool without in-memory reserves is worth an RPC read. False
+  // skips it: the pool is left out of the answer and the consumer keeps its
+  // previous value. The base class always reads.
+  protected shouldFetchReserves(_target: UniswapV2ReservesTarget): boolean {
+    return true;
+  }
+
+  async getPoolReserves(pools: string[] = []): Promise<PoolReserves[]> {
+    const targets: UniswapV2ReservesTarget[] = [];
+    const seen = new Set<string>();
+    for (const raw of pools) {
+      let descriptor: unknown;
+      try {
+        descriptor = JSON.parse(raw);
+      } catch (e) {
+        continue;
+      }
+      const target = this.parsePoolReservesTarget(descriptor);
+      if (!target || seen.has(target.id) || !this.matchesKnownPool(target)) {
+        continue;
+      }
+      seen.add(target.id);
+      targets.push(target);
+    }
+
+    const reserves = new Map<string, [bigint, bigint]>();
+    const misses: UniswapV2ReservesTarget[] = [];
+    for (const target of targets) {
+      const cached = this.getCachedPoolReserves(target);
+      if (cached) reserves.set(target.id, cached);
+      else if (this.shouldFetchReserves(target)) misses.push(target);
+    }
+
+    if (misses.length > 0) {
+      const fetched = await multicallValues<[bigint, bigint]>(
+        this.dexHelper.multiWrapper,
+        misses.map(target => ({
+          target: target.address,
+          callData: getReservesCallData,
+          decodeFunction: decodeReserves,
+        })),
+      );
+      misses.forEach((target, i) => {
+        const value = fetched[i];
+        if (value) reserves.set(target.id, value);
+      });
+    }
+
+    const result: PoolReserves[] = [];
+    for (const target of targets) {
+      const value = reserves.get(target.id);
+      if (!value) continue;
+      result.push({
+        dex: this.dexKey,
+        id: target.id,
+        address: target.address,
+        reserves: toReserves([target.token0, target.token1], value),
+      });
+    }
+    return result;
   }
 
   async getTopPoolsForToken(

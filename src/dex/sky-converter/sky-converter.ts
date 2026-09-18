@@ -8,12 +8,14 @@ import {
   Logger,
   NumberAsString,
   DexExchangeParam,
+  PoolReserves,
 } from '../../types';
 import {
   SwapSide,
   Network,
   NO_USD_LIQUIDITY,
   UNLIMITED_USD_LIQUIDITY,
+  UNLIMITED_RESERVES,
 } from '../../constants';
 import * as CALLDATA_GAS_COST from '../../calldata-gas-cost';
 import { getDexKeysWithNetwork } from '../../utils';
@@ -24,6 +26,10 @@ import { SimpleExchange } from '../simple-exchange';
 import { SkyConverterConfig } from './config';
 import { BI_POWS } from '../../bigint-constants';
 import { SkyConverterEventPool } from './sky-converter-pool';
+import {
+  directionalReserves,
+  DirectionalReserve,
+} from '../../lib/pools-storage/reserves';
 
 export class SkyConverter
   extends SimpleExchange
@@ -241,6 +247,33 @@ export class SkyConverter
       targetExchange: this.config.converterAddress,
       returnAmountPos: undefined,
     };
+  }
+
+  getPoolReserves(): PoolReserves[] {
+    const pool = this.config.converterAddress.toLowerCase();
+    const swaps: DirectionalReserve[] = [];
+    if (this.config.oldToNewFunctionName) {
+      swaps.push({
+        src: this.oldToken,
+        dest: this.newToken,
+        capacity: UNLIMITED_RESERVES,
+      });
+    }
+    if (this.config.newToOldFunctionName) {
+      swaps.push({
+        src: this.newToken,
+        dest: this.oldToken,
+        capacity: UNLIMITED_RESERVES,
+      });
+    }
+    return [
+      {
+        dex: this.dexKey,
+        id: pool,
+        address: pool,
+        reserves: directionalReserves(swaps),
+      },
+    ];
   }
 
   // Returns list of top pools based on liquidity. Max

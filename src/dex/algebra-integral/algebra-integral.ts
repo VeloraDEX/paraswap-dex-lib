@@ -12,6 +12,9 @@ import {
   DexExchangeParam,
   GetDexParamOptions,
   NumberAsString,
+  PoolReserves,
+  PoolsStorage,
+  PoolsStorageType,
 } from '../../types';
 import {
   SwapSide,
@@ -19,6 +22,7 @@ import {
   DEST_TOKEN_DEX_TRANSFERS,
   SRC_TOKEN_DEX_TRANSFERS,
   SUBGRAPH_TIMEOUT,
+  CACHE_PREFIX,
 } from '../../constants';
 import * as CALLDATA_GAS_COST from '../../calldata-gas-cost';
 import { Interface } from 'ethers/lib/utils';
@@ -60,6 +64,13 @@ import {
 import { uint256ToBigInt } from '../../lib/decoders';
 import AlgebraIntegralStateMulticallABI from '../../abi/algebra-integral/AlgebraIntegralStateMulticall.abi.json';
 import { buildFeeCallData } from './utils';
+import {
+  PoolsWriter,
+  TokenPoolDescriptor,
+  describesTokens,
+  tokenPoolDescriptor,
+  tokenPoolReserves,
+} from '../../lib/pools-storage';
 
 export class AlgebraIntegral
   extends SimpleExchange
@@ -72,6 +83,7 @@ export class AlgebraIntegral
   private readonly factory: AlgebraIntegralFactory;
   private updatePoolsTvlTimer?: NodeJS.Timeout;
   private feeUpdateIntervalTask?: NodeJS.Timeout;
+  private readonly poolsWriter: PoolsWriter<TokenPoolDescriptor>;
   protected eventPools: Record<string, AlgebraIntegralEventPool | null> = {};
   private poolInitPromises: Record<
     string,
@@ -110,6 +122,12 @@ export class AlgebraIntegral
       this.config.factory,
       this.config.subgraphURL,
     );
+    this.poolsWriter = new PoolsWriter({
+      cache: dexHelper.cache,
+      key: `${CACHE_PREFIX}_${network}_${dexKey}_pools`.toLowerCase(),
+      logger: this.logger,
+      listPools: () => this.listPoolDescriptors(),
+    });
   }
 
   async initializePricing(blockNumber: number) {
@@ -143,6 +161,10 @@ export class AlgebraIntegral
           }
         }, POOL_TVL_UPDATE_INTERVAL * 1000);
       }
+
+      // after the first TVL refresh so the initial publication already
+      // reflects which pools clear MIN_USD_TVL_FOR_PRICING
+      this.poolsWriter.start();
 
       if (!this.feeUpdateIntervalTask) {
         void this.updateAllPoolFees();
@@ -844,6 +866,52 @@ export class AlgebraIntegral
     }));
   }
 
+  // The factory list is the routable inventory: the same TVL cut as pricing
+  // applies, so unpriced-but-routable pools are published as well.
+  private *listPoolDescriptors(): Iterable<[string, TokenPoolDescriptor]> {
+    for (const pool of this.factory.getAllPools()) {
+      if (pool.tvlUSD < MIN_USD_TVL_FOR_PRICING) continue;
+      const descriptor = tokenPoolDescriptor(
+        pool.poolAddress,
+        pool.token0,
+        pool.token1,
+      );
+      yield [descriptor.a, descriptor];
+    }
+  }
+
+  getPoolsStorage(): PoolsStorage {
+    return {
+      key: this.poolsWriter.key,
+      type: PoolsStorageType.RedisHash,
+      fieldInValue: true,
+    };
+  }
+
+  getPoolReserves(pools: string[] = []): Promise<PoolReserves[]> {
+    const byAddress = new Map<string, AlgebraIntegralEventPool>();
+    for (const pool of Object.values(this.eventPools)) {
+      if (pool) byAddress.set(pool.poolAddress, pool);
+    }
+    return tokenPoolReserves({
+      dexKey: this.dexKey,
+      multiWrapper: this.dexHelper.multiWrapper,
+      descriptors: pools,
+      cached: descriptor => {
+        const pool = byAddress.get(descriptor.a);
+        if (!pool) return null;
+        if (!describesTokens(descriptor, pool.token0, pool.token1)) return {};
+        if (pool.isInvalid()) return null;
+        const state = pool.getStaleState();
+        if (!state) return null;
+        return {
+          [pool.token0]: state.balance0,
+          [pool.token1]: state.balance1,
+        };
+      },
+    });
+  }
+
   async getTopPoolsForToken(
     tokenAddress: Address,
     limit: number,
@@ -946,6 +1014,8 @@ export class AlgebraIntegral
   }
 
   releaseResources(): void {
+    this.poolsWriter.release();
+
     if (this.updatePoolsTvlTimer) {
       clearInterval(this.updatePoolsTvlTimer);
       this.updatePoolsTvlTimer = undefined;

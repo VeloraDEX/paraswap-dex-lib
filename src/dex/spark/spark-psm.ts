@@ -277,6 +277,13 @@ export class SparkPsm extends Spark {
     ];
   }
 
+  protected getPoolReservesTokens(): { address: Address; tokens: Address[] } {
+    return {
+      address: this.config.psmAddress!,
+      tokens: [this.daiAddress, this.sdaiAddress, this.usdcAddress],
+    };
+  }
+
   async getTopPoolsForToken(
     tokenAddress: Address,
     limit: number,

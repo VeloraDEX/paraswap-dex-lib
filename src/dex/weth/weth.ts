@@ -8,8 +8,9 @@ import {
   PoolLiquidity,
   Logger,
   DexExchangeParam,
+  PoolReserves,
 } from '../../types';
-import { SwapSide, Network } from '../../constants';
+import { SwapSide, Network, ETHER_ADDRESS } from '../../constants';
 import * as CALLDATA_GAS_COST from '../../calldata-gas-cost';
 import { getDexKeysWithNetwork, isETHAddress } from '../../utils';
 import { IDex } from '../../dex/idex';
@@ -26,6 +27,7 @@ import { SimpleExchange } from '../simple-exchange';
 import { Adapters, WethConfig } from './config';
 import { BI_POWS } from '../../bigint-constants';
 import { NumberAsString, ParaSwapVersion } from '@paraswap/core';
+import { unlimitedReserves } from '../../lib/pools-storage/reserves';
 
 export class Weth
   extends SimpleExchange
@@ -183,6 +185,18 @@ export class Weth
       targetExchange: this.address,
       returnAmountPos: undefined,
     };
+  }
+
+  getPoolReserves(): PoolReserves[] {
+    const wrapped = this.address.toLowerCase();
+    return [
+      {
+        dex: this.dexKey,
+        id: wrapped,
+        address: wrapped,
+        reserves: unlimitedReserves([ETHER_ADDRESS, wrapped]),
+      },
+    ];
   }
 
   async getTopPoolsForToken(
