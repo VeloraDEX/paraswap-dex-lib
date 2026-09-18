@@ -1,0 +1,1082 @@
+{
+  "info": {
+    "name": "Pool reserves consumer simulation",
+    "_postman_id": "9c1d4f2e-7b31-4c0a-9a1e-3f6d2a8b5c71",
+    "description": "Local harness for the dex-lib pool-reserves API running over a copy of the production Redis. Start it with `POOL_RESERVES_CHAINS=1,8453 pnpm pool-reserves-server` (see scripts/pool-reserves-server/README.md). Collection variables: `baseUrl`, `chainId`, `dexKey`, `poolId`, `sample`. Requests carry tests for the invariants worth checking; run a folder with the Collection Runner to execute them in order.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://127.0.0.1:3400"
+    },
+    {
+      "key": "chainId",
+      "value": "1"
+    },
+    {
+      "key": "dexKey",
+      "value": "UniswapV2"
+    },
+    {
+      "key": "poolId",
+      "value": ""
+    },
+    {
+      "key": "sample",
+      "value": "50"
+    }
+  ],
+  "event": [
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// collection-wide: every request answers JSON",
+          "pm.test('response is JSON', () => pm.response.to.be.json);"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "0. Requests (no tests)",
+      "description": "Plain requests for manual use. Path variables (:dexKey, :chainId, :id) are editable in the Params tab and default to the collection variables.",
+      "item": [
+        {
+          "name": "GET health",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/health",
+              "host": ["{{baseUrl}}"],
+              "path": ["health"]
+            }
+          }
+        },
+        {
+          "name": "GET dexs on chain",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/dexs/:chainId",
+              "host": ["{{baseUrl}}"],
+              "path": ["dexs", ":chainId"],
+              "variable": [
+                {
+                  "key": "chainId",
+                  "value": "{{chainId}}"
+                }
+              ]
+            },
+            "description": "Every dex exposing getPoolReserves: mode, storage key, init outcome, storage size before init and now."
+          }
+        },
+        {
+          "name": "GET status of chain",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/status/:chainId",
+              "host": ["{{baseUrl}}"],
+              "path": ["status", ":chainId"],
+              "variable": [
+                {
+                  "key": "chainId",
+                  "value": "{{chainId}}"
+                }
+              ]
+            },
+            "description": "Init outcomes, running dex, last run, all stored reports."
+          }
+        },
+        {
+          "name": "GET pools page",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/pools/:dexKey/:chainId?cursor=0&count=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["pools", ":dexKey", ":chainId"],
+              "query": [
+                {
+                  "key": "cursor",
+                  "value": "0"
+                },
+                {
+                  "key": "count",
+                  "value": "20"
+                }
+              ],
+              "variable": [
+                {
+                  "key": "dexKey",
+                  "value": "{{dexKey}}"
+                },
+                {
+                  "key": "chainId",
+                  "value": "{{chainId}}"
+                }
+              ]
+            },
+            "description": "HSCAN page of the storage (mode A) or last-run ids (mode B). Follow `cursor` until '0'."
+          }
+        },
+        {
+          "name": "GET one pool descriptor",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/pools/:dexKey/:chainId/:id",
+              "host": ["{{baseUrl}}"],
+              "path": ["pools", ":dexKey", ":chainId", ":id"],
+              "variable": [
+                {
+                  "key": "dexKey",
+                  "value": "{{dexKey}}"
+                },
+                {
+                  "key": "chainId",
+                  "value": "{{chainId}}"
+                },
+                {
+                  "key": "id",
+                  "value": "{{poolId}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "POST generate one dex",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/generate/:chainId/:dexKey",
+              "host": ["{{baseUrl}}"],
+              "path": ["generate", ":chainId", ":dexKey"],
+              "variable": [
+                {
+                  "key": "chainId",
+                  "value": "{{chainId}}"
+                },
+                {
+                  "key": "dexKey",
+                  "value": "{{dexKey}}"
+                }
+              ]
+            },
+            "description": "Sweep + getPoolReserves + publish for one dex."
+          }
+        },
+        {
+          "name": "POST generate whole chain",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/generate/:chainId",
+              "host": ["{{baseUrl}}"],
+              "path": ["generate", ":chainId"],
+              "variable": [
+                {
+                  "key": "chainId",
+                  "value": "{{chainId}}"
+                }
+              ]
+            },
+            "description": "All dexes on the chain sequentially (Mainnet ~45 s, Base ~55 s)."
+          }
+        },
+        {
+          "name": "GET reserves page",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/reserves/:dexKey/:chainId?cursor=0&count=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["reserves", ":dexKey", ":chainId"],
+              "query": [
+                {
+                  "key": "cursor",
+                  "value": "0"
+                },
+                {
+                  "key": "count",
+                  "value": "20"
+                }
+              ],
+              "variable": [
+                {
+                  "key": "dexKey",
+                  "value": "{{dexKey}}"
+                },
+                {
+                  "key": "chainId",
+                  "value": "{{chainId}}"
+                }
+              ]
+            },
+            "description": "Published rows with `meta` (consumer report) and `harness` (RPC counters, warnings)."
+          }
+        },
+        {
+          "name": "GET one reserves row",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/reserves/:dexKey/:chainId/:id",
+              "host": ["{{baseUrl}}"],
+              "path": ["reserves", ":dexKey", ":chainId", ":id"],
+              "variable": [
+                {
+                  "key": "dexKey",
+                  "value": "{{dexKey}}"
+                },
+                {
+                  "key": "chainId",
+                  "value": "{{chainId}}"
+                },
+                {
+                  "key": "id",
+                  "value": "{{poolId}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET verify sample",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/verify/:dexKey/:chainId?sample={{sample}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["verify", ":dexKey", ":chainId"],
+              "query": [
+                {
+                  "key": "sample",
+                  "value": "{{sample}}"
+                }
+              ],
+              "variable": [
+                {
+                  "key": "dexKey",
+                  "value": "{{dexKey}}"
+                },
+                {
+                  "key": "chainId",
+                  "value": "{{chainId}}"
+                }
+              ]
+            },
+            "description": "On-chain check of sampled rows; run right after generate."
+          }
+        }
+      ]
+    },
+    {
+      "name": "0b. Examples",
+      "description": "Concrete requests with fixed dex keys.",
+      "item": [
+        {
+          "name": "Mainnet: dexs",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/dexs/1",
+              "host": ["{{baseUrl}}"],
+              "path": ["dexs", "1"]
+            }
+          }
+        },
+        {
+          "name": "Mainnet: UniswapV2 pools page",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/pools/UniswapV2/1?cursor=0&count=5",
+              "host": ["{{baseUrl}}"],
+              "path": ["pools", "UniswapV2", "1"],
+              "query": [
+                {
+                  "key": "cursor",
+                  "value": "0"
+                },
+                {
+                  "key": "count",
+                  "value": "5"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Mainnet: PancakeSwapV2 pools page (fieldInValue: false)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/pools/PancakeSwapV2/1?cursor=0&count=5",
+              "host": ["{{baseUrl}}"],
+              "path": ["pools", "PancakeSwapV2", "1"],
+              "query": [
+                {
+                  "key": "cursor",
+                  "value": "0"
+                },
+                {
+                  "key": "count",
+                  "value": "5"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Mainnet: generate PancakeSwapV2 (~2 s)",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/generate/1/PancakeSwapV2",
+              "host": ["{{baseUrl}}"],
+              "path": ["generate", "1", "PancakeSwapV2"]
+            }
+          }
+        },
+        {
+          "name": "Mainnet: generate UniswapV2 (~15 s)",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/generate/1/UniswapV2",
+              "host": ["{{baseUrl}}"],
+              "path": ["generate", "1", "UniswapV2"]
+            }
+          }
+        },
+        {
+          "name": "Mainnet: generate all (~45 s)",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/generate/1",
+              "host": ["{{baseUrl}}"],
+              "path": ["generate", "1"]
+            }
+          }
+        },
+        {
+          "name": "Mainnet: UniswapV2 reserves",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/reserves/UniswapV2/1?cursor=0&count=5",
+              "host": ["{{baseUrl}}"],
+              "path": ["reserves", "UniswapV2", "1"],
+              "query": [
+                {
+                  "key": "cursor",
+                  "value": "0"
+                },
+                {
+                  "key": "count",
+                  "value": "5"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Mainnet: LitePsm reserves (directional keys)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/reserves/LitePsm/1",
+              "host": ["{{baseUrl}}"],
+              "path": ["reserves", "LitePsm", "1"]
+            }
+          }
+        },
+        {
+          "name": "Mainnet: AaveGsm reserves (seized → 0 rows)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/reserves/AaveGsm/1",
+              "host": ["{{baseUrl}}"],
+              "path": ["reserves", "AaveGsm", "1"]
+            }
+          }
+        },
+        {
+          "name": "Mainnet: EkuboV3 reserves",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/reserves/EkuboV3/1?cursor=0&count=5",
+              "host": ["{{baseUrl}}"],
+              "path": ["reserves", "EkuboV3", "1"],
+              "query": [
+                {
+                  "key": "cursor",
+                  "value": "0"
+                },
+                {
+                  "key": "count",
+                  "value": "5"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Mainnet: verify UniswapV2",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/verify/UniswapV2/1?sample=50",
+              "host": ["{{baseUrl}}"],
+              "path": ["verify", "UniswapV2", "1"],
+              "query": [
+                {
+                  "key": "sample",
+                  "value": "50"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Mainnet: verify MaverickV2",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/verify/MaverickV2/1?sample=68",
+              "host": ["{{baseUrl}}"],
+              "path": ["verify", "MaverickV2", "1"],
+              "query": [
+                {
+                  "key": "sample",
+                  "value": "68"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Mainnet: verify EkuboV3 (id set)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/verify/EkuboV3/1",
+              "host": ["{{baseUrl}}"],
+              "path": ["verify", "EkuboV3", "1"]
+            }
+          }
+        },
+        {
+          "name": "Base: dexs",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/dexs/8453",
+              "host": ["{{baseUrl}}"],
+              "path": ["dexs", "8453"]
+            }
+          }
+        },
+        {
+          "name": "Base: Aerodrome pools page",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/pools/Aerodrome/8453?cursor=0&count=5",
+              "host": ["{{baseUrl}}"],
+              "path": ["pools", "Aerodrome", "8453"],
+              "query": [
+                {
+                  "key": "cursor",
+                  "value": "0"
+                },
+                {
+                  "key": "count",
+                  "value": "5"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Base: generate all (~55 s)",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/generate/8453",
+              "host": ["{{baseUrl}}"],
+              "path": ["generate", "8453"]
+            }
+          }
+        },
+        {
+          "name": "Base: Aerodrome reserves",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/reserves/Aerodrome/8453?cursor=0&count=5",
+              "host": ["{{baseUrl}}"],
+              "path": ["reserves", "Aerodrome", "8453"],
+              "query": [
+                {
+                  "key": "cursor",
+                  "value": "0"
+                },
+                {
+                  "key": "count",
+                  "value": "5"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Base: verify Aerodrome",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/verify/Aerodrome/8453?sample=50",
+              "host": ["{{baseUrl}}"],
+              "path": ["verify", "Aerodrome", "8453"],
+              "query": [
+                {
+                  "key": "sample",
+                  "value": "50"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Base: verify QuickSwapV4",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/verify/QuickSwapV4/8453?sample=50",
+              "host": ["{{baseUrl}}"],
+              "path": ["verify", "QuickSwapV4", "8453"],
+              "query": [
+                {
+                  "key": "sample",
+                  "value": "50"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "1. Discovery",
+      "item": [
+        {
+          "name": "Health",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/health"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('every chain ready', () => pm.expect(body.chains.every(c => c.ready)).to.be.true);",
+                  "pm.test('no run in progress', () => pm.expect(body.chains.every(c => c.running === null)).to.be.true);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Dexes on chain",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/dexs/{{chainId}}",
+            "description": "Every dex exposing getPoolReserves on the chain: mode (storage / enumerated), storage key and fieldInValue, init outcome, storage size before dex-lib initialization (production input) and now (includes what PoolsWriter dexes published locally)."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('has dexes', () => pm.expect(body.count).to.be.above(0));",
+                  "pm.test('no failed or timed out init', () => {",
+                  "  const bad = body.dexs.filter(d => d.init && ['failed', 'timeout'].includes(d.init.status));",
+                  "  pm.expect(bad.map(d => d.dexKey), 'failed inits').to.eql([]);",
+                  "});",
+                  "pm.test('storage dexes point at dl_<chain>_ hashes', () => {",
+                  "  body.dexs.filter(d => d.mode === 'storage').forEach(d => pm.expect(d.storage.key).to.match(new RegExp('^dl_' + pm.collectionVariables.get('chainId') + '_')));",
+                  "});",
+                  "console.log(body.dexs.map(d => ({ dexKey: d.dexKey, mode: d.mode, init: d.init && d.init.status, before: d.poolsInStorageBeforeInit, now: d.poolsInStorageNow })));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Status of chain",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/status/{{chainId}}",
+            "description": "Init outcomes with RPC counters and captured warnings, the running dex, the last run and every stored report."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('chain ready', () => pm.expect(body.ready).to.be.true);"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "2. Pools (input descriptors)",
+      "item": [
+        {
+          "name": "Pools page",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/pools/{{dexKey}}/{{chainId}}?cursor=0&count=5",
+              "host": ["{{baseUrl}}"],
+              "path": ["pools", "{{dexKey}}", "{{chainId}}"],
+              "query": [
+                {
+                  "key": "cursor",
+                  "value": "0"
+                },
+                {
+                  "key": "count",
+                  "value": "5"
+                }
+              ]
+            },
+            "description": "One HSCAN page of the dex's storage (mode A) or of the last run's ids (mode B). `total` is HLEN; follow `cursor` until it is '0'. Sets `poolId` to the first id for the next request."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('mode is storage or enumerated', () => pm.expect(['storage', 'enumerated']).to.include(body.mode));",
+                  "if (body.mode === 'storage') {",
+                  "  pm.test('storage has fields', () => pm.expect(body.total).to.be.above(0));",
+                  "  if (body.pools.length) pm.collectionVariables.set('poolId', body.pools[0].id);",
+                  "} else if (body.ids && body.ids.length) {",
+                  "  pm.collectionVariables.set('poolId', body.ids[0]);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "One descriptor",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/pools/{{dexKey}}/{{chainId}}/{{poolId}}",
+            "description": "HGET of one stored descriptor. Use it to classify entries from `skippedSample`: UniswapV2-family placeholders have no `exchange`."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('id echoed', () => pm.expect(body.id).to.eql(pm.collectionVariables.get('poolId')));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "3. Generate",
+      "item": [
+        {
+          "name": "Generate one dex",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/generate/{{chainId}}/{{dexKey}}",
+            "description": "Runs the consumer for one dex: HSCAN → batches ≤ 1000 → getPoolReserves → validate → publish. UniswapV2 on Mainnet (~450k fields) takes ~15 s."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const r = pm.response.json().reports[0];",
+                  "pm.test('run ok', () => pm.expect(r.status).to.eql('ok'));",
+                  "pm.test('no failed batches / invalid / unexpected rows', () => {",
+                  "  pm.expect(r.failedBatches, 'failedBatches').to.eql(0);",
+                  "  pm.expect(r.invalid, 'invalid').to.eql(0);",
+                  "  pm.expect(r.unexpectedId, 'unexpectedId').to.eql(0);",
+                  "});",
+                  "if (r.mode === 'storage') {",
+                  "  pm.test('accounting identity: scanned = requested + unparsable', () => pm.expect(r.scannedFields).to.eql(r.requested + r.unparsable));",
+                  "  pm.test('accounting identity: requested = returned + invalid + skipped + duplicateFields', () => pm.expect(r.requested).to.eql(r.returned + r.invalid + r.skipped + r.duplicateFields));",
+                  "  pm.test('batches never exceed 1000', () => pm.expect(r.batchSize).to.be.at.most(1000));",
+                  "}",
+                  "console.log(`${r.dexKey}: returned=${r.returned} skipped=${r.skipped} rpc=${r.rpc.jsonRpcRequests} ${r.durationMs}ms warnings=${r.samples.warnings}`);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Generate whole chain",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/generate/{{chainId}}",
+            "description": "Every dex on the chain, sequentially. Mainnet ~45 s, Base ~55 s. Returns one report per dex."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('every dex ok', () => pm.expect(body.reports.filter(r => r.status !== 'ok').map(r => r.dexKey)).to.eql([]));",
+                  "pm.test('no failed batches anywhere', () => pm.expect(body.reports.filter(r => r.failedBatches > 0).map(r => r.dexKey)).to.eql([]));",
+                  "pm.test('accounting identity holds for every storage dex', () => {",
+                  "  body.reports.filter(r => r.mode === 'storage').forEach(r => {",
+                  "    pm.expect(r.requested, r.dexKey).to.eql(r.returned + r.invalid + r.skipped + r.duplicateFields);",
+                  "  });",
+                  "});",
+                  "console.log(body.reports.map(r => ({ dexKey: r.dexKey, mode: r.mode, status: r.status, before: r.poolsInStorageBeforeInit, scanned: r.scannedFields, returned: r.returned, skipped: r.skipped, rpc: r.rpc.jsonRpcRequests, ms: r.durationMs, warnings: r.samples.warnings })));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Generate while running → 409",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/generate/{{chainId}}/Weth",
+            "description": "Send while 'Generate whole chain' is still in flight in another tab to see the per-chain lock. Outside a run it returns 200."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 idle or 409 while a run is active', () => pm.expect([200, 409]).to.include(pm.response.code));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "4. Reserves (published output)",
+      "item": [
+        {
+          "name": "Reserves page",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/reserves/{{dexKey}}/{{chainId}}?cursor=0&count=5",
+              "host": ["{{baseUrl}}"],
+              "path": ["reserves", "{{dexKey}}", "{{chainId}}"],
+              "query": [
+                {
+                  "key": "cursor",
+                  "value": "0"
+                },
+                {
+                  "key": "count",
+                  "value": "5"
+                }
+              ]
+            },
+            "description": "Last published run: `meta` (consumer report), `harness` (RPC counters, captured dex-lib warnings), `lastFailure`, `total` rows and one page of rows from dexlib:pools_reserves_legacy:{<dexKey>:<chainId>}. 404 when no run was ever published."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 (404 means: run Generate first)', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('meta belongs to an ok run', () => pm.expect(body.meta.status).to.eql('ok'));",
+                  "pm.test('total matches persistedRows', () => pm.expect(body.total).to.eql(body.meta.persistedRows));",
+                  "pm.test('rows are well formed', () => {",
+                  "  body.reserves.forEach(row => {",
+                  "    pm.expect(row.address).to.match(/^0x[0-9a-f]{40}$/);",
+                  "    Object.entries(row.reserves).forEach(([k, v]) => {",
+                  "      pm.expect(k).to.match(/^0x[0-9a-f]{40}(_0x[0-9a-f]{40})?$/);",
+                  "      pm.expect(v).to.match(/^(0|[1-9][0-9]*|unlimited)$/);",
+                  "    });",
+                  "  });",
+                  "});",
+                  "if (body.reserves.length) pm.collectionVariables.set('poolId', body.reserves[0].id);",
+                  "console.log('skipped sample:', (body.meta.skippedSample || []).slice(0, 5));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "One reserves row",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/reserves/{{dexKey}}/{{chainId}}/{{poolId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('has reserves', () => pm.expect(Object.keys(pm.response.json().reserves).length).to.be.above(0));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Mode B example: LitePsm (Mainnet)",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/reserves/LitePsm/1",
+            "description": "Directional keys: gem→dai, dai→gem, gem→usds, usds→gem. No dai↔usds key."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('one row with four directional keys', () => {",
+                  "  pm.expect(body.total).to.eql(1);",
+                  "  const keys = Object.keys(body.reserves[0].reserves);",
+                  "  pm.expect(keys.length).to.eql(4);",
+                  "  keys.forEach(k => pm.expect(k).to.include('_'));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Mode B example: AaveGsm (Mainnet, seized → empty)",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/reserves/AaveGsm/1",
+            "description": "Both Mainnet GSMs report getIsSeized() == true on-chain, so the specified result is zero rows with a published meta (not a 404)."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 with meta and zero rows', () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  const body = pm.response.json();",
+                  "  pm.expect(body.meta.status).to.eql('ok');",
+                  "  pm.expect(body.total).to.eql(0);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "5. Verify against chain",
+      "item": [
+        {
+          "name": "Verify sample",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/verify/{{dexKey}}/{{chainId}}?sample={{sample}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["verify", "{{dexKey}}", "{{chainId}}"],
+              "query": [
+                {
+                  "key": "sample",
+                  "value": "{{sample}}"
+                }
+              ]
+            },
+            "description": "Re-reads sampled rows on-chain: UniswapV2 family via getReserves() at the run block (then latest), token-pool dexes via balanceOf at run / state / latest block with a 1e-6 tolerance, EkuboV3 by id set. Run right after Generate: state-path dexes (MaverickV2) drift within seconds."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const v = pm.response.json();",
+                  "const agree = v.agreeAtRunBlock + v.agreeAtStateBlock + v.agreeAtLatest + v.agreeWithinTolerance;",
+                  "pm.test('an oracle applied', () => pm.expect(v.oracle).to.not.eql('none'));",
+                  "pm.test('>= 90% of the sample agrees', () => {",
+                  "  if (v.sampled === 0) pm.expect.fail('nothing sampled: ' + v.reason);",
+                  "  pm.expect(agree / v.sampled).to.be.at.least(0.9);",
+                  "});",
+                  "console.log(`${v.dexKey}: oracle=${v.oracle} sampled=${v.sampled} agree=${agree} disagree=${v.disagree} unverified=${v.unverified}`);",
+                  "(v.checks || []).filter(c => c.result === 'disagree').slice(0, 5).forEach(c => console.log('disagree', c.id, JSON.stringify(c.detail)));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Verify EkuboV3 id set (Mainnet)",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/verify/EkuboV3/1"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const v = pm.response.json();",
+                  "pm.test('published ids == pool manager pools', () => {",
+                  "  pm.expect(v.oracle).to.eql('idSet');",
+                  "  pm.expect(v.disagree).to.eql(0);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Invalid sample → 400",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/verify/{{dexKey}}/{{chainId}}?sample=-5",
+              "host": ["{{baseUrl}}"],
+              "path": ["verify", "{{dexKey}}", "{{chainId}}"],
+              "query": [
+                {
+                  "key": "sample",
+                  "value": "-5"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "6. Error handling",
+      "item": [
+        {
+          "name": "Unknown chain → 404",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/dexs/999999"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('404', () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Unknown dex → 404 with known keys",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/pools/NoSuchDex/{{chainId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('404 lists known dex keys', () => {",
+                  "  pm.response.to.have.status(404);",
+                  "  pm.expect(pm.response.json().known).to.be.an('array').that.is.not.empty;",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Unknown pool id → 404",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/pools/{{dexKey}}/{{chainId}}/does-not-exist"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('404', () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

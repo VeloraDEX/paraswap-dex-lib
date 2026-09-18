@@ -4,6 +4,7 @@ module.exports = {
   testRegex: [
     '/tests/.*\\.(test|spec)\\.(ts)$',
     '/src/(dex|lib|executor)/.*\\.(test|spec)\\.(ts)$',
+    '/scripts/pool-reserves-server/.*\\.(test|spec)\\.(ts)$',
   ],
   moduleFileExtensions: ['ts', 'js', 'json', 'node'],
   testTimeout: 30 * 1000,

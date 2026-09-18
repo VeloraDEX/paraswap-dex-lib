@@ -372,6 +372,13 @@ class DummyBlockManager implements IBlockManager {
   }
 }
 
+export type DummyDexHelperOptions = {
+  // replaces the in-memory DummyCache, e.g. with a real Redis-backed ICache
+  cache?: ICache;
+  isSlave?: boolean;
+  masterCachePrefix?: string;
+};
+
 export class DummyDexHelper implements IDexHelper {
   config: ConfigHelper;
   cache: ICache;
@@ -391,9 +398,17 @@ export class DummyDexHelper implements IDexHelper {
     tokenAmounts: [toke: string, amount: bigint | null][],
   ) => Promise<number[]>;
 
-  constructor(network: number, rpcUrl?: string) {
-    this.config = new ConfigHelper(false, generateConfig(network), 'is');
-    this.cache = new DummyCache();
+  constructor(
+    network: number,
+    rpcUrl?: string,
+    options: DummyDexHelperOptions = {},
+  ) {
+    this.config = new ConfigHelper(
+      options.isSlave ?? false,
+      generateConfig(network),
+      options.masterCachePrefix ?? 'is',
+    );
+    this.cache = options.cache ?? new DummyCache();
     this.httpRequest = new DummyRequestWrapper(this.config.data.apiKeyTheGraph);
     this.provider = new StaticJsonRpcProvider(
       rpcUrl ? rpcUrl : this.config.data.privateHttpProvider,

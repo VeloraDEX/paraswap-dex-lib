@@ -1,6 +1,7 @@
 import * as _ from 'lodash';
 import {
   DummyDexHelper,
+  DummyDexHelperOptions,
   DummyLimitOrderProvider,
   IDexHelper,
 } from '../dex-helper';
@@ -72,8 +73,9 @@ export class LocalParaswapSDK implements IParaSwapSDK {
     dexKeys: string | string[],
     rpcUrl: string,
     limitOrderProvider?: DummyLimitOrderProvider,
+    dexHelperOptions?: DummyDexHelperOptions,
   ) {
-    this.dexHelper = new DummyDexHelper(this.network, rpcUrl);
+    this.dexHelper = new DummyDexHelper(this.network, rpcUrl, dexHelperOptions);
     this.dexAdapterService = new DexAdapterService(
       this.dexHelper,
       this.network,
