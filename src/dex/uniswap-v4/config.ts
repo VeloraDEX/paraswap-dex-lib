@@ -2,6 +2,7 @@ import { DexConfigMap } from '../../types';
 import { Network } from '../../constants';
 import { DexParams, SubgraphPool } from './types';
 import { ArenaHook } from './hooks/arena/arena-hook';
+import { BuffetHook } from './hooks/buffet/buffet-hook';
 
 export const UniswapV4Config: DexConfigMap<DexParams> = {
   UniswapV4: {
@@ -22,6 +23,7 @@ export const UniswapV4Config: DexConfigMap<DexParams> = {
       stateView: '0xa3c0c9b65bad0b08107aa264b0f3db444b867a71',
       skipPoolsWithUnconventionalFees: true,
       stateMulticall: '0x223c5fc295557f634979827728558424cf879d44',
+      supportedHooks: [BuffetHook],
     },
     [Network.OPTIMISM]: {
       poolManager: '0x9a13f98cb987694c9f086b1f5eb990eea8264ec3',
@@ -77,6 +79,18 @@ export const UniswapV4Config: DexConfigMap<DexParams> = {
 
 export const UniswapV4PoolsList: Record<number, SubgraphPool[]> = {
   [Network.BASE]: [
+    {
+      fee: '100',
+      hooks: '0x880bfa436d722bfde337eafc7c22123c17b90088',
+      id: '0xaf36a3b872ece56b04af777bf6867cf79b91cb0212f12c92f27fd1bb27dd25a2',
+      tickSpacing: '1',
+      token0: {
+        address: '0x0000000000000000000000000000000000000000', // symbol: 'ETH',
+      },
+      token1: {
+        address: '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913', // symbol: 'USDC',
+      },
+    },
     {
       fee: '7',
       hooks: '0x0000000000000000000000000000000000000000',
