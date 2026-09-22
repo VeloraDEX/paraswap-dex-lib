@@ -13,6 +13,7 @@ import {
   OptimalSwapExchange,
   PreprocessTransactionOptions,
   NumberAsString,
+  GetDexParamOptions,
 } from '../../types';
 import { SwapSide, Network } from '../../constants';
 import * as CALLDATA_GAS_COST from '../../calldata-gas-cost';
@@ -21,6 +22,7 @@ import { IDex } from '../../dex/idex';
 import { IDexHelper } from '../../dex-helper/idex-helper';
 import { VurtoData, DexParams, VurtoQuoteResponse } from './types';
 import { SimpleExchange } from '../simple-exchange';
+import { resolvePreProcessedData } from '../preprocess-in-dex-param';
 import {
   VurtoConfig,
   VURTO_PRICING_TIMEOUT_MS,
@@ -60,6 +62,33 @@ import {
  * inside the calldata is the gross one our router checks before the fee comes
  * out; those two differ on purpose and must not be swapped.
  */
+/**
+ * Saida para UMA unidade inteira do token de origem, derivada.
+ *
+ * `unit` existe para o roteador comparar fontes numa mesma escala. Buscar uma
+ * cotacao so para ele custava uma ida HTTP a mais por par e por pedido, em
+ * serie, num caminho que aborta em 3s. A regra de tres sobre a cotacao mais
+ * PROXIMA de uma unidade e uma aproximacao, e ela e honesta nesse papel: `unit`
+ * nao vai para a transacao, o que vai e `prices`, que continua medido valor a
+ * valor.
+ */
+function unidadeDerivada(
+  cotacoes: (VurtoQuoteResponse | null)[],
+  amounts: bigint[],
+  decimals: number,
+): bigint {
+  const uma = BigInt(10) ** BigInt(decimals);
+  let melhorIdx = -1;
+  let melhorDistancia = -1n;
+  cotacoes.forEach((c, i) => {
+    if (!c || amounts[i] === 0n) return;
+    const d = amounts[i] > uma ? amounts[i] - uma : uma - amounts[i];
+    if (melhorDistancia < 0n || d < melhorDistancia) { melhorDistancia = d; melhorIdx = i; }
+  });
+  if (melhorIdx < 0) return 0n;
+  return (BigInt(cotacoes[melhorIdx]!.amountOut) * uma) / amounts[melhorIdx];
+}
+
 export class Vurto extends SimpleExchange implements IDex<VurtoData> {
   /** Our output is not linear in the input: it comes from real pool math. */
   readonly hasConstantPriceLargeAmounts = false;
@@ -140,50 +169,48 @@ export class Vurto extends SimpleExchange implements IDex<VurtoData> {
     if (side === SwapSide.BUY) return null;
     if (limitPools && !limitPools.includes(this.poolIdentifier)) return null;
 
-    const pedidos = amounts.map(async amount => {
-      if (amount === 0n) return 0n;
-      const cotacao = await this.cotar(srcToken, destToken, amount);
-      return cotacao ? BigInt(cotacao.amountOut) : 0n;
-    });
+    const pedidos = amounts.map(async amount =>
+      amount === 0n ? null : await this.cotar(srcToken, destToken, amount));
 
-    const saidas = await Promise.all(pedidos);
+    const cotacoes = await Promise.all(pedidos);
+    const saidas = cotacoes.map(c => (c ? BigInt(c.amountOut) : 0n));
     /* A pool that answered nothing for every non-zero amount is a pool that is
        not there for this pair right now, and saying so is cheaper for the
        router than a row of zeroes it has to filter. */
     if (saidas.every(v => v === 0n)) return null;
 
-    const maior = await this.cotar(
-      srcToken,
-      destToken,
-      amounts[amounts.length - 1],
-    );
+    /* A melhor cotacao ja veio no lote acima. Pedir de novo, e pedir mais uma
+       para a unidade, somava duas idas SEQUENCIAIS de ate 4s cada a um
+       ajudante de preco que aborta em 3s: o efeito era a Vurto devolver nada
+       quase sempre. A unidade agora se deriva do que ja esta na mao. */
+    const melhor = cotacoes.filter(Boolean).pop() ?? null;
 
     return [
       {
-        unit: await this.unidade(srcToken, destToken),
+        unit: unidadeDerivada(cotacoes, amounts, srcToken.decimals),
         prices: saidas,
+        /* Sem calldata aqui, e isso e a correcao de um defeito real.
+           Guardar na cotacao a calldata de UM dos valores fazia `getDexParam`
+           encodar a transacao do valor errado quando o construtor nao passava
+           por `preProcessTransaction`: tamanho diferente do que o usuario pediu,
+           em silencio. A calldata agora nasce so na montagem, com o valor e o
+           destinatario reais, e `isPreProcessed` abaixo e o que distingue os
+           dois estados. */
         data: {
           exchange: this.params.router,
-          calldata: maior?.tx.data ?? '0x',
-          value: maior?.tx.value ?? '0',
-          venue: maior?.venue ?? 'vurto',
-          validUntil: maior?.validUntil ?? 0,
+          calldata: '',
+          value: '0',
+          venue: melhor?.venue ?? 'vurto',
+          validUntil: 0,
         },
         poolIdentifiers: [this.poolIdentifier],
         // Alvo conhecido ja na cotacao: e sempre o nosso roteador.
         targetExchange: this.params.router,
         exchange: this.dexKey,
-        gasCost: Number(maior?.estimatedGas ?? VURTO_ROUTER_GAS),
+        gasCost: Number(melhor?.estimatedGas ?? VURTO_ROUTER_GAS),
         poolAddresses: [this.params.router],
       },
     ];
-  }
-
-  /** Output for one whole unit of the source token, which is what `unit` means. */
-  private async unidade(srcToken: Token, destToken: Token): Promise<bigint> {
-    const uma = BigInt(10) ** BigInt(srcToken.decimals);
-    const cotacao = await this.cotar(srcToken, destToken, uma);
-    return cotacao ? BigInt(cotacao.amountOut) : 0n;
   }
 
   /**
@@ -309,18 +336,29 @@ export class Vurto extends SimpleExchange implements IDex<VurtoData> {
     _destAmount: NumberAsString,
     _recipient: Address,
     data: VurtoData,
-    _side: SwapSide,
+    side: SwapSide,
     _executorAddress: Address,
+    options?: GetDexParamOptions,
   ): Promise<DexExchangeParam> {
-    if (!data.calldata || data.calldata === '0x') {
-      throw new Error(`${this.dexKey}: no calldata, preProcessTransaction must run first`);
-    }
+    /* A calldata so existe depois de `preProcessTransaction`, e um construtor
+       pode chegar aqui sem ter passado por ele. Antes isto lancava; agora o
+       proprio `getDexParam` roda o preprocess com o contexto que o chamador
+       trouxe, que e o contrato desta base para fonte que cota por HTTP. */
+    const { data: resolvida } = await resolvePreProcessedData({
+      dexKey: this.dexKey,
+      data,
+      side,
+      isPreProcessed: Boolean(data.calldata) && data.calldata !== '0x',
+      preProcessTransaction: this.preProcessTransaction.bind(this),
+      options,
+    });
+
     return {
       needWrapNative: this.needWrapNative,
       dexFuncHasRecipient: true,
-      exchangeData: data.calldata,
-      targetExchange: data.exchange,
-      spender: data.exchange,
+      exchangeData: resolvida.calldata,
+      targetExchange: resolvida.exchange,
+      spender: resolvida.exchange,
       returnAmountPos: undefined,
     };
   }

@@ -107,26 +107,42 @@ describe(`${dexKey} integration contract`, () => {
     expect(pools).toEqual([]);
   });
 
-  it('refuses to build a transaction without a fresh quote', async () => {
-    await expect(
-      vurto.getDexParam(
-        tokens[srcTokenSymbol].address,
-        tokens[destTokenSymbol].address,
-        '1000000',
-        '0',
-        '0x0000000000000000000000000000000000000001',
-        {
-          exchange: '0x15cb65b1c6026334a079e48241d6c8fa79df7784',
-          calldata: '0x',
-          value: '0',
-          venue: 'uniswap',
-          validUntil: 0,
-        },
-        SwapSide.SELL,
-        '0x0000000000000000000000000000000000000002',
-      ),
-    ).rejects.toThrow(/no calldata/);
+  /* Antes isto lancava um erro nosso. Agora o caminho certo e outro, e a
+     mudanca veio de revisao no PR: `getDexParam` roda o preprocess sozinho
+     quando o chamador nao rodou. Sem contexto para rodar, o erro tem que ser o
+     TIPADO desta base, nao um `Error` generico nosso, porque e ele que permite
+     atribuir uma falha de montagem a esta fonte. */
+  it('sem cotacao e sem contexto, falha com o erro tipado do preprocess', async () => {
+    const erro = await vurto.getDexParam(
+      tokens[srcTokenSymbol].address,
+      tokens[destTokenSymbol].address,
+      '1000000',
+      '0',
+      '0x0000000000000000000000000000000000000001',
+      {
+        exchange: '0x15cb65b1c6026334a079e48241d6c8fa79df7784',
+        calldata: '',
+        value: '0',
+        venue: 'uniswap',
+        validUntil: 0,
+      },
+      SwapSide.SELL,
+      '0x0000000000000000000000000000000000000002',
+    ).then(() => null, (e: any) => e);
+    expect(erro).not.toBeNull();
+    expect(erro.isGetDexParamPreProcessError).toBe(true);
+    expect(String(erro.message)).toMatch(/MISSING_CONTEXT/);
   });
+
+  it('a cotacao NAO carrega calldata, que so nasce na montagem', async () => {
+    if (!online) return;
+    const prices = await vurto.getPricesVolume(
+      tokens[srcTokenSymbol], tokens[destTokenSymbol], amounts, SwapSide.SELL, 0);
+    if (!prices) return;
+    // Guardar calldata na cotacao fazia a montagem usar o tamanho errado.
+    expect(prices[0].data.calldata).toBe('');
+  });
+
 });
 
 describe(`${dexKey} pricing against the live surface`, () => {

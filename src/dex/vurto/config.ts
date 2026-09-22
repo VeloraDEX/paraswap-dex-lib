@@ -17,8 +17,16 @@ export const VURTO_GATEWAY = 'https://swap.vurto.cc/gateway/v1';
 /** Our quotes carry `validUntil`; this is the window we trust a cached one. */
 export const VURTO_QUOTE_TTL_MS = 8_000;
 
-/** Ceiling for a single pricing round, so a slow round never stalls a request. */
-export const VURTO_PRICING_TIMEOUT_MS = 4_000;
+/**
+ * Ceiling for a single pricing round.
+ *
+ * 2.5s, and the number is not arbitrary: the pricing helper in this repository
+ * aborts the whole round at 3s. A per-quote ceiling ABOVE that guarantees the
+ * abort fires first and Vurto returns nothing, which is exactly what happened
+ * with the 4s this constant used to hold. Ours has to end first, with room for
+ * the round to assemble the answer.
+ */
+export const VURTO_PRICING_TIMEOUT_MS = 2_500;
 
 /**
  * Router overhead on top of the venue call, in gas units.
