@@ -12,6 +12,7 @@ import {
   DexExchangeParam,
   GetDexParamOptions,
   TransferFeeParams,
+  PoolReserves,
 } from '../../types';
 import {
   SwapSide,
@@ -33,6 +34,7 @@ import { OSwapEventPool } from './oswap-pool';
 import OSwapABI from '../../abi/oswap/oswap.abi.json';
 import { extractReturnAmountPosition } from '../../executor/utils';
 import { applyTransferFee } from '../../lib/token-transfer-fee';
+import { toReserves } from '../../lib/pools-storage/reserves';
 
 export class OSwap extends SimpleExchange implements IDex<OSwapData> {
   readonly eventPools: { [id: string]: OSwapEventPool } = {};
@@ -452,6 +454,48 @@ export class OSwap extends SimpleExchange implements IDex<OSwapData> {
         pool.setState(state, blockNumber);
       }),
     );
+  }
+
+  // Pool state is created lazily on first pricing, so pools this instance
+  // has not priced yet are generated once here; a pool that fails to
+  // generate is skipped without affecting the others.
+  async getPoolReserves(): Promise<PoolReserves[]> {
+    const missing = this.pools
+      .map(pool => this.eventPools[pool.id])
+      .filter(eventPool => eventPool && !eventPool.getStaleState());
+    if (missing.length > 0) {
+      const blockNumber =
+        await this.dexHelper.web3Provider.eth.getBlockNumber();
+      await Promise.all(
+        missing.map(async eventPool => {
+          try {
+            const state = await eventPool.generateState(blockNumber);
+            eventPool.setState(state, blockNumber);
+          } catch (e) {
+            this.logger.warn(
+              `${this.dexKey}: failed to generate state for ${eventPool.name}`,
+              e,
+            );
+          }
+        }),
+      );
+    }
+    return this.pools.flatMap(pool => {
+      const eventPool = this.eventPools[pool.id];
+      const state = eventPool?.isInvalid() ? null : eventPool?.getStaleState();
+      if (!state) return [];
+      return [
+        {
+          dex: this.dexKey,
+          id: pool.address,
+          address: pool.address,
+          reserves: toReserves(
+            [pool.token0, pool.token1],
+            [BigInt(state.balance0), BigInt(state.balance1)],
+          ),
+        },
+      ];
+    });
   }
 
   // Returns a list of top pools based on liquidity. Max

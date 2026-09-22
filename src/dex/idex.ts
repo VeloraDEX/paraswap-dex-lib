@@ -16,6 +16,8 @@ import {
   TransferFeeParams,
   Config,
   GetDexParamOptions,
+  PoolsStorage,
+  PoolReserves,
 } from '../types';
 import { SwapSide, Network } from '../constants';
 import { IDexHelper } from '../dex-helper/idex-helper';
@@ -246,6 +248,18 @@ export interface IDexPooltracker {
     tokenAddress: Address,
     limit: number,
   ): AsyncOrSync<PoolLiquidity[]>;
+
+  // Storage mode: returns where the dex publishes its known pools; the
+  // consumer reads it directly and calls `getPoolReserves(pools)`
+  // with batches of stored descriptors.
+  // Enumerated mode: absent or returns null; `getPoolReserves()` with no
+  // arguments returns every pool.
+  getPoolsStorage?(): PoolsStorage | null;
+
+  // Returns the current reserves of the requested pools (storage mode) or of
+  // every pool (enumerated mode). Runs on pricing instances: in-memory state
+  // when available, RPC otherwise. Pools that cannot be resolved are skipped.
+  getPoolReserves?(pools?: string[]): AsyncOrSync<PoolReserves[]>;
 }
 
 // Combine IDexTxBuilder, IDexPricing & IDexPooltracker in

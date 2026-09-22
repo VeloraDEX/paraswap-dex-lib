@@ -14,6 +14,7 @@ import {
   booleanDecode,
   uint256ToBigInt,
 } from '../../lib/decoders';
+import { getTopicLogDecoder } from '../../lib/topic-log-decoder';
 
 export class AaveGsmEventPool extends StatefulEventSubscriber<PoolState> {
   RAY = 10n ** 27n;
@@ -47,9 +48,9 @@ export class AaveGsmEventPool extends StatefulEventSubscriber<PoolState> {
     super(parentName, `${parentName}_${gsm}`, dexHelper, logger);
 
     this.logDecoder = (log: Log) => {
-      let decodedLog = this.aaveGsmIface.parseLog(log);
+      let decodedLog = getTopicLogDecoder(this.aaveGsmIface).decode(log);
       if (decodedLog == null) {
-        decodedLog = this.poolIface.parseLog(log);
+        decodedLog = getTopicLogDecoder(this.poolIface).decode(log);
       }
 
       return decodedLog;

@@ -9,6 +9,7 @@ import {
   Logger,
   NumberAsString,
   DexExchangeParam,
+  PoolReserves,
 } from '../../types';
 import { SwapSide, Network, NULL_ADDRESS } from '../../constants';
 import * as CALLDATA_GAS_COST from '../../calldata-gas-cost';
@@ -28,6 +29,7 @@ import { addressDecode } from '../../lib/decoders';
 import { ifaces } from './utils';
 import { StatePollingManager } from '../../lib/stateful-rpc-poller/state-polling-manager';
 import { extractReturnAmountPosition } from '../../executor/utils';
+import { toReserves } from '../../lib/pools-storage/reserves';
 
 export class WooFiV2 extends SimpleExchange implements IDex<WooFiV2Data> {
   readonly math: WooFiV2Math;
@@ -401,6 +403,37 @@ export class WooFiV2 extends SimpleExchange implements IDex<WooFiV2Data> {
     this.vaultUSDBalance = tokenBalancesUSD.reduce(
       (sum: number, curr: number) => sum + curr,
     );
+  }
+
+  // Single WooPPV2 pool; the quote token and every base token with a
+  // feasible oracle swap to each other, and the payout capacity of a token is
+  // its `reserve`. Omitted while paused.
+  async getPoolReserves(): Promise<PoolReserves[]> {
+    if (!this.pollingPool || !this.tokenByAddress) return [];
+    const state = await this.pollingPool.getState();
+    if (!state || state.value.isPaused) return [];
+
+    const { tokenInfos, tokenStates } = state.value;
+    const tokens = Object.values(this.tokenByAddress)
+      .map(t => t.address.toLowerCase())
+      .filter(
+        t =>
+          tokenInfos[t] !== undefined &&
+          (t === this.quoteTokenAddress || tokenStates[t]?.woFeasible),
+      );
+    if (tokens.length < 2) return [];
+
+    return [
+      {
+        dex: this.dexKey,
+        id: this.config.wooPPV2Address,
+        address: this.config.wooPPV2Address,
+        reserves: toReserves(
+          tokens,
+          tokens.map(t => state.value.tokenInfos[t].reserve),
+        ),
+      },
+    ];
   }
 
   async getTopPoolsForToken(

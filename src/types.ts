@@ -291,6 +291,34 @@ export type PoolLiquidity = {
   liquidityUSD: number;
 };
 
+export enum PoolsStorageType {
+  RedisHash = 'redis-hash',
+}
+
+// Where a dex keeps the list of its known pools. The consumer reads the
+// storage directly and passes the stored descriptors back to
+// `getPoolReserves(pools)` verbatim. An incompatible descriptor change is
+// published under a new key; the key is the version.
+export type PoolsStorage = {
+  key: string;
+  type: PoolsStorageType;
+  // true: the dex derives the hash field from the value alone
+  // false: the consumer must send `{ i: field, ...value }`
+  fieldInValue: boolean;
+};
+
+export type PoolReserves = {
+  dex: string;
+  // storage mode: the hash field; enumerated mode: a dex-defined stable id
+  id: string;
+  address: Address;
+  // key: `token` (plain, every listed token swaps to every other one both ways)
+  //   or `srcToken_destToken` (directional, exactly this swap)
+  // value: raw payout capacity of the output token as a decimal string,
+  //   UNLIMITED_RESERVES, or '0' (supported swap with nothing to pay out)
+  reserves: Record<string, string>;
+};
+
 export interface Log {
   address: string;
   data: string;

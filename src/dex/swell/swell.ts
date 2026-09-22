@@ -11,11 +11,17 @@ import {
   SimpleExchangeParam,
   Token,
   TransferFeeParams,
+  PoolReserves,
 } from '../../types';
 import { IDex } from '../idex';
 import SWETH_ABI from '../../abi/swETH.json';
 import RSWETH_ABI from '../../abi/rswETH.json';
-import { ETHER_ADDRESS, Network, NULL_ADDRESS } from '../../constants';
+import {
+  ETHER_ADDRESS,
+  Network,
+  NULL_ADDRESS,
+  UNLIMITED_RESERVES,
+} from '../../constants';
 import { IDexHelper } from '../../dex-helper';
 import { SimpleExchange } from '../simple-exchange';
 import { BI_POWS } from '../../bigint-constants';
@@ -28,6 +34,7 @@ import _ from 'lodash';
 import { SwellConfig, Adapters } from './config';
 import { RswethPool } from './rsweth-pool';
 import { ethers } from 'ethers';
+import { directionalReserves } from '../../lib/pools-storage/reserves';
 
 export enum swETHFunctions {
   deposit = 'deposit',
@@ -299,6 +306,20 @@ export class Swell
 
   getAdapters(side: SwapSide): { name: string; index: number }[] | null {
     return this.adapters?.[side] || null;
+  }
+
+  // One-way mint from ETH / WETH into each share token, SELL only.
+  getPoolReserves(): PoolReserves[] {
+    const weth = this.dexHelper.config.data.wrappedNativeTokenAddress;
+    return [this.swETHAddress, this.rswETHAddress].map(share => ({
+      dex: this.dexKey,
+      id: share,
+      address: share,
+      reserves: directionalReserves([
+        { src: ETHER_ADDRESS, dest: share, capacity: UNLIMITED_RESERVES },
+        { src: weth, dest: share, capacity: UNLIMITED_RESERVES },
+      ]),
+    }));
   }
 
   getTopPoolsForToken(

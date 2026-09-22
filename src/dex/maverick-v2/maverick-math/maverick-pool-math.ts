@@ -25,12 +25,11 @@ export class MaverickPoolMath {
   tokenBScale: bigint;
   timestamp: bigint;
 
+  private sqrtPriceCache = new Map<bigint, [bigint, bigint]>();
+
   constructor(
-    private feeAIn: bigint,
-    private feeBIn: bigint,
     private lookback: bigint,
     private tickSpacing: bigint,
-    private protocolFeeRatioD3: bigint,
     private activeTick: bigint,
     private tokenADecimals: bigint,
     private tokenBDecimals: bigint,
@@ -42,6 +41,9 @@ export class MaverickPoolMath {
       lastTwaD8: 0n,
       lastLogPriceD8: 0n,
       lastTimestamp: 0n,
+      feeAIn: 0n,
+      feeBIn: 0n,
+      protocolFeeRatioD3: 0n,
       binCounter: 0n,
       bins: {},
       ticks: {},
@@ -372,7 +374,7 @@ export class MaverickPoolMath {
       startingTickState.totalSupply,
       firstBin.tickBalance,
     );
-    startingTickState.binIdsByTick[moveData.kind.toString()] = 0n;
+    delete startingTickState.binIdsByTick[moveData.kind.toString()];
     if (this.state.ticks[firstBin.tick.toString()].totalSupply === 0n) {
       delete this.state.ticks[firstBin.tick.toString()];
     }
@@ -595,6 +597,17 @@ export class MaverickPoolMath {
     );
   }
 
+  // Tick sqrt prices depend only on (tickSpacing, tick), so they are memoised
+  // per pool: computing them costs ~20 wide multiplications and a division.
+  tickSqrtPrices(tick: bigint): [bigint, bigint] {
+    let prices = this.sqrtPriceCache.get(tick);
+    if (!prices) {
+      prices = MaverickTickMath.tickSqrtPrices(this.tickSpacing, tick);
+      this.sqrtPriceCache.set(tick, prices);
+    }
+    return prices;
+  }
+
   tickSqrtPriceAndLiquidity(tick: bigint): [bigint, bigint, bigint, TickData] {
     let tickState = this.state.ticks[tick.toString()];
     let output: TickData = {
@@ -603,8 +616,7 @@ export class MaverickPoolMath {
       currentLiquidity: 0n,
     };
 
-    let [sqrtLowerTickPrice, sqrtUpperTickPrice] =
-      MaverickTickMath.tickSqrtPrices(this.tickSpacing, tick);
+    let [sqrtLowerTickPrice, sqrtUpperTickPrice] = this.tickSqrtPrices(tick);
 
     let sqrtPrice;
     [sqrtPrice, output.currentLiquidity] =
@@ -655,7 +667,7 @@ export class MaverickPoolMath {
           delta.excess,
           delta.tokenAIn,
           this.fee(delta.tokenAIn),
-          this.protocolFeeRatioD3,
+          this.state.protocolFeeRatioD3,
         )
       : MaverickSwapMath.computeSwapExactIn(
           delta.sqrtPrice,
@@ -663,7 +675,7 @@ export class MaverickPoolMath {
           delta.excess,
           delta.tokenAIn,
           this.fee(delta.tokenAIn),
-          this.protocolFeeRatioD3,
+          this.state.protocolFeeRatioD3,
         );
 
     if (newDelta.excess === 0n) {
@@ -686,7 +698,7 @@ export class MaverickPoolMath {
   }
 
   fee(tokenAIn: boolean): bigint {
-    return tokenAIn ? this.feeAIn : this.feeBIn;
+    return tokenAIn ? this.state.feeAIn : this.state.feeBIn;
   }
 
   allocateSwapValuesToTick(delta: Delta, tokenAIn: boolean, tick: bigint) {

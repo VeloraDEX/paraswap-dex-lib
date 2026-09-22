@@ -5,6 +5,7 @@ import { IDexHelper } from '../../dex-helper/idex-helper';
 import { StatefulEventSubscriber } from '../../stateful-event-subscriber';
 import { Address, Log, Logger } from '../../types';
 import { LogDescription } from 'ethers/lib/utils';
+import { getTopicLogDecoder } from '../../lib/topic-log-decoder';
 
 export type FactoryState = Record<string, never>;
 
@@ -40,7 +41,8 @@ export class UniswapV2Factory extends StatefulEventSubscriber<FactoryState> {
 
     this.addressesSubscribed = [factoryAddress];
 
-    this.logDecoder = (log: Log) => this.factoryIface.parseLog(log);
+    this.logDecoder = (log: Log) =>
+      getTopicLogDecoder(this.factoryIface).decode(log);
 
     this.handlers['PairCreated'] = this.handleNewPool.bind(this);
   }

@@ -13,6 +13,7 @@ import { BlockHeader } from 'web3-eth';
 import { BN_0, BN_600, BN_POWS } from '../../../bignumber-constants';
 import { IDexHelper } from '../../../dex-helper';
 import { erc20Iface } from '../../../lib/tokens/utils';
+import { getTopicLogDecoder } from '../../../lib/topic-log-decoder';
 import { bigNumberify, stringify, catchParseLogError } from '../../../utils';
 import { getManyPoolStates } from './getstate-multicall';
 
@@ -54,6 +55,8 @@ export abstract class CurveMetapool extends StatefulEventSubscriber<MetapoolStat
   public poolIface: Interface;
 
   decoder: (log: Log) => any;
+
+  protected coinsLowerCase: Set<Address>;
 
   // The lastTransferredCoin is not stored in the state as
   // the value itself doesn't effect the pricing but it only
@@ -121,18 +124,16 @@ export abstract class CurveMetapool extends StatefulEventSubscriber<MetapoolStat
     this.basepool.handlers['TokenExchange'] =
       this.handleBasepoolTokenExchange.bind(this);
 
-    this.poolIface = new Interface(this.abi);
-    this.decoder = (log: Log) => {
-      if (
-        this.trackCoins &&
-        _.findIndex(
-          this.COINS,
-          c => c.toLowerCase() === log.address.toLowerCase(),
-        ) != -1
-      )
-        return erc20Iface.parseLog(log);
+    this.coinsLowerCase = new Set(this.COINS.map(c => c.toLowerCase()));
 
-      return this.poolIface.parseLog(log);
+    this.poolIface = new Interface(this.abi);
+    const erc20LogDecoder = getTopicLogDecoder(erc20Iface);
+    const poolLogDecoder = getTopicLogDecoder(this.poolIface);
+    this.decoder = (log: Log) => {
+      if (this.trackCoins && this.coinsLowerCase.has(log.address.toLowerCase()))
+        return erc20LogDecoder.decode(log);
+
+      return poolLogDecoder.decode(log);
     };
   }
 

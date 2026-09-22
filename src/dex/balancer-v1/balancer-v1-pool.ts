@@ -12,6 +12,7 @@ import { BN_POWS } from '../../bignumber-constants';
 import { calcOutGivenIn, calcInGivenOut } from './balancer-v1-math';
 import { generatePoolStates } from './utils';
 import BalancerV1PoolABI from '../../abi/BalancerV1Pool.json';
+import { getTopicLogDecoder } from '../../lib/topic-log-decoder';
 
 function multiplyStringBy1e18ToBigInt(n: FractionAsString): bigint {
   return BigInt(new BigNumber(n).times(BN_POWS[18]).toFixed(0));
@@ -152,7 +153,7 @@ export class BalancerV1EventPool extends StatefulEventSubscriber<PoolState> {
     log: Readonly<Log>,
   ): DeepReadonly<PoolState> | null {
     try {
-      const event = BalancerV1EventPool.iface.parseLog(log);
+      const event = getTopicLogDecoder(BalancerV1EventPool.iface).decode(log);
       if (event.name in this.handlers) {
         return this.handlers[event.name](event, state, log);
       }

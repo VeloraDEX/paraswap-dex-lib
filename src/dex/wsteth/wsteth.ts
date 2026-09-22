@@ -10,6 +10,7 @@ import {
   Logger,
   NumberAsString,
   DexExchangeParam,
+  PoolReserves,
 } from '../../types';
 import { SwapSide, Network, UNLIMITED_USD_LIQUIDITY } from '../../constants';
 import * as CALLDATA_GAS_COST from '../../calldata-gas-cost';
@@ -24,6 +25,7 @@ import { Utils } from '../../utils';
 import WSTETH_ABI from '../../abi/wstETH.json';
 import STETH_ABI from '../../abi/stETH.json';
 import { extractReturnAmountPosition } from '../../executor/utils';
+import { unlimitedReserves } from '../../lib/pools-storage/reserves';
 
 export class WstETH extends SimpleExchange implements IDex<WstETHData> {
   static readonly wstETHIface = new Interface(WSTETH_ABI);
@@ -269,6 +271,20 @@ export class WstETH extends SimpleExchange implements IDex<WstETHData> {
           ? extractReturnAmountPosition(WstETH.wstETHIface, swapFunction)
           : undefined,
     };
+  }
+
+  getPoolReserves(): PoolReserves[] {
+    return [
+      {
+        dex: this.dexKey,
+        id: this.config.wstETHAddress,
+        address: this.config.wstETHAddress,
+        reserves: unlimitedReserves([
+          this.config.stETHAddress,
+          this.config.wstETHAddress,
+        ]),
+      },
+    ];
   }
 
   // Returns list of top pools based on liquidity. Max

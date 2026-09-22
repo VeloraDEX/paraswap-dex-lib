@@ -6,9 +6,10 @@ import { AsyncOrSync, DeepReadonly } from 'ts-essentials';
 import { SWETHPoolState } from './type';
 import { getOnChainStateSwETH } from './utils';
 import { BI_POWS } from '../../bigint-constants';
+import { getTopicLogDecoder } from '../../lib/topic-log-decoder';
 
 export class SwethPool extends StatefulEventSubscriber<SWETHPoolState> {
-  decoder = (log: Log) => this.poolInterface.parseLog(log);
+  decoder = (log: Log) => getTopicLogDecoder(this.poolInterface).decode(log);
 
   constructor(
     parentName: string,

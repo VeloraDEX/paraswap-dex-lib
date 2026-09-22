@@ -9,12 +9,14 @@ import {
   Logger,
   NumberAsString,
   DexExchangeParam,
+  PoolReserves,
 } from '../../types';
 import {
   SwapSide,
   Network,
   UNLIMITED_USD_LIQUIDITY,
   NO_USD_LIQUIDITY,
+  UNLIMITED_RESERVES,
 } from '../../constants';
 import * as CALLDATA_GAS_COST from '../../calldata-gas-cost';
 import { getDexKeysWithNetwork } from '../../utils';
@@ -35,6 +37,10 @@ import ERC4626_ABI from '../../abi/ERC4626.json';
 import { DEPOSIT_TOPIC, TRANSFER_TOPIC, WITHDRAW_TOPIC } from './constants';
 import { extractReturnAmountPosition } from '../../executor/utils';
 import { hexConcat, hexDataLength, hexZeroPad } from '@ethersproject/bytes';
+import {
+  directionalReserves,
+  DirectionalReserve,
+} from '../../lib/pools-storage/reserves';
 
 export class ERC4626
   extends SimpleExchange
@@ -205,6 +211,31 @@ export class ERC4626
       const newState = await this.eventPool.getOrGenerateState(blockNumber);
       this.eventPool.setState(newState, blockNumber);
     }
+  }
+
+  // asset -> vault is a mint with no cap; vault -> asset pays out of
+  // `totalAssets` and only while redeeming is allowed.
+  getPoolReserves(): PoolReserves[] {
+    if (this.eventPool.isInvalid()) return [];
+    const state = this.eventPool.getStaleState();
+    if (!state) return [];
+
+    const vault = this.vault.toLowerCase();
+    const asset = this.asset.toLowerCase();
+    const swaps: DirectionalReserve[] = [
+      { src: asset, dest: vault, capacity: UNLIMITED_RESERVES },
+    ];
+    if (this.redeemAllowed(state)) {
+      swaps.push({ src: vault, dest: asset, capacity: state.totalAssets });
+    }
+    return [
+      {
+        dex: this.dexKey,
+        id: vault,
+        address: vault,
+        reserves: directionalReserves(swaps),
+      },
+    ];
   }
 
   async getTopPoolsForToken(

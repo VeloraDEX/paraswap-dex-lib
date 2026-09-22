@@ -14,6 +14,7 @@ import { PartialEventSubscriber } from '../../composed-event-subscriber';
 import { Lens } from '../../lens';
 import _ from 'lodash';
 import { ethers } from 'ethers';
+import { getTopicLogDecoder } from '../../lib/topic-log-decoder';
 
 export class MorphoVaultSubscriber<State> extends PartialEventSubscriber<
   State,
@@ -35,7 +36,9 @@ export class MorphoVaultSubscriber<State> extends PartialEventSubscriber<
     blockHeader: Readonly<BlockHeader>,
   ): DeepReadonly<MorphoVaultState> | null {
     try {
-      const parsed = MorphoVaultSubscriber.interface.parseLog(log);
+      const parsed = getTopicLogDecoder(MorphoVaultSubscriber.interface).decode(
+        log,
+      );
       const _state: MorphoVaultState = _.cloneDeep(state) as MorphoVaultState;
       switch (parsed.name) {
         case 'UpdateLastTotalAssets':

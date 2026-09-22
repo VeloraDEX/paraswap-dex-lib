@@ -8,6 +8,7 @@ import { PoolState } from './types';
 import StkGHO_ABI from '../../abi/stkGHO.json';
 import { StkGHOConfig } from './config';
 import { uint256ToBigInt } from '../../lib/decoders';
+import { getTopicLogDecoder } from '../../lib/topic-log-decoder';
 
 export class StkGHOEventPool extends StatefulEventSubscriber<PoolState> {
   handlers: {
@@ -32,7 +33,8 @@ export class StkGHOEventPool extends StatefulEventSubscriber<PoolState> {
   ) {
     super(parentName, poolName, dexHelper, logger);
 
-    this.logDecoder = (log: Log) => this.stkGHOIface.parseLog(log);
+    this.logDecoder = (log: Log) =>
+      getTopicLogDecoder(this.stkGHOIface).decode(log);
     this.addressesSubscribed = [StkGHOConfig[parentName][network].stkGHO];
 
     this.handlers['ExchangeRateChanged'] =

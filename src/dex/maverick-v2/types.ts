@@ -68,6 +68,9 @@ export type PoolState = {
   lastTwaD8: bigint;
   lastLogPriceD8: bigint;
   lastTimestamp: bigint;
+  feeAIn: bigint;
+  feeBIn: bigint;
+  protocolFeeRatioD3: bigint;
   bins: { [id: string]: Bin };
   ticks: { [id: string]: Tick };
 };

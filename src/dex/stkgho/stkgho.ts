@@ -9,12 +9,14 @@ import {
   Logger,
   NumberAsString,
   DexExchangeParam,
+  PoolReserves,
 } from '../../types';
 import {
   SwapSide,
   Network,
   UNLIMITED_USD_LIQUIDITY,
   NO_USD_LIQUIDITY,
+  UNLIMITED_RESERVES,
 } from '../../constants';
 import * as CALLDATA_GAS_COST from '../../calldata-gas-cost';
 import { getDexKeysWithNetwork } from '../../utils';
@@ -26,6 +28,7 @@ import { StkGHOConfig } from './config';
 import { StkGHOEventPool } from './stkgho-pool';
 import { Interface } from '@ethersproject/abi';
 import StkGHO_ABI from '../../abi/stkGHO.json';
+import { directionalReserves } from '../../lib/pools-storage/reserves';
 
 export class StkGHO extends SimpleExchange implements IDex<StkGHOData> {
   static readonly stkGHOInterface = new Interface(StkGHO_ABI);
@@ -192,6 +195,24 @@ export class StkGHO extends SimpleExchange implements IDex<StkGHOData> {
       targetExchange: this.config.stkGHO,
       returnAmountPos: undefined,
     };
+  }
+
+  // Staking only: GHO -> stkGHO, SELL side.
+  getPoolReserves(): PoolReserves[] {
+    return [
+      {
+        dex: this.dexKey,
+        id: this.config.stkGHO,
+        address: this.config.stkGHO,
+        reserves: directionalReserves([
+          {
+            src: this.config.GHO,
+            dest: this.config.stkGHO,
+            capacity: UNLIMITED_RESERVES,
+          },
+        ]),
+      },
+    ];
   }
 
   async getTopPoolsForToken(
