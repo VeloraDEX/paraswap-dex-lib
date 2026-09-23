@@ -243,6 +243,10 @@ export const Tokens: {
       address: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2',
       decimals: 18,
     },
+    B: {
+      address: '0x9fDbDE76236998Dc2836FE67A9954eDE456A1D63',
+      decimals: 18,
+    },
     VLR: {
       address: '0x4e107a0000DB66f0E9Fd2039288Bf811dD1f9c74',
       decimals: 18,
@@ -1702,6 +1706,18 @@ export const Tokens: {
     },
   },
   [Network.BASE]: {
+    REPPO: {
+      address: '0xff8104251e7761163fac3211ef5583fb3f8583d6',
+      decimals: 18,
+    },
+    VIRTUAL: {
+      address: '0x0b3e328455c4059eeb9e3f84b5543f74e24e7e1b',
+      decimals: 18,
+    },
+    BSR: {
+      address: '0x4082b90beBa6935c7718497165557106e43a6aC6',
+      decimals: 18,
+    },
     yoETH: {
       address: '0x3a43aec53490cb9fa922847385d82fe25d0e9de7',
       decimals: 18,
