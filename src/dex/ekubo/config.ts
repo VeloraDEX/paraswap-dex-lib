@@ -7,7 +7,6 @@ export const DEX_KEY = 'Ekubo';
 export const EKUBO_CONFIG: DexConfigMap<DexParams> = {
   [DEX_KEY]: {
     [Network.MAINNET]: {
-      apiUrl: 'https://eth-mainnet-api.ekubo.org',
       core: '0xe0e0e08A6A4b9Dc7bD67BCB7aadE5cF48157d444',
       oracle: '0x51d02A5948496a67827242EaBc5725531342527C',
       twamm: '0xD4279c050DA1F5c5B2830558C7A08E57e12b54eC',
