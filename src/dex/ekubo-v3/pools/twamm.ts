@@ -47,11 +47,20 @@ export class TwammPool extends EkuboPool<
       contract: { address: coreAddress },
       interface: coreIface,
     } = contracts.core;
-    const {
-      contract: { address: twammAddress },
-      interface: twammIface,
-      quoteDataFetcher: twammDataFetcher,
-    } = contracts.twamm;
+    const { v1: twammV1, v2: twammV2, interface: twammIface } = contracts.twamm;
+
+    const extension = key.config.extension;
+    let twammDeployment;
+
+    if (extension === BigInt(twammV1.address)) {
+      twammDeployment = twammV1;
+    } else if (extension === BigInt(twammV2.address)) {
+      twammDeployment = twammV2;
+    } else {
+      throw new Error('unknown TWAMM extension');
+    }
+    const { address: twammAddress, quoteDataFetcher: twammDataFetcher } =
+      twammDeployment;
 
     super(
       parentName,
