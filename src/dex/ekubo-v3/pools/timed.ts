@@ -5,6 +5,9 @@ import { EkuboSupportedNetwork } from '../config';
 const SLOT_DURATION_SECS_BY_CHAIN_ID: Record<EkuboSupportedNetwork, bigint> = {
   [Network.MAINNET]: 12n,
   [Network.ARBITRUM]: 1n,
+  // Robinhood produces multiple blocks per timestamp second, so the next
+  // block is not guaranteed to advance block.timestamp.
+  [Network.ROBINHOOD]: 0n,
 };
 
 export type RateDeltaBoundary = readonly [

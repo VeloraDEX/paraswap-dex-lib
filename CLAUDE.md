@@ -11,6 +11,12 @@ When making fixes based on code review comments or feedback, add a concise descr
 <!-- Add new fixes at the top of this list -->
 <!-- Format: - **[Date] Issue**: Brief description of fix -->
 
+- **[2026-07] Ve33 initialization and regeneration**: Initialize pools discovered from events with `getVe33QuoteData` at the event block so the voted fee is never temporarily zero. Use the same bitmap search depth for initial loading and every Ve33 pool type's later state regeneration.
+
+- **[2026-07] Sub-second block timestamps**: Do not force `block.timestamp` to advance by one second on Robinhood, where multiple 100ms blocks can share the same EVM timestamp second. Estimate from the greater of wall-clock time and the last observed timestamp.
+
+- **[2026-07] Ve33 state consistency**: Use `Ve33DataFetcher.getVe33QuoteData` to fetch Core quote state and the extension-managed fee atomically at one block. Decode `VoteWeightApplied` with its ABI and signature topic instead of fixed byte offsets.
+
 - **[2025-01] Block manager unavailable in certain methods**: `dexHelper.blockManager` is not available in `getTopPoolsForToken()` and `updatePoolState()` methods since these are called on a service that does not have it implemented. Use direct RPC calls (e.g., `dexHelper.provider.getBlock('latest')`) instead when block data is needed in these methods.
 
 - **[2025-01] Remove unused ABIs when removing DEXes**: When removing DEX integrations, also remove their associated ABI files from `src/abi/` if no longer referenced. Use `grep` to verify ABIs are not imported elsewhere before deletion.
