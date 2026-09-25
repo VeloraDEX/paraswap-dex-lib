@@ -87,4 +87,23 @@ describe('UniswapV2 Base E2E', () => {
       tokenBAmount,
     );
   });
+
+  describe('RubiconAquila', () => {
+    const dexKey = 'RubiconAquila';
+
+    const tokenASymbol: string = 'WETH';
+    const tokenBSymbol: string = 'USDC';
+
+    const tokenAAmount: string = '50000000000000000';
+    const tokenBAmount: string = '150000000';
+
+    testForNetwork(
+      network,
+      dexKey,
+      tokenASymbol,
+      tokenBSymbol,
+      tokenAAmount,
+      tokenBAmount,
+    );
+  });
 });
