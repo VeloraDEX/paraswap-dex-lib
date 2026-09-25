@@ -650,6 +650,37 @@ describe('AerostratSlipstream tax handling', () => {
       expect((aerostrat as any).taxBps).toEqual(1000n);
     });
 
+    it('treats an empty getCurrentFee return as a failed read, not a zero tax', async () => {
+      // A call to an address without the function reports success with no
+      // data. The stock uint256 decoder defaults that to 0n, which isQuotable()
+      // accepts - so the pool would be quoted untaxed. Run the fork's own
+      // decoder on the raw return, as tryAggregate does, rather than bypass it.
+      const viaRealDecoder = async (raw: string) =>
+        jest
+          .spyOn(dexHelper.multiWrapper, 'tryAggregate')
+          .mockImplementation(async (_mandatory: any, calls: any) => [
+            { success: true, returnData: calls[0].decodeFunction(raw) },
+          ]);
+
+      const healthy = '0x' + (1000).toString(16).padStart(64, '0');
+      const empty = '0x';
+
+      setTax(undefined);
+      await viaRealDecoder(healthy);
+      await (aerostrat as any).updateTax();
+      expect((aerostrat as any).taxBps).toEqual(1000n);
+
+      await viaRealDecoder(empty);
+      await (aerostrat as any).updateTax();
+      expect((aerostrat as any).taxBps).toEqual(1000n);
+
+      setTax(undefined);
+      await viaRealDecoder(empty);
+      await (aerostrat as any).updateTax();
+      expect((aerostrat as any).taxBps).toBeUndefined();
+      expect((aerostrat as any).isQuotable()).toBe(false);
+    });
+
     it('never falls back to the untaxed quoter', async () => {
       await expect(aerostrat.getPricingFromRpc()).resolves.toBeNull();
     });

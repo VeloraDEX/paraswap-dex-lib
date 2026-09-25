@@ -14,7 +14,7 @@ import {
 } from '../../../../types';
 import { getDexKeysWithNetwork } from '../../../../utils';
 import { extractReturnAmountPosition } from '../../../../executor/utils';
-import { uint256ToBigInt } from '../../../../lib/decoders';
+import { generalDecoder } from '../../../../lib/decoders';
 import { applyTransferFee } from '../../../../lib/token-transfer-fee';
 import { getLocalDeadlineAsFriendlyPlaceholder } from '../../../simple-exchange';
 import AerostratRouterABI from '../../../../abi/aerostrat/AerostratRouter.abi.json';
@@ -105,7 +105,11 @@ export class AerostratSlipstream extends VelodromeSlipstream {
           {
             target: this.taxedToken,
             callData: this.taxedTokenIface.encodeFunctionData('getCurrentFee'),
-            decodeFunction: uint256ToBigInt,
+            // No default value: the stock decoder turns an empty return into 0n,
+            // which would read as a zero-percent tax and quote the pool untaxed.
+            // getCurrentFee() always returns a word, so empty is a failed read.
+            decodeFunction: r =>
+              generalDecoder(r, ['uint256'], undefined, v => v[0].toBigInt()),
           },
         ],
       );
@@ -392,6 +396,9 @@ export class AerostratSlipstream extends VelodromeSlipstream {
           );
         }
 
+        // Executor03 locates toAmountPos by scanning this calldata for the exact
+        // se.destAmount. The grossed-up amount below is not that value, so the scan
+        // misses and leaves it in place - which is what makes the gross-up land.
         poolDestAmount = this.applyTax(
           [BigInt(destAmount)],
           SwapSide.BUY,
