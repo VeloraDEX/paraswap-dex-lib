@@ -1,4 +1,6 @@
 import {
+  decodeReserves,
+  getReservesCallData,
   isPairCacheRecordFresh,
   pairFromCacheRecord,
   parsePairCacheRecord,
@@ -24,14 +26,13 @@ import {
   TransferFeeParams,
 } from '../../types';
 import { IDexHelper } from '../../dex-helper';
-import erc20ABI from '../../abi/erc20.json';
 import { UniswapData, UniswapV2Data } from '../uniswap-v2/types';
 import { getBigIntPow, getDexKeysWithNetwork } from '../../utils';
 import solidlyFactoryABI from '../../abi/solidly/SolidlyFactory.json';
 import solidlyPair from '../../abi/solidly/SolidlyPair.json';
 import _ from 'lodash';
 import { NumberAsString, SwapSide } from '@paraswap/core';
-import { Interface, AbiCoder } from '@ethersproject/abi';
+import { Interface } from '@ethersproject/abi';
 import { SolidlyStablePool } from './solidly-stable-pool';
 import { Uniswapv2ConstantProductPool } from '../uniswap-v2/uniswap-v2-constant-product-pool';
 import {
@@ -50,9 +51,7 @@ import { addressDecode } from '../../lib/decoders';
 
 const SOLIDLY_RECHECK_PAIR_EXISTENCE_AFTER_MS = 3 * 24 * 60 * 60 * 1000; // 3 days
 
-const erc20Iface = new Interface(erc20ABI);
 const solidlyPairIface = new Interface(solidlyPair);
-const defaultAbiCoder = new AbiCoder();
 
 function encodePools(
   pools: SolidlyPool[],
@@ -347,18 +346,7 @@ export class Solidly extends UniswapV2 {
       const calldata = pairs
         .map((pair, i) => {
           let calldata = [
-            {
-              target: pair.token0.address,
-              callData: erc20Iface.encodeFunctionData('balanceOf', [
-                pair.exchange!,
-              ]),
-            },
-            {
-              target: pair.token1.address,
-              callData: erc20Iface.encodeFunctionData('balanceOf', [
-                pair.exchange!,
-              ]),
-            },
+            { target: pair.exchange!, callData: getReservesCallData },
           ];
           if (this.isDynamicFees) calldata.push(multiCallFeeData[i]!.callEntry);
           return calldata;
@@ -370,19 +358,18 @@ export class Solidly extends UniswapV2 {
           .aggregate(calldata)
           .call({}, blockNumber);
 
-      const returnData = _.chunk(data.returnData, this.isDynamicFees ? 3 : 2);
+      const returnData = _.chunk(data.returnData, this.isDynamicFees ? 2 : 1);
 
-      return pairs.map((pair, i) => ({
-        reserves0: defaultAbiCoder
-          .decode(['uint256'], returnData[i][0])[0]
-          .toString(),
-        reserves1: defaultAbiCoder
-          .decode(['uint256'], returnData[i][1])[0]
-          .toString(),
-        feeCode: this.isDynamicFees
-          ? multiCallFeeData[i]!.callDecoder(returnData[i][2])
-          : (pair.stable ? this.stableFee : this.volatileFee) || this.feeCode,
-      }));
+      return pairs.map((pair, i) => {
+        const [reserves0, reserves1] = decodeReserves(returnData[i][0]);
+        return {
+          reserves0: reserves0.toString(),
+          reserves1: reserves1.toString(),
+          feeCode: this.isDynamicFees
+            ? multiCallFeeData[i]!.callDecoder(returnData[i][1])
+            : (pair.stable ? this.stableFee : this.volatileFee) || this.feeCode,
+        };
+      });
     } catch (e) {
       this.logger.error(
         `Error_getManyPoolReserves could not get reserves with error:`,
