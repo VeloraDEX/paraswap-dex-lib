@@ -2,7 +2,6 @@ import { AbiCoder, Interface } from '@ethersproject/abi';
 import { pack } from '@ethersproject/solidity';
 import _ from 'lodash';
 import { AsyncOrSync, DeepReadonly } from 'ts-essentials';
-import erc20ABI from '../../abi/erc20.json';
 import { StatefulEventSubscriber } from '../../stateful-event-subscriber';
 import {
   AdapterExchangeParam,
@@ -104,20 +103,19 @@ interface UniswapV2PoolState {
 }
 
 const uniswapV2PoolIface = new Interface(uniswapV2ABI);
-const erc20iface = new Interface(erc20ABI);
 const coder = new AbiCoder();
 
 const ADDRESS_RE = /^0x[0-9a-fA-F]{40}$/;
 const isAddress = (value: unknown): value is Address =>
   typeof value === 'string' && ADDRESS_RE.test(value);
 
-const getReservesCallData = uniswapV2PoolIface.encodeFunctionData(
+export const getReservesCallData = uniswapV2PoolIface.encodeFunctionData(
   'getReserves',
   [],
 );
 // uint256 decoding covers both the uint112 (UniswapV2) and uint256 (Solidly)
 // return layouts: values are one word each either way.
-const decodeReserves = (
+export const decodeReserves = (
   result: MultiResult<BytesLike> | BytesLike,
 ): [bigint, bigint] =>
   generalDecoder(result, ['uint256', 'uint256', 'uint256'], undefined, res => [
@@ -595,42 +593,29 @@ export class UniswapV2
       const calldata = pairs
         .map((pair, i) => {
           let calldata = [
-            {
-              target: pair.token0.address,
-              callData: erc20iface.encodeFunctionData('balanceOf', [
-                pair.exchange!,
-              ]),
-            },
-            {
-              target: pair.token1.address,
-              callData: erc20iface.encodeFunctionData('balanceOf', [
-                pair.exchange!,
-              ]),
-            },
+            { target: pair.exchange!, callData: getReservesCallData },
           ];
           if (this.isDynamicFees) calldata.push(multiCallFeeData[i]!.callEntry);
           return calldata;
         })
         .flat();
 
-      // const data: { returnData: any[] } =
-      //   await this.dexHelper.multiContract.callStatic.aggregate(calldata, {
-      //     blockTag: blockNumber,
-      //   });
-
       const data: { returnData: any[] } =
         await this.dexHelper.multiContract.methods
           .aggregate(calldata)
           .call({}, blockNumber);
 
-      const returnData = _.chunk(data.returnData, this.isDynamicFees ? 3 : 2);
-      return pairs.map((pair, i) => ({
-        reserves0: coder.decode(['uint256'], returnData[i][0])[0].toString(),
-        reserves1: coder.decode(['uint256'], returnData[i][1])[0].toString(),
-        feeCode: this.isDynamicFees
-          ? multiCallFeeData[i]!.callDecoder(returnData[i][2])
-          : this.feeCode,
-      }));
+      const returnData = _.chunk(data.returnData, this.isDynamicFees ? 2 : 1);
+      return pairs.map((pair, i) => {
+        const [reserves0, reserves1] = decodeReserves(returnData[i][0]);
+        return {
+          reserves0: reserves0.toString(),
+          reserves1: reserves1.toString(),
+          feeCode: this.isDynamicFees
+            ? multiCallFeeData[i]!.callDecoder(returnData[i][1])
+            : this.feeCode,
+        };
+      });
     } catch (e) {
       this.logger.error(
         `Error_getManyPoolReserves could not get reserves with error:`,
