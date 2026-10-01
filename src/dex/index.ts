@@ -107,6 +107,7 @@ import { Cap } from './cap/cap';
 import { PancakeSwapInfinity } from './pancakeswap-infinity/pancakeswap-infinity';
 import { Metric } from './metric/metric';
 import { Tessera } from './tessera/tessera';
+import { LunarBase } from './lunar-base/lunar-base';
 
 const LegacyDexes = [
   CurveV2,
@@ -129,6 +130,7 @@ const Dexes = [
   Dexalot,
   CurveV1,
   CurveFork,
+  LunarBase,
   BalancerV1,
   BalancerV2,
   BalancerV3,
