@@ -1,0 +1,12 @@
+[
+  {
+    "type": "event",
+    "name": "AnswerUpdated",
+    "anonymous": false,
+    "inputs": [
+      { "indexed": true, "name": "current", "type": "int256" },
+      { "indexed": true, "name": "roundId", "type": "uint256" },
+      { "indexed": false, "name": "updatedAt", "type": "uint256" }
+    ]
+  }
+]
