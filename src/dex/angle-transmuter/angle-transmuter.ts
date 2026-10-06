@@ -9,8 +9,14 @@ import {
   Logger,
   NumberAsString,
   DexExchangeParam,
+  PoolReserves,
 } from '../../types';
-import { SwapSide, Network, UNLIMITED_USD_LIQUIDITY } from '../../constants';
+import {
+  SwapSide,
+  Network,
+  UNLIMITED_USD_LIQUIDITY,
+  UNLIMITED_RESERVES,
+} from '../../constants';
 import * as CALLDATA_GAS_COST from '../../calldata-gas-cost';
 import { getDexKeysWithNetwork } from '../../utils';
 import { IDex } from '../../dex/idex';
@@ -23,6 +29,12 @@ import { Interface, formatUnits, parseUnits } from 'ethers/lib/utils';
 import { TransmuterSubscriber } from './transmuter';
 import ERC20ABI from '../../abi/erc20.json';
 import { extractReturnAmountPosition } from '../../executor/utils';
+import {
+  directionalReserves,
+  DirectionalReserve,
+  multicallBalances,
+} from '../../lib/pools-storage/reserves';
+import { uint256ToBigInt } from '../../lib/decoders';
 
 const TransmuterGasCost = 350000;
 
@@ -328,6 +340,66 @@ export class AngleTransmuter
         (sum: number, curr: number) => sum + curr,
       );
     }
+  }
+
+  // One pool per stablecoin. Minting the stablecoin has no cap; burning it
+  // pays out of the transmuter's balance of each collateral, fetched here
+  // because the event state does not track balances.
+  async getPoolReserves(): Promise<PoolReserves[]> {
+    const fiats = this.stablecoinList.filter(fiat => {
+      const pool = this.eventPools[fiat];
+      return (
+        pool &&
+        this.params[fiat as keyof DexParams] &&
+        !pool.isInvalid() &&
+        pool.getStaleState() !== null
+      );
+    });
+    const calls = fiats.flatMap(fiat => {
+      const transmuter = this.params[fiat as keyof DexParams]!.transmuter;
+      return this.eventPools[fiat].config.collaterals.map(collateral => ({
+        target: collateral,
+        callData: AngleTransmuter.erc20Interface.encodeFunctionData(
+          'balanceOf',
+          [transmuter],
+        ),
+        decodeFunction: uint256ToBigInt,
+      }));
+    });
+    const balances = await multicallBalances(
+      this.dexHelper.multiWrapper,
+      calls,
+    );
+
+    let offset = 0;
+    return fiats.flatMap(fiat => {
+      const params = this.params[fiat as keyof DexParams]!;
+      const transmuter = params.transmuter.toLowerCase();
+      const stable = params.stablecoin.address.toLowerCase();
+      const collaterals = this.eventPools[fiat].config.collaterals;
+      const swaps: DirectionalReserve[] = [];
+      collaterals.forEach((collateral, i) => {
+        const balance = balances[offset + i];
+        swaps.push({
+          src: collateral,
+          dest: stable,
+          capacity: UNLIMITED_RESERVES,
+        });
+        if (balance !== null) {
+          swaps.push({ src: stable, dest: collateral, capacity: balance });
+        }
+      });
+      offset += collaterals.length;
+      if (swaps.length === 0) return [];
+      return [
+        {
+          dex: this.dexKey,
+          id: transmuter,
+          address: transmuter,
+          reserves: directionalReserves(swaps),
+        },
+      ];
+    });
   }
 
   // Returns list of top pools based on liquidity. Max

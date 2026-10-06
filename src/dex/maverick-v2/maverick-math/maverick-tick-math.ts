@@ -1,5 +1,4 @@
 import { BI_MAX_UINT256, BI_POWS } from '../../../bigint-constants';
-import { _require } from '../../../utils';
 import { MaverickBasicMath } from './maverick-basic-math';
 
 const MAX_TICK = 460540;
@@ -71,19 +70,23 @@ export class MaverickTickMath {
       reserveB <<= precisionBump;
     }
 
-    let diff;
-    let b =
-      MaverickBasicMath.divDown(reserveA, sqrtUpperTickPrice) +
-      MaverickBasicMath.mulDown(reserveB, sqrtLowerTickPrice);
-    diff = sqrtUpperTickPrice - sqrtLowerTickPrice;
+    const diff = sqrtUpperTickPrice - sqrtLowerTickPrice;
 
-    if (reserveA === 0n || reserveB === 0n)
+    if (reserveB === 0n)
+      return MaverickBasicMath.divDown(reserveA, diff) >> precisionBump;
+    if (reserveA === 0n)
       return (
-        MaverickBasicMath.mulDivDown(b, sqrtUpperTickPrice, diff) >>
-        precisionBump
+        MaverickBasicMath.mulDivDown(
+          MaverickBasicMath.mulDown(reserveB, sqrtLowerTickPrice),
+          sqrtUpperTickPrice,
+          diff,
+        ) >> precisionBump
       );
 
-    b >>= 1n;
+    const b =
+      (MaverickBasicMath.divDown(reserveA, sqrtUpperTickPrice) +
+        MaverickBasicMath.mulDown(reserveB, sqrtLowerTickPrice)) >>
+      1n;
 
     return (
       MaverickBasicMath.mulDiv(

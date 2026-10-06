@@ -40,6 +40,7 @@ import {
   TICK_BITMAP_TO_USE_BY_CHAIN,
 } from './constants';
 import { IBaseHook } from './hooks/types';
+import { getTopicLogDecoder } from '../../lib/topic-log-decoder';
 
 export class UniswapV4PoolManager extends StatefulEventSubscriber<PoolManagerState> {
   handlers: {
@@ -95,7 +96,8 @@ export class UniswapV4PoolManager extends StatefulEventSubscriber<PoolManagerSta
     this.wethAddress =
       this.dexHelper.config.data.wrappedNativeTokenAddress.toLowerCase();
 
-    this.logDecoder = (log: Log) => this.poolManagerIface.parseLog(log);
+    this.logDecoder = (log: Log) =>
+      getTopicLogDecoder(this.poolManagerIface).decode(log);
 
     this.hookInstancesByAddress = Object.fromEntries(
       supportedHooks.map(hook => [hook.address.toLowerCase(), hook]),

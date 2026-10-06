@@ -11,6 +11,7 @@ import {
 import { Lens } from '../../lens';
 import { Interface } from '@ethersproject/abi';
 import StakedAvaxABI from '../../abi/benqi/staked-avax.json';
+import { getTopicLogDecoder } from '../topic-log-decoder';
 
 export type StakedAvaxState = {
   totalPooledAvax: bigint;
@@ -37,7 +38,9 @@ export class StakedAvaxSubscriber<State> extends PartialEventSubscriber<
     blockHeader: Readonly<BlockHeader>,
   ): DeepReadonly<StakedAvaxState> | null {
     try {
-      const parsed = StakedAvaxSubscriber.stakedAvaxInterface.parseLog(log);
+      const parsed = getTopicLogDecoder(
+        StakedAvaxSubscriber.stakedAvaxInterface,
+      ).decode(log);
       switch (parsed.name) {
         case 'Submitted':
           // The event doesn't contain the deposited amount but a recalculated

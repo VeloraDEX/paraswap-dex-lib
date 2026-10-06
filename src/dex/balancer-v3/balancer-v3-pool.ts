@@ -52,6 +52,7 @@ import {
   ReClammPoolState,
   virtualBalancesUpdatedEvent,
 } from './reClammPool';
+import { TopicLogDecoder } from '../../lib/topic-log-decoder';
 
 export const WAD = BI_POWS[18];
 const FEE_SCALING_FACTOR = BI_POWS[11];
@@ -116,11 +117,14 @@ export class BalancerV3EventPool extends StatefulEventSubscriber<PoolStateMap> {
       ]),
     };
 
-    this.logDecoder = (log: Log) =>
+    // combined once: rebuilding the interface per log parses every fragment again
+    const logDecoder = new TopicLogDecoder(
       combineInterfaces([
         this.interfaces['VAULT'],
         this.interfaces['QUANT_UPDATEWEIGHTRUNNER'],
-      ]).parseLog(log);
+      ]),
+    );
+    this.logDecoder = (log: Log) => logDecoder.decode(log);
     this.addressesSubscribed = [
       BalancerV3Config.BalancerV3[network].vaultAddress,
       // QuantWeightRunner will emit events for Weight changes on any pool

@@ -7,9 +7,10 @@ import { AsyncOrSync, DeepReadonly } from 'ts-essentials';
 import { catchParseLogError } from '../../utils';
 import { PoolState } from './types';
 import { getOnChainState } from './utils';
+import { getTopicLogDecoder } from '../../lib/topic-log-decoder';
 
 export class UsualPool extends StatefulEventSubscriber<PoolState> {
-  decoder = (log: Log) => this.poolInterface.parseLog(log);
+  decoder = (log: Log) => getTopicLogDecoder(this.poolInterface).decode(log);
 
   constructor(
     parentName: string,

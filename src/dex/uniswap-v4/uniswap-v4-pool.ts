@@ -24,6 +24,7 @@ import { MultiResult } from '../../lib/multi-wrapper';
 import { NumberAsString } from '@paraswap/core';
 import { extractSuccessAndValue } from '../../lib/decoders';
 import { IBaseHook } from './hooks/types';
+import { getTopicLogDecoder } from '../../lib/topic-log-decoder';
 
 export class UniswapV4Pool extends StatefulEventSubscriber<PoolState> {
   handlers: {
@@ -66,7 +67,8 @@ export class UniswapV4Pool extends StatefulEventSubscriber<PoolState> {
 
     this.addressesSubscribed = [this.config.poolManager];
 
-    this.logDecoder = (log: Log) => this.poolManagerIface.parseLog(log);
+    this.logDecoder = (log: Log) =>
+      getTopicLogDecoder(this.poolManagerIface).decode(log);
 
     // Add handlers
     this.handlers['Swap'] = this.handleSwapEvent.bind(this);

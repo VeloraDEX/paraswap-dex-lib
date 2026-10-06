@@ -12,6 +12,7 @@ import VatABI from '../../abi/lite-psm/vat.json';
 import { erc20Iface } from '../../lib/tokens/utils';
 import DaiABI from '../../abi/lite-psm/dai.json';
 import UsdcABI from '../../abi/lite-psm/usdc.json';
+import { getTopicLogDecoder } from '../../lib/topic-log-decoder';
 
 const vatInterface = new Interface(VatABI);
 const psmInterface = new Interface(PsmABI);
@@ -120,11 +121,11 @@ export class LitePsmEventPool extends StatefulEventSubscriber<PoolState> {
     this.logDecoder = (log: Log) => {
       const logAddress = log.address.toLowerCase();
       if (logAddress === this.daiAddress) {
-        return daiInterface.parseLog(log);
+        return getTopicLogDecoder(daiInterface).decode(log);
       } else if (logAddress === this.poolConfig.gem.address) {
-        return usdcInterface.parseLog(log);
+        return getTopicLogDecoder(usdcInterface).decode(log);
       } else {
-        return psmInterface.parseLog(log);
+        return getTopicLogDecoder(psmInterface).decode(log);
       }
     };
     this.addressesSubscribed = [

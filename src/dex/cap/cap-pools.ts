@@ -13,6 +13,7 @@ import {
 } from './types';
 import CapTokenAbi from '../../abi/cap/CapToken.json';
 import PriceOracleAbi from '../../abi/cap/PriceOracle.json';
+import { getTopicLogDecoder } from '../../lib/topic-log-decoder';
 
 export class CapPools extends StatefulEventSubscriber<VaultsStates> {
   handlers: {
@@ -38,7 +39,8 @@ export class CapPools extends StatefulEventSubscriber<VaultsStates> {
   ) {
     super(parentName, 'cap', dexHelper, logger);
 
-    this.logDecoder = (log: Log) => this.capIface.parseLog(log);
+    this.logDecoder = (log: Log) =>
+      getTopicLogDecoder(this.capIface).decode(log);
     this.addressesSubscribed = [
       ...Object.values(this.configs).map(config => config.vault.address),
     ];

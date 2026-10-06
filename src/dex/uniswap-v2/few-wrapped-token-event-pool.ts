@@ -5,6 +5,7 @@ import { Interface } from '@ethersproject/abi';
 import { AsyncOrSync, DeepReadonly } from 'ts-essentials';
 import ERC20_ABI from '../../abi/ERC20.abi.json';
 import { ethers } from 'ethers';
+import { getTopicLogDecoder } from '../../lib/topic-log-decoder';
 
 const ERC20_INTERFACE = new Interface(ERC20_ABI);
 const TRANSFER_TOPIC =
@@ -38,7 +39,7 @@ export class FewWrappedTokenEventPool extends StatefulEventSubscriber<FewWrapped
       return null;
     }
 
-    const event = ERC20_INTERFACE.parseLog(log);
+    const event = getTopicLogDecoder(ERC20_INTERFACE).decode(log);
     const from = event.args.from.toLowerCase();
     const to = event.args.to.toLowerCase();
 

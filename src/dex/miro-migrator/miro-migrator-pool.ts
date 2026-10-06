@@ -6,6 +6,7 @@ import { IDexHelper } from '../../dex-helper/idex-helper';
 import { PoolState } from './types';
 import ERC20ABI from '../../abi/ERC20.abi.json';
 import { Contract } from 'ethers';
+import { getTopicLogDecoder } from '../../lib/topic-log-decoder';
 
 export class MiroMigratorEventPool extends StatefulEventSubscriber<PoolState> {
   handlers: {
@@ -32,7 +33,8 @@ export class MiroMigratorEventPool extends StatefulEventSubscriber<PoolState> {
     ),
   ) {
     super(parentName, 'vlr', dexHelper, logger);
-    this.logDecoder = (log: Log) => this.vlrContract.interface.parseLog(log);
+    this.logDecoder = (log: Log) =>
+      getTopicLogDecoder(this.vlrContract.interface).decode(log);
     this.addressesSubscribed = [vlrTokenAddress];
 
     this.handlers['Transfer'] = this.handleTransfer.bind(this);

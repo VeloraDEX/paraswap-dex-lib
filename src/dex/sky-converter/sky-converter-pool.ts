@@ -7,6 +7,7 @@ import { StatefulEventSubscriber } from '../../stateful-event-subscriber';
 import { Address, BlockHeader, Log, Logger } from '../../types';
 import { IDexHelper } from '../../dex-helper';
 import { SkyConverterPoolState } from './types';
+import { getTopicLogDecoder } from '../../lib/topic-log-decoder';
 
 const FEE_BYTES32 =
   '0x6665650000000000000000000000000000000000000000000000000000000000';
@@ -34,7 +35,8 @@ export class SkyConverterEventPool extends StatefulEventSubscriber<SkyConverterP
   ) {
     super(parentName, 'fee', dexHelper, logger);
 
-    this.logDecoder = (log: Log) => this.converterInterface.parseLog(log);
+    this.logDecoder = (log: Log) =>
+      getTopicLogDecoder(this.converterInterface).decode(log);
     this.contract = new Contract(
       this.converterAddress,
       this.converterInterface.fragments,

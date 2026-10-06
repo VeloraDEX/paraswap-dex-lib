@@ -24,6 +24,7 @@ import {
 import stableSurgeHookAbi from '../../../abi/balancer-v3/stableSurgeHook.json';
 import { combineInterfaces } from '../utils';
 import { AkronHookState, AkronConfig, Akron } from './akronHook';
+import { TopicLogDecoder } from '../../../lib/topic-log-decoder';
 
 // Add each supported hook state here
 export type HookState =
@@ -78,8 +79,9 @@ export class BalancerEventHook extends StatefulEventSubscriber<HookStateMap> {
       new Interface(directionalFeeHookAbi),
       new Interface(stableSurgeHookAbi),
     ];
-    this.logDecoder = (log: Log) =>
-      combineInterfaces(this.interfaces).parseLog(log);
+    // combined once: rebuilding the interface per log parses every fragment again
+    const logDecoder = new TopicLogDecoder(combineInterfaces(this.interfaces));
+    this.logDecoder = (log: Log) => logDecoder.decode(log);
 
     // Subscribe to all hooks
     this.addressesSubscribed = Object.keys(this.hooksConfigMap);

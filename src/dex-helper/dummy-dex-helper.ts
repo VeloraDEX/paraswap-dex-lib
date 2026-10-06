@@ -228,11 +228,35 @@ class DummyCache implements ICache {
   }
 
   async hgetAll(mapKey: string): Promise<Record<string, string>> {
-    return {};
+    return { ...(this.hashStorage[mapKey] ?? {}) };
+  }
+
+  async hscan(
+    mapKey: string,
+    cursor: string,
+    count: number,
+  ): Promise<{ cursor: string; entries: Record<string, string> }> {
+    const fields = Object.keys(this.hashStorage[mapKey] ?? {});
+    const start = Number(cursor);
+    const end = Math.min(start + count, fields.length);
+    const entries: Record<string, string> = {};
+    for (const field of fields.slice(start, end)) {
+      entries[field] = this.hashStorage[mapKey][field];
+    }
+    return { cursor: end >= fields.length ? '0' : String(end), entries };
   }
 
   async hdel(mapKey: string, keys: string[]): Promise<number> {
-    return 0;
+    const map = this.hashStorage[mapKey];
+    if (!map) return 0;
+    let removed = 0;
+    for (const key of keys) {
+      if (key in map) {
+        delete map[key];
+        removed++;
+      }
+    }
+    return removed;
   }
 
   async publish(channel: string, msg: string): Promise<void> {

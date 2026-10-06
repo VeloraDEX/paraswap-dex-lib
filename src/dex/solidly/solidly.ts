@@ -1,4 +1,13 @@
-import { UniswapV2 } from '../uniswap-v2/uniswap-v2';
+import {
+  decodeReserves,
+  getReservesCallData,
+  isPairCacheRecordFresh,
+  pairFromCacheRecord,
+  parsePairCacheRecord,
+  UniswapV2,
+  UniswapV2PairCacheRecord,
+  UniswapV2ReservesTarget,
+} from '../uniswap-v2/uniswap-v2';
 import {
   Network,
   NULL_ADDRESS,
@@ -17,14 +26,13 @@ import {
   TransferFeeParams,
 } from '../../types';
 import { IDexHelper } from '../../dex-helper';
-import erc20ABI from '../../abi/erc20.json';
 import { UniswapData, UniswapV2Data } from '../uniswap-v2/types';
 import { getBigIntPow, getDexKeysWithNetwork } from '../../utils';
 import solidlyFactoryABI from '../../abi/solidly/SolidlyFactory.json';
 import solidlyPair from '../../abi/solidly/SolidlyPair.json';
 import _ from 'lodash';
 import { NumberAsString, SwapSide } from '@paraswap/core';
-import { Interface, AbiCoder } from '@ethersproject/abi';
+import { Interface } from '@ethersproject/abi';
 import { SolidlyStablePool } from './solidly-stable-pool';
 import { Uniswapv2ConstantProductPool } from '../uniswap-v2/uniswap-v2-constant-product-pool';
 import {
@@ -43,9 +51,7 @@ import { addressDecode } from '../../lib/decoders';
 
 const SOLIDLY_RECHECK_PAIR_EXISTENCE_AFTER_MS = 3 * 24 * 60 * 60 * 1000; // 3 days
 
-const erc20Iface = new Interface(erc20ABI);
 const solidlyPairIface = new Interface(solidlyPair);
-const defaultAbiCoder = new AbiCoder();
 
 function encodePools(
   pools: SolidlyPool[],
@@ -198,34 +204,31 @@ export class Solidly extends UniswapV2 {
     pairKeys: string[],
     pairs: SolidlyPair[],
   ): Promise<SolidlyPair[]> {
-    const cachedPairsRaw = await this.dexHelper.cache.hmget(
+    const cachedRecordsRaw = await this.dexHelper.cache.hmget(
       this.pairsHashCacheKey,
       pairKeys,
     );
 
-    const cachedPairs = cachedPairsRaw.map(p =>
-      p ? (JSON.parse(p) as SolidlyPair) : null,
-    );
+    const cachedRecords = cachedRecordsRaw.map(parsePairCacheRecord);
 
-    const shouldFetchFromRpc = cachedPairs.some(
-      (cachedPair, i): cachedPair is SolidlyPair => {
-        if (
-          cachedPair &&
-          (cachedPair.exchange ||
-            (cachedPair.checkExistenceAfter &&
-              cachedPair.checkExistenceAfter > Date.now()))
-        ) {
-          // prevent wiping initialized pool
-          if (!pairs[i]?.pool) {
-            pairs[i] = cachedPair;
-            this.pairs[pairKeys[i]] = cachedPair;
-          }
-          return false;
+    const shouldFetchFromRpc = cachedRecords.some((cachedRecord, i) => {
+      if (cachedRecord && isPairCacheRecordFresh(cachedRecord)) {
+        // prevent wiping initialized pool
+        if (!pairs[i]?.pool) {
+          // token0/token1/stable are known by the caller, only `exchange` and
+          // `checkExistenceAfter` are kept in the cache
+          const cachedPair: SolidlyPair = {
+            ...pairFromCacheRecord(token0, token1, cachedRecord),
+            stable: stableValues[i],
+          };
+          pairs[i] = cachedPair;
+          this.pairs[pairKeys[i]] = cachedPair;
         }
+        return false;
+      }
 
-        return true;
-      },
-    );
+      return true;
+    });
 
     if (!shouldFetchFromRpc) return pairs;
 
@@ -276,7 +279,16 @@ export class Solidly extends UniswapV2 {
     await this.dexHelper.cache.hmset(
       this.pairsHashCacheKey,
       Object.fromEntries(
-        pairsToCache.map(([key, pair]) => [key, JSON.stringify(pair)]),
+        pairsToCache.map(([key, pair]) => {
+          const record: UniswapV2PairCacheRecord = {
+            ...(pair.exchange ? { exchange: pair.exchange } : {}),
+            checkExistenceAfter:
+              pair.checkExistenceAfter ??
+              Date.now() + SOLIDLY_RECHECK_PAIR_EXISTENCE_AFTER_MS,
+          };
+
+          return [key, JSON.stringify(record)];
+        }),
       ),
     );
 
@@ -334,18 +346,7 @@ export class Solidly extends UniswapV2 {
       const calldata = pairs
         .map((pair, i) => {
           let calldata = [
-            {
-              target: pair.token0.address,
-              callData: erc20Iface.encodeFunctionData('balanceOf', [
-                pair.exchange!,
-              ]),
-            },
-            {
-              target: pair.token1.address,
-              callData: erc20Iface.encodeFunctionData('balanceOf', [
-                pair.exchange!,
-              ]),
-            },
+            { target: pair.exchange!, callData: getReservesCallData },
           ];
           if (this.isDynamicFees) calldata.push(multiCallFeeData[i]!.callEntry);
           return calldata;
@@ -357,19 +358,18 @@ export class Solidly extends UniswapV2 {
           .aggregate(calldata)
           .call({}, blockNumber);
 
-      const returnData = _.chunk(data.returnData, this.isDynamicFees ? 3 : 2);
+      const returnData = _.chunk(data.returnData, this.isDynamicFees ? 2 : 1);
 
-      return pairs.map((pair, i) => ({
-        reserves0: defaultAbiCoder
-          .decode(['uint256'], returnData[i][0])[0]
-          .toString(),
-        reserves1: defaultAbiCoder
-          .decode(['uint256'], returnData[i][1])[0]
-          .toString(),
-        feeCode: this.isDynamicFees
-          ? multiCallFeeData[i]!.callDecoder(returnData[i][2])
-          : (pair.stable ? this.stableFee : this.volatileFee) || this.feeCode,
-      }));
+      return pairs.map((pair, i) => {
+        const [reserves0, reserves1] = decodeReserves(returnData[i][0]);
+        return {
+          reserves0: reserves0.toString(),
+          reserves1: reserves1.toString(),
+          feeCode: this.isDynamicFees
+            ? multiCallFeeData[i]!.callDecoder(returnData[i][1])
+            : (pair.stable ? this.stableFee : this.volatileFee) || this.feeCode,
+        };
+      });
     } catch (e) {
       this.logger.error(
         `Error_getManyPoolReserves could not get reserves with error:`,
@@ -538,6 +538,48 @@ export class Solidly extends UniswapV2 {
       this.logger.error(`Error_getPrices:`, e);
       return null;
     }
+  }
+
+  // Inverse of `poolPostfix`: recovers the `stable` flag a pool identifier was
+  // built with, along with the pair identifier it was appended to.
+  protected parsePoolPostfix(
+    identifier: string,
+  ): { stable: boolean; pairIdentifier: string } | null {
+    for (const stable of [false, true]) {
+      const postfix = this.poolPostfix(stable);
+      if (postfix && identifier.endsWith(postfix)) {
+        return {
+          stable,
+          pairIdentifier: identifier.slice(0, -postfix.length),
+        };
+      }
+    }
+    return null;
+  }
+
+  // A pool identifier embeds the `stable` flag, so one that does not carry a
+  // postfix cannot be mapped to a pool.
+  protected parsePoolReservesTarget(
+    descriptor: unknown,
+  ): UniswapV2ReservesTarget | null {
+    const identifier = (descriptor as { i?: unknown } | null)?.i;
+    if (typeof identifier !== 'string') return null;
+
+    const parsed = this.parsePoolPostfix(identifier);
+    if (!parsed) return null;
+
+    const target = super.parsePoolReservesTarget({
+      ...(descriptor as object),
+      i: parsed.pairIdentifier,
+    });
+    if (!target) return null;
+
+    const key = this.getPoolIdentifier(
+      target.token0,
+      target.token1,
+      parsed.stable,
+    );
+    return { ...target, id: key, key };
   }
 
   async getTopPoolsForToken(

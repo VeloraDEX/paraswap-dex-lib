@@ -12,6 +12,7 @@ import { Address } from '../../types';
 import { uint256DecodeToNumber } from '../../lib/decoders';
 import { Contract } from 'ethers';
 import { ETHER_ADDRESS } from '../../constants';
+import { getTopicLogDecoder } from '../../lib/topic-log-decoder';
 
 type OnPoolCreatedCallback = (pools: readonly PoolWithDecimals[]) => void;
 
@@ -41,7 +42,8 @@ export class FluidDexFactory extends StatefulEventSubscriber<
   ) {
     super(parentName, 'factory', dexHelper, logger);
 
-    this.logDecoder = (log: Log) => this.dexFactoryIface.parseLog(log);
+    this.logDecoder = (log: Log) =>
+      getTopicLogDecoder(this.dexFactoryIface).decode(log);
     this.addressesSubscribed = [commonAddresses.dexFactory];
 
     // Add handlers

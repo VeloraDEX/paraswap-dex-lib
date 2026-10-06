@@ -11,6 +11,7 @@ import {
   SwappedEvent,
 } from './utils';
 import { EventSubscriber } from '../../../dex-helper';
+import { getTopicLogDecoder } from '../../../lib/topic-log-decoder';
 
 export type Quote<StateAfter = undefined> = {
   consumedAmount: bigint;
@@ -21,6 +22,7 @@ export type Quote<StateAfter = undefined> = {
 
 export interface IEkuboPool<C extends PoolTypeConfig> extends EventSubscriber {
   key: PoolKey<C>;
+  isInvalid(): boolean;
   initializationBlockNumber(): number;
   quote(amount: bigint, token: bigint, blockNumber: number): Quote;
   updateState(blockNumber: number): Promise<void>;
@@ -49,7 +51,7 @@ export class NamedEventHandlers<State> {
     oldState: DeepReadonly<State>,
     blockHeader: Readonly<BlockHeader>,
   ): DeepReadonly<State> | null {
-    const event = this.iface.parseLog(log);
+    const event = getTopicLogDecoder(this.iface).decode(log);
     return (
       this.handlers[event.name]?.(event.args, oldState, blockHeader) ?? null
     );
