@@ -135,7 +135,7 @@ describe('curve-api-pools', () => {
 
   describe('curveApiPoolReserves', () => {
     it('maps coins to plain reserves with raw balances', () => {
-      expect(curveApiPoolReserves('CurveV1', apiPool())).toEqual({
+      expect(curveApiPoolReserves('CurveV1', apiPool(), [A, B])).toEqual({
         dex: 'CurveV1',
         id: POOL.toLowerCase(),
         address: POOL.toLowerCase(),
@@ -143,18 +143,25 @@ describe('curve-api-pools', () => {
       });
     });
 
-    it('skips broken pools and pools with a single coin', () => {
+    it('keeps only the coins the adapter supports, case-insensitively', () => {
+      const C = '0x3333333333333333333333333333333333333333';
+      const pool = apiPool({
+        coins: [
+          { address: A, decimals: '18', poolBalance: '100' },
+          { address: B, decimals: '6', poolBalance: '200' },
+          { address: C, decimals: '6', poolBalance: '300' },
+        ],
+      });
       expect(
-        curveApiPoolReserves('CurveV1', apiPool({ isBroken: true })),
-      ).toBeNull();
+        curveApiPoolReserves('CurveV1', pool, [A.toUpperCase(), B])!.reserves,
+      ).toEqual({ [A]: '100', [B]: '200' });
+    });
+
+    it('skips broken pools and pools with fewer than two supported coins', () => {
       expect(
-        curveApiPoolReserves(
-          'CurveV1',
-          apiPool({
-            coins: [{ address: A, decimals: '18', poolBalance: '1' }],
-          }),
-        ),
+        curveApiPoolReserves('CurveV1', apiPool({ isBroken: true }), [A, B]),
       ).toBeNull();
+      expect(curveApiPoolReserves('CurveV1', apiPool(), [A])).toBeNull();
     });
   });
 });

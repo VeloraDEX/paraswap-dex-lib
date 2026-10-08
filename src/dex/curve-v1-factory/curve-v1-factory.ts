@@ -1586,7 +1586,12 @@ export class CurveV1Factory
         return pools.flatMap(pool => {
           const apiPool = apiPools[pool.address.toLowerCase()];
           const reserves =
-            apiPool && curveApiPoolReserves(this.dexKey, apiPool);
+            apiPool &&
+            curveApiPoolReserves(
+              this.dexKey,
+              apiPool,
+              Object.keys(pool.coinsToIndices),
+            );
           return reserves ? [reserves] : [];
         });
       }),

@@ -97,15 +97,23 @@ export function fetchCurveApiPools(
   return pools;
 }
 
-// Plain reserves over the pool's own coins: every coin swaps to every other
-// one, and `poolBalance` is the raw payout capacity of that coin. Metapool
-// underlying swaps are not listed; the base pool is reported as its own
-// pool. `null` for a broken pool or one with fewer than two coins.
+// Plain reserves over the coins the adapter prices: every listed coin swaps
+// to every other one, and `poolBalance` is the raw payout capacity of that
+// coin. The API may list coins the adapter does not support (legacy USDT
+// pool: cDAI, cUSDC and USDT, while CurveV1 prices only cDAI <-> cUSDC), so
+// only `supportedCoins` are kept. Metapool underlying swaps are not listed;
+// the base pool is reported as its own pool. `null` for a broken pool or one
+// with fewer than two supported coins.
 export function curveApiPoolReserves(
   dexKey: string,
   pool: CurveApiPool,
+  supportedCoins: string[],
 ): PoolReserves | null {
-  if (pool.isBroken || pool.coins.length < 2) return null;
+  if (pool.isBroken) return null;
+
+  const supported = new Set(supportedCoins.map(c => c.toLowerCase()));
+  const coins = pool.coins.filter(c => supported.has(c.address.toLowerCase()));
+  if (coins.length < 2) return null;
 
   const address = pool.address.toLowerCase();
   return {
@@ -113,8 +121,8 @@ export function curveApiPoolReserves(
     id: address,
     address,
     reserves: toReserves(
-      pool.coins.map(c => c.address),
-      pool.coins.map(c => BigInt(c.poolBalance)),
+      coins.map(c => c.address),
+      coins.map(c => BigInt(c.poolBalance)),
     ),
   };
 }

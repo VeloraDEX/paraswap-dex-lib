@@ -1386,7 +1386,8 @@ export class CurveV1
 
     return Object.values(this.pools).flatMap(pool => {
       const apiPool = apiPools[pool.address.toLowerCase()];
-      const reserves = apiPool && curveApiPoolReserves(this.dexKey, apiPool);
+      const reserves =
+        apiPool && curveApiPoolReserves(this.dexKey, apiPool, pool.coins);
       return reserves ? [reserves] : [];
     });
   }

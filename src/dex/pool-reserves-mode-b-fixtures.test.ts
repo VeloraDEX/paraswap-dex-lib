@@ -287,8 +287,8 @@ describe('pool reserves fixtures: Curve (API-backed)', () => {
         dexHelper,
         curveApiSlug: slug,
         pools: {
-          configured: { address: POOL },
-          notInApi: { address: POOL2 },
+          configured: { address: POOL, coins: [A, B] },
+          notInApi: { address: POOL2, coins: [A, B] },
         },
       });
 
@@ -316,6 +316,22 @@ describe('pool reserves fixtures: Curve (API-backed)', () => {
       expect(get.mock.calls[0][0]).toEqual(
         'https://api.curve.finance/v1/getPools/ethereum/main',
       );
+    });
+
+    it('drops API coins the adapter does not price', async () => {
+      // legacy USDT pool: the API lists cDAI, cUSDC and USDT while the
+      // config prices only cDAI <-> cUSDC
+      get.mockResolvedValueOnce(
+        apiResponse([
+          {
+            address: POOL,
+            isBroken: false,
+            coins: [coin(A, '1'), coin(B, '2'), coin(C, '3')],
+          },
+        ]),
+      );
+      const reserves = await curve().getPoolReserves();
+      expect(reserves[0].reserves).toEqual({ [A]: '1', [B]: '2' });
     });
 
     it('skips a pool the API marks broken', async () => {
@@ -354,6 +370,7 @@ describe('pool reserves fixtures: Curve (API-backed)', () => {
             pools.map(p => ({
               address: p.address,
               curveLiquidityApiSlug: p.slug,
+              coinsToIndices: { [A]: 0, [B]: 1 },
             })),
         },
       });

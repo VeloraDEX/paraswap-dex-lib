@@ -31,6 +31,8 @@ When making fixes based on code review comments or feedback, add a concise descr
 
 - **[2026-08] Structural params can't reference `protected` members**: a helper typed `{ network: number }` is not assignable from a class where `network` is `protected` (`SimpleExchange`). Pass the bound method plus plain values (`dexKey` is public) instead of `this`.
 
+- **[2026-10] Protocol-API reserves must be filtered to the adapter's coins**: the Curve API lists every coin a pool holds, but a dex config may price only a subset (legacy USDT pool: API returns cDAI, cUSDC, USDT; `CurveV1` config has only cDAI and cUSDC). `getPoolReserves` built from an external API must intersect the API coins with what the adapter supports (`PoolConfig.coins`, `PoolPollingBase.coinsToIndices`), otherwise consumers discover routes `getPoolIdentifiers` rejects. See `curveApiPoolReserves(..., supportedCoins)`.
+
 - **[2025-01] Avoid analytics logging**: Don't add success/failure count logs (e.g., `Updated ${successCount}/${totalCount} pools`). Log only important operations, warnings for failures, and errors with context. Analytics-style logs create unnecessary noise.
 
 ## Repository Overview
