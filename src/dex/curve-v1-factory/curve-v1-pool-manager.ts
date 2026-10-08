@@ -168,6 +168,12 @@ export class CurveV1FactoryPoolManager {
     this.taskScheduler.releaseResources();
   }
 
+  // Pools this dex prices directly. Base pools kept only for state are not
+  // included: they belong to the dex that prices them.
+  getPricedPools(): PoolPollingBase[] {
+    return Object.values(this.statePollingPoolsFromId);
+  }
+
   initializeNewPool(identifier: string, pool: PoolPollingBase) {
     if (this.statePollingPoolsFromId[identifier]) {
       return;

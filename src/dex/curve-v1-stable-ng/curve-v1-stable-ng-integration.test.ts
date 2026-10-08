@@ -5,6 +5,7 @@ import { DummyDexHelper } from '../../dex-helper';
 import { Tokens } from '../../../tests/constants-e2e';
 import { BI_POWS } from '../../bigint-constants';
 import { checkPoolsLiquidity } from '../../../tests/utils';
+import { expectPoolReserves } from '../../../tests/utils-pool-reserves';
 import { CurveV1StableNg } from './curve-v1-stable-ng';
 import { testPricingOnNetwork } from '../curve-v1-factory/curve-v1-factory-integration.test';
 import CurveV1StableNgPoolAbi from '../../abi/curve-v1/CurveV1StableNg.json';
@@ -123,6 +124,18 @@ describe('CurveV1StableNG integration', function () {
             dexKey,
           );
         }
+      });
+
+      it('getPoolReserves', async function () {
+        const reserves = await curveV1StableNg.getPoolReserves();
+        console.log(`Pool reserves: ${reserves.length} pools`);
+        expectPoolReserves(reserves, dexKey);
+        expect(reserves.length).toBeGreaterThan(0);
+
+        const withLiquidity = reserves.filter(r =>
+          Object.values(r.reserves).some(v => BigInt(v) > 0n),
+        );
+        expect(withLiquidity.length).toBeGreaterThan(0);
       });
     });
   });

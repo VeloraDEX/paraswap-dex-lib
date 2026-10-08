@@ -15,6 +15,7 @@ import {
   ExchangeTxInfo,
   PoolLiquidity,
   PoolPrices,
+  PoolReserves,
   PreprocessTransactionOptions,
   SimpleExchangeParam,
   Token,
@@ -95,9 +96,14 @@ import { packCurveData } from '../../lib/curve/encoder';
 import { encodeCurveAssets } from './packer';
 import { hexConcat, hexZeroPad, hexlify } from 'ethers/lib/utils';
 import {
+  CURVE_API_MAIN_SLUG,
   CURVE_API_URL,
   NETWORK_ID_TO_NAME,
 } from '../curve-v1-factory/constants';
+import {
+  curveApiPoolReserves,
+  fetchCurveApiPools,
+} from '../curve-v1-factory/curve-api-pools';
 
 const CURVE_DEFAULT_CHUNKS = 10;
 
@@ -129,6 +135,9 @@ export class CurveV1
 
   protected pools: Record<string, PoolConfig>;
   protected allApiPools: ApiPool[] = [];
+  // Curve API registry the configured pools live in. Forks of the protocol
+  // are not served by the API and set this to null.
+  protected curveApiSlug: string | null = CURVE_API_MAIN_SLUG;
   protected eventSupportedPools: string[];
   protected baseTokens: Record<string, TokenWithReasonableVolume>;
 
@@ -1359,5 +1368,26 @@ export class CurveV1
     return selectedPool
       .sort((a, b) => b.liquidityUSD - a.liquidityUSD)
       .slice(0, limit);
+  }
+
+  // Enumerated mode. Balances come from the Curve API main registry
+  // (`coins[].poolBalance`) for the configured pools; pools the API does not
+  // list or marks broken are skipped.
+  async getPoolReserves(): Promise<PoolReserves[]> {
+    if (!this.curveApiSlug) return [];
+
+    const apiPools = await fetchCurveApiPools(
+      this.dexHelper,
+      this.network,
+      this.curveApiSlug,
+      this.logger,
+    );
+    if (!apiPools) return [];
+
+    return Object.values(this.pools).flatMap(pool => {
+      const apiPool = apiPools[pool.address.toLowerCase()];
+      const reserves = apiPool && curveApiPoolReserves(this.dexKey, apiPool);
+      return reserves ? [reserves] : [];
+    });
   }
 }

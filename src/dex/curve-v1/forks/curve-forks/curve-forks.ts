@@ -8,6 +8,10 @@ import { IDexHelper } from '../../../../dex-helper';
 import { Adapters, CurveForksConfig } from './config';
 
 export class CurveFork extends CurveV1 {
+  // Ellipsis, Acryptos etc. are not Curve deployments and are absent from
+  // the Curve API, so they report no reserves.
+  protected curveApiSlug = null;
+
   public static dexKeysWithNetwork: { key: string; networks: Network[] }[] =
     getDexKeysWithNetwork(CurveForksConfig);
 

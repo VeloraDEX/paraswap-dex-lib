@@ -28,6 +28,12 @@ export const CURVE_API_BY_NETWORK: Record<number, string> = {
 export const CURVE_API_SLUGS_BY_NETWORK: Record<number, string[]> = {
   [Network.PLASMA]: ['/factory-stable-ng'],
 };
+// Pool reserves are read from the same registry endpoints. Responses are up
+// to ~2MB (factory-stable-ng on mainnet), so they are cached in-process.
+export const CURVE_API_POOLS_TTL_MS = 60 * 1000;
+export const CURVE_API_POOLS_TIMEOUT_MS = 8 * 1000;
+// Registry slug of the legacy (non-factory) pools priced by CurveV1.
+export const CURVE_API_MAIN_SLUG = '/main';
 export const NETWORK_ID_TO_NAME: Record<number, string> = {
   [Network.MAINNET]: 'ethereum',
   [Network.POLYGON]: 'polygon',

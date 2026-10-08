@@ -18,6 +18,7 @@ import {
   Logger,
   PoolLiquidity,
   PoolPrices,
+  PoolReserves,
   PreprocessTransactionOptions,
   SimpleExchangeParam,
   Token,
@@ -70,6 +71,7 @@ import {
   POOL_EXCHANGE_GAS_COST,
 } from './constants';
 import { CurveV1FactoryPoolManager } from './curve-v1-pool-manager';
+import { curveApiPoolReserves, fetchCurveApiPools } from './curve-api-pools';
 import CurveABI from '../../abi/Curve.json';
 import CurveV1RouterABI from '../../abi/curve-v1-factory/CurveV1Router.abi.json';
 import DirectSwapABI from '../../abi/DirectSwap.json';
@@ -1560,6 +1562,37 @@ export class CurveV1Factory
       }, [])
       .sort((a, b) => b.liquidityUSD - a.liquidityUSD)
       .slice(0, limit);
+  }
+
+  // Enumerated mode. Balances come from the Curve API registry endpoints
+  // (`coins[].poolBalance`), one request per registry slug the priced pools
+  // belong to; a failed slug drops only its pools.
+  async getPoolReserves(): Promise<PoolReserves[]> {
+    const poolsBySlug = _.groupBy(
+      this.poolManager.getPricedPools(),
+      pool => pool.curveLiquidityApiSlug,
+    );
+
+    const results = await Promise.all(
+      Object.entries(poolsBySlug).map(async ([slug, pools]) => {
+        const apiPools = await fetchCurveApiPools(
+          this.dexHelper,
+          this.network,
+          slug,
+          this.logger,
+        );
+        if (!apiPools) return [];
+
+        return pools.flatMap(pool => {
+          const apiPool = apiPools[pool.address.toLowerCase()];
+          const reserves =
+            apiPool && curveApiPoolReserves(this.dexKey, apiPool);
+          return reserves ? [reserves] : [];
+        });
+      }),
+    );
+
+    return results.flat();
   }
 
   releaseResources(): AsyncOrSync<void> {
