@@ -104,6 +104,9 @@ export class Ekubo extends SimpleExchange implements IDex<EkuboData> {
     getDexKeysWithNetwork(EKUBO_CONFIG);
 
   private readonly pools: Map<string, IEkuboPool> = new Map();
+  // token0 -> token1 -> string IDs of the tracked pools for that pair
+  private readonly poolIdsByPair: Map<bigint, Map<bigint, Set<string>>> =
+    new Map();
   private poolInitPromises: Record<string, Promise<IEkuboPool>> = {};
   private poolKeysSynced = false;
 
@@ -236,7 +239,7 @@ export class Ekubo extends SimpleExchange implements IDex<EkuboData> {
         );
       }
 
-      this.pools.set(poolKey.stringId, pool);
+      this.trackPool(poolKey.stringId, pool);
     };
 
     for (
@@ -359,15 +362,7 @@ export class Ekubo extends SimpleExchange implements IDex<EkuboData> {
   // the API, the most common pool parameters are assumed to exist so that
   // pricing can fall back to initializing them on demand.
   private poolStringIdsForPair(token0: bigint, token1: bigint): string[] {
-    const stringIds = new Set(
-      this.pools
-        .entries()
-        .filter(
-          ([_, pool]) =>
-            pool.key.token0 === token0 && pool.key.token1 === token1,
-        )
-        .map(([stringId, _]) => stringId),
-    );
+    const stringIds = new Set(this.poolIdsByPair.get(token0)?.get(token1));
 
     if (!this.poolKeysSynced) {
       for (const params of FALLBACK_POOL_PARAMETERS) {
@@ -793,9 +788,29 @@ export class Ekubo extends SimpleExchange implements IDex<EkuboData> {
 
     this.logger.info(`Initializing untracked pool ${stringId}`);
     await pool.initialize(blockNumber);
-    this.pools.set(stringId, pool);
+    this.trackPool(stringId, pool);
 
     return pool;
+  }
+
+  private trackPool(stringId: string, pool: IEkuboPool) {
+    this.pools.set(stringId, pool);
+
+    const { token0, token1 } = pool.key;
+
+    let poolIdsByToken1 = this.poolIdsByPair.get(token0);
+    if (typeof poolIdsByToken1 === 'undefined') {
+      poolIdsByToken1 = new Map();
+      this.poolIdsByPair.set(token0, poolIdsByToken1);
+    }
+
+    let poolIds = poolIdsByToken1.get(token1);
+    if (typeof poolIds === 'undefined') {
+      poolIds = new Set();
+      poolIdsByToken1.set(token1, poolIds);
+    }
+
+    poolIds.add(stringId);
   }
 
   // LEGACY
