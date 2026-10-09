@@ -12,6 +12,7 @@ import {
   checkPoolsLiquidity,
 } from '../../../tests/utils';
 import { Tokens } from '../../../tests/constants-e2e';
+import { expectPoolReserves } from '../../../tests/utils-pool-reserves';
 import { CurveV1Data } from './types';
 import _ from 'lodash';
 
@@ -141,5 +142,22 @@ describe('CurveV1', function () {
     if (!curveV1.hasConstantPriceLargeAmounts) {
       checkPoolsLiquidity(poolLiquidity, TokenA.address, dexKey);
     }
+  });
+
+  it('getPoolReserves', async function () {
+    const reserves = await curveV1.getPoolReserves();
+    console.log(`Pool reserves: ${reserves.length} pools`);
+    expectPoolReserves(reserves, dexKey);
+    expect(reserves.length).toBeGreaterThan(0);
+
+    // 3pool is in the main registry and always holds all three coins
+    const threePool = reserves.find(
+      r => r.address === '0xbebc44782c7db0a1a60cb6fe97d0b483032ff1c7',
+    );
+    expect(threePool).toBeDefined();
+    expect(Object.keys(threePool!.reserves)).toHaveLength(3);
+    Object.values(threePool!.reserves).forEach(v =>
+      expect(BigInt(v)).toBeGreaterThan(0n),
+    );
   });
 });

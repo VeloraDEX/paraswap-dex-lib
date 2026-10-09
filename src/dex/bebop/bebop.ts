@@ -1105,6 +1105,10 @@ export class Bebop
       this.rateFetcher.stop();
     }
   }
+
+  minUsdTradeValue() {
+    return 1;
+  }
 }
 
 const sleep = (time: number) =>

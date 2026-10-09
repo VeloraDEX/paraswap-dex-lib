@@ -7,6 +7,9 @@ import { AngleTransmuter } from './angle-transmuter/angle-transmuter';
 import { OSwap } from './oswap/oswap';
 import { ERC4626 } from './erc4626/erc4626';
 import { AaveGsm } from './aave-gsm/aave-gsm';
+import { CurveV1 } from './curve-v1/curve-v1';
+import { CurveV1Factory } from './curve-v1-factory/curve-v1-factory';
+import { resetCurveApiPoolsCache } from './curve-v1-factory/curve-api-pools';
 
 // Deterministic state cases for the state-backed enumerated-mode adapters.
 // Instances are built from the prototype with only the fields
@@ -254,5 +257,152 @@ describe('pool reserves fixtures: AaveGsm', () => {
   it('omits frozen and seized GSMs', () => {
     expect(gsm({ isFrozen: true }).getPoolReserves()).toEqual([]);
     expect(gsm({ isSeized: true }).getPoolReserves()).toEqual([]);
+  });
+});
+
+describe('pool reserves fixtures: Curve (API-backed)', () => {
+  const get = jest.fn();
+  const dexHelper = { httpRequest: { get } };
+  const coin = (address: string, poolBalance: string) => ({
+    address,
+    decimals: '18',
+    poolBalance,
+  });
+  const apiResponse = (poolData: object[]) => ({
+    success: true,
+    data: { poolData },
+  });
+
+  beforeEach(() => {
+    get.mockReset();
+    resetCurveApiPoolsCache();
+  });
+
+  describe('CurveV1', () => {
+    const curve = (slug: string | null = '/main') =>
+      build(CurveV1, {
+        dexKey: 'CurveV1',
+        network: 1,
+        logger,
+        dexHelper,
+        curveApiSlug: slug,
+        pools: {
+          configured: { address: POOL, coins: [A, B] },
+          notInApi: { address: POOL2, coins: [A, B] },
+        },
+      });
+
+    it('reports configured pools found in the main registry', async () => {
+      get.mockResolvedValueOnce(
+        apiResponse([
+          {
+            address: POOL,
+            isBroken: false,
+            coins: [coin(A, '1'), coin(B, '2')],
+          },
+          { address: C, isBroken: false, coins: [coin(A, '9'), coin(B, '9')] },
+        ]),
+      );
+      const reserves = await curve().getPoolReserves();
+      expectPoolReserves(reserves, 'CurveV1');
+      expect(reserves).toEqual([
+        {
+          dex: 'CurveV1',
+          id: POOL,
+          address: POOL,
+          reserves: { [A]: '1', [B]: '2' },
+        },
+      ]);
+      expect(get.mock.calls[0][0]).toEqual(
+        'https://api.curve.finance/v1/getPools/ethereum/main',
+      );
+    });
+
+    it('drops API coins the adapter does not price', async () => {
+      // legacy USDT pool: the API lists cDAI, cUSDC and USDT while the
+      // config prices only cDAI <-> cUSDC
+      get.mockResolvedValueOnce(
+        apiResponse([
+          {
+            address: POOL,
+            isBroken: false,
+            coins: [coin(A, '1'), coin(B, '2'), coin(C, '3')],
+          },
+        ]),
+      );
+      const reserves = await curve().getPoolReserves();
+      expect(reserves[0].reserves).toEqual({ [A]: '1', [B]: '2' });
+    });
+
+    it('skips a pool the API marks broken', async () => {
+      get.mockResolvedValueOnce(
+        apiResponse([
+          {
+            address: POOL,
+            isBroken: true,
+            coins: [coin(A, '1'), coin(B, '2')],
+          },
+        ]),
+      );
+      expect(await curve().getPoolReserves()).toEqual([]);
+    });
+
+    it('returns nothing when the API fails', async () => {
+      get.mockRejectedValueOnce(new Error('timeout'));
+      expect(await curve().getPoolReserves()).toEqual([]);
+    });
+
+    it('returns nothing for forks without an API registry', async () => {
+      expect(await curve(null).getPoolReserves()).toEqual([]);
+      expect(get).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('CurveV1Factory', () => {
+    const factory = (pools: { address: string; slug: string }[]) =>
+      build(CurveV1Factory, {
+        dexKey: 'CurveV1Factory',
+        network: 1,
+        logger,
+        dexHelper,
+        poolManager: {
+          getPricedPools: () =>
+            pools.map(p => ({
+              address: p.address,
+              curveLiquidityApiSlug: p.slug,
+              coinsToIndices: { [A]: 0, [B]: 1 },
+            })),
+        },
+      });
+
+    it('fetches each registry once and drops only the pools of a failed one', async () => {
+      get.mockImplementation(async (url: string) => {
+        if (url.endsWith('/factory')) {
+          return apiResponse([
+            {
+              address: POOL,
+              isBroken: false,
+              coins: [coin(A, '5'), coin(B, '6')],
+            },
+          ]);
+        }
+        throw new Error('timeout');
+      });
+
+      const reserves = await factory([
+        { address: POOL, slug: '/factory' },
+        { address: POOL2, slug: '/factory' },
+        { address: C, slug: '/factory-stable-ng' },
+      ]).getPoolReserves();
+
+      expectPoolReserves(reserves, 'CurveV1Factory');
+      expect(reserves.map(r => r.id)).toEqual([POOL]);
+      expect(get).toHaveBeenCalledTimes(2);
+    });
+
+    it('returns nothing when no pools are priced', async () => {
+      expect(await factory([]).getPoolReserves()).toEqual([]);
+      expect(get).not.toHaveBeenCalled();
+    });
   });
 });
