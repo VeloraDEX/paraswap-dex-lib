@@ -161,3 +161,37 @@ describe('CurveV1', function () {
     );
   });
 });
+
+describe('CurveV1 GNOSIS native', function () {
+  const gnosisTokens = Tokens[Network.GNOSIS];
+  const curveV1 = new CurveV1(
+    Network.GNOSIS,
+    dexKey,
+    new DummyDexHelper(Network.GNOSIS),
+  );
+
+  it('prices native XDAI against the WXDAI pool', async function () {
+    const pools = await curveV1.getPoolIdentifiers(
+      gnosisTokens['XDAI'],
+      gnosisTokens['USDC'],
+      SwapSide.SELL,
+      0,
+    );
+    expect(pools).toEqual([curveV1.getPoolIdentifier('3pool (x3CRV)')]);
+  });
+
+  it('does not price XDAI <-> WXDAI', async function () {
+    for (const [src, dest] of [
+      ['XDAI', 'WXDAI'],
+      ['WXDAI', 'XDAI'],
+    ]) {
+      const pools = await curveV1.getPoolIdentifiers(
+        gnosisTokens[src],
+        gnosisTokens[dest],
+        SwapSide.SELL,
+        0,
+      );
+      expect(pools).toEqual([]);
+    }
+  });
+});

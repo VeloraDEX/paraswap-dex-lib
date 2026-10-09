@@ -290,7 +290,10 @@ export class CurveV1
       const w = this.dexHelper.config.wrapETH(t);
       return { ...w, address: w.address.toLowerCase() };
     };
-    return [wrap(from), wrap(to)];
+    const [wrappedFrom, wrappedTo] = [wrap(from), wrap(to)];
+    // native<->wrapped would collapse into a same-coin swap
+    if (wrappedFrom.address === wrappedTo.address) return [from, to];
+    return [wrappedFrom, wrappedTo];
   }
 
   poolConfigsByAddress() {
