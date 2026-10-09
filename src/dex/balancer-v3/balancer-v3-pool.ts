@@ -593,25 +593,24 @@ export class BalancerV3EventPool extends StatefulEventSubscriber<PoolStateMap> {
           BigInt(timestamp);
       }
 
-      // ERC4626 unwrap: the underlying balancer-maths BufferState only
-      // enforces maxDeposit/maxMint for wraps. On-chain, the Vault will call
-      // withdraw/redeem on the wrapper which reverts against maxWithdraw /
-      // maxRedeem(vault). Check those ourselves so we return a 0 price
-      // instead of producing a quote that would revert on execution.
+      // The wrapper reverts a Vault wrap or unwrap above its ERC4626 max limits,
+      // and balancer-maths treats a 0 wrap limit as unlimited, so check here.
       if (step.isBuffer && step.poolState.poolType === 'Buffer') {
         const buffer = step.poolState as BufferStateExt;
         const isUnwrap =
           step.swapInput.tokenIn.toLowerCase() ===
           buffer.poolAddress.toLowerCase();
-        if (isUnwrap) {
-          // GivenIn  → amount is shares (redeem); GivenOut → amount is assets (withdraw)
-          const limit =
-            swapKind === SwapKind.GivenIn
-              ? buffer.maxRedeem
-              : buffer.maxWithdraw;
-          if (amount > limit) {
-            return 0n;
-          }
+        // GivenIn: amount is assets (deposit) or shares (redeem);
+        // GivenOut: amount is shares (mint) or assets (withdraw)
+        const limit = isUnwrap
+          ? swapKind === SwapKind.GivenIn
+            ? buffer.maxRedeem
+            : buffer.maxWithdraw
+          : swapKind === SwapKind.GivenIn
+          ? buffer.maxDeposit
+          : buffer.maxMint;
+        if (limit !== undefined && amount > limit) {
+          return 0n;
         }
       }
 
