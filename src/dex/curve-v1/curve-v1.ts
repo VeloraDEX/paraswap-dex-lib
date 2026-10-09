@@ -72,7 +72,7 @@ import {
   getLocalDeadlineAsFriendlyPlaceholder,
   SimpleExchange,
 } from '../simple-exchange';
-import { IDex } from '../idex';
+import { IDex, NeedWrapNativeFunc } from '../idex';
 import { IDexHelper } from '../../dex-helper';
 import { Logger } from 'log4js';
 import { uin128DecodeToInt, uin256DecodeToFloat } from '../../lib/decoders';
@@ -130,6 +130,9 @@ export class CurveV1
 
   readonly hasConstantPriceLargeAmounts = false;
   readonly isFeeOnTransferSupported = true;
+
+  readonly needWrapNative: NeedWrapNativeFunc = (_priceRoute, swap, se) =>
+    this._needWrapNative(swap.srcToken, swap.destToken, se.data);
 
   private decimalsCoinsAndUnderlying: Record<string, number> = {};
 
@@ -269,8 +272,25 @@ export class CurveV1
     side: SwapSide,
     blockNumber: number,
   ): Promise<string[]> {
-    const pools = this.getPoolConfigs(_from, _to);
+    const [from, to] = this.getPricingTokens(_from, _to);
+    const pools = this.getPoolConfigs(from, to);
     return pools.map(pool => this.getPoolIdentifier(pool.name));
+  }
+
+  // Native in/out with no native pool falls back to wrapped-native pools;
+  // _needWrapNative then wraps/unwraps at execution.
+  private getPricingTokens(from: Token, to: Token): [Token, Token] {
+    if (
+      (!isETHAddress(from.address) && !isETHAddress(to.address)) ||
+      this.getPoolConfigs(from, to).length
+    )
+      return [from, to];
+
+    const wrap = (t: Token): Token => {
+      const w = this.dexHelper.config.wrapETH(t);
+      return { ...w, address: w.address.toLowerCase() };
+    };
+    return [wrap(from), wrap(to)];
   }
 
   poolConfigsByAddress() {
@@ -657,6 +677,7 @@ export class CurveV1
 
       _from.address = _from.address.toLowerCase();
       _to.address = _to.address.toLowerCase();
+      [_from, _to] = this.getPricingTokens(_from, _to);
 
       const _isSrcTokenTransferFeeToBeExchanged =
         this.disableFeeOnTransferTokenAddresses.has(_from.address)
@@ -813,6 +834,29 @@ export class CurveV1
       this.logger.error(`Error_${this.dexKey}_getPrices`, e);
       return null;
     }
+  }
+
+  // A pool listing the wrapped native token (e.g. WXDAI in Gnosis x3pool) has a
+  // non-payable exchange, so native in/out must go through WETH. Only pools
+  // listing ETHER_ADDRESS itself take msg.value.
+  private _needWrapNative(
+    srcToken: Address,
+    destToken: Address,
+    data: CurveV1Data,
+  ): boolean {
+    const pool = Object.values(this.pools).find(
+      p => p.address === data.exchange.toLowerCase(),
+    );
+    if (!pool) return false;
+
+    const tokens = data.underlyingSwap ? pool.underlying : pool.coins;
+    const weth =
+      this.dexHelper.config.data.wrappedNativeTokenAddress.toLowerCase();
+
+    return (
+      (isETHAddress(srcToken) && tokens[data.i] === weth) ||
+      (isETHAddress(destToken) && tokens[data.j] === weth)
+    );
   }
 
   getSwapIndexes(
@@ -986,8 +1030,7 @@ export class CurveV1
         ? CurveV1SwapType.EXCHANGE_UNDERLYING
         : CurveV1SwapType.EXCHANGE,
       beneficiary,
-      // For CurveV1 we work as it is, without wrapping and unwrapping
-      false,
+      this._needWrapNative(srcToken, destToken, data),
       permit,
       uuidToBytes16(uuid),
     ];
@@ -1030,11 +1073,19 @@ export class CurveV1
       hexZeroPad(hexlify(blockNumber), 16),
     ]);
 
+    const needWrapNative = this._needWrapNative(srcToken, destToken, data);
+    let wrapFlag = 0;
+    if (isETHAddress(srcToken)) {
+      wrapFlag = needWrapNative ? 1 : 3; // wrap src eth : send eth as msg.value
+    } else if (needWrapNative && isETHAddress(destToken)) {
+      wrapFlag = 2; // unwrap dest eth
+    }
+
     const swapParams: DirectCurveV1ParamV6 = [
       packCurveData(
         data.exchange,
         !data.isApproved, // approve flag, if not approved then set to true
-        isETHAddress(destToken) ? 0 : isETHAddress(srcToken) ? 3 : 0,
+        wrapFlag,
         data.underlyingSwap
           ? CurveV1SwapType.EXCHANGE_UNDERLYING
           : CurveV1SwapType.EXCHANGE,
