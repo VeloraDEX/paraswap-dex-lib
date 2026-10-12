@@ -87,6 +87,7 @@ import { BigNumber } from 'ethers';
 import { SpecialDex } from '../../executor/types';
 import { extractReturnAmountPosition } from '../../executor/utils';
 import { getTopicLogDecoder } from '../../lib/topic-log-decoder';
+import { booleanDecode } from '../../lib/decoders';
 
 // Fallback pools configuration for when subgraph is unavailable
 const FallbackPoolsConfig: Record<string, Record<number, FallbackPool[]>> = {
@@ -292,6 +293,7 @@ const fetchWeightUpdating = `query ($count: Int, $timestampPast: Int, $timestamp
 const MAX_POOL_CNT = 1000; // Taken from SOR
 const POOL_CACHE_TTL = 60 * 60; // 1 hr
 const POOL_EVENT_DISABLED_TTL = 5 * 60; // 5 min
+const PAUSED_POOLS_UPDATE_TTL = 2 * 60; // 2 min
 const POOL_EVENT_REENABLE_DELAY = 7 * 24 * 60 * 60; // 1 week
 
 function typecastReadOnlyPoolState(pool: DeepReadonly<PoolState>): PoolState {
@@ -457,40 +459,39 @@ export class BalancerV2EventPool extends StatefulEventSubscriber<PoolStateMap> {
       this.network,
       cacheKey,
     );
-    if (cachedPools) {
-      const allPools = JSON.parse(cachedPools);
+    const allCachedPools: SubgraphPoolBase[] = cachedPools
+      ? JSON.parse(cachedPools)
+      : [];
+    if (allCachedPools.length) {
       this.logger.info(
-        `Got ${allPools.length} ${this.parentName}_${this.network} pools from cache`,
+        `Got ${allCachedPools.length} ${this.parentName}_${this.network} pools from cache`,
       );
-      return allPools;
+      await this.saveLastKnownApiPools(cachedPools!);
+      return allCachedPools;
     }
 
     this.logger.info(
       `Fetching ${this.parentName}_${this.network} Pools from API`,
     );
 
+    let allPools: SubgraphPoolBase[];
     try {
-      const allPools = await getPoolsApi(
+      allPools = await getPoolsApi(
         this.apiNetworkName,
         MAX_POOL_CNT,
         enabledPoolTypes,
         disabledPoolIds,
       );
-
-      this.dexHelper.cache.setex(
-        this.parentName,
-        this.network,
-        cacheKey,
-        POOL_CACHE_TTL,
-        JSON.stringify(allPools),
-      );
-
-      this.logger.info(
-        `Got ${allPools.length} ${this.parentName}_${this.network} pools from API`,
-      );
-
-      return allPools;
     } catch (e) {
+      const lastKnownPools = await this.getLastKnownApiPools();
+      if (lastKnownPools) {
+        this.logger.warn(
+          `API unavailable for ${this.parentName}_${this.network}, using ${lastKnownPools.length} last known pools`,
+          e,
+        );
+        return lastKnownPools;
+      }
+
       if (this.fallbackPools.length > 0) {
         this.logger.warn(
           `API unavailable for ${this.parentName}_${this.network}, using ${this.fallbackPools.length} fallback pools`,
@@ -500,6 +501,58 @@ export class BalancerV2EventPool extends StatefulEventSubscriber<PoolStateMap> {
 
       throw e;
     }
+
+    const serializedPools = JSON.stringify(allPools);
+    this.dexHelper.cache.setex(
+      this.parentName,
+      this.network,
+      cacheKey,
+      POOL_CACHE_TTL,
+      serializedPools,
+    );
+    await this.saveLastKnownApiPools(serializedPools);
+
+    this.logger.info(
+      `Got ${allPools.length} ${this.parentName}_${this.network} pools from API`,
+    );
+
+    return allPools;
+  }
+
+  // The Balancer API is being shut down: keep the last successful response
+  // without TTL so pricing can continue on the last known pool set.
+  private async saveLastKnownApiPools(serializedPools: string): Promise<void> {
+    try {
+      await this.dexHelper.cache.set(
+        this.lastKnownApiPoolsKey,
+        serializedPools,
+      );
+    } catch (e) {
+      this.logger.error(
+        `${this.parentName}_${this.network}: Failed to cache last known API pools`,
+        e,
+      );
+    }
+  }
+
+  private async getLastKnownApiPools(): Promise<SubgraphPoolBase[] | null> {
+    try {
+      const cached = await this.dexHelper.cache.rawget(
+        this.lastKnownApiPoolsKey,
+      );
+      const pools: SubgraphPoolBase[] = cached ? JSON.parse(cached) : [];
+      return pools.length ? pools : null;
+    } catch (e) {
+      this.logger.error(
+        `${this.parentName}_${this.network}: Failed to read last known API pools`,
+        e,
+      );
+      return null;
+    }
+  }
+
+  private get lastKnownApiPoolsKey(): string {
+    return `${this.network}_${this.parentName}_lastKnownApiPools`.toLowerCase();
   }
 
   private buildPoolsFromFallback(): SubgraphPoolBase[] {
@@ -751,6 +804,13 @@ export class BalancerV2
   eventDisabledPoolsTimer?: NodeJS.Timeout;
   eventDisabledPools: Address[] = [];
 
+  pausedPoolsTimer?: NodeJS.Timeout;
+  pausedPools = new Set<Address>();
+
+  readonly pausableIface = new Interface([
+    'function getPausedState() view returns (bool paused, uint256 pauseWindowEndTime, uint256 bufferPeriodEndTime)',
+  ]);
+
   constructor(
     protected network: Network,
     dexKey: string,
@@ -860,6 +920,49 @@ export class BalancerV2
       }, POOL_EVENT_DISABLED_TTL * 1000);
     }
     await this.setupEventPools(blockNumber);
+
+    if (!this.pausedPoolsTimer) {
+      await this.updatePausedPools();
+      this.pausedPoolsTimer = setInterval(async () => {
+        try {
+          await this.updatePausedPools();
+        } catch (e) {
+          this.logger.error(
+            `${this.dexKey}: Failed to update paused pools:`,
+            e,
+          );
+        }
+      }, PAUSED_POOLS_UPDATE_TTL * 1000);
+    }
+  }
+
+  // Pools emit PausedStateChanged themselves (not the Vault) and their state is
+  // not refreshed after generateState, so pause status is polled on chain.
+  async updatePausedPools(): Promise<void> {
+    const pools = this.eventPools.allPools;
+    const results = await this.dexHelper.multiWrapper.tryAggregate(
+      false,
+      pools.map(pool => ({
+        target: pool.address,
+        callData: this.pausableIface.encodeFunctionData('getPausedState'),
+        decodeFunction: booleanDecode,
+      })),
+      undefined,
+      this.dexHelper.multiWrapper.defaultBatchSize,
+      false,
+    );
+
+    // A failed call keeps the previous status, so a paused pool is not
+    // re-enabled without a confirmed unpause.
+    const pausedPools = new Set<Address>();
+    pools.forEach((pool, i) => {
+      const address = pool.address.toLowerCase();
+      const result = results[i];
+      if (result.success ? result.returnData : this.pausedPools.has(address)) {
+        pausedPools.add(address);
+      }
+    });
+    this.pausedPools = pausedPools;
   }
 
   releaseResources(): void {
@@ -870,10 +973,19 @@ export class BalancerV2
         `${this.dexKey}: cleared eventDisabledPoolsTimer before shutting down`,
       );
     }
+    if (this.pausedPoolsTimer) {
+      clearInterval(this.pausedPoolsTimer);
+      this.pausedPoolsTimer = undefined;
+      this.logger.info(
+        `${this.dexKey}: cleared pausedPoolsTimer before shutting down`,
+      );
+    }
   }
 
   getPoolsWithTokenPair(from: Token, to: Token): SubgraphPoolBase[] {
     const pools = this.eventPools.allPools.filter(p => {
+      if (this.pausedPools.has(p.address.toLowerCase())) return false;
+
       const fromMain = p.mainTokens.find(
         token => token.address.toLowerCase() === from.address.toLowerCase(),
       );

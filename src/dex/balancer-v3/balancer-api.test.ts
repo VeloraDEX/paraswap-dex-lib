@@ -1,6 +1,6 @@
 // npx jest src/dex/balancer-v3/balancer-api.test.ts
 /* eslint-disable no-console */
-import { getPoolsApi } from './getPoolsApi';
+import { ApiPool, getPoolsApi, parseApiPools } from './getPoolsApi';
 import { getTopPoolsApi, Pool } from './getTopPoolsApi';
 import { loadHooksConfig } from './hooks/loadHooksConfig';
 import { ImmutablePoolStateMap } from './types';
@@ -82,40 +82,82 @@ describe('Balancer API Tests', function () {
       };
       expect(pools[stableSurgePoolAddr]).toEqual(expectedPool);
     });
+  });
 
-    it('should fetch pool with correct token order', function () {
-      const expectedPool = {
-        poolAddress: poolUnorderedTokensAddr,
-        tokens: [
-          '0x5f9d59db355b4a60501544637b00e94082ca575b',
-          '0x7bc3485026ac48b6cf9baf0a377477fff5703af8',
-        ],
-        tokensUnderlying: [
-          '0x4c9edd5852cd905f086c759e8383e09bff1e68b3',
-          '0xdac17f958d2ee523a2206206994597c13d831ec7',
-        ],
-        weights: [0n, 0n],
-        poolType: 'STABLE',
+  describe('parseApiPools', function () {
+    const gyroParams = {
+      alpha: null,
+      beta: null,
+      c: null,
+      s: null,
+      lambda: null,
+      tauAlphaX: null,
+      tauAlphaY: null,
+      tauBetaX: null,
+      tauBetaY: null,
+      u: null,
+      v: null,
+      w: null,
+      z: null,
+      dSq: null,
+    };
+    const apiPool = (id: string, totalLiquidity: string) =>
+      ({
+        id,
+        type: 'STABLE',
         version: 1,
-        hookAddress: undefined,
-        hookType: undefined,
-        supportsUnbalancedLiquidity: true,
-        dSq: 0n,
-        paramsAlpha: 0n,
-        paramsBeta: 0n,
-        paramsC: 0n,
-        paramsLambda: 0n,
-        paramsS: 0n,
-        tauAlphaX: 0n,
-        tauAlphaY: 0n,
-        tauBetaX: 0n,
-        tauBetaY: 0n,
-        u: 0n,
-        v: 0n,
-        w: 0n,
-        z: 0n,
-      };
-      expect(pools[poolUnorderedTokensAddr]).toEqual(expectedPool);
+        hook: null,
+        dynamicData: { totalLiquidity },
+        // Intentionally out of index order
+        poolTokens: [
+          {
+            address: '0x7bc3485026ac48b6cf9baf0a377477fff5703af8',
+            index: 1,
+            weight: null,
+            canUseBufferForSwaps: true,
+            underlyingToken: {
+              address: '0xdac17f958d2ee523a2206206994597c13d831ec7',
+            },
+          },
+          {
+            address: '0x5f9d59db355b4a60501544637b00e94082ca575b',
+            index: 0,
+            weight: null,
+            canUseBufferForSwaps: true,
+            underlyingToken: {
+              address: '0x4c9edd5852cd905f086c759e8383e09bff1e68b3',
+            },
+          },
+        ],
+        ...gyroParams,
+      } as unknown as ApiPool);
+
+    it('should sort pool tokens by index', function () {
+      const pools = parseApiPools(
+        network,
+        [apiPool(poolUnorderedTokensAddr, '1000')],
+        hooksConfigMap,
+      );
+
+      expect(pools[poolUnorderedTokensAddr].tokens).toEqual([
+        '0x5f9d59db355b4a60501544637b00e94082ca575b',
+        '0x7bc3485026ac48b6cf9baf0a377477fff5703af8',
+      ]);
+      expect(pools[poolUnorderedTokensAddr].tokensUnderlying).toEqual([
+        '0x4c9edd5852cd905f086c759e8383e09bff1e68b3',
+        '0xdac17f958d2ee523a2206206994597c13d831ec7',
+      ]);
+    });
+
+    it('should skip pools below min TVL', function () {
+      const lowTvlPool = '0x0000000000000000000000000000000000000001';
+      const pools = parseApiPools(
+        network,
+        [apiPool(poolUnorderedTokensAddr, '100'), apiPool(lowTvlPool, '99.9')],
+        hooksConfigMap,
+      );
+
+      expect(Object.keys(pools)).toEqual([poolUnorderedTokensAddr]);
     });
   });
 

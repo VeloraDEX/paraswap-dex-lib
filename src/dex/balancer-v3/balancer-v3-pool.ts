@@ -8,12 +8,13 @@ import { StatefulEventSubscriber } from '../../stateful-event-subscriber';
 import { IDexHelper } from '../../dex-helper/idex-helper';
 import {
   BufferStateExt,
+  ImmutablePoolStateMap,
   PoolState,
   PoolStateMap,
   Step,
   TokenInfo,
 } from './types';
-import { getPoolsApi } from './getPoolsApi';
+import { ApiPool, fetchApiPools, parseApiPools } from './getPoolsApi';
 import vaultExtensionAbi_V3 from '../../abi/balancer-v3/vault-extension.json';
 import {
   decodeErc4626MultiCallData,
@@ -56,6 +57,7 @@ import { TopicLogDecoder } from '../../lib/topic-log-decoder';
 
 export const WAD = BI_POWS[18];
 const FEE_SCALING_FACTOR = BI_POWS[11];
+const API_POOLS_CACHE_KEY = 'apiPools';
 
 export class BalancerV3EventPool extends StatefulEventSubscriber<PoolStateMap> {
   handlers: {
@@ -75,6 +77,7 @@ export class BalancerV3EventPool extends StatefulEventSubscriber<PoolStateMap> {
   };
   vault: Vault;
   hooksConfigMap: HooksConfigMap = {};
+  private isUsingCachedApiPools = false;
 
   constructor(
     readonly parentName: string,
@@ -189,10 +192,7 @@ export class BalancerV3EventPool extends StatefulEventSubscriber<PoolStateMap> {
   async generateState(
     blockNumber: number,
   ): Promise<DeepReadonly<PoolStateMap>> {
-    const apiPoolStateMap = await getPoolsApi(
-      this.network,
-      this.hooksConfigMap,
-    );
+    const apiPoolStateMap = await this.getApiPoolStateMap();
     const allOnChainPools = await getOnChainState(
       this.network,
       apiPoolStateMap,
@@ -202,39 +202,57 @@ export class BalancerV3EventPool extends StatefulEventSubscriber<PoolStateMap> {
       this.logger,
     );
 
-    // Filter out all paused pools
-    const filteredPools = Object.entries(allOnChainPools)
-      .filter(([address, pool]) => {
-        return !pool.isPoolPaused;
-      })
-      .reduce((acc, [address, pool]) => {
-        acc[address] = pool;
-        return acc;
-      }, {} as PoolStateMap);
-
-    return filteredPools;
+    // Paused pools can't be swapped against
+    return _.pickBy(allOnChainPools, pool => !pool.isPoolPaused);
   }
 
   async getUpdatedPoolState(
     blockNumber: number,
   ): Promise<DeepReadonly<PoolStateMap> | null> {
-    // Get all latest pools from API
-    const apiPoolStateMap = await getPoolsApi(
-      this.network,
-      this.hooksConfigMap,
-    );
+    return this.generateState(blockNumber);
+  }
 
-    // Get on-chain state for all pools to ensure correct state
-    const latestOnChainPools = await getOnChainState(
-      this.network,
-      apiPoolStateMap,
-      this.dexHelper,
-      this.interfaces,
-      blockNumber,
-      this.logger,
-    );
+  // The Balancer API is being shut down. Every successful response is stored
+  // without TTL, so once the API stops answering we keep pricing the last known
+  // pool set. Mutable state (balances, rates, paused, ...) always comes from chain.
+  private async getApiPoolStateMap(): Promise<ImmutablePoolStateMap> {
+    const cacheKey =
+      `${this.network}_${this.parentName}_${API_POOLS_CACHE_KEY}`.toLowerCase();
 
-    return latestOnChainPools;
+    let pools: ApiPool[];
+    let poolStateMap: ImmutablePoolStateMap;
+    try {
+      pools = await fetchApiPools(this.network, this.hooksConfigMap);
+      // Parse before persisting so a malformed or degraded response never
+      // replaces a good snapshot
+      poolStateMap = parseApiPools(this.network, pools, this.hooksConfigMap);
+      if (_.isEmpty(poolStateMap)) {
+        throw new Error('Balancer API returned no supported pools');
+      }
+    } catch (e) {
+      const cached = await this.dexHelper.cache.rawget(cacheKey);
+      if (!cached) throw e;
+
+      pools = JSON.parse(cached);
+      // Logged once per outage, otherwise it repeats on every refresh
+      if (!this.isUsingCachedApiPools) {
+        this.isUsingCachedApiPools = true;
+        this.logger.warn(
+          `${this.parentName}: Balancer API unavailable, using ${pools.length} cached pools`,
+          e,
+        );
+      }
+      return parseApiPools(this.network, pools, this.hooksConfigMap);
+    }
+    this.isUsingCachedApiPools = false;
+
+    try {
+      await this.dexHelper.cache.set(cacheKey, JSON.stringify(pools));
+    } catch (e) {
+      this.logger.error(`${this.parentName}: Failed to cache API pools`, e);
+    }
+
+    return poolStateMap;
   }
 
   liquidityAddedEvent(
