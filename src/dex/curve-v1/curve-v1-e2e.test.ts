@@ -301,6 +301,26 @@ describe('CurveV1 E2E', () => {
           amount: (10 ** 6).toString(),
         },
       ],
+      [
+        {
+          symbol: 'XDAI',
+          amount: (10 ** 18).toString(),
+        },
+        {
+          symbol: 'USDC',
+          amount: (10 ** 6).toString(),
+        },
+      ],
+      [
+        {
+          symbol: 'USDC',
+          amount: (10 ** 6).toString(),
+        },
+        {
+          symbol: 'XDAI',
+          amount: (10 ** 18).toString(),
+        },
+      ],
     ];
 
     const sideToContractMethods = new Map([
