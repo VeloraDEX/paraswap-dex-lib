@@ -13,6 +13,9 @@ import { GyroECLPImmutableString } from './gyroECLPPool';
 import { ReClammApiName } from './reClammPool';
 
 const API_TIMEOUT_MS = 30_000;
+// Pools below this TVL are mostly spam (e.g. ~1.5k empty GyroE pools on mainnet)
+// and only add on-chain refresh cost.
+const MIN_TVL_USD = 100;
 
 interface PoolToken {
   address: string;
@@ -32,6 +35,9 @@ export type ApiPool = {
   hook: {
     address: string;
   } | null;
+  dynamicData: {
+    totalLiquidity: string;
+  };
 } & GyroECLPImmutableString;
 
 interface QueryResponse {
@@ -82,6 +88,9 @@ function createQuery(
         }
         hook {
           address
+        }
+        dynamicData {
+          totalLiquidity
         }
         alpha
         beta
@@ -257,7 +266,11 @@ export function parseApiPools(
 ): ImmutablePoolStateMap {
   const disabled = disabledPoolIds.BalancerV3[network] ?? [];
   return toImmutablePoolStateMap(
-    pools.filter(pool => !disabled.includes(pool.id.toLowerCase())),
+    pools.filter(
+      pool =>
+        !disabled.includes(pool.id.toLowerCase()) &&
+        Number(pool.dynamicData.totalLiquidity) >= MIN_TVL_USD,
+    ),
     hooksConfigMap,
   );
 }
