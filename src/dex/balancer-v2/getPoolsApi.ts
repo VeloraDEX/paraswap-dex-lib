@@ -129,9 +129,7 @@ export async function getPoolsApi(
     },
   );
 
-  if (
-    !(response.data && response.data.data && response.data.data.poolGetPools)
-  ) {
+  if (!response.data?.data?.poolGetPools?.length) {
     throw new Error('Unable to fetch pools from the API v3');
   }
 

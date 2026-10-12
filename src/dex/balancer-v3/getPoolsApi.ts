@@ -11,6 +11,9 @@ import { HooksConfigMap } from './hooks/balancer-hook-event-subscriber';
 import { getUniqueHookNames } from './utils';
 import { GyroECLPImmutableString } from './gyroECLPPool';
 import { ReClammApiName } from './reClammPool';
+
+const API_TIMEOUT_MS = 30_000;
+
 interface PoolToken {
   address: string;
   index: number;
@@ -21,7 +24,7 @@ interface PoolToken {
   } | null;
 }
 
-type Pool = {
+export type ApiPool = {
   id: string;
   type: string;
   version: number;
@@ -33,8 +36,9 @@ type Pool = {
 
 interface QueryResponse {
   data: {
-    aggregatorPools: Pool[];
+    aggregatorPools: ApiPool[];
   };
+  errors?: unknown[];
 }
 
 function createQuery(
@@ -99,7 +103,7 @@ function createQuery(
 }
 
 function toImmutablePoolStateMap(
-  pools: Pool[],
+  pools: ApiPool[],
   hooksConfigMap: HooksConfigMap,
 ): ImmutablePoolStateMap {
   return (
@@ -205,38 +209,65 @@ function getHookAddress(
   else return hook.address.toLowerCase();
 }
 
+// Raw API response, before any local filtering. Kept as-is so it can be cached
+// and re-parsed once the API is no longer available.
+export async function fetchApiPools(
+  network: number,
+  hooksConfigMap: HooksConfigMap,
+  timestamp?: number,
+): Promise<ApiPool[]> {
+  const query = createQuery(
+    network,
+    Object.values(SUPPORTED_POOLS),
+    getUniqueHookNames(hooksConfigMap),
+    timestamp,
+  );
+  const response = await axios.post<QueryResponse>(
+    apiUrl,
+    {
+      query,
+    },
+    {
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      timeout: API_TIMEOUT_MS,
+    },
+  );
+
+  if (response.data?.errors?.length) {
+    throw new Error(
+      `Balancer API returned errors for network ${network}: ${JSON.stringify(
+        response.data.errors,
+      )}`,
+    );
+  }
+
+  const pools = response.data?.data?.aggregatorPools;
+  if (!pools?.length) {
+    throw new Error(`Balancer API returned no pools for network ${network}`);
+  }
+  return pools;
+}
+
+export function parseApiPools(
+  network: number,
+  pools: ApiPool[],
+  hooksConfigMap: HooksConfigMap,
+): ImmutablePoolStateMap {
+  const disabled = disabledPoolIds.BalancerV3[network] ?? [];
+  return toImmutablePoolStateMap(
+    pools.filter(pool => !disabled.includes(pool.id.toLowerCase())),
+    hooksConfigMap,
+  );
+}
+
 // Any data from API will be immutable. Mutable data such as balances, etc will be fetched via onchain/event state.
 export async function getPoolsApi(
   network: number,
   hooksConfigMap: HooksConfigMap,
   timestamp?: number,
 ): Promise<ImmutablePoolStateMap> {
-  try {
-    const query = createQuery(
-      network,
-      Object.values(SUPPORTED_POOLS),
-      getUniqueHookNames(hooksConfigMap),
-      timestamp,
-    );
-    const response = await axios.post<QueryResponse>(
-      apiUrl,
-      {
-        query,
-      },
-      {
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      },
-    );
-
-    const disabled = disabledPoolIds.BalancerV3[network] ?? [];
-    const pools = response.data.data.aggregatorPools.filter(
-      pool => !disabled.includes(pool.id.toLowerCase()),
-    );
-    return toImmutablePoolStateMap(pools, hooksConfigMap);
-  } catch (error) {
-    // console.error('Error executing GraphQL query:', error);
-    throw error;
-  }
+  const pools = await fetchApiPools(network, hooksConfigMap, timestamp);
+  return parseApiPools(network, pools, hooksConfigMap);
 }
