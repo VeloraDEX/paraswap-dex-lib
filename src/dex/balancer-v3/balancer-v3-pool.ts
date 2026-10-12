@@ -77,6 +77,7 @@ export class BalancerV3EventPool extends StatefulEventSubscriber<PoolStateMap> {
   };
   vault: Vault;
   hooksConfigMap: HooksConfigMap = {};
+  private isUsingCachedApiPools = false;
 
   constructor(
     readonly parentName: string,
@@ -222,19 +223,28 @@ export class BalancerV3EventPool extends StatefulEventSubscriber<PoolStateMap> {
     let poolStateMap: ImmutablePoolStateMap;
     try {
       pools = await fetchApiPools(this.network, this.hooksConfigMap);
-      // Parse before persisting so a malformed response never replaces a good snapshot
+      // Parse before persisting so a malformed or degraded response never
+      // replaces a good snapshot
       poolStateMap = parseApiPools(this.network, pools, this.hooksConfigMap);
+      if (_.isEmpty(poolStateMap)) {
+        throw new Error('Balancer API returned no supported pools');
+      }
     } catch (e) {
       const cached = await this.dexHelper.cache.rawget(cacheKey);
       if (!cached) throw e;
 
       pools = JSON.parse(cached);
-      this.logger.warn(
-        `${this.parentName}: Balancer API unavailable, using ${pools.length} cached pools`,
-        e,
-      );
+      // Logged once per outage, otherwise it repeats on every refresh
+      if (!this.isUsingCachedApiPools) {
+        this.isUsingCachedApiPools = true;
+        this.logger.warn(
+          `${this.parentName}: Balancer API unavailable, using ${pools.length} cached pools`,
+          e,
+        );
+      }
       return parseApiPools(this.network, pools, this.hooksConfigMap);
     }
+    this.isUsingCachedApiPools = false;
 
     try {
       await this.dexHelper.cache.set(cacheKey, JSON.stringify(pools));

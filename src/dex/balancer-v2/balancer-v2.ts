@@ -459,13 +459,15 @@ export class BalancerV2EventPool extends StatefulEventSubscriber<PoolStateMap> {
       this.network,
       cacheKey,
     );
-    if (cachedPools) {
-      const allPools = JSON.parse(cachedPools);
+    const allCachedPools: SubgraphPoolBase[] = cachedPools
+      ? JSON.parse(cachedPools)
+      : [];
+    if (allCachedPools.length) {
       this.logger.info(
-        `Got ${allPools.length} ${this.parentName}_${this.network} pools from cache`,
+        `Got ${allCachedPools.length} ${this.parentName}_${this.network} pools from cache`,
       );
-      await this.saveLastKnownApiPools(cachedPools);
-      return allPools;
+      await this.saveLastKnownApiPools(cachedPools!);
+      return allCachedPools;
     }
 
     this.logger.info(
@@ -538,7 +540,8 @@ export class BalancerV2EventPool extends StatefulEventSubscriber<PoolStateMap> {
       const cached = await this.dexHelper.cache.rawget(
         this.lastKnownApiPoolsKey,
       );
-      return cached ? JSON.parse(cached) : null;
+      const pools: SubgraphPoolBase[] = cached ? JSON.parse(cached) : [];
+      return pools.length ? pools : null;
     } catch (e) {
       this.logger.error(
         `${this.parentName}_${this.network}: Failed to read last known API pools`,
