@@ -748,6 +748,46 @@ export const CurveV1Config: DexConfigMap<DexParams> = {
         '0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84', // stETH
       ]),
     },
+    [Network.POLYGON]: {
+      baseTokens: {
+        '0x8f3cf7ad23cd3cadbd9735aff958023239c6a063': {
+          // dai
+          address: '0x8f3cf7ad23cd3cadbd9735aff958023239c6a063',
+          decimals: 18,
+          reasonableVolume: 100000000000000000000n,
+        },
+        '0x1bfd67037b42cf73acf2047067bd4f2c47d9bfd6': {
+          address: '0x1BFD67037B42Cf73acF2047067bd4F2C47D9BfD6',
+          decimals: 8,
+          reasonableVolume: 10000000n,
+        },
+        '0xE111178A87A3BFf0c8d18DECBa5798827539Ae99': {
+          address: '0xE111178A87A3BFf0c8d18DECBa5798827539Ae99',
+          decimals: 2,
+          reasonableVolume: 10000n,
+        },
+      },
+      eventSupportedPools: [],
+      pools: {
+        Ren: {
+          underlying: [
+            '0x1bfd67037b42cf73acf2047067bd4f2c47d9bfd6',
+            '0xdbf31df14b66535af65aac99c32e9ea844e14501',
+          ],
+          coins: [
+            '0x5c2ed810328349100a66b82b78a1791b101c9d61',
+            '0xdbf31df14b66535af65aac99c32e9ea844e14501',
+          ],
+          address: '0xc2d95eef97ec6c17551d45e77b590dc1f9117c67',
+          name: 'ren',
+          type: 2,
+          version: 3,
+          isLending: true,
+          isMetapool: false,
+          baseToken: '0x1bfd67037b42cf73acf2047067bd4f2c47d9bfd6',
+        },
+      },
+    },
     [Network.ARBITRUM]: {
       baseTokens: {
         '0xFF970A61A04b1cA14834A43f5dE4533eBDDB5CC8': {
@@ -873,6 +913,14 @@ export const Adapters: Record<number, AdapterMappings> = {
       {
         name: 'BscAdapter01',
         index: 2,
+      },
+    ],
+  },
+  [Network.POLYGON]: {
+    [SwapSide.SELL]: [
+      {
+        name: 'PolygonAdapter01',
+        index: 3,
       },
     ],
   },
