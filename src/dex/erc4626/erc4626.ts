@@ -40,6 +40,7 @@ import { hexConcat, hexDataLength, hexZeroPad } from '@ethersproject/bytes';
 import {
   directionalReserves,
   DirectionalReserve,
+  PoolReservesNotReadyError,
 } from '../../lib/pools-storage/reserves';
 
 export class ERC4626
@@ -216,9 +217,10 @@ export class ERC4626
   // asset -> vault is a mint with no cap; vault -> asset pays out of
   // `totalAssets` and only while redeeming is allowed.
   getPoolReserves(): PoolReserves[] {
-    if (this.eventPool.isInvalid()) return [];
-    const state = this.eventPool.getStaleState();
-    if (!state) return [];
+    const state = this.eventPool.isInvalid()
+      ? null
+      : this.eventPool.getStaleState();
+    if (!state) throw new PoolReservesNotReadyError(this.dexKey, 'no state');
 
     const vault = this.vault.toLowerCase();
     const asset = this.asset.toLowerCase();

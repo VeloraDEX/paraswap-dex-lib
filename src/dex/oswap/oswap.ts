@@ -34,7 +34,10 @@ import { OSwapEventPool } from './oswap-pool';
 import OSwapABI from '../../abi/oswap/oswap.abi.json';
 import { extractReturnAmountPosition } from '../../executor/utils';
 import { applyTransferFee } from '../../lib/token-transfer-fee';
-import { toReserves } from '../../lib/pools-storage/reserves';
+import {
+  PoolReservesNotReadyError,
+  toReserves,
+} from '../../lib/pools-storage/reserves';
 
 export class OSwap extends SimpleExchange implements IDex<OSwapData> {
   readonly eventPools: { [id: string]: OSwapEventPool } = {};
@@ -483,7 +486,12 @@ export class OSwap extends SimpleExchange implements IDex<OSwapData> {
     return this.pools.flatMap(pool => {
       const eventPool = this.eventPools[pool.id];
       const state = eventPool?.isInvalid() ? null : eventPool?.getStaleState();
-      if (!state) return [];
+      if (!state) {
+        throw new PoolReservesNotReadyError(
+          this.dexKey,
+          `no state for ${pool.id}`,
+        );
+      }
       return [
         {
           dex: this.dexKey,

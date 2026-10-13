@@ -24,7 +24,10 @@ import { Interface } from '@ethersproject/abi';
 import MiroMigratorAbi from '../../abi/miro-migrator/MiroMigrator.abi.json';
 import { MIRO_MIGRATION_GAS_COST } from './constants';
 import { MiroMigratorEventPool } from './miro-migrator-pool';
-import { directionalReserves } from '../../lib/pools-storage/reserves';
+import {
+  directionalReserves,
+  PoolReservesNotReadyError,
+} from '../../lib/pools-storage/reserves';
 
 export class MiroMigrator
   extends SimpleExchange
@@ -230,9 +233,10 @@ export class MiroMigrator
   // One-way migration into VLR; both source tokens draw on the same VLR
   // balance held by the migrator.
   getPoolReserves(): PoolReserves[] {
-    if (this.eventPool.isInvalid()) return [];
-    const state = this.eventPool.getStaleState();
-    if (!state) return [];
+    const state = this.eventPool.isInvalid()
+      ? null
+      : this.eventPool.getStaleState();
+    if (!state) throw new PoolReservesNotReadyError(this.dexKey, 'no state');
 
     const migrator = this.config.migratorAddress.toLowerCase();
     const vlr = this.config.vlrTokenAddress.toLowerCase();

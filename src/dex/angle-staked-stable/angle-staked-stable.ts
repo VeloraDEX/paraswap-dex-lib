@@ -27,7 +27,10 @@ import { SimpleExchange } from '../simple-exchange';
 import { AngleStakedStableConfig, Adapters } from './config';
 import { AngleStakedStableEventPool } from './angle-staked-stable-pool';
 import { PoolReserves } from '../../types';
-import { directionalReserves } from '../../lib/pools-storage/reserves';
+import {
+  directionalReserves,
+  PoolReservesNotReadyError,
+} from '../../lib/pools-storage/reserves';
 
 // https://dashboard.tenderly.co/paraswap/paraswap/simulator/51688afb-c603-48cf-aa2c-9629c65b1bf9/gas-usage
 const AngleStakedGasCost = 70_000;
@@ -311,7 +314,8 @@ export class AngleStakedStable
   getPoolReserves(): PoolReserves[] {
     const eventPool = this.eventPools[this.config.stakeToken];
     const state = eventPool?.isInvalid() ? null : eventPool?.getStaleState();
-    if (!state || state.paused) return [];
+    if (!state) throw new PoolReservesNotReadyError(this.dexKey, 'no state');
+    if (state.paused) return [];
     return [
       {
         dex: this.dexKey,

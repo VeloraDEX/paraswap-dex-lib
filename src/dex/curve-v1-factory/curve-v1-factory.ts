@@ -72,6 +72,7 @@ import {
 } from './constants';
 import { CurveV1FactoryPoolManager } from './curve-v1-pool-manager';
 import { curveApiPoolReserves, fetchCurveApiPools } from './curve-api-pools';
+import { PoolReservesNotReadyError } from '../../lib/pools-storage/reserves';
 import CurveABI from '../../abi/Curve.json';
 import CurveV1RouterABI from '../../abi/curve-v1-factory/CurveV1Router.abi.json';
 import DirectSwapABI from '../../abi/DirectSwap.json';
@@ -1568,8 +1569,12 @@ export class CurveV1Factory
   // (`coins[].poolBalance`), one request per registry slug the priced pools
   // belong to; a failed slug drops only its pools.
   async getPoolReserves(): Promise<PoolReserves[]> {
+    const pricedPools = this.poolManager.getPricedPools();
+    if (pricedPools.length === 0) {
+      throw new PoolReservesNotReadyError(this.dexKey, 'no pools loaded');
+    }
     const poolsBySlug = _.groupBy(
-      this.poolManager.getPricedPools(),
+      pricedPools,
       pool => pool.curveLiquidityApiSlug,
     );
 
@@ -1577,9 +1582,9 @@ export class CurveV1Factory
       Object.entries(poolsBySlug).map(async ([slug, pools]) => {
         const apiPools = await fetchCurveApiPools(
           this.dexHelper,
+          this.dexKey,
           this.network,
           slug,
-          this.logger,
         );
         if (!apiPools) return [];
 

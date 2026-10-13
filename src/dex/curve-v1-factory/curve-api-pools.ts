@@ -1,6 +1,6 @@
 import { IDexHelper } from '../../dex-helper';
-import { Logger, PoolReserves } from '../../types';
-import { toReserves } from '../../lib/pools-storage';
+import { PoolReserves } from '../../types';
+import { PoolReservesNotReadyError, toReserves } from '../../lib/pools-storage';
 import {
   CURVE_API_BY_NETWORK,
   CURVE_API_POOLS_TIMEOUT_MS,
@@ -58,13 +58,15 @@ export function curveApiPoolsUrl(network: number, slug: string): string | null {
 }
 
 // Fetches `getPools/<network><slug>` with an in-process TTL cache and
-// in-flight deduplication. A failed request resolves to `null` and is not
-// cached, so the next caller retries.
+// in-flight deduplication. A failed request rejects with
+// `PoolReservesNotReadyError` and is not cached, so the next caller retries.
+// It must not resolve to an empty result: callers would report the pools as
+// gone.
 export function fetchCurveApiPools(
   dexHelper: IDexHelper,
+  dexKey: string,
   network: number,
   slug: string,
-  logger: Logger,
 ): Promise<CurveApiPools | null> {
   const url = curveApiPoolsUrl(network, slug);
   if (!url) return Promise.resolve(null);
@@ -89,8 +91,10 @@ export function fetchCurveApiPools(
     })
     .catch(e => {
       cache.delete(url);
-      logger.error(`fetchCurveApiPools ${url} failed:`, e);
-      return null;
+      throw new PoolReservesNotReadyError(
+        dexKey,
+        `Curve API ${url} failed: ${e instanceof Error ? e.message : e}`,
+      );
     });
 
   cache.set(url, { fetchedAt: now, pools });
