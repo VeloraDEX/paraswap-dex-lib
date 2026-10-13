@@ -28,6 +28,15 @@ import { WrappedMM } from './usual/wrapped-m-m';
 import { UsualPP } from './usual-pp/usual-pp';
 import { FxProtocolRusd } from './fx-protocol-rusd/fx-protocol-rusd';
 import { dETH } from './deth/dETH';
+import { ERC4626 } from './erc4626/erc4626';
+import { Cap } from './cap/cap';
+import { AngleStakedStable } from './angle-staked-stable/angle-staked-stable';
+import { AngleTransmuter } from './angle-transmuter/angle-transmuter';
+import { LitePsm } from './lite-psm/lite-psm';
+import { AaveGsm } from './aave-gsm/aave-gsm';
+import { MiroMigrator } from './miro-migrator/miro-migrator';
+import { WooFiV2 } from './woo-fi-v2/woo-fi-v2';
+import { PoolReservesNotReadyError } from '../lib/pools-storage/reserves';
 
 // Enumerated-mode adapters whose pool set and directions come from config
 // alone, so they run without RPC. Expected direction sets are written
@@ -281,5 +290,40 @@ describe('pool reserves: enumerated mode (config-only dexes)', () => {
         ).toBeUndefined();
       });
     });
+  });
+});
+
+// Adapters whose reserves come from event or polling state: before that state
+// is loaded they must throw instead of returning `[]`, which the consumer
+// reads as "the dex has no pools" and deletes them.
+describe('pool reserves: state not loaded', () => {
+  const mainnet = new DummyDexHelper(Network.MAINNET);
+  const optimism = new DummyDexHelper(Network.OPTIMISM);
+
+  const cases: [string, () => { getPoolReserves(): unknown }][] = [
+    ['ERC4626', () => new ERC4626(Network.MAINNET, 'wUSDL', mainnet)],
+    ['Cap', () => new Cap(Network.MAINNET, 'Cap', mainnet)],
+    [
+      'AngleStakedStable',
+      () =>
+        new AngleStakedStable(Network.MAINNET, 'AngleStakedStableUSD', mainnet),
+    ],
+    [
+      'AngleTransmuter',
+      () => new AngleTransmuter(Network.MAINNET, 'AngleTransmuter', mainnet),
+    ],
+    ['LitePsm', () => new LitePsm(Network.MAINNET, 'LitePsm', mainnet)],
+    ['AaveGsm', () => new AaveGsm(Network.MAINNET, 'AaveGsm', mainnet)],
+    [
+      'MiroMigrator',
+      () => new MiroMigrator(Network.MAINNET, 'MiroMigrator', mainnet),
+    ],
+    ['WooFiV2', () => new WooFiV2(Network.OPTIMISM, 'WooFiV2', optimism)],
+  ];
+
+  it.each(cases)('%s throws PoolReservesNotReadyError', async (_, build) => {
+    await expect(
+      (async () => build().getPoolReserves())(),
+    ).rejects.toBeInstanceOf(PoolReservesNotReadyError);
   });
 });

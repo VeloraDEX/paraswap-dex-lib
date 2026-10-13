@@ -28,7 +28,10 @@ import {
   RETURN_AMOUNT_POS_0,
   RETURN_AMOUNT_POS_32,
 } from '../../executor/constants';
-import { directionalReserves } from '../../lib/pools-storage/reserves';
+import {
+  directionalReserves,
+  PoolReservesNotReadyError,
+} from '../../lib/pools-storage/reserves';
 
 export class AaveGsm extends SimpleExchange implements IDex<AaveGsmData> {
   static readonly gsmInterface = new Interface(GSM_ABI);
@@ -425,7 +428,13 @@ export class AaveGsm extends SimpleExchange implements IDex<AaveGsmData> {
   getPoolReserves(): PoolReserves[] {
     return Object.values(this.eventPools).flatMap(pool => {
       const state = pool.isInvalid() ? null : pool.getStaleState();
-      if (!state || state.isFrozen || state.isSeized) return [];
+      if (!state) {
+        throw new PoolReservesNotReadyError(
+          this.dexKey,
+          `no state for ${pool.gsm}`,
+        );
+      }
+      if (state.isFrozen || state.isSeized) return [];
 
       const remaining =
         state.exposureCap > state.underlyingLiquidity

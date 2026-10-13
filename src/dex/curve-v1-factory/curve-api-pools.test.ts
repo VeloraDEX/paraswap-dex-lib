@@ -1,6 +1,6 @@
 import { Network } from '../../constants';
 import { IDexHelper } from '../../dex-helper';
-import { Logger } from '../../types';
+import { PoolReservesNotReadyError } from '../../lib/pools-storage/reserves';
 import {
   CURVE_API_POOLS_TTL_MS,
   CURVE_API_POOLS_TIMEOUT_MS,
@@ -34,7 +34,6 @@ const response = (pools: object[]) => ({
 describe('curve-api-pools', () => {
   const get = jest.fn();
   const dexHelper = { httpRequest: { get } } as unknown as IDexHelper;
-  const logger = { error: jest.fn() } as unknown as Logger;
 
   beforeEach(() => {
     get.mockReset();
@@ -67,9 +66,9 @@ describe('curve-api-pools', () => {
 
       const pools = await fetchCurveApiPools(
         dexHelper,
+        'CurveV1',
         Network.MAINNET,
         '/main',
-        logger,
       );
 
       expect(get).toHaveBeenCalledWith(
@@ -84,50 +83,59 @@ describe('curve-api-pools', () => {
       get.mockResolvedValue(response([apiPool()]));
 
       const [first, second] = await Promise.all([
-        fetchCurveApiPools(dexHelper, Network.MAINNET, '/main', logger),
-        fetchCurveApiPools(dexHelper, Network.MAINNET, '/main', logger),
+        fetchCurveApiPools(dexHelper, 'CurveV1', Network.MAINNET, '/main'),
+        fetchCurveApiPools(dexHelper, 'CurveV1', Network.MAINNET, '/main'),
       ]);
-      await fetchCurveApiPools(dexHelper, Network.MAINNET, '/main', logger);
+      await fetchCurveApiPools(dexHelper, 'CurveV1', Network.MAINNET, '/main');
       expect(get).toHaveBeenCalledTimes(1);
       expect(first).toBe(second);
 
       jest.setSystemTime(1_000_000 + CURVE_API_POOLS_TTL_MS);
-      await fetchCurveApiPools(dexHelper, Network.MAINNET, '/main', logger);
+      await fetchCurveApiPools(dexHelper, 'CurveV1', Network.MAINNET, '/main');
       expect(get).toHaveBeenCalledTimes(2);
     });
 
     it('caches per slug', async () => {
       get.mockResolvedValue(response([apiPool()]));
-      await fetchCurveApiPools(dexHelper, Network.MAINNET, '/main', logger);
-      await fetchCurveApiPools(dexHelper, Network.MAINNET, '/factory', logger);
+      await fetchCurveApiPools(dexHelper, 'CurveV1', Network.MAINNET, '/main');
+      await fetchCurveApiPools(
+        dexHelper,
+        'CurveV1',
+        Network.MAINNET,
+        '/factory',
+      );
       expect(get).toHaveBeenCalledTimes(2);
     });
 
-    it('returns null and retries later when the request fails', async () => {
+    it('rejects and retries later when the request fails', async () => {
       get.mockRejectedValueOnce(new Error('timeout'));
       get.mockResolvedValueOnce(response([apiPool()]));
 
-      expect(
-        await fetchCurveApiPools(dexHelper, Network.MAINNET, '/main', logger),
-      ).toBeNull();
-      expect(logger.error).toHaveBeenCalled();
+      await expect(
+        fetchCurveApiPools(dexHelper, 'CurveV1', Network.MAINNET, '/main'),
+      ).rejects.toThrow(PoolReservesNotReadyError);
 
       expect(
-        await fetchCurveApiPools(dexHelper, Network.MAINNET, '/main', logger),
+        await fetchCurveApiPools(
+          dexHelper,
+          'CurveV1',
+          Network.MAINNET,
+          '/main',
+        ),
       ).not.toBeNull();
       expect(get).toHaveBeenCalledTimes(2);
     });
 
-    it('returns null on an unexpected response shape', async () => {
+    it('rejects on an unexpected response shape', async () => {
       get.mockResolvedValueOnce({ success: false });
-      expect(
-        await fetchCurveApiPools(dexHelper, Network.MAINNET, '/main', logger),
-      ).toBeNull();
+      await expect(
+        fetchCurveApiPools(dexHelper, 'CurveV1', Network.MAINNET, '/main'),
+      ).rejects.toThrow(PoolReservesNotReadyError);
     });
 
     it('returns null without a request for an unsupported network', async () => {
       expect(
-        await fetchCurveApiPools(dexHelper, Network.BSC, '/main', logger),
+        await fetchCurveApiPools(dexHelper, 'CurveV1', Network.BSC, '/main'),
       ).toBeNull();
       expect(get).not.toHaveBeenCalled();
     });

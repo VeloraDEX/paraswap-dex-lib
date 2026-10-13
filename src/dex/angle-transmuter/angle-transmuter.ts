@@ -33,6 +33,7 @@ import {
   directionalReserves,
   DirectionalReserve,
   multicallBalances,
+  PoolReservesNotReadyError,
 } from '../../lib/pools-storage/reserves';
 import { uint256ToBigInt } from '../../lib/decoders';
 
@@ -346,15 +347,16 @@ export class AngleTransmuter
   // pays out of the transmuter's balance of each collateral, fetched here
   // because the event state does not track balances.
   async getPoolReserves(): Promise<PoolReserves[]> {
-    const fiats = this.stablecoinList.filter(fiat => {
+    const fiats = this.stablecoinList;
+    for (const fiat of fiats) {
       const pool = this.eventPools[fiat];
-      return (
-        pool &&
-        this.params[fiat as keyof DexParams] &&
-        !pool.isInvalid() &&
-        pool.getStaleState() !== null
-      );
-    });
+      if (!pool || pool.isInvalid() || pool.getStaleState() === null) {
+        throw new PoolReservesNotReadyError(
+          this.dexKey,
+          `no state for ${fiat}`,
+        );
+      }
+    }
     const calls = fiats.flatMap(fiat => {
       const transmuter = this.params[fiat as keyof DexParams]!.transmuter;
       return this.eventPools[fiat].config.collaterals.map(collateral => ({

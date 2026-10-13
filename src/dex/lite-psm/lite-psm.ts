@@ -44,7 +44,10 @@ import {
 import { BigNumber } from 'ethers';
 import { LitePsmEventPool } from './lite-psm-event-pool';
 import { extractReturnAmountPosition } from '../../executor/utils';
-import { directionalReserves } from '../../lib/pools-storage/reserves';
+import {
+  directionalReserves,
+  PoolReservesNotReadyError,
+} from '../../lib/pools-storage/reserves';
 
 const daiPsmInterface = new Interface(DaiPsmABI);
 const usdsPsmInterface = new Interface(UsdsPsmABI);
@@ -506,7 +509,9 @@ export class LitePsm
       const state = eventPool?.isInvalid()
         ? null
         : eventPool?.getStaleState() ?? null;
-      if (!state) return [];
+      if (!state) {
+        throw new PoolReservesNotReadyError(this.dexKey, `no state for ${gem}`);
+      }
 
       const psm = config.psmAddress.toLowerCase();
       return [

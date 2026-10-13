@@ -21,6 +21,16 @@ export class PoolReservesRequestError extends Error {
   }
 }
 
+// Thrown when a dex cannot report its reserves right now (state not yet
+// loaded or invalidated, upstream data source unavailable). An empty result
+// means "no pools", so a dex must throw this instead of returning `[]`.
+export class PoolReservesNotReadyError extends Error {
+  constructor(dexKey: string, reason: string) {
+    super(`${dexKey}: pool reserves not ready: ${reason}`);
+    this.name = 'PoolReservesNotReadyError';
+  }
+}
+
 const formatCapacity = (capacity: ReserveCapacity): string =>
   capacity === UNLIMITED_RESERVES ? UNLIMITED_RESERVES : capacity.toString();
 
