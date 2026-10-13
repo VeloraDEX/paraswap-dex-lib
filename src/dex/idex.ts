@@ -259,6 +259,8 @@ export interface IDexPooltracker {
   // Returns the current reserves of the requested pools (storage mode) or of
   // every pool (enumerated mode). Runs on pricing instances: in-memory state
   // when available, RPC otherwise. Pools that cannot be resolved are skipped.
+  // An empty result means the dex has no pools: when state is missing or a
+  // data source fails, throw `PoolReservesNotReadyError` instead.
   getPoolReserves?(pools?: string[]): AsyncOrSync<PoolReserves[]>;
 }
 

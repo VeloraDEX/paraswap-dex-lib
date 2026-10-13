@@ -38,7 +38,10 @@ export {
 
 export { UNLIMITED_RESERVES, MAX_POOL_RESERVES_BATCH } from './constants';
 
-export { PoolReservesRequestError } from './lib/pools-storage/reserves';
+export {
+  PoolReservesRequestError,
+  PoolReservesNotReadyError,
+} from './lib/pools-storage/reserves';
 
 export { IDex } from './dex/idex';
 

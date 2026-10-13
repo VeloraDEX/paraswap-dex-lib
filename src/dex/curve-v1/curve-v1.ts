@@ -1432,9 +1432,9 @@ export class CurveV1
 
     const apiPools = await fetchCurveApiPools(
       this.dexHelper,
+      this.dexKey,
       this.network,
       this.curveApiSlug,
-      this.logger,
     );
     if (!apiPools) return [];
 

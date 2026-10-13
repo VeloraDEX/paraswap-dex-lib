@@ -29,7 +29,10 @@ import { addressDecode } from '../../lib/decoders';
 import { ifaces } from './utils';
 import { StatePollingManager } from '../../lib/stateful-rpc-poller/state-polling-manager';
 import { extractReturnAmountPosition } from '../../executor/utils';
-import { toReserves } from '../../lib/pools-storage/reserves';
+import {
+  PoolReservesNotReadyError,
+  toReserves,
+} from '../../lib/pools-storage/reserves';
 
 export class WooFiV2 extends SimpleExchange implements IDex<WooFiV2Data> {
   readonly math: WooFiV2Math;
@@ -409,9 +412,12 @@ export class WooFiV2 extends SimpleExchange implements IDex<WooFiV2Data> {
   // feasible oracle swap to each other, and the payout capacity of a token is
   // its `reserve`. Omitted while paused.
   async getPoolReserves(): Promise<PoolReserves[]> {
-    if (!this.pollingPool || !this.tokenByAddress) return [];
+    if (!this.pollingPool || !this.tokenByAddress) {
+      throw new PoolReservesNotReadyError(this.dexKey, 'not initialized');
+    }
     const state = await this.pollingPool.getState();
-    if (!state || state.value.isPaused) return [];
+    if (!state) throw new PoolReservesNotReadyError(this.dexKey, 'no state');
+    if (state.value.isPaused) return [];
 
     const { tokenInfos, tokenStates } = state.value;
     const tokens = Object.values(this.tokenByAddress)

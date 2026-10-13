@@ -39,7 +39,10 @@ import { BI_POWS } from '../../bigint-constants';
 import { Interface } from '@ethersproject/abi';
 import CapTokenAbi from '../../abi/cap/CapToken.json';
 import { extractReturnAmountPosition } from '../../executor/utils';
-import { directionalReserves } from '../../lib/pools-storage/reserves';
+import {
+  directionalReserves,
+  PoolReservesNotReadyError,
+} from '../../lib/pools-storage/reserves';
 
 const RAY_PRECISION = 10n ** 27n;
 
@@ -249,9 +252,10 @@ export class Cap extends SimpleExchange implements IDex<CapData> {
   // One pool per (vault, asset): minting has no cap, burning pays out of the
   // vault's supply of that asset. SELL only, but both directions exist.
   getPoolReserves(): PoolReserves[] {
-    if (this.eventPools.isInvalid()) return [];
-    const states = this.eventPools.getStaleState();
-    if (!states) return [];
+    const states = this.eventPools.isInvalid()
+      ? null
+      : this.eventPools.getStaleState();
+    if (!states) throw new PoolReservesNotReadyError(this.dexKey, 'no state');
 
     return Object.values(this.configs).flatMap(config => {
       const vault = config.vault.address.toLowerCase();
