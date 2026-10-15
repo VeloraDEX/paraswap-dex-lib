@@ -1734,6 +1734,10 @@ export const Tokens: {
       address: '0x4200000000000000000000000000000000000006',
       decimals: 18,
     },
+    XMA: {
+      address: '0xA4985Faeb1e64Ba215282255dBb78ff59C63d7A9',
+      decimals: 18,
+    },
     MAV: {
       address: '0x64b88c73A5DfA78D1713fE1b4c69a22d7E0faAa7',
       decimals: 18,
@@ -2379,6 +2383,7 @@ export const Holders: {
   },
   [Network.BASE]: {
     WETH: '0x24D61e5411C143135068557AfD06546d81A751b8',
+    XMA: '0x02F67B2e6aFbac5d1590C39097d03829bc0beDa9',
     PRIME: '0xe3879b7359695f802d6FD56Bb76fD82C362Dafd6',
     ETH: '0xd34ea7278e6bd48defe656bbe263aef11101469c',
     MAV: '0xf977814e90da44bfa03b6295a0616a897441acec',
