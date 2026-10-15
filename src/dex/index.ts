@@ -67,6 +67,7 @@ import { PharaohV1 } from './solidly/forks-override/pharaohV1';
 import { PharaohV3 } from './uniswap-v3/forks/pharaoh-v3/pharaoh-v3';
 import { EtherFi } from './etherfi';
 import { Native } from './native/native';
+import { Liquorice } from './liquorice/liquorice';
 import { Spark } from './spark/spark';
 import { SparkPsm } from './spark/spark-psm';
 import { VelodromeSlipstream } from './uniswap-v3/forks/velodrome-slipstream/velodrome-slipstream';
@@ -161,6 +162,7 @@ const Dexes = [
   ERC4626,
   Hashflow,
   Native,
+  Liquorice,
   MaverickV1,
   MaverickV2,
   Camelot,
