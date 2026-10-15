@@ -124,6 +124,7 @@ export class UniswapV3
         'OkuTradeV3',
         'PangolinV3',
         'Wagmi',
+        'RubiconCLMM',
       ]),
     );
 
