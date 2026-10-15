@@ -43,10 +43,19 @@ export type EkuboContract = {
   quoteDataFetcher: Contract;
 };
 
-export type EkuboContracts = Record<
-  'core' | 'twamm' | 'boostedFees',
-  EkuboContract
->;
+export type EkuboContracts = Record<'core' | 'boostedFees', EkuboContract> & {
+  twamm: {
+    interface: Interface;
+    v1: {
+      address: string;
+      quoteDataFetcher: Contract;
+    };
+    v2: {
+      address: string;
+      quoteDataFetcher: Contract;
+    };
+  };
+};
 
 export type BoostedFeesQuoteData = {
   sqrtRatio: BigNumber;
