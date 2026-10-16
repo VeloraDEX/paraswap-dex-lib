@@ -308,6 +308,73 @@ export class PricingHelper {
     return dexKeys.filter(key => !dexesWithRestrictedPair.includes(key));
   }
 
+  // Combines `filterOutDexKeysWithRestrictions` and
+  // `filterOutDexKeysWithRestrictedPair` into a single cache `mget`.
+  // Blacklist keys are requested only for a non-null `userAddress`,
+  // pair keys only when both tokens are passed.
+  async filterOutRestrictedDexKeys(
+    dexKeys: string[],
+    {
+      userAddress = NULL_ADDRESS,
+      usdTradeValue = null,
+      srcToken,
+      destToken,
+    }: {
+      userAddress?: string;
+      usdTradeValue?: number | null;
+      srcToken?: string;
+      destToken?: string;
+    } = {},
+  ): Promise<string[]> {
+    const checkBlacklist = userAddress !== NULL_ADDRESS;
+    const checkPair = !!srcToken && !!destToken;
+
+    const excluded = new Set<string>();
+    const cacheKeys: string[] = [];
+    const cacheKeyOwners: string[] = [];
+
+    for (const key of dexKeys) {
+      const dex = this.getDexByKey(key, false);
+      if (!dex) continue;
+
+      const minTradeUsd = dex.minUsdTradeValue?.() ?? null;
+      if (
+        minTradeUsd !== null &&
+        (usdTradeValue === null || usdTradeValue < minTradeUsd)
+      ) {
+        excluded.add(key);
+        continue;
+      }
+
+      if (checkBlacklist && dex.hasBlacklist?.()) {
+        cacheKeys.push(dex.getBlacklistedCacheKey(userAddress));
+        cacheKeyOwners.push(key);
+      }
+
+      if (dex.hasDexRestriction?.()) {
+        cacheKeys.push(dex.getRestrictedCacheKey());
+        cacheKeyOwners.push(key);
+      }
+
+      if (checkPair && dex.hasPairRestriction?.()) {
+        cacheKeys.push(dex.getRestrictedPairCacheKey(srcToken, destToken));
+        cacheKeyOwners.push(key);
+      }
+    }
+
+    if (cacheKeys.length) {
+      const result = await this.dexAdapterService.dexHelper.cache.mget(
+        cacheKeys,
+      );
+      // knowing the result is not NULL is sufficient
+      result.forEach((value, i) => {
+        if (value) excluded.add(cacheKeyOwners[i]);
+      });
+    }
+
+    return excluded.size ? dexKeys.filter(key => !excluded.has(key)) : dexKeys;
+  }
+
   getDexsSupportingFeeOnTransfer(): string[] {
     const allDexKeys = this.dexAdapterService.getAllDexKeys();
     return allDexKeys
