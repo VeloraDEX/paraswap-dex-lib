@@ -263,7 +263,12 @@ export class Native
       this.logger.warn(
         `${this.dexKey}-${this.network}: blacklisted TX Origin address '${options.txOrigin}' trying to build a transaction. Bailing...`,
       );
-      throw new BlacklistError(this.dexKey, this.network, options.txOrigin);
+      throw new BlacklistError(
+        this.dexKey,
+        this.network,
+        options.txOrigin,
+        'CACHED',
+      );
     }
 
     if (
@@ -273,7 +278,12 @@ export class Native
       this.logger.warn(
         `${this.dexKey}-${this.network}: blacklisted user address '${options.userAddress}' trying to build a transaction. Bailing...`,
       );
-      throw new BlacklistError(this.dexKey, this.network, options.userAddress);
+      throw new BlacklistError(
+        this.dexKey,
+        this.network,
+        options.userAddress,
+        'CACHED',
+      );
     }
 
     // Native DEX only supports SELL side for now

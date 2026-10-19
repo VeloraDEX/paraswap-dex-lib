@@ -513,7 +513,12 @@ export class SwaapV2
       this.logger.warn(
         `${this.dexKey}-${this.network}: blacklisted TX Origin address '${options.txOrigin}' trying to build a transaction. Bailing...`,
       );
-      throw new BlacklistError(this.dexKey, this.network, options.txOrigin);
+      throw new BlacklistError(
+        this.dexKey,
+        this.network,
+        options.txOrigin,
+        'CACHED',
+      );
     }
 
     const isSell = side === SwapSide.SELL;
@@ -654,6 +659,7 @@ export class SwaapV2
             this.dexKey,
             this.network,
             options.userAddress,
+            'HTTP_403',
           );
         }
 
@@ -669,6 +675,7 @@ export class SwaapV2
             this.dexKey,
             this.network,
             options.userAddress,
+            'HTTP_429',
           );
         }
       } else if (e instanceof TooStrictSlippageCheckError) {

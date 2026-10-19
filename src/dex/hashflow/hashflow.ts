@@ -546,7 +546,12 @@ export class Hashflow
       this.logger.warn(
         `${this.dexKey}-${this.network}: blacklisted TX Origin address '${options.txOrigin}' trying to build a transaction. Bailing...`,
       );
-      throw new BlacklistError(this.dexKey, this.network, options.txOrigin);
+      throw new BlacklistError(
+        this.dexKey,
+        this.network,
+        options.txOrigin,
+        'CACHED',
+      );
     }
     const mm = optimalSwapExchange.data?.mm;
     assert(
@@ -725,6 +730,7 @@ export class Hashflow
           this.dexKey,
           this.network,
           options.userAddress,
+          'USER_RESTRICTED',
         );
       } else if (e instanceof TooStrictSlippageCheckError) {
         this.logger.warn(

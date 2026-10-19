@@ -349,14 +349,24 @@ export class GenericRFQ extends ParaSwapLimitOrders {
     options: PreprocessTransactionOptions,
   ): Promise<[OptimalSwapExchange<ParaSwapLimitOrdersData>, ExchangeTxInfo]> {
     if (await this.isBlacklisted(options.txOrigin)) {
-      throw new BlacklistError(this.dexKey, this.network, options.txOrigin);
+      throw new BlacklistError(
+        this.dexKey,
+        this.network,
+        options.txOrigin,
+        'CACHED',
+      );
     }
 
     if (
       options.userAddress !== options.txOrigin &&
       (await this.isBlacklisted(options.userAddress))
     ) {
-      throw new BlacklistError(this.dexKey, this.network, options.userAddress);
+      throw new BlacklistError(
+        this.dexKey,
+        this.network,
+        options.userAddress,
+        'CACHED',
+      );
     }
 
     try {
@@ -462,6 +472,7 @@ export class GenericRFQ extends ParaSwapLimitOrders {
           this.dexKey,
           this.network,
           options.userAddress,
+          'HTTP_403',
         );
       }
 

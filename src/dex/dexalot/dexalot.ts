@@ -570,7 +570,12 @@ export class Dexalot
       this.logger.warn(
         `${this.dexKey}-${this.network}: blacklisted TX Origin address '${options.txOrigin}' trying to build a transaction. Bailing...`,
       );
-      throw new BlacklistError(this.dexKey, this.network, options.txOrigin);
+      throw new BlacklistError(
+        this.dexKey,
+        this.network,
+        options.txOrigin,
+        'CACHED',
+      );
     }
 
     if (BigInt(optimalSwapExchange.srcAmount) === 0n) {
@@ -731,6 +736,7 @@ export class Dexalot
             this.dexKey,
             this.network,
             options.userAddress,
+            'FQ_009',
           );
         } else {
           await this.addBlacklistedAddress(options.userAddress);
@@ -741,6 +747,7 @@ export class Dexalot
             this.dexKey,
             this.network,
             options.userAddress,
+            'API_ERROR',
           );
         }
       } else {

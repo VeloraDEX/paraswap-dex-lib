@@ -7,6 +7,7 @@ import { DummyDexHelper } from '../../dex-helper/index';
 import { Network, SwapSide } from '../../constants';
 import { Tokens } from '../../../tests/constants-e2e';
 import { GetDexParamPreProcessOptions } from '../../types';
+import { BlacklistError } from '../generic-rfq/types';
 import { Bebop } from './bebop';
 
 const dexKey = 'Bebop';
@@ -132,6 +133,21 @@ describe('Bebop getDexParam without preProcessTransaction', () => {
     // the dex's own reason stays visible instead of being swallowed
     expect(error.message).toContain('no liquidity');
     expect(error.originalError).toBeInstanceOf(Error);
+  });
+
+  it('keeps a DenyListed quote as a BlacklistError with its reason', async () => {
+    const dexHelper = new DummyDexHelper(network);
+    (dexHelper.httpRequest.get as any) = jest.fn(async () => ({
+      error: { errorCode: 112, message: 'DenyListed' },
+    }));
+    const bebop = new Bebop(network, dexKey, dexHelper);
+
+    const error = await getDexParam(bebop, {}, { preProcess }).catch(e => e);
+
+    expect(error.code).toBe('PREPROCESS_FAILED');
+    expect(error.originalError).toBeInstanceOf(BlacklistError);
+    expect(error.originalError.reason).toBe('DENY_LISTED');
+    expect(error.originalError.user).toBe(userAddress);
   });
 
   it('throws when there is neither order build nor preProcess context', async () => {
