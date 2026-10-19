@@ -51,6 +51,7 @@ export {
   SlippageCheckError,
   BlacklistError,
   BlacklistReason,
+  RestrictedError,
 } from './dex/generic-rfq/types';
 
 export {

@@ -46,7 +46,11 @@ import { BytesLike, formatUnits, parseUnits } from 'ethers/lib/utils';
 import { uint8ToNumber } from '../../lib/decoders';
 import { MultiResult } from '../../lib/multi-wrapper';
 import { SimpleExchangeWithRestrictions } from '../simple-exchange-with-restrictions';
-import { BlacklistError, SlippageCheckError } from '../generic-rfq/types';
+import {
+  BlacklistError,
+  RestrictedError,
+  SlippageCheckError,
+} from '../generic-rfq/types';
 import * as CALLDATA_GAS_COST from '../../calldata-gas-cost';
 
 export class Native
@@ -395,7 +399,9 @@ export class Native
           error instanceof Error
             ? `${error.name}: ${error.message}`
             : 'Unknown error';
-        this.restrict(message);
+        if (await this.restrictSafely(message)) {
+          throw new RestrictedError(this.dexKey, this.network, message);
+        }
       }
 
       throw new Error(error);

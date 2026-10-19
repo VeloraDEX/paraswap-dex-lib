@@ -204,7 +204,21 @@ export class SimpleExchangeWithRestrictions
       .then(() => true);
   }
 
-  protected async restrict(errorMessage: string) {
+  // restrict for a failure that is about to be rethrown, so a cache error
+  // cannot replace the dex's own error.
+  protected async restrictSafely(errorMessage: string): Promise<boolean> {
+    try {
+      return await this.restrict(errorMessage);
+    } catch (e) {
+      this.logger.warn(
+        `[RESTRICTION-dex] ${this.dexKey}-${this.network}: restrict failed: ${e}`,
+      );
+      return false;
+    }
+  }
+
+  // Resolves true when this call restricted the dex.
+  protected async restrict(errorMessage: string): Promise<boolean> {
     this.logger.warn(
       `[RESTRICTION-dex] ${this.dexKey}-${this.network}: restrict attempt, error: ${errorMessage}`,
     );
@@ -235,7 +249,7 @@ export class SimpleExchangeWithRestrictions
         ERRORS_TTL_S,
         Utils.Serialize(data),
       );
-      return;
+      return false;
     } else {
       if (errorsData.count + 1 >= this.restrictCountThreshold) {
         this.logger.warn(
@@ -250,6 +264,7 @@ export class SimpleExchangeWithRestrictions
           RESTRICTED_CACHE_VALUE,
           this.restrictTtlS,
         );
+        return true;
       } else {
         this.logger.warn(
           `${this.dexKey}-${this.network}: Error count increased`,
@@ -265,6 +280,7 @@ export class SimpleExchangeWithRestrictions
           ERRORS_TTL_S,
           Utils.Serialize(data),
         );
+        return false;
       }
     }
   }

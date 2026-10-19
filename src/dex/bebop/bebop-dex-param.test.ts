@@ -7,7 +7,7 @@ import { DummyDexHelper } from '../../dex-helper/index';
 import { Network, SwapSide } from '../../constants';
 import { Tokens } from '../../../tests/constants-e2e';
 import { GetDexParamPreProcessOptions } from '../../types';
-import { BlacklistError } from '../generic-rfq/types';
+import { BlacklistError, RestrictedError } from '../generic-rfq/types';
 import { Bebop } from './bebop';
 
 const dexKey = 'Bebop';
@@ -161,5 +161,40 @@ describe('Bebop getDexParam without preProcessTransaction', () => {
       code: 'MISSING_CONTEXT',
     });
     expect(getMock).not.toHaveBeenCalled();
+  });
+
+  it('reports the failure that restricts the dex as a RestrictedError', async () => {
+    const dexHelper = new DummyDexHelper(network);
+    (dexHelper.httpRequest.get as any) = jest.fn(async () => ({
+      error: { errorCode: 999, message: 'no liquidity' },
+    }));
+    const bebop = new Bebop(network, dexKey, dexHelper);
+
+    const errors = [];
+    for (let i = 0; i < 10; i++) {
+      errors.push(await getDexParam(bebop, {}, { preProcess }).catch(e => e));
+    }
+
+    // bebop restricts on its 10th failure within the window
+    for (const error of errors.slice(0, 9)) {
+      expect(error.originalError).not.toBeInstanceOf(RestrictedError);
+    }
+    expect(errors[9].code).toBe('PREPROCESS_FAILED');
+    expect(errors[9].originalError).toBeInstanceOf(RestrictedError);
+    expect(await bebop.isRestricted()).toBe(true);
+  });
+
+  it('does not restrict on a DenyListed quote', async () => {
+    const dexHelper = new DummyDexHelper(network);
+    (dexHelper.httpRequest.get as any) = jest.fn(async () => ({
+      error: { errorCode: 112, message: 'DenyListed' },
+    }));
+    const bebop = new Bebop(network, dexKey, dexHelper);
+
+    for (let i = 0; i < 10; i++) {
+      const error = await getDexParam(bebop, {}, { preProcess }).catch(e => e);
+      expect(error.originalError).toBeInstanceOf(BlacklistError);
+    }
+    expect(await bebop.isRestricted()).toBe(false);
   });
 });
