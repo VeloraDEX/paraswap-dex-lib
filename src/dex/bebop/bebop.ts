@@ -947,6 +947,7 @@ export class Bebop
           this.dexKey,
           this.network,
           options.userAddress,
+          'DENY_LISTED',
         );
       }
 
@@ -1037,6 +1038,7 @@ export class Bebop
           e instanceof Error ? `${e.name}: ${e.message}` : 'Unknown error';
         this.restrict(restrictMessage);
       }
+      if (e?.isBlacklistError) throw e;
       throw new Error(message);
     }
   }

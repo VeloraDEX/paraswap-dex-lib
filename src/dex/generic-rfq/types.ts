@@ -104,6 +104,17 @@ export type RFQFirmRateResponse = {
   order: AugustusOrderWithStringAndSignature;
 };
 
+// Why a dex refused the user. The Go API decides from it how long to keep the
+// address blacklisted; CACHED means this dex-lib already had it blacklisted.
+export type BlacklistReason =
+  | 'CACHED'
+  | 'HTTP_403'
+  | 'HTTP_429'
+  | 'USER_RESTRICTED'
+  | 'FQ_009'
+  | 'API_ERROR'
+  | 'DENY_LISTED';
+
 export class BlacklistError extends Error {
   isBlacklistError = true;
   cause = 'BlacklistError';
@@ -113,6 +124,7 @@ export class BlacklistError extends Error {
     public dexKey: string,
     public network: Network,
     public user: Address,
+    public reason: BlacklistReason,
   ) {
     const message = `User address ${user} is blacklisted on ${dexKey}-${network}`;
     super(message);
