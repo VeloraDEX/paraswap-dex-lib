@@ -1,4 +1,4 @@
-import { DarkPoolsPoolState, DarkPoolsQuoteResult } from './types';
+import { LunarBasePoolState, LunarBaseQuoteResult } from './types';
 
 const Q12 = 1n << 12n;
 const Q24 = 1n << 24n;
@@ -178,10 +178,10 @@ function getNextSqrtPriceFromAmountYRoundingDown(
 }
 
 function linearXToY(
-  state: DarkPoolsPoolState,
+  state: LunarBasePoolState,
   amountIn: bigint,
   feeMultiplier: bigint,
-): DarkPoolsQuoteResult {
+): LunarBaseQuoteResult {
   const dy = mulDiv(
     mulDiv(amountIn, state.anchorPrice, Q96),
     state.anchorPrice,
@@ -196,10 +196,10 @@ function linearXToY(
 }
 
 function linearYToX(
-  state: DarkPoolsPoolState,
+  state: LunarBasePoolState,
   amountIn: bigint,
   feeMultiplier: bigint,
-): DarkPoolsQuoteResult {
+): LunarBaseQuoteResult {
   if (state.anchorPrice === 0n) {
     return { amountOut: 0n, sqrtPriceNext: state.anchorPrice, fee: 0n };
   }
@@ -218,10 +218,10 @@ function linearYToX(
 }
 
 export function quoteXToY(
-  state: DarkPoolsPoolState,
+  state: LunarBasePoolState,
   amountIn: bigint,
   feeMultiplier: bigint,
-): DarkPoolsQuoteResult {
+): LunarBaseQuoteResult {
   const zero = { amountOut: 0n, sqrtPriceNext: state.anchorPrice, fee: 0n };
   const cQ48 = concentrationQ48(
     state.anchorPrice,
@@ -259,10 +259,10 @@ export function quoteXToY(
 }
 
 export function quoteYToX(
-  state: DarkPoolsPoolState,
+  state: LunarBasePoolState,
   amountIn: bigint,
   feeMultiplier: bigint,
-): DarkPoolsQuoteResult {
+): LunarBaseQuoteResult {
   const zero = { amountOut: 0n, sqrtPriceNext: state.anchorPrice, fee: 0n };
   const cQ48 = concentrationQ48(
     state.anchorPrice,

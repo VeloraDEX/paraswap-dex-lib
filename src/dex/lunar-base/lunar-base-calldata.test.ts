@@ -6,15 +6,15 @@ import {
   NULL_ADDRESS,
   SwapSide,
 } from '../../constants';
-import PoolABI from '../../abi/dark-pools/pool.json';
-import { DarkPools } from './dark-pools';
-import { BASE_USDC, DARK_POOLS_POOL_BASE } from './config';
-import { DarkPoolsData } from './types';
+import PoolABI from '../../abi/lunar-base/pool.json';
+import { LunarBase } from './lunar-base';
+import { BASE_USDC, LUNAR_BASE_POOL_BASE } from './config';
+import { LunarBaseData } from './types';
 
 const recipient = '0x1111111111111111111111111111111111111111';
 const poolIface = new Interface(PoolABI as JsonFragment[]);
 
-function buildDex(): DarkPools {
+function buildDex(): LunarBase {
   const dexHelper = {
     web3Provider: new Web3(),
     config: {
@@ -28,14 +28,14 @@ function buildDex(): DarkPools {
     getLogger: () => console,
   };
 
-  return new DarkPools(Network.BASE, 'DarkPools', dexHelper as any);
+  return new LunarBase(Network.BASE, 'LunarBase', dexHelper as any);
 }
 
-describe('DarkPools calldata', () => {
+describe('LunarBase calldata', () => {
   it('encodes native ETH -> USDC through swapExactInNative', () => {
     const dex = buildDex();
-    const data: DarkPoolsData = {
-      pool: DARK_POOLS_POOL_BASE,
+    const data: LunarBaseData = {
+      pool: LUNAR_BASE_POOL_BASE,
       tokenIn: NULL_ADDRESS,
       tokenOut: BASE_USDC,
       isXToY: true,
@@ -56,7 +56,7 @@ describe('DarkPools calldata', () => {
       param.exchangeData,
     );
 
-    expect(param.targetExchange).toBe(DARK_POOLS_POOL_BASE);
+    expect(param.targetExchange).toBe(LUNAR_BASE_POOL_BASE);
     expect(param.spender).toBeUndefined();
     expect(param.swappedAmountNotPresentInExchangeData).toBe(true);
     expect(decoded.tokenOut.toLowerCase()).toBe(BASE_USDC);
@@ -66,8 +66,8 @@ describe('DarkPools calldata', () => {
 
   it('encodes USDC -> ETH through swapExactIn with pool as spender', () => {
     const dex = buildDex();
-    const data: DarkPoolsData = {
-      pool: DARK_POOLS_POOL_BASE,
+    const data: LunarBaseData = {
+      pool: LUNAR_BASE_POOL_BASE,
       tokenIn: BASE_USDC,
       tokenOut: NULL_ADDRESS,
       isXToY: false,
@@ -89,8 +89,8 @@ describe('DarkPools calldata', () => {
     );
     const exactInput = decoded.params;
 
-    expect(param.targetExchange).toBe(DARK_POOLS_POOL_BASE);
-    expect(param.spender).toBe(DARK_POOLS_POOL_BASE);
+    expect(param.targetExchange).toBe(LUNAR_BASE_POOL_BASE);
+    expect(param.spender).toBe(LUNAR_BASE_POOL_BASE);
     expect(exactInput.tokenIn.toLowerCase()).toBe(BASE_USDC);
     expect(exactInput.tokenOut.toLowerCase()).toBe(NULL_ADDRESS);
     expect(exactInput.recipient.toLowerCase()).toBe(recipient);

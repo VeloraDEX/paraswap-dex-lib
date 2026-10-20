@@ -26,27 +26,27 @@ import {
   getLocalDeadlineAsFriendlyPlaceholder,
 } from '../simple-exchange';
 import { extractReturnAmountPosition } from '../../executor/utils';
-import PoolABI from '../../abi/dark-pools/pool.json';
-import { DarkPoolsConfig } from './config';
+import PoolABI from '../../abi/lunar-base/pool.json';
+import { LunarBaseConfig } from './config';
 import {
-  DarkPoolsData,
-  DarkPoolsPoolConfig,
-  DarkPoolsPoolState,
+  LunarBaseData,
+  LunarBasePoolConfig,
+  LunarBasePoolState,
   DexParams,
 } from './types';
-import { DarkPoolsEventPool } from './dark-pools-pool';
+import { LunarBaseEventPool } from './lunar-base-pool';
 import { quoteXToY, quoteYToX } from './math';
 
-export class DarkPools extends SimpleExchange implements IDex<DarkPoolsData> {
+export class LunarBase extends SimpleExchange implements IDex<LunarBaseData> {
   readonly hasConstantPriceLargeAmounts = false;
   readonly needWrapNative = false;
   readonly isFeeOnTransferSupported = false;
 
   public static dexKeysWithNetwork: { key: string; networks: Network[] }[] =
-    getDexKeysWithNetwork(DarkPoolsConfig);
+    getDexKeysWithNetwork(LunarBaseConfig);
 
   protected config: DexParams;
-  protected eventPools: Map<Address, DarkPoolsEventPool>;
+  protected eventPools: Map<Address, LunarBaseEventPool>;
   protected poolIface: Interface;
   logger: Logger;
 
@@ -57,12 +57,12 @@ export class DarkPools extends SimpleExchange implements IDex<DarkPoolsData> {
   ) {
     super(dexHelper, dexKey);
     this.logger = dexHelper.getLogger(dexKey);
-    this.config = DarkPoolsConfig[dexKey][network];
+    this.config = LunarBaseConfig[dexKey][network];
     this.poolIface = new Interface(PoolABI as JsonFragment[]);
     this.eventPools = new Map(
       this.config.pools.map(pool => [
         pool.address,
-        new DarkPoolsEventPool(dexKey, dexHelper, pool.address, this.logger),
+        new LunarBaseEventPool(dexKey, dexHelper, pool.address, this.logger),
       ]),
     );
   }
@@ -101,7 +101,7 @@ export class DarkPools extends SimpleExchange implements IDex<DarkPoolsData> {
     side: SwapSide,
     blockNumber: number,
     limitPools?: string[],
-  ): Promise<ExchangePrices<DarkPoolsData> | null> {
+  ): Promise<ExchangePrices<LunarBaseData> | null> {
     if (side === SwapSide.BUY) return null;
 
     const pool = this.config.pools.find(candidate =>
@@ -147,7 +147,7 @@ export class DarkPools extends SimpleExchange implements IDex<DarkPoolsData> {
   }
 
   getCalldataGasCost(
-    _poolPrices: PoolPrices<DarkPoolsData>,
+    _poolPrices: PoolPrices<LunarBaseData>,
   ): number | number[] {
     return CALLDATA_GAS_COST.DEX_NO_PAYLOAD;
   }
@@ -157,7 +157,7 @@ export class DarkPools extends SimpleExchange implements IDex<DarkPoolsData> {
     _destToken: Address,
     _srcAmount: NumberAsString,
     _destAmount: NumberAsString,
-    data: DarkPoolsData,
+    data: LunarBaseData,
     _side: SwapSide,
   ): AdapterExchangeParam {
     return {
@@ -173,7 +173,7 @@ export class DarkPools extends SimpleExchange implements IDex<DarkPoolsData> {
     srcAmount: NumberAsString,
     destAmount: NumberAsString,
     recipient: Address,
-    data: DarkPoolsData,
+    data: LunarBaseData,
     side: SwapSide,
   ): DexExchangeParam {
     if (side === SwapSide.BUY) {
@@ -254,12 +254,12 @@ export class DarkPools extends SimpleExchange implements IDex<DarkPoolsData> {
       });
   }
 
-  private getPoolIdentifier(pool: DarkPoolsPoolConfig): string {
+  private getPoolIdentifier(pool: LunarBasePoolConfig): string {
     return `${this.dexKey}_${pool.address}`.toLowerCase();
   }
 
   private isStateUsable(
-    state: DarkPoolsPoolState,
+    state: LunarBasePoolState,
     blockNumber: number,
   ): boolean {
     if (state.paused) return false;
@@ -270,7 +270,7 @@ export class DarkPools extends SimpleExchange implements IDex<DarkPoolsData> {
   }
 
   private isPoolPair(
-    pool: DarkPoolsPoolConfig,
+    pool: LunarBasePoolConfig,
     src: Address,
     dest: Address,
   ): boolean {
@@ -280,15 +280,15 @@ export class DarkPools extends SimpleExchange implements IDex<DarkPoolsData> {
     );
   }
 
-  private isPoolToken(pool: DarkPoolsPoolConfig, token: Address): boolean {
+  private isPoolToken(pool: LunarBasePoolConfig, token: Address): boolean {
     return this.isTokenX(pool, token) || this.isTokenY(pool, token);
   }
 
-  private isTokenX(pool: DarkPoolsPoolConfig, token: Address): boolean {
+  private isTokenX(pool: LunarBasePoolConfig, token: Address): boolean {
     return this.normalizedToken(token) === pool.tokenX.address;
   }
 
-  private isTokenY(pool: DarkPoolsPoolConfig, token: Address): boolean {
+  private isTokenY(pool: LunarBasePoolConfig, token: Address): boolean {
     return this.normalizedToken(token) === pool.tokenY.address;
   }
 
@@ -297,7 +297,7 @@ export class DarkPools extends SimpleExchange implements IDex<DarkPoolsData> {
   }
 
   private toPoolTokenAddress(
-    pool: DarkPoolsPoolConfig,
+    pool: LunarBasePoolConfig,
     token: Address,
   ): Address {
     if (this.isTokenX(pool, token)) return pool.tokenX.poolAddress;
