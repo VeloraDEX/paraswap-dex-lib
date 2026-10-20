@@ -28,7 +28,11 @@ import {
   RoutingInstruction,
   TokenDataMap,
 } from './types';
-import { BlacklistError, SlippageCheckError } from '../generic-rfq/types';
+import {
+  BlacklistError,
+  RestrictedError,
+  SlippageCheckError,
+} from '../generic-rfq/types';
 import settlementABI from '../../abi/bebop/BebopSettlement.abi.json';
 import { resolvePreProcessedData } from '../preprocess-in-dex-param';
 import { SimpleExchangeWithRestrictions } from '../simple-exchange-with-restrictions';
@@ -1036,7 +1040,9 @@ export class Bebop
       if (!e?.isSlippageError && !e?.isBlacklistError) {
         const restrictMessage =
           e instanceof Error ? `${e.name}: ${e.message}` : 'Unknown error';
-        this.restrict(restrictMessage);
+        if (await this.restrictSafely(restrictMessage)) {
+          throw new RestrictedError(this.dexKey, this.network, message);
+        }
       }
       if (e?.isBlacklistError) throw e;
       throw new Error(message);

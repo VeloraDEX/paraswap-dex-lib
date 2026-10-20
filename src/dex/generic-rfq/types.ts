@@ -132,6 +132,19 @@ export class BlacklistError extends Error {
   }
 }
 
+// The dex has just restricted itself after repeated firm-quote failures. The
+// Go API keeps it out of pricing for as long as it decides.
+export class RestrictedError extends Error {
+  isRestrictedError = true;
+  cause = 'RestrictedError';
+  code = 'RESTRICTED';
+
+  constructor(public dexKey: string, public network: Network, reason: string) {
+    super(`${dexKey}-${network} is restricted: ${reason}`);
+    this.name = 'RestrictedError';
+  }
+}
+
 export class SlippageCheckError extends Error {
   isSlippageError = true;
   cause = 'SlippageCheckError';

@@ -6,6 +6,7 @@ import { DummyDexHelper } from '../../dex-helper/index';
 import { Network, SwapSide } from '../../constants';
 import { Tokens } from '../../../tests/constants-e2e';
 import { GetDexParamPreProcessOptions } from '../../types';
+import { RestrictedError } from '../generic-rfq/types';
 import { Native } from './native';
 import { NATIVE_TRADE_RFQT_SELECTOR } from './constants';
 
@@ -131,5 +132,28 @@ describe('Native getDexParam without preProcessTransaction', () => {
       code: 'MISSING_CONTEXT',
     });
     expect(requestMock).not.toHaveBeenCalled();
+  });
+
+  it('reports the failure that restricts the dex as a RestrictedError', async () => {
+    const { native, requestMock } = buildNative();
+    requestMock.mockImplementation(
+      async (): Promise<any> => ({
+        data: { success: false, errorMessage: 'no liquidity' },
+      }),
+    );
+
+    const errors = [];
+    for (let i = 0; i < 10; i++) {
+      errors.push(await getDexParam(native, {}, { preProcess }).catch(e => e));
+    }
+
+    // native restricts on its 10th failure within the window
+    for (const error of errors.slice(0, 9)) {
+      expect(error.originalError).not.toBeInstanceOf(RestrictedError);
+    }
+    expect(errors[9].code).toBe('PREPROCESS_FAILED');
+    expect(errors[9].originalError).toBeInstanceOf(RestrictedError);
+    expect(errors[9].originalError.dexKey).toBe(dexKey);
+    expect(await native.isRestricted()).toBe(true);
   });
 });
