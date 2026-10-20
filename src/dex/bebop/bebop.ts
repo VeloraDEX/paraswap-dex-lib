@@ -1041,7 +1041,7 @@ export class Bebop
         const restrictMessage =
           e instanceof Error ? `${e.name}: ${e.message}` : 'Unknown error';
         if (await this.restrictSafely(restrictMessage)) {
-          throw new RestrictedError(this.dexKey, this.network, restrictMessage);
+          throw new RestrictedError(this.dexKey, this.network, message);
         }
       }
       if (e?.isBlacklistError) throw e;

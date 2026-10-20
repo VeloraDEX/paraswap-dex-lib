@@ -181,6 +181,9 @@ describe('Bebop getDexParam without preProcessTransaction', () => {
     }
     expect(errors[9].code).toBe('PREPROCESS_FAILED');
     expect(errors[9].originalError).toBeInstanceOf(RestrictedError);
+    // keeps the request and quote ids the plain error carried
+    expect(errors[9].originalError.message).toContain('requestId:');
+    expect(errors[9].originalError.message).toContain('no liquidity');
     expect(await bebop.isRestricted()).toBe(true);
   });
 
