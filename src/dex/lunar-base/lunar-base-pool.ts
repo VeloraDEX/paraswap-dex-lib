@@ -5,6 +5,7 @@ import { StatefulEventSubscriber } from '../../stateful-event-subscriber';
 import { Address, Log, Logger } from '../../types';
 import { catchParseLogError } from '../../utils';
 import { MultiCallParams, MultiResult } from '../../lib/multi-wrapper';
+import { getTopicLogDecoder } from '../../lib/topic-log-decoder';
 import PoolABI from '../../abi/lunar-base/pool.json';
 import { LunarBasePoolState } from './types';
 
@@ -220,7 +221,7 @@ export class LunarBaseEventPool extends StatefulEventSubscriber<LunarBasePoolSta
     log: Readonly<Log>,
   ): Promise<DeepReadonly<LunarBasePoolState> | null> {
     try {
-      const event = poolIface.parseLog(log);
+      const event = getTopicLogDecoder(poolIface).decode(log);
       // An implementation upgrade can change the pricing model and the
       // storage behind every getter: re-read the whole state.
       if (event.name === 'Upgraded') {

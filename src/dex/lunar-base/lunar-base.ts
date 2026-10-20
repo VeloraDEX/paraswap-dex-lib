@@ -5,6 +5,7 @@ import {
   Address,
   DexExchangeParam,
   ExchangePrices,
+  GetDexParamOptions,
   Logger,
   NumberAsString,
   PoolLiquidity,
@@ -194,12 +195,15 @@ export class LunarBase extends SimpleExchange implements IDex<LunarBaseData> {
     data: LunarBaseData,
     side: SwapSide,
     executorAddress: Address,
+    options?: GetDexParamOptions,
   ): DexExchangeParam {
     if (side === SwapSide.BUY) {
       throw new Error(`${this.dexKey}: BUY is not supported`);
     }
 
-    const deadline = getLocalDeadlineAsFriendlyPlaceholder();
+    const deadline = getLocalDeadlineAsFriendlyPlaceholder(
+      options?.nowTimestampMs,
+    );
     // A WETH destination is paid out in native ETH: deliver it to the
     // executor, which wraps it after the call and forwards the result.
     const isWethDest = this.dexHelper.config.isWETH(destToken);

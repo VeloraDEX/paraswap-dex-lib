@@ -148,6 +148,32 @@ describe('LunarBase calldata', () => {
     expect(params.recipient.toLowerCase()).toBe(executor);
   });
 
+  it('pins the pool deadline to the build timestamp', () => {
+    const nowTimestampMs = 1_800_000_000_000;
+    const params = [
+      USDC,
+      ETHER_ADDRESS,
+      '20000000',
+      '1',
+      recipient,
+      usdcToEth,
+      SwapSide.SELL,
+      executor,
+      { nowTimestampMs },
+    ] as const;
+    const first = buildDex().getDexParam(...params);
+    const second = buildDex().getDexParam(...params);
+    const { params: decoded } = poolIface.decodeFunctionData(
+      'swapExactIn',
+      first.exchangeData,
+    );
+
+    expect(first.exchangeData).toBe(second.exchangeData);
+    expect(decoded.deadline.toString()).toBe(
+      String(nowTimestampMs / 1000 + 7 * 24 * 60 * 60),
+    );
+  });
+
   it('rejects BUY', () => {
     expect(() =>
       buildDex().getDexParam(
