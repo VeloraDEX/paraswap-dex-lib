@@ -1,171 +1,255 @@
+// Port of the on-chain LunarBase pool quote math (dark_pools SwapLib).
+//
+// Two pricing models are deployed:
+//  - punishment model (current): linear anchor price, the stored directional
+//    fee is raised by a size-proportional punishment for the current swap;
+//  - concentration model (legacy): a concentrated curve around the anchor
+//    whose width depends on the swap size relative to the inventory.
+// Every helper mirrors the Solidity rounding of the corresponding contract
+// function, so quotes match `quoteXToY` / `quoteYToX` to the wei.
 import { LunarBasePoolState, LunarBaseQuoteResult } from './types';
 
 const Q12 = 1n << 12n;
 const Q24 = 1n << 24n;
 const Q48 = 1n << 48n;
 const Q96 = 1n << 96n;
+const MAX_U24 = (1n << 24n) - 1n;
+const MAX_U128 = (1n << 128n) - 1n;
 const MAX_U160 = (1n << 160n) - 1n;
 const MAX_U256 = (1n << 256n) - 1n;
 
-function mulDiv(a: bigint, b: bigint, denominator: bigint): bigint {
-  if (denominator === 0n) throw new Error('mulDiv division by zero');
-  return (a * b) / denominator;
+// A Solidity revert in the mirrored path (overflow, SafeCast). The swap would
+// revert too, so the quote is treated as unavailable.
+export class LunarBaseMathError extends Error {}
+
+function mulDiv(a: bigint, b: bigint, d: bigint): bigint {
+  if (d === 0n) throw new LunarBaseMathError('mulDiv: division by zero');
+  const r = (a * b) / d;
+  if (r > MAX_U256) throw new LunarBaseMathError('mulDiv: overflow');
+  return r;
 }
 
-function mulDivRoundingUp(a: bigint, b: bigint, denominator: bigint): bigint {
-  if (denominator === 0n) throw new Error('mulDiv division by zero');
-  const product = a * b;
-  return product === 0n ? 0n : (product - 1n) / denominator + 1n;
+function mulDivUp(a: bigint, b: bigint, d: bigint): bigint {
+  if (d === 0n) throw new LunarBaseMathError('mulDivUp: division by zero');
+  const p = a * b;
+  let r = p / d;
+  if (p % d !== 0n) r += 1n;
+  if (r > MAX_U256) throw new LunarBaseMathError('mulDivUp: overflow');
+  return r;
 }
 
 function ceilDiv(a: bigint, b: bigint): bigint {
-  if (b === 0n) throw new Error('ceilDiv division by zero');
+  if (b === 0n) throw new LunarBaseMathError('ceilDiv: division by zero');
   return a === 0n ? 0n : (a - 1n) / b + 1n;
 }
 
-function sqrt(value: bigint): bigint {
-  if (value < 0n) throw new Error('square root of negative number');
-  if (value < 2n) return value;
-
-  let x0 = value;
-  let x1 = (value >> 1n) + 1n;
-  while (x1 < x0) {
-    x0 = x1;
-    x1 = (x1 + value / x1) >> 1n;
+function isqrt(x: bigint): bigint {
+  if (x < 2n) return x;
+  // Newton iteration from an upper bound; exact floor(sqrt(x)).
+  let r = 1n << (BigInt(x.toString(2).length + 1) / 2n);
+  for (;;) {
+    const next = (r + x / r) >> 1n;
+    if (next >= r) return r;
+    r = next;
   }
-  return x0;
 }
 
+function toUint160(x: bigint): bigint {
+  if (x > MAX_U160) throw new LunarBaseMathError('SafeCast: uint160');
+  return x;
+}
+
+function toUint128(x: bigint): bigint {
+  if (x > MAX_U128) throw new LunarBaseMathError('SafeCast: uint128');
+  return x;
+}
+
+const rejected = (anchorPrice: bigint): LunarBaseQuoteResult => ({
+  amountOut: 0n,
+  sqrtPriceNext: anchorPrice,
+  fee: 0n,
+});
+
+// SwapLib._xValueInY: X valued in Y at the squared Q64.96 anchor, two floors.
+function xValueInY(amountX: bigint, anchorPrice: bigint): bigint {
+  return mulDiv(mulDiv(amountX, anchorPrice, Q96), anchorPrice, Q96);
+}
+
+function yValueInX(amountY: bigint, anchorPrice: bigint): bigint {
+  return mulDiv(mulDiv(amountY, Q96, anchorPrice), Q96, anchorPrice);
+}
+
+// SwapLib.applyFee. The MEV tax that the current impl adds when the tx
+// priority fee is above the pool threshold is not modelled: it depends on the
+// gas price of the user's transaction, which is unknown at pricing time.
 function applyFee(
   grossOutput: bigint,
-  feeQ24: number,
+  feeQ24: bigint,
   feeMultiplier: bigint,
-): [amountOut: bigint, fee: bigint] {
-  const baseFee = mulDiv(grossOutput, BigInt(feeQ24), Q24);
-  if (feeMultiplier <= 1n || baseFee === 0n) {
-    return [grossOutput - baseFee, baseFee];
+  saturatesAtMax: boolean,
+): { amountOut: bigint; fee: bigint } {
+  if (saturatesAtMax && feeQ24 === MAX_U24) {
+    return { amountOut: 0n, fee: grossOutput };
   }
-
-  if (feeMultiplier > MAX_U256 / baseFee) return [0n, grossOutput];
-
-  const fee = baseFee * feeMultiplier;
-  if (fee >= grossOutput) return [0n, grossOutput];
-
-  return [grossOutput - fee, fee];
+  let fee = mulDiv(grossOutput, feeQ24, Q24);
+  if (fee === 0n || feeMultiplier <= 1n) {
+    return { amountOut: grossOutput - fee, fee };
+  }
+  if (feeMultiplier > MAX_U256 / fee) {
+    return { amountOut: 0n, fee: grossOutput };
+  }
+  fee *= feeMultiplier;
+  if (fee >= grossOutput) return { amountOut: 0n, fee: grossOutput };
+  return { amountOut: grossOutput - fee, fee };
 }
 
-function concentrationQ48(
-  anchorPrice: bigint,
+// ---------------------------------------------------------------------------
+// Punishment model
+// ---------------------------------------------------------------------------
+
+export function punishmentX24(
+  state: LunarBasePoolState,
   amountIn: bigint,
-  reserveX: bigint,
-  reserveY: bigint,
-  concentrationK: number,
   xToY: boolean,
 ): bigint {
-  if (amountIn === 0n || concentrationK === 0 || anchorPrice === 0n) return 0n;
+  const maxPunishment = BigInt(state.maxPunishmentX24);
+  if (amountIn === 0n || maxPunishment === 0n || state.anchorPrice === 0n) {
+    return 0n;
+  }
 
-  const xWealthInY = mulDiv(
-    mulDiv(reserveX, anchorPrice, Q96),
-    anchorPrice,
-    Q96,
+  const inventoryWealth =
+    xValueInY(state.reserveX, state.anchorPrice) + state.reserveY;
+  if (inventoryWealth === 0n) return 0n;
+
+  const swapWealth = xToY ? xValueInY(amountIn, state.anchorPrice) : amountIn;
+  if (swapWealth === 0n) return 0n;
+
+  const maximum = maxPunishment === MAX_U24 ? Q24 : maxPunishment;
+  const calculated =
+    swapWealth >= inventoryWealth
+      ? maximum
+      : mulDivUp(maximum, swapWealth, inventoryWealth);
+
+  return calculated >= Q24 ? MAX_U24 : calculated;
+}
+
+// SwapLib.saturatingFeeX24: the fee used by this swap and stored after it.
+export function saturatingFeeX24(storedFeeX24: bigint, desired: bigint) {
+  const available = MAX_U24 - storedFeeX24;
+  return desired >= available ? MAX_U24 : storedFeeX24 + desired;
+}
+
+function punishmentQuoteXToY(
+  state: LunarBasePoolState,
+  dx: bigint,
+  feeMultiplier: bigint,
+): LunarBaseQuoteResult {
+  const effectiveFee = saturatingFeeX24(
+    BigInt(state.feeBidX24),
+    punishmentX24(state, dx, true),
   );
-  const totalWealthInY = xWealthInY + reserveY;
+  const dy = xValueInY(dx, state.anchorPrice);
+  if (dy === 0n || dy > state.reserveY) return rejected(state.anchorPrice);
+  return {
+    ...applyFee(dy, effectiveFee, feeMultiplier, true),
+    sqrtPriceNext: state.anchorPrice,
+  };
+}
+
+function punishmentQuoteYToX(
+  state: LunarBasePoolState,
+  dy: bigint,
+  feeMultiplier: bigint,
+): LunarBaseQuoteResult {
+  const effectiveFee = saturatingFeeX24(
+    BigInt(state.feeAskX24),
+    punishmentX24(state, dy, false),
+  );
+  if (state.anchorPrice === 0n) return rejected(state.anchorPrice);
+  const dx = yValueInX(dy, state.anchorPrice);
+  if (dx === 0n || dx > state.reserveX) return rejected(state.anchorPrice);
+  return {
+    ...applyFee(dx, effectiveFee, feeMultiplier, true),
+    sqrtPriceNext: state.anchorPrice,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Concentration model (legacy pools)
+// ---------------------------------------------------------------------------
+
+function concentrationQ48(
+  state: LunarBasePoolState,
+  amountIn: bigint,
+  xToY: boolean,
+): bigint {
+  const k = BigInt(state.concentrationK);
+  const p = state.anchorPrice;
+  if (amountIn === 0n || k === 0n || p === 0n) return 0n;
+
+  const totalWealthInY = xValueInY(state.reserveX, p) + state.reserveY;
   if (totalWealthInY === 0n) return 0n;
 
-  const amountInWealth = xToY
-    ? mulDiv(mulDiv(amountIn, anchorPrice, Q96), anchorPrice, Q96)
-    : amountIn;
-
+  const amountInWealth = xToY ? xValueInY(amountIn, p) : amountIn;
   const rQ48 =
     amountInWealth >= totalWealthInY
       ? Q48
       : mulDiv(amountInWealth, Q48, totalWealthInY);
   const rSquaredQ48 = mulDiv(rQ48, rQ48, Q48);
-  const cQ48 = mulDiv(BigInt(concentrationK), rSquaredQ48, Q12);
-
+  const cQ48 = mulDiv(k, rSquaredQ48, Q12);
   return cQ48 >= Q48 ? Q48 : cQ48;
 }
 
-function lowerBound(anchorPrice: bigint, cQ48: bigint): bigint {
-  const oneMinusConcentrationQ48 = Q48 - cQ48;
-  return mulDiv(anchorPrice, sqrt(oneMinusConcentrationQ48), Q24);
+function lowerBound(p: bigint, cQ48: bigint): bigint {
+  return toUint160(mulDiv(p, isqrt(Q48 - cQ48), Q24));
 }
 
-function upperBound(anchorPrice: bigint, cQ48: bigint): bigint {
-  const oneMinusConcentrationQ48 = Q48 - cQ48;
-  return mulDiv(anchorPrice, Q24, sqrt(oneMinusConcentrationQ48));
+function upperBound(p: bigint, cQ48: bigint): bigint {
+  return toUint160(mulDiv(p, Q24, isqrt(Q48 - cQ48)));
 }
 
-function ly(anchorPrice: bigint, lower: bigint, reserveY: bigint): bigint {
-  return mulDiv(reserveY, Q96, anchorPrice - lower);
+function liquidityY(p: bigint, lower: bigint, reserveY: bigint): bigint {
+  return toUint128(mulDiv(reserveY, Q96, p - lower));
 }
 
-function lx(anchorPrice: bigint, upper: bigint, reserveX: bigint): bigint {
-  const priceProductX96 = mulDiv(anchorPrice, upper, Q96);
-  return mulDiv(reserveX, priceProductX96, upper - anchorPrice);
+function liquidityX(p: bigint, upper: bigint, reserveX: bigint): bigint {
+  const priceProductX96 = mulDiv(p, upper, Q96);
+  return toUint128(mulDiv(reserveX, priceProductX96, upper - p));
 }
 
-function getAmountXDelta(
-  sqrtRatioA: bigint,
-  sqrtRatioB: bigint,
-  liquidity: bigint,
-  roundUp: boolean,
-): bigint {
-  const [sa, sb] =
-    sqrtRatioA > sqrtRatioB
-      ? [sqrtRatioB, sqrtRatioA]
-      : [sqrtRatioA, sqrtRatioB];
-  if (sa === 0n) throw new Error('invalid sqrtRatioAX96');
-
-  const numerator1 = liquidity << 96n;
-  const numerator2 = sb - sa;
-
-  if (roundUp) {
-    return ceilDiv(mulDivRoundingUp(numerator1, numerator2, sb), sa);
-  }
-
-  return mulDiv(numerator1, numerator2, sb) / sa;
+function getAmountXDelta(a: bigint, b: bigint, liquidity: bigint): bigint {
+  if (a > b) [a, b] = [b, a];
+  if (a === 0n) throw new LunarBaseMathError('InvalidSqrtRatioAX96');
+  return mulDiv(liquidity << 96n, b - a, b) / a;
 }
 
-function getAmountYDelta(
-  sqrtRatioA: bigint,
-  sqrtRatioB: bigint,
-  liquidity: bigint,
-  roundUp: boolean,
-): bigint {
-  const [sa, sb] =
-    sqrtRatioA > sqrtRatioB
-      ? [sqrtRatioB, sqrtRatioA]
-      : [sqrtRatioA, sqrtRatioB];
-  const diff = sb - sa;
-
-  return roundUp
-    ? mulDivRoundingUp(liquidity, diff, Q96)
-    : mulDiv(liquidity, diff, Q96);
+function getAmountYDelta(a: bigint, b: bigint, liquidity: bigint): bigint {
+  if (a > b) [a, b] = [b, a];
+  return mulDiv(liquidity, b - a, Q96);
 }
 
-function getNextSqrtPriceFromAmountXRoundingUp(
-  sqrtPX96: bigint,
+// SqrtPriceMath.getNextSqrtPriceFromAmountXRoundingUp(addX = true), with the
+// unchecked uint256 product of the contract.
+function nextSqrtPriceFromAmountX(
+  p: bigint,
   liquidity: bigint,
   amountX: bigint,
 ): bigint {
-  if (amountX === 0n) return sqrtPX96;
-
+  if (amountX === 0n) return p;
   const numerator1 = liquidity << 96n;
-  const product = amountX * sqrtPX96;
-
-  if (product <= MAX_U256) {
+  const product = (amountX * p) & MAX_U256;
+  if (product / amountX === p) {
     const denominator = numerator1 + product;
-    if (denominator <= MAX_U256 && denominator >= numerator1) {
-      return mulDivRoundingUp(numerator1, sqrtPX96, denominator);
+    if (denominator <= MAX_U256) {
+      return toUint160(mulDivUp(numerator1, p, denominator));
     }
   }
-
-  return ceilDiv(numerator1, numerator1 / sqrtPX96 + amountX);
+  return toUint160(ceilDiv(numerator1, numerator1 / p + amountX));
 }
 
-function getNextSqrtPriceFromAmountYRoundingDown(
-  sqrtPX96: bigint,
+// SqrtPriceMath.getNextSqrtPriceFromAmountYRoundingDown(addY = true).
+function nextSqrtPriceFromAmountY(
+  p: bigint,
   liquidity: bigint,
   amountY: bigint,
 ): bigint {
@@ -173,128 +257,98 @@ function getNextSqrtPriceFromAmountYRoundingDown(
     amountY <= MAX_U160
       ? (amountY << 96n) / liquidity
       : mulDiv(amountY, Q96, liquidity);
-
-  return sqrtPX96 + quotient;
+  return toUint160(p + quotient);
 }
 
-function linearXToY(
+function concentrationQuoteXToY(
   state: LunarBasePoolState,
-  amountIn: bigint,
+  dx: bigint,
   feeMultiplier: bigint,
 ): LunarBaseQuoteResult {
-  const dy = mulDiv(
-    mulDiv(amountIn, state.anchorPrice, Q96),
-    state.anchorPrice,
-    Q96,
-  );
-  if (dy === 0n || dy > state.reserveY) {
-    return { amountOut: 0n, sqrtPriceNext: state.anchorPrice, fee: 0n };
+  const p = state.anchorPrice;
+  const fee = BigInt(state.feeBidX24);
+  const cQ48 = concentrationQ48(state, dx, true);
+  if (cQ48 === 0n) {
+    const dy = xValueInY(dx, p);
+    if (dy === 0n || dy > state.reserveY) return rejected(p);
+    return { ...applyFee(dy, fee, feeMultiplier, false), sqrtPriceNext: p };
   }
+  if (cQ48 >= Q48) return rejected(p);
 
-  const [amountOut, fee] = applyFee(dy, state.feeBidX24, feeMultiplier);
-  return { amountOut, sqrtPriceNext: state.anchorPrice, fee };
+  const lower = lowerBound(p, cQ48);
+  if (p <= lower) return rejected(p);
+  const liquidity = liquidityY(p, lower, state.reserveY);
+  if (liquidity === 0n) throw new LunarBaseMathError('LiquidityIsZero');
+  if (dx > getAmountXDelta(lower, p, liquidity)) return rejected(p);
+
+  const pNext = nextSqrtPriceFromAmountX(p, liquidity, dx);
+  const dy = getAmountYDelta(p, pNext, liquidity);
+  return {
+    ...applyFee(dy, fee, feeMultiplier, false),
+    sqrtPriceNext: pNext,
+  };
 }
 
-function linearYToX(
+function concentrationQuoteYToX(
   state: LunarBasePoolState,
-  amountIn: bigint,
+  dy: bigint,
   feeMultiplier: bigint,
 ): LunarBaseQuoteResult {
-  if (state.anchorPrice === 0n) {
-    return { amountOut: 0n, sqrtPriceNext: state.anchorPrice, fee: 0n };
+  const p = state.anchorPrice;
+  const fee = BigInt(state.feeAskX24);
+  const cQ48 = concentrationQ48(state, dy, false);
+  if (cQ48 === 0n) {
+    if (p === 0n) return rejected(p);
+    const dx = yValueInX(dy, p);
+    if (dx === 0n || dx > state.reserveX) return rejected(p);
+    return { ...applyFee(dx, fee, feeMultiplier, false), sqrtPriceNext: p };
   }
+  if (cQ48 >= Q48) return rejected(p);
 
-  const dx = mulDiv(
-    mulDiv(amountIn, Q96, state.anchorPrice),
-    Q96,
-    state.anchorPrice,
-  );
-  if (dx === 0n || dx > state.reserveX) {
-    return { amountOut: 0n, sqrtPriceNext: state.anchorPrice, fee: 0n };
-  }
+  const upper = upperBound(p, cQ48);
+  if (p >= upper) return rejected(p);
+  const liquidity = liquidityX(p, upper, state.reserveX);
+  if (liquidity === 0n) throw new LunarBaseMathError('LiquidityIsZero');
+  if (dy > getAmountYDelta(p, upper, liquidity)) return rejected(p);
 
-  const [amountOut, fee] = applyFee(dx, state.feeAskX24, feeMultiplier);
-  return { amountOut, sqrtPriceNext: state.anchorPrice, fee };
+  const pNext = nextSqrtPriceFromAmountY(p, liquidity, dy);
+  const dx = getAmountXDelta(p, pNext, liquidity);
+  return {
+    ...applyFee(dx, fee, feeMultiplier, false),
+    sqrtPriceNext: pNext,
+  };
 }
+
+// ---------------------------------------------------------------------------
+// Entry points
+// ---------------------------------------------------------------------------
 
 export function quoteXToY(
   state: LunarBasePoolState,
-  amountIn: bigint,
-  feeMultiplier: bigint,
+  dx: bigint,
+  feeMultiplier = 1n,
 ): LunarBaseQuoteResult {
-  const zero = { amountOut: 0n, sqrtPriceNext: state.anchorPrice, fee: 0n };
-  const cQ48 = concentrationQ48(
-    state.anchorPrice,
-    amountIn,
-    state.reserveX,
-    state.reserveY,
-    state.concentrationK,
-    true,
-  );
-
-  if (cQ48 === 0n) return linearXToY(state, amountIn, feeMultiplier);
-  if (cQ48 >= Q48) return zero;
-
-  const lower = lowerBound(state.anchorPrice, cQ48);
-  if (state.anchorPrice <= lower) return zero;
-
-  const liquidity = ly(state.anchorPrice, lower, state.reserveY);
-  const maxNetDx = getAmountXDelta(lower, state.anchorPrice, liquidity, false);
-  if (amountIn > maxNetDx) return zero;
-
-  const sqrtPriceNext = getNextSqrtPriceFromAmountXRoundingUp(
-    state.anchorPrice,
-    liquidity,
-    amountIn,
-  );
-  const dy = getAmountYDelta(
-    state.anchorPrice,
-    sqrtPriceNext,
-    liquidity,
-    false,
-  );
-  const [amountOut, fee] = applyFee(dy, state.feeBidX24, feeMultiplier);
-
-  return { amountOut, sqrtPriceNext, fee };
+  try {
+    return state.model === 'punishment'
+      ? punishmentQuoteXToY(state, dx, feeMultiplier)
+      : concentrationQuoteXToY(state, dx, feeMultiplier);
+  } catch (e) {
+    if (e instanceof LunarBaseMathError) return rejected(state.anchorPrice);
+    throw e;
+  }
 }
 
 export function quoteYToX(
   state: LunarBasePoolState,
-  amountIn: bigint,
-  feeMultiplier: bigint,
+  dy: bigint,
+  feeMultiplier = 1n,
 ): LunarBaseQuoteResult {
-  const zero = { amountOut: 0n, sqrtPriceNext: state.anchorPrice, fee: 0n };
-  const cQ48 = concentrationQ48(
-    state.anchorPrice,
-    amountIn,
-    state.reserveX,
-    state.reserveY,
-    state.concentrationK,
-    false,
-  );
-
-  if (cQ48 === 0n) return linearYToX(state, amountIn, feeMultiplier);
-  if (cQ48 >= Q48) return zero;
-
-  const upper = upperBound(state.anchorPrice, cQ48);
-  if (state.anchorPrice >= upper) return zero;
-
-  const liquidity = lx(state.anchorPrice, upper, state.reserveX);
-  const maxNetDy = getAmountYDelta(state.anchorPrice, upper, liquidity, false);
-  if (amountIn > maxNetDy) return zero;
-
-  const sqrtPriceNext = getNextSqrtPriceFromAmountYRoundingDown(
-    state.anchorPrice,
-    liquidity,
-    amountIn,
-  );
-  const dx = getAmountXDelta(
-    state.anchorPrice,
-    sqrtPriceNext,
-    liquidity,
-    false,
-  );
-  const [amountOut, fee] = applyFee(dx, state.feeAskX24, feeMultiplier);
-
-  return { amountOut, sqrtPriceNext, fee };
+  try {
+    return state.model === 'punishment'
+      ? punishmentQuoteYToX(state, dy, feeMultiplier)
+      : concentrationQuoteYToX(state, dy, feeMultiplier);
+  } catch (e) {
+    if (e instanceof LunarBaseMathError) return rejected(state.anchorPrice);
+    throw e;
+  }
 }

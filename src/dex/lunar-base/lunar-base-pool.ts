@@ -1,86 +1,116 @@
 import { Interface, JsonFragment } from '@ethersproject/abi';
-import { AsyncOrSync, DeepReadonly } from 'ts-essentials';
-import { Contract } from 'web3-eth-contract';
+import { DeepReadonly } from 'ts-essentials';
 import { IDexHelper } from '../../dex-helper/idex-helper';
 import { StatefulEventSubscriber } from '../../stateful-event-subscriber';
 import { Address, Log, Logger } from '../../types';
 import { catchParseLogError } from '../../utils';
+import { MultiCallParams, MultiResult } from '../../lib/multi-wrapper';
 import PoolABI from '../../abi/lunar-base/pool.json';
 import { LunarBasePoolState } from './types';
 
 const poolIface = new Interface(PoolABI as JsonFragment[]);
 
-function toBigInt(value: any): bigint {
-  return BigInt(value.toString());
-}
+const toBigInt = (value: any): bigint => BigInt(value.toString());
+const toNumber = (value: any): number => Number(value.toString());
 
-function toNumber(value: any): number {
-  return Number(value.toString());
-}
+const decodeWith =
+  (method: string) =>
+  (result: MultiResult<any> | any): any => {
+    const data = result?.returnData ?? result;
+    return poolIface.decodeFunctionResult(method, data);
+  };
+
+const GETTERS = [
+  'state',
+  'maxPunishmentX24',
+  'concentrationK',
+  'blockDelay',
+  'blacklistFeeMultiplier',
+  'getXReserve',
+  'getYReserve',
+  'paused',
+] as const;
 
 export async function getOnChainState(
-  multiContract: Contract,
+  dexHelper: IDexHelper,
   pool: Address,
+  executors: Address[],
   blockNumber: number | 'latest',
 ): Promise<LunarBasePoolState> {
-  const calls = [
-    'state',
-    'concentrationK',
-    'blockDelay',
-    'blacklistFeeMultiplier',
-    'getXReserve',
-    'getYReserve',
-    'paused',
-  ].map(method => ({
-    target: pool,
-    callData: poolIface.encodeFunctionData(method, []),
-  }));
+  const calls: MultiCallParams<any>[] = [
+    ...GETTERS.map(method => ({
+      target: pool,
+      callData: poolIface.encodeFunctionData(method, []),
+      decodeFunction: decodeWith(method),
+    })),
+    ...executors.map(executor => ({
+      target: pool,
+      callData: poolIface.encodeFunctionData('isWhitelisted', [executor]),
+      decodeFunction: decodeWith('isWhitelisted'),
+    })),
+  ];
 
-  const response: { returnData: string[] } = await multiContract.methods
-    .aggregate(calls)
-    .call({}, blockNumber);
-
-  let offset = 0;
-  const state = poolIface.decodeFunctionResult(
-    'state',
-    response.returnData[offset++],
+  // `maxPunishmentX24` exists only on punishment-model pools and
+  // `concentrationK` only on legacy ones, so one of them always reverts.
+  const results = await dexHelper.multiWrapper.tryAggregate(
+    false,
+    calls,
+    blockNumber,
+    dexHelper.multiWrapper.defaultBatchSize,
+    false,
   );
-  const concentrationK = poolIface.decodeFunctionResult(
-    'concentrationK',
-    response.returnData[offset++],
-  )[0];
-  const blockDelay = poolIface.decodeFunctionResult(
-    'blockDelay',
-    response.returnData[offset++],
-  )[0];
-  const blacklistFeeMultiplier = poolIface.decodeFunctionResult(
-    'blacklistFeeMultiplier',
-    response.returnData[offset++],
-  )[0];
-  const reserveX = poolIface.decodeFunctionResult(
-    'getXReserve',
-    response.returnData[offset++],
-  )[0];
-  const reserveY = poolIface.decodeFunctionResult(
-    'getYReserve',
-    response.returnData[offset++],
-  )[0];
-  const paused = poolIface.decodeFunctionResult(
-    'paused',
-    response.returnData[offset++],
-  )[0];
+  const [
+    state,
+    maxPunishment,
+    concentrationK,
+    blockDelay,
+    blacklistFeeMultiplier,
+    reserveX,
+    reserveY,
+    paused,
+    ...whitelist
+  ] = results;
+
+  const required = [
+    state,
+    blockDelay,
+    blacklistFeeMultiplier,
+    reserveX,
+    reserveY,
+    paused,
+    ...whitelist,
+  ];
+  if (required.some(r => !r.success)) {
+    throw new Error(`LunarBase: failed to read state of pool ${pool}`);
+  }
+  if (!maxPunishment.success && !concentrationK.success) {
+    throw new Error(`LunarBase: unknown pricing model of pool ${pool}`);
+  }
 
   return {
-    anchorPrice: toBigInt(state[0]),
-    feeAskX24: toNumber(state[1]),
-    feeBidX24: toNumber(state[2]),
-    latestUpdateBlock: toNumber(state[3]),
-    concentrationK: toNumber(concentrationK),
-    blockDelay: toNumber(blockDelay),
-    blacklistFeeMultiplier: toBigInt(blacklistFeeMultiplier),
-    reserveX: toBigInt(reserveX),
-    reserveY: toBigInt(reserveY),
-    paused,
+    model: maxPunishment.success ? 'punishment' : 'concentration',
+    anchorPrice: toBigInt(state.returnData[0]),
+    feeAskX24: toNumber(state.returnData[1]),
+    feeBidX24: toNumber(state.returnData[2]),
+    latestUpdateBlock: toNumber(state.returnData[3]),
+    reserveX: toBigInt(reserveX.returnData[0]),
+    reserveY: toBigInt(reserveY.returnData[0]),
+    blockDelay: toNumber(blockDelay.returnData[0]),
+    maxPunishmentX24: maxPunishment.success
+      ? toNumber(maxPunishment.returnData[0])
+      : 0,
+    concentrationK:
+      !maxPunishment.success && concentrationK.success
+        ? toNumber(concentrationK.returnData[0])
+        : 0,
+    blacklistFeeMultiplier: toBigInt(blacklistFeeMultiplier.returnData[0]),
+    executorsWhitelist: Object.fromEntries(
+      executors.map((executor, i) => [
+        executor.toLowerCase(),
+        Boolean(whitelist[i].returnData[0]),
+      ]),
+    ),
+    paused: Boolean(paused.returnData[0]),
   };
 }
 
@@ -88,6 +118,7 @@ export class LunarBaseEventPool extends StatefulEventSubscriber<LunarBasePoolSta
   private readonly handlers: Record<
     string,
     (
+      event: any,
       log: Readonly<Log>,
       state: DeepReadonly<LunarBasePoolState>,
     ) => DeepReadonly<LunarBasePoolState>
@@ -97,22 +128,59 @@ export class LunarBaseEventPool extends StatefulEventSubscriber<LunarBasePoolSta
     parentName: string,
     protected dexHelper: IDexHelper,
     public readonly pool: Address,
+    protected readonly executors: Address[],
     logger: Logger,
   ) {
     super(parentName, pool, dexHelper, logger);
     this.addressesSubscribed = [pool];
     this.handlers = {
-      [poolIface.getEventTopic('StateUpdated')]:
-        this.handleStateUpdated.bind(this),
-      [poolIface.getEventTopic('Sync')]: this.handleSync.bind(this),
-      [poolIface.getEventTopic('ConcentrationKSet')]:
-        this.handleConcentrationKSet.bind(this),
-      [poolIface.getEventTopic('BlockDelaySet')]:
-        this.handleBlockDelaySet.bind(this),
-      [poolIface.getEventTopic('BlacklistFeeMultiplierSet')]:
-        this.handleBlacklistFeeMultiplierSet.bind(this),
-      [poolIface.getEventTopic('Paused')]: this.handlePaused.bind(this),
-      [poolIface.getEventTopic('Unpaused')]: this.handleUnpaused.bind(this),
+      StateUpdated: (event, log, state) => ({
+        ...state,
+        anchorPrice: toBigInt(event.args.anchorPrice),
+        feeAskX24: toNumber(event.args.feeAskX24),
+        feeBidX24: toNumber(event.args.feeBidX24),
+        latestUpdateBlock: log.blockNumber,
+      }),
+      // A swap stores its punished directional fee for the following swaps.
+      PunishmentApplied: (event, _log, state) => ({
+        ...state,
+        feeAskX24: toNumber(event.args.feeAskX24),
+        feeBidX24: toNumber(event.args.feeBidX24),
+      }),
+      Sync: (event, _log, state) => ({
+        ...state,
+        reserveX: toBigInt(event.args.reserveX),
+        reserveY: toBigInt(event.args.reserveY),
+      }),
+      MaxPunishmentX24Set: (event, _log, state) => ({
+        ...state,
+        maxPunishmentX24: toNumber(event.args.maxPunishmentX24),
+      }),
+      ConcentrationKSet: (event, _log, state) => ({
+        ...state,
+        concentrationK: toNumber(event.args.concentrationK),
+      }),
+      BlockDelaySet: (event, _log, state) => ({
+        ...state,
+        blockDelay: toNumber(event.args.blockDelay),
+      }),
+      BlacklistFeeMultiplierSet: (event, _log, state) => ({
+        ...state,
+        blacklistFeeMultiplier: toBigInt(event.args.multiplier),
+      }),
+      WhitelistSet: (event, _log, state) => {
+        const account = event.args.account.toLowerCase();
+        if (!(account in state.executorsWhitelist)) return state;
+        return {
+          ...state,
+          executorsWhitelist: {
+            ...state.executorsWhitelist,
+            [account]: Boolean(event.args.whitelisted),
+          },
+        };
+      },
+      Paused: (_event, _log, state) => ({ ...state, paused: true }),
+      Unpaused: (_event, _log, state) => ({ ...state, paused: false }),
     };
   }
 
@@ -124,8 +192,9 @@ export class LunarBaseEventPool extends StatefulEventSubscriber<LunarBasePoolSta
     blockNumber: number | 'latest' = 'latest',
   ): Promise<DeepReadonly<LunarBasePoolState>> {
     return getOnChainState(
-      this.dexHelper.multiContract,
+      this.dexHelper,
       this.pool,
+      this.executors,
       blockNumber,
     );
   }
@@ -146,92 +215,23 @@ export class LunarBaseEventPool extends StatefulEventSubscriber<LunarBasePoolSta
     }
   }
 
-  protected processLog(
+  protected async processLog(
     state: DeepReadonly<LunarBasePoolState>,
     log: Readonly<Log>,
-  ): AsyncOrSync<DeepReadonly<LunarBasePoolState> | null> {
-    const handler = this.handlers[log.topics[0]];
-    if (!handler) return null;
-
+  ): Promise<DeepReadonly<LunarBasePoolState> | null> {
     try {
-      return handler(log, state);
+      const event = poolIface.parseLog(log);
+      // An implementation upgrade can change the pricing model and the
+      // storage behind every getter: re-read the whole state.
+      if (event.name === 'Upgraded') {
+        return await this.generateState(log.blockNumber);
+      }
+      const handler = this.handlers[event.name];
+      return handler ? handler(event, log, state) : null;
     } catch (e) {
       catchParseLogError(e, this.logger);
       return null;
     }
-  }
-
-  private handleStateUpdated(
-    log: Readonly<Log>,
-    state: DeepReadonly<LunarBasePoolState>,
-  ): DeepReadonly<LunarBasePoolState> {
-    const event = poolIface.parseLog(log);
-    return {
-      ...state,
-      anchorPrice: toBigInt(event.args.anchorPrice),
-      feeAskX24: toNumber(event.args.feeAskX24),
-      feeBidX24: toNumber(event.args.feeBidX24),
-      latestUpdateBlock: log.blockNumber,
-    };
-  }
-
-  private handleSync(
-    log: Readonly<Log>,
-    state: DeepReadonly<LunarBasePoolState>,
-  ): DeepReadonly<LunarBasePoolState> {
-    const event = poolIface.parseLog(log);
-    return {
-      ...state,
-      reserveX: toBigInt(event.args.reserveX),
-      reserveY: toBigInt(event.args.reserveY),
-    };
-  }
-
-  private handleConcentrationKSet(
-    log: Readonly<Log>,
-    state: DeepReadonly<LunarBasePoolState>,
-  ): DeepReadonly<LunarBasePoolState> {
-    const event = poolIface.parseLog(log);
-    return {
-      ...state,
-      concentrationK: toNumber(event.args.concentrationK),
-    };
-  }
-
-  private handleBlockDelaySet(
-    log: Readonly<Log>,
-    state: DeepReadonly<LunarBasePoolState>,
-  ): DeepReadonly<LunarBasePoolState> {
-    const event = poolIface.parseLog(log);
-    return {
-      ...state,
-      blockDelay: toNumber(event.args.blockDelay),
-    };
-  }
-
-  private handleBlacklistFeeMultiplierSet(
-    log: Readonly<Log>,
-    state: DeepReadonly<LunarBasePoolState>,
-  ): DeepReadonly<LunarBasePoolState> {
-    const event = poolIface.parseLog(log);
-    return {
-      ...state,
-      blacklistFeeMultiplier: toBigInt(event.args.multiplier),
-    };
-  }
-
-  private handlePaused(
-    _log: Readonly<Log>,
-    state: DeepReadonly<LunarBasePoolState>,
-  ): DeepReadonly<LunarBasePoolState> {
-    return { ...state, paused: true };
-  }
-
-  private handleUnpaused(
-    _log: Readonly<Log>,
-    state: DeepReadonly<LunarBasePoolState>,
-  ): DeepReadonly<LunarBasePoolState> {
-    return { ...state, paused: false };
   }
 }
 

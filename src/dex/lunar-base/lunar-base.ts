@@ -1,4 +1,5 @@
 import { Interface, JsonFragment } from '@ethersproject/abi';
+import { DeepReadonly } from 'ts-essentials';
 import {
   AdapterExchangeParam,
   Address,
@@ -27,7 +28,7 @@ import {
 } from '../simple-exchange';
 import { extractReturnAmountPosition } from '../../executor/utils';
 import PoolABI from '../../abi/lunar-base/pool.json';
-import { LunarBaseConfig } from './config';
+import { LUNAR_BASE_GAS_COST, LunarBaseConfig } from './config';
 import {
   LunarBaseData,
   LunarBasePoolConfig,
@@ -39,6 +40,8 @@ import { quoteXToY, quoteYToX } from './math';
 
 export class LunarBase extends SimpleExchange implements IDex<LunarBaseData> {
   readonly hasConstantPriceLargeAmounts = false;
+  // Pools hold the native token itself; WETH/WBNB routes are unwrapped and
+  // wrapped by the executor around the pool call (`needUnwrapNative`).
   readonly needWrapNative = false;
   readonly isFeeOnTransferSupported = false;
 
@@ -48,6 +51,9 @@ export class LunarBase extends SimpleExchange implements IDex<LunarBaseData> {
   protected config: DexParams;
   protected eventPools: Map<Address, LunarBaseEventPool>;
   protected poolIface: Interface;
+  // Executors that call the pool on SELL routes. The pool prices a caller
+  // with `blacklistFeeMultiplier` unless the caller is whitelisted.
+  protected executors: Address[];
   logger: Logger;
 
   constructor(
@@ -59,10 +65,20 @@ export class LunarBase extends SimpleExchange implements IDex<LunarBaseData> {
     this.logger = dexHelper.getLogger(dexKey);
     this.config = LunarBaseConfig[dexKey][network];
     this.poolIface = new Interface(PoolABI as JsonFragment[]);
+    const executors = dexHelper.config.data.executorsAddresses ?? {};
+    this.executors = [executors.Executor01, executors.Executor02]
+      .filter((executor): executor is Address => !!executor)
+      .map(executor => executor.toLowerCase());
     this.eventPools = new Map(
       this.config.pools.map(pool => [
         pool.address,
-        new LunarBaseEventPool(dexKey, dexHelper, pool.address, this.logger),
+        new LunarBaseEventPool(
+          dexKey,
+          dexHelper,
+          pool.address,
+          this.executors,
+          this.logger,
+        ),
       ]),
     );
   }
@@ -102,6 +118,7 @@ export class LunarBase extends SimpleExchange implements IDex<LunarBaseData> {
     blockNumber: number,
     limitPools?: string[],
   ): Promise<ExchangePrices<LunarBaseData> | null> {
+    // Pools only expose exact-input swaps.
     if (side === SwapSide.BUY) return null;
 
     const pool = this.config.pools.find(candidate =>
@@ -119,19 +136,20 @@ export class LunarBase extends SimpleExchange implements IDex<LunarBaseData> {
     if (!state || !this.isStateUsable(state, blockNumber)) return null;
 
     const isXToY = this.isTokenX(pool, srcToken.address);
-    const feeMultiplier = state.blacklistFeeMultiplier || 1n;
+    const feeMultiplier = this.feeMultiplier(state);
     const quote = (amount: bigint) =>
       isXToY
         ? quoteXToY(state, amount, feeMultiplier).amountOut
         : quoteYToX(state, amount, feeMultiplier).amountOut;
 
     const unit = quote(getBigIntPow(srcToken.decimals));
-    if (unit === 0n) return null;
+    const prices = amounts.map(amount => (amount === 0n ? 0n : quote(amount)));
+    if (prices.every(price => price === 0n)) return null;
 
     return [
       {
         unit,
-        prices: amounts.map(amount => (amount === 0n ? 0n : quote(amount))),
+        prices,
         data: {
           pool: pool.address,
           tokenIn: this.toPoolTokenAddress(pool, srcToken.address),
@@ -141,7 +159,7 @@ export class LunarBase extends SimpleExchange implements IDex<LunarBaseData> {
         poolAddresses: [pool.address],
         poolIdentifiers: [poolIdentifier],
         exchange: this.dexKey,
-        gasCost: isETHAddress(srcToken.address) ? 180000 : 210000,
+        gasCost: LUNAR_BASE_GAS_COST,
       },
     ];
   }
@@ -169,30 +187,37 @@ export class LunarBase extends SimpleExchange implements IDex<LunarBaseData> {
 
   getDexParam(
     srcToken: Address,
-    _destToken: Address,
+    destToken: Address,
     srcAmount: NumberAsString,
     destAmount: NumberAsString,
     recipient: Address,
     data: LunarBaseData,
     side: SwapSide,
+    executorAddress: Address,
   ): DexExchangeParam {
     if (side === SwapSide.BUY) {
       throw new Error(`${this.dexKey}: BUY is not supported`);
     }
 
     const deadline = getLocalDeadlineAsFriendlyPlaceholder();
+    // A WETH destination is paid out in native ETH: deliver it to the
+    // executor, which wraps it after the call and forwards the result.
+    const isWethDest = this.dexHelper.config.isWETH(destToken);
+    const swapRecipient = isWethDest ? executorAddress : recipient;
 
-    if (isETHAddress(srcToken)) {
+    if (data.tokenIn === NULL_ADDRESS) {
       const exchangeData = this.poolIface.encodeFunctionData(
         'swapExactInNative',
-        [data.tokenOut, recipient, destAmount, deadline],
+        [data.tokenOut, swapRecipient, destAmount, deadline],
       );
 
       return {
-        needWrapNative: false,
-        dexFuncHasRecipient: true,
+        needWrapNative: this.needWrapNative,
+        needUnwrapNative: true,
+        dexFuncHasRecipient: !isWethDest,
         exchangeData,
         targetExchange: data.pool,
+        // The input is msg.value only.
         swappedAmountNotPresentInExchangeData: true,
         returnAmountPos: extractReturnAmountPosition(
           this.poolIface,
@@ -203,12 +228,20 @@ export class LunarBase extends SimpleExchange implements IDex<LunarBaseData> {
     }
 
     const exchangeData = this.poolIface.encodeFunctionData('swapExactIn', [
-      [data.tokenIn, data.tokenOut, recipient, srcAmount, destAmount, deadline],
+      [
+        data.tokenIn,
+        data.tokenOut,
+        swapRecipient,
+        srcAmount,
+        destAmount,
+        deadline,
+      ],
     ]);
 
     return {
-      needWrapNative: false,
-      dexFuncHasRecipient: true,
+      needWrapNative: this.needWrapNative,
+      needUnwrapNative: true,
+      dexFuncHasRecipient: !isWethDest,
       exchangeData,
       targetExchange: data.pool,
       spender: data.pool,
@@ -254,18 +287,28 @@ export class LunarBase extends SimpleExchange implements IDex<LunarBaseData> {
       });
   }
 
+  private feeMultiplier(state: DeepReadonly<LunarBasePoolState>): bigint {
+    const whitelisted =
+      this.executors.length > 0 &&
+      this.executors.every(executor => state.executorsWhitelist[executor]);
+    if (whitelisted) return 1n;
+    return state.blacklistFeeMultiplier > 1n
+      ? state.blacklistFeeMultiplier
+      : 1n;
+  }
+
   private getPoolIdentifier(pool: LunarBasePoolConfig): string {
     return `${this.dexKey}_${pool.address}`.toLowerCase();
   }
 
   private isStateUsable(
-    state: LunarBasePoolState,
+    state: DeepReadonly<LunarBasePoolState>,
     blockNumber: number,
   ): boolean {
     if (state.paused) return false;
     if (state.anchorPrice === 0n) return false;
-    if (state.reserveX === 0n || state.reserveY === 0n) return false;
 
+    // Swaps revert with StalePrice once the anchor is `blockDelay` blocks old.
     return blockNumber < state.latestUpdateBlock + state.blockDelay;
   }
 
@@ -292,8 +335,13 @@ export class LunarBase extends SimpleExchange implements IDex<LunarBaseData> {
     return this.normalizedToken(token) === pool.tokenY.address;
   }
 
+  // Pools hold the native token, never its wrapped form: price WETH/WBNB
+  // against the native side.
   private normalizedToken(token: Address): Address {
-    return isETHAddress(token) ? ETHER_ADDRESS : token.toLowerCase();
+    if (isETHAddress(token) || this.dexHelper.config.isWETH(token)) {
+      return ETHER_ADDRESS;
+    }
+    return token.toLowerCase();
   }
 
   private toPoolTokenAddress(
