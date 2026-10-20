@@ -141,7 +141,9 @@ export abstract class EkuboPool<State>
     if (quote.calculatedAmount === 0n) {
       quote.gasConsumed = 0;
     } else {
-      quote.gasConsumed += BASE_GAS_COST;
+      // Pool gas models include fractional terms (bitmap lookups / 256, log256);
+      // consumers decode gasCost as an integer.
+      quote.gasConsumed = Math.ceil(quote.gasConsumed) + BASE_GAS_COST;
     }
 
     return quote;
