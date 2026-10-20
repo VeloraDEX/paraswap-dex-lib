@@ -40,6 +40,7 @@ import {
 } from './types';
 import {
   BlacklistError,
+  PairRestrictedError,
   SlippageCheckError,
   TooStrictSlippageCheckError,
 } from '../generic-rfq/types';
@@ -758,11 +759,9 @@ export class Dexalot
         } else {
           const message =
             e instanceof Error ? `${e.name}: ${e.message}` : 'Unknown error';
-          await this.restrictPair(
-            srcToken.address,
-            destToken.address,
-            `${message} (swap: ${swapIdentifier})`,
-          );
+          const reason = `${message} (swap: ${swapIdentifier})`;
+          await this.restrictPair(srcToken.address, destToken.address, reason);
+          throw new PairRestrictedError(this.dexKey, this.network, reason);
         }
       }
 

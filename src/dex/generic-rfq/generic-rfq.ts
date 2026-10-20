@@ -20,6 +20,7 @@ import { ONE_ORDER_GASCOST } from '../paraswap-limit-orders/constant';
 import { RateFetcher } from './rate-fetcher';
 import {
   BlacklistError,
+  PairRestrictedError,
   PriceAndAmountBigNumber,
   RFQConfig,
   RFQDirectPayload,
@@ -495,6 +496,12 @@ export class GenericRFQ extends ParaSwapLimitOrders {
           isTimeoutError
             ? PAIR_RESTRICTION_DUE_TO_TIMEOUT_TTL_S
             : this.restrictPairTtlS,
+        );
+        throw new PairRestrictedError(
+          this.dexKey,
+          this.network,
+          message,
+          isTimeoutError ? 'TIMEOUT' : undefined,
         );
       }
 

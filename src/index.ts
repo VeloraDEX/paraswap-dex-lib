@@ -52,6 +52,7 @@ export {
   BlacklistError,
   BlacklistReason,
   RestrictedError,
+  PairRestrictedError,
 } from './dex/generic-rfq/types';
 
 export {
