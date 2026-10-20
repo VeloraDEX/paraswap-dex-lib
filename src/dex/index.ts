@@ -107,6 +107,7 @@ import { Cap } from './cap/cap';
 import { PancakeSwapInfinity } from './pancakeswap-infinity/pancakeswap-infinity';
 import { Metric } from './metric/metric';
 import { Tessera } from './tessera/tessera';
+import { DarkPools } from './dark-pools/dark-pools';
 
 const LegacyDexes = [
   CurveV2,
@@ -129,6 +130,7 @@ const Dexes = [
   Dexalot,
   CurveV1,
   CurveFork,
+  DarkPools,
   BalancerV1,
   BalancerV2,
   BalancerV3,
