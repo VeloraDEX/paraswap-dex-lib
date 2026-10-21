@@ -21,7 +21,8 @@ async function fetchPoolState(
 }
 
 // The stata rate accrues every block but only moves in the event state on
-// ReserveDataUpdated, so it can trail the on-chain rate by a few blocks
+// ReserveDataUpdated, so it can trail the on-chain rate by a few blocks.
+// ReserveDataUpdated blocks are compared exactly.
 function compareState(state: PoolState, expected: PoolState) {
   const { rate, ...rest } = state;
   const { rate: expectedRate, ...expectedRest } = expected;
@@ -53,12 +54,14 @@ describe('AaveGsm EventPool Mainnet', function () {
       BuyAsset: [26235835],
       SellAsset: [26234805],
       ExposureCapUpdated: [25285820],
+      ReserveDataUpdated: [26234996],
     },
     [config.GSM_USDC]: {
       FeeStrategyUpdated: [25155555],
       BuyAsset: [25941286],
       SellAsset: [25923845],
       ExposureCapUpdated: [24665765],
+      ReserveDataUpdated: [26234988],
     },
   };
 
@@ -90,7 +93,9 @@ describe('AaveGsm EventPool Mainnet', function () {
                     blockNumber,
                     `${dexKey}_${poolAddress}`,
                     dexHelper.provider,
-                    compareState,
+                    eventName === 'ReserveDataUpdated'
+                      ? undefined
+                      : compareState,
                   );
                 });
               });
