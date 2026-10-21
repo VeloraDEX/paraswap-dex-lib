@@ -14,7 +14,10 @@ import {
   booleanDecode,
   uint256ToBigInt,
 } from '../../lib/decoders';
-import { getTopicLogDecoder } from '../../lib/topic-log-decoder';
+import {
+  getTopicLogDecoder,
+  TopicLogDecoder,
+} from '../../lib/topic-log-decoder';
 
 export class AaveGsmEventPool extends StatefulEventSubscriber<PoolState> {
   RAY = 10n ** 27n;
@@ -27,7 +30,10 @@ export class AaveGsmEventPool extends StatefulEventSubscriber<PoolState> {
     ) => Promise<DeepReadonly<PoolState> | null>;
   } = {};
 
-  logDecoder: (log: Log) => any;
+  // The GSM and the Aave pool share the log subscription: a decoder only knows
+  // its own ABI and throws on any other topic, so each log goes to the decoder
+  // of the ABI that defines its topic
+  private decoderByTopic = new Map<string, TopicLogDecoder>();
 
   addressesSubscribed: string[];
 
@@ -47,14 +53,15 @@ export class AaveGsmEventPool extends StatefulEventSubscriber<PoolState> {
   ) {
     super(parentName, `${parentName}_${gsm}`, dexHelper, logger);
 
-    this.logDecoder = (log: Log) => {
-      let decodedLog = getTopicLogDecoder(this.aaveGsmIface).decode(log);
-      if (decodedLog == null) {
-        decodedLog = getTopicLogDecoder(this.poolIface).decode(log);
+    for (const iface of [this.aaveGsmIface, this.poolIface]) {
+      const decoder = getTopicLogDecoder(iface);
+      for (const fragment of Object.values(iface.events)) {
+        const topic = iface.getEventTopic(fragment);
+        if (!this.decoderByTopic.has(topic)) {
+          this.decoderByTopic.set(topic, decoder);
+        }
       }
-
-      return decodedLog;
-    };
+    }
     this.addressesSubscribed = [gsm, pool];
 
     // Add handlers
@@ -79,8 +86,11 @@ export class AaveGsmEventPool extends StatefulEventSubscriber<PoolState> {
     state: DeepReadonly<PoolState>,
     log: Readonly<Log>,
   ): Promise<DeepReadonly<PoolState> | null> {
+    const decoder = this.decoderByTopic.get(log.topics[0]?.toLowerCase());
+    if (!decoder) return null;
+
     try {
-      const event = this.logDecoder(log);
+      const event = decoder.decode(log);
       if (event.name in this.handlers) {
         return await this.handlers[event.name](event, state, log);
       }
@@ -193,7 +203,10 @@ export class AaveGsmEventPool extends StatefulEventSubscriber<PoolState> {
     state: DeepReadonly<PoolState>,
     log: Readonly<Log>,
   ): Promise<DeepReadonly<PoolState> | null> {
-    return await this.getOnChainState(event.args.newFeeStrategy);
+    return await this.getOnChainState(
+      event.args.newFeeStrategy,
+      log.blockNumber,
+    );
   }
 
   async handleSwapFreeze(
@@ -251,7 +264,7 @@ export class AaveGsmEventPool extends StatefulEventSubscriber<PoolState> {
     return {
       ...state,
       underlyingLiquidity:
-        state.underlyingLiquidity - BigInt(event.args.underlyingAmount),
+        state.underlyingLiquidity + BigInt(event.args.underlyingAmount),
     };
   }
 
@@ -260,7 +273,7 @@ export class AaveGsmEventPool extends StatefulEventSubscriber<PoolState> {
     state: DeepReadonly<PoolState>,
     log: Readonly<Log>,
   ): Promise<DeepReadonly<PoolState> | null> {
-    if (state.asset !== event.args.reserve) {
+    if (state.asset !== event.args.reserve.toLowerCase()) {
       return state;
     }
 

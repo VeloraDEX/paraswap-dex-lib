@@ -61,7 +61,7 @@ async function checkOnChainPricing(
       .call({}, blockNumber)
   ).returnData;
 
-  const expectedPrices = [0n].concat(
+  let expectedPrices = [0n].concat(
     decodeReaderResult(
       readerResult,
       readerIface,
@@ -69,6 +69,31 @@ async function checkOnChainPricing(
       funcName.indexOf('getGho') == 0 ? 1 : 0,
     ),
   );
+
+  // The view functions ignore liquidity, but buyAsset reverts when the GSM
+  // can't pay out the asset amount (index 0 of the result)
+  if (funcName.endsWith('ForBuyAsset')) {
+    const liquidity = BigInt(
+      await aaveGsm.dexHelper.provider.call(
+        {
+          to: exchangeAddress,
+          data: readerIface.encodeFunctionData('getAvailableLiquidity'),
+        },
+        blockNumber,
+      ),
+    );
+    const assetAmounts = [0n].concat(
+      decodeReaderResult(readerResult, readerIface, funcName, 0),
+    );
+    expectedPrices = expectedPrices.map((price, i) =>
+      assetAmounts[i] > liquidity ? 0n : price,
+    );
+  }
+
+  // GHO -> asset quotes 1e-6 less than the GSM so buyAsset survives rate accrual
+  if (funcName === 'getAssetAmountForBuyAsset') {
+    expectedPrices = expectedPrices.map(price => price - price / 1_000_000n);
+  }
 
   expect(JSON.stringify(prices.map(n => n.toString()))).toEqual(
     JSON.stringify(expectedPrices.map(n => n.toString())),
@@ -85,6 +110,7 @@ async function testPricingOnNetwork(
   side: SwapSide,
   amounts: bigint[],
   funcNameToCheck: string,
+  expectZeroOutput = false,
 ) {
   const networkTokens = Tokens[network];
 
@@ -115,7 +141,9 @@ async function testPricingOnNetwork(
   );
 
   expect(poolPrices).not.toBeNull();
-  if (aaveGsm.hasConstantPriceLargeAmounts) {
+  if (expectZeroOutput) {
+    expect(poolPrices![0].prices.every(price => price === 0n)).toBe(true);
+  } else if (aaveGsm.hasConstantPriceLargeAmounts) {
     checkConstantPoolPrices(poolPrices!, amounts, dexKey);
   } else {
     checkPoolPrices(poolPrices!, amounts, side, dexKey);
@@ -196,18 +224,23 @@ describe('AaveGsm', function () {
       );
     });
 
-    it('getPoolIdentifiers and getPricesVolume BUY', async function () {
-      await testPricingOnNetwork(
-        aaveGsm,
-        network,
-        dexKey,
-        blockNumber,
-        srcTokenSymbol,
-        destTokenSymbol,
+    it('BUY is not supported', async function () {
+      const pools = await aaveGsm.getPoolIdentifiers(
+        tokens[srcTokenSymbol],
+        tokens[destTokenSymbol],
         SwapSide.BUY,
-        amountsForBuy,
-        'getAssetAmountForSellAsset',
+        blockNumber,
       );
+      expect(pools).toEqual([]);
+
+      const poolPrices = await aaveGsm.getPricesVolume(
+        tokens[srcTokenSymbol],
+        tokens[destTokenSymbol],
+        amountsForBuy,
+        SwapSide.BUY,
+        blockNumber,
+      );
+      expect(poolPrices).toBeNull();
     });
 
     it('getTopPoolsForToken', async function () {
@@ -393,18 +426,23 @@ describe('AaveGsm', function () {
       );
     });
 
-    it('getPoolIdentifiers and getPricesVolume BUY', async function () {
-      await testPricingOnNetwork(
-        aaveGsm,
-        network,
-        dexKey,
-        blockNumber,
-        srcTokenSymbol,
-        destTokenSymbol,
+    it('BUY is not supported', async function () {
+      const pools = await aaveGsm.getPoolIdentifiers(
+        tokens[srcTokenSymbol],
+        tokens[destTokenSymbol],
         SwapSide.BUY,
-        amountsForBuy,
-        'getAssetAmountForSellAsset',
+        blockNumber,
       );
+      expect(pools).toEqual([]);
+
+      const poolPrices = await aaveGsm.getPricesVolume(
+        tokens[srcTokenSymbol],
+        tokens[destTokenSymbol],
+        amountsForBuy,
+        SwapSide.BUY,
+        blockNumber,
+      );
+      expect(poolPrices).toBeNull();
     });
 
     it('getTopPoolsForToken', async function () {
@@ -439,6 +477,7 @@ describe('AaveGsm', function () {
     const tokens = Tokens[network];
 
     // Don't forget to update relevant tokens in constant-e2e.ts
+    // The USDC GSM is drained (~0.03 USDC), so buyAsset can't pay out
     const srcTokenSymbol = 'GHO';
     const destTokenSymbol = 'waEthUSDC';
 
@@ -489,6 +528,7 @@ describe('AaveGsm', function () {
         SwapSide.SELL,
         amountsForSell,
         'getAssetAmountForBuyAsset',
+        true,
       );
     });
 
@@ -503,6 +543,7 @@ describe('AaveGsm', function () {
         SwapSide.BUY,
         amountsForBuy,
         'getGhoAmountForBuyAsset',
+        true,
       );
     });
 

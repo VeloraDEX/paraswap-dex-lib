@@ -7,8 +7,10 @@ export const AaveGsmConfig: DexConfigMap<DexParams> = {
   AaveGsm: {
     [Network.MAINNET]: {
       POOL: AaveV3Ethereum.POOL.toLowerCase(),
-      GSM_USDT: '0x535b2f7C20B9C83d70e519cf9991578eF9816B7B'.toLowerCase(),
-      GSM_USDC: '0xFeeb6FE430B7523fEF2a38327241eE7153779535'.toLowerCase(),
+      // GSMs listed in the GSM registry 0x167527DB01325408696326e3580cd8e55D99Dc1A
+      // (aave-address-book still points to the GSMs seized in block 24584901)
+      GSM_USDT: '0x882285E62656b9623AF136Ce3078c6BdCc33F5E3'.toLowerCase(),
+      GSM_USDC: '0x3A3868898305f04beC7FEa77BecFf04C13444112'.toLowerCase(),
       waEthUSDT: AaveV3Ethereum.ASSETS.USDT.STATA_TOKEN.toLowerCase(),
       waEthUSDC: AaveV3Ethereum.ASSETS.USDC.STATA_TOKEN.toLowerCase(),
       GHO: AaveV3Ethereum.ASSETS.GHO.UNDERLYING.toLowerCase(),

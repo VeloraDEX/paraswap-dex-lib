@@ -145,6 +145,25 @@ export class RestrictedError extends Error {
   }
 }
 
+// The dex has just restricted the swap's token pair after a firm-quote failure.
+// The Go API keeps the dex out of pricing for that pair; TIMEOUT means the
+// shorter timeout restriction was used.
+export class PairRestrictedError extends Error {
+  isPairRestrictedError = true;
+  cause = 'PairRestrictedError';
+  code = 'PAIR_RESTRICTED';
+
+  constructor(
+    public dexKey: string,
+    public network: Network,
+    detail: string,
+    public reason?: 'TIMEOUT',
+  ) {
+    super(`${dexKey}-${network} restricted the pair: ${detail}`);
+    this.name = 'PairRestrictedError';
+  }
+}
+
 export class SlippageCheckError extends Error {
   isSlippageError = true;
   cause = 'SlippageCheckError';

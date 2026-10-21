@@ -76,6 +76,7 @@ import {
 import { Method } from '../../dex-helper/irequest-wrapper';
 import {
   BlacklistError,
+  PairRestrictedError,
   SlippageCheckError,
   TooStrictSlippageCheckError,
 } from '../generic-rfq/types';
@@ -690,6 +691,7 @@ export class SwaapV2
           destToken.address,
           message,
         );
+        throw new PairRestrictedError(this.dexKey, this.network, message);
       }
 
       throw e;
