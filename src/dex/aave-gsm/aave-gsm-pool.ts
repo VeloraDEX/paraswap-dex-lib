@@ -193,7 +193,10 @@ export class AaveGsmEventPool extends StatefulEventSubscriber<PoolState> {
     state: DeepReadonly<PoolState>,
     log: Readonly<Log>,
   ): Promise<DeepReadonly<PoolState> | null> {
-    return await this.getOnChainState(event.args.newFeeStrategy);
+    return await this.getOnChainState(
+      event.args.newFeeStrategy,
+      log.blockNumber,
+    );
   }
 
   async handleSwapFreeze(
@@ -251,7 +254,7 @@ export class AaveGsmEventPool extends StatefulEventSubscriber<PoolState> {
     return {
       ...state,
       underlyingLiquidity:
-        state.underlyingLiquidity - BigInt(event.args.underlyingAmount),
+        state.underlyingLiquidity + BigInt(event.args.underlyingAmount),
     };
   }
 
@@ -260,7 +263,7 @@ export class AaveGsmEventPool extends StatefulEventSubscriber<PoolState> {
     state: DeepReadonly<PoolState>,
     log: Readonly<Log>,
   ): Promise<DeepReadonly<PoolState> | null> {
-    if (state.asset !== event.args.reserve) {
+    if (state.asset !== event.args.reserve.toLowerCase()) {
       return state;
     }
 

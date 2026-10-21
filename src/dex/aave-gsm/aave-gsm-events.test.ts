@@ -17,11 +17,17 @@ async function fetchPoolState(
   blockNumber: number,
   poolAddress: string,
 ): Promise<PoolState> {
-  const eventState = aaveGsmPool.getState(blockNumber);
-  if (eventState) return eventState;
-  const onChainState = await aaveGsmPool.generateState(blockNumber);
-  aaveGsmPool.setState(onChainState, blockNumber);
-  return onChainState;
+  return aaveGsmPool.generateState(blockNumber);
+}
+
+// The stata rate accrues every block but only moves in the event state on
+// ReserveDataUpdated, so it can trail the on-chain rate by a few blocks
+function compareState(state: PoolState, expected: PoolState) {
+  const { rate, ...rest } = state;
+  const { rate: expectedRate, ...expectedRest } = expected;
+  expect(rest).toEqual(expectedRest);
+  const diff = rate > expectedRate ? rate - expectedRate : expectedRate - rate;
+  expect(diff * 1_000_000n).toBeLessThanOrEqual(expectedRate);
 }
 
 // eventName -> blockNumbers
@@ -32,39 +38,45 @@ describe('AaveGsm EventPool Mainnet', function () {
   const network = Network.MAINNET;
   const dexHelper = new DummyDexHelper(network);
   const logger = dexHelper.getLogger(dexKey);
+  const config = AaveGsmConfig[dexKey][network];
   let aaveGsmPool: AaveGsmEventPool;
+
+  const underlyings: Record<Address, Address> = {
+    [config.GSM_USDT]: config.waEthUSDT,
+    [config.GSM_USDC]: config.waEthUSDC,
+  };
 
   // poolAddress -> EventMappings
   const eventsToTest: Record<Address, EventMappings> = {
-    [AaveGsmConfig[dexKey][network].GSM_USDT]: {
-      FeeStrategyUpdated: [],
-      BuyAsset: [],
-      SellAsset: [22065512], // SellAsset, FeeStrategyUpdated,
-      ExposureCapUpdated: [22069460],
+    [config.GSM_USDT]: {
+      FeeStrategyUpdated: [25998106],
+      BuyAsset: [26235835],
+      SellAsset: [26234805],
+      ExposureCapUpdated: [25285820],
     },
-    [AaveGsmConfig[dexKey][network].GSM_USDC]: {
-      FeeStrategyUpdated: [],
-      BuyAsset: [],
-      SellAsset: [22065512, 22130398], // SellAsset, FeeStrategyUpdated for first
-      ExposureCapUpdated: [22069460],
+    [config.GSM_USDC]: {
+      FeeStrategyUpdated: [25155555],
+      BuyAsset: [25941286],
+      SellAsset: [25923845],
+      ExposureCapUpdated: [24665765],
     },
   };
-
-  beforeEach(async () => {
-    aaveGsmPool = new AaveGsmEventPool(
-      AaveGsmConfig[dexKey][network].GSM_USDT,
-      AaveGsmConfig[dexKey][network].waEthUSDT,
-      AaveGsmConfig[dexKey][network].POOL,
-      dexKey,
-      network,
-      dexHelper,
-      logger,
-    );
-  });
 
   Object.entries(eventsToTest).forEach(
     ([poolAddress, events]: [string, EventMappings]) => {
       describe(`Events for ${poolAddress}`, () => {
+        beforeEach(async () => {
+          aaveGsmPool = new AaveGsmEventPool(
+            poolAddress,
+            underlyings[poolAddress],
+            config.POOL,
+            dexKey,
+            network,
+            dexHelper,
+            logger,
+          );
+        });
+
         Object.entries(events).forEach(
           ([eventName, blockNumbers]: [string, number[]]) => {
             describe(`${eventName}`, () => {
@@ -78,6 +90,7 @@ describe('AaveGsm EventPool Mainnet', function () {
                     blockNumber,
                     `${dexKey}_${poolAddress}`,
                     dexHelper.provider,
+                    compareState,
                   );
                 });
               });
