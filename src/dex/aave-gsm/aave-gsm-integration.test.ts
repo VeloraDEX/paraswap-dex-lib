@@ -219,18 +219,23 @@ describe('AaveGsm', function () {
       );
     });
 
-    it('getPoolIdentifiers and getPricesVolume BUY', async function () {
-      await testPricingOnNetwork(
-        aaveGsm,
-        network,
-        dexKey,
-        blockNumber,
-        srcTokenSymbol,
-        destTokenSymbol,
+    it('BUY is not supported', async function () {
+      const pools = await aaveGsm.getPoolIdentifiers(
+        tokens[srcTokenSymbol],
+        tokens[destTokenSymbol],
         SwapSide.BUY,
-        amountsForBuy,
-        'getAssetAmountForSellAsset',
+        blockNumber,
       );
+      expect(pools).toEqual([]);
+
+      const poolPrices = await aaveGsm.getPricesVolume(
+        tokens[srcTokenSymbol],
+        tokens[destTokenSymbol],
+        amountsForBuy,
+        SwapSide.BUY,
+        blockNumber,
+      );
+      expect(poolPrices).toBeNull();
     });
 
     it('getTopPoolsForToken', async function () {
@@ -416,18 +421,23 @@ describe('AaveGsm', function () {
       );
     });
 
-    it('getPoolIdentifiers and getPricesVolume BUY', async function () {
-      await testPricingOnNetwork(
-        aaveGsm,
-        network,
-        dexKey,
-        blockNumber,
-        srcTokenSymbol,
-        destTokenSymbol,
+    it('BUY is not supported', async function () {
+      const pools = await aaveGsm.getPoolIdentifiers(
+        tokens[srcTokenSymbol],
+        tokens[destTokenSymbol],
         SwapSide.BUY,
-        amountsForBuy,
-        'getAssetAmountForSellAsset',
+        blockNumber,
       );
+      expect(pools).toEqual([]);
+
+      const poolPrices = await aaveGsm.getPricesVolume(
+        tokens[srcTokenSymbol],
+        tokens[destTokenSymbol],
+        amountsForBuy,
+        SwapSide.BUY,
+        blockNumber,
+      );
+      expect(poolPrices).toBeNull();
     });
 
     it('getTopPoolsForToken', async function () {

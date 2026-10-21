@@ -127,6 +127,8 @@ export class AaveGsm extends SimpleExchange implements IDex<AaveGsmData> {
     const srcTokenAddress = srcToken.address.toLowerCase();
     const destTokenAddress = destToken.address.toLowerCase();
 
+    if (this.isBuyGho(destTokenAddress, side)) return [];
+
     if (
       (srcTokenAddress === this.config.GHO &&
         destTokenAddress === this.config.waEthUSDT) ||
@@ -144,6 +146,12 @@ export class AaveGsm extends SimpleExchange implements IDex<AaveGsmData> {
     } else {
       return [];
     }
+  }
+
+  // sellAsset only takes an exact asset amount in, so there is no way to
+  // request an exact GHO amount out
+  private isBuyGho(destTokenAddress: string, side: SwapSide) {
+    return side === SwapSide.BUY && destTokenAddress === this.config.GHO;
   }
 
   async getPoolState(gsm: string, blockNumber?: number): Promise<PoolState> {
@@ -233,34 +241,6 @@ export class AaveGsm extends SimpleExchange implements IDex<AaveGsmData> {
     return grossAmount - fee;
   }
 
-  getAssetAmountForSellAsset(ghoAmount: bigint, state: PoolState) {
-    const grossAmount = MMath.mulDiv(
-      ghoAmount,
-      10_000n,
-      10_000n - state.sellFee,
-      true,
-    );
-
-    const vaultAssets = MMath.mulDiv(
-      grossAmount,
-      1n,
-      1_000_000_000_000n, // 18 - 6 = 12 (decimals)
-      false,
-    );
-
-    const result = MMath.mulDiv(
-      vaultAssets,
-      1_000_000_000_000_000_000_000_000_000n,
-      state.rate,
-      true,
-    );
-
-    if (this.canSellAsset(result, state)) {
-      return result;
-    }
-    return 0n;
-  }
-
   async getPricesVolume(
     srcToken: Token,
     destToken: Token,
@@ -280,7 +260,8 @@ export class AaveGsm extends SimpleExchange implements IDex<AaveGsmData> {
         (destTokenAddress === this.config.GHO &&
           (srcTokenAddress === this.config.waEthUSDC ||
             srcTokenAddress === this.config.waEthUSDT))
-      )
+      ) ||
+      this.isBuyGho(destTokenAddress, side)
     ) {
       return null;
     }
@@ -306,13 +287,9 @@ export class AaveGsm extends SimpleExchange implements IDex<AaveGsmData> {
       // amount = srcAmount = ghoAmount
       endpoint = this.getAssetAmountForBuyAsset.bind(this);
       gas = 300_000;
-    } else if (destTokenAddress === this.config.GHO && side === SwapSide.SELL) {
+    } else {
       // amount = srcAmount = assetAmount
       endpoint = this.getGhoAmountForSellAsset.bind(this);
-      gas = 200_000;
-    } else {
-      // amount = destAmount = ghoAmount
-      endpoint = this.getAssetAmountForSellAsset.bind(this);
       gas = 200_000;
     }
 
@@ -376,7 +353,6 @@ export class AaveGsm extends SimpleExchange implements IDex<AaveGsmData> {
   ): Promise<DexExchangeParam> {
     const isSrcGho = srcToken.toLowerCase() === this.config.GHO;
     const swapFunction = isSrcGho ? 'buyAsset' : 'sellAsset';
-    const ghoAmount = isSrcGho ? srcAmount : destAmount;
     let assetAmount = isSrcGho ? destAmount : srcAmount;
     const targetExchange =
       srcToken.toLowerCase() === this.config.waEthUSDT ||
@@ -384,17 +360,12 @@ export class AaveGsm extends SimpleExchange implements IDex<AaveGsmData> {
         ? this.config.GSM_USDT
         : this.config.GSM_USDC;
 
-    if (BigInt(assetAmount) === 1n) {
+    if (isSrcGho && BigInt(assetAmount) === 1n) {
       const poolState = await this.getPoolState(targetExchange);
-      assetAmount = isSrcGho
-        ? this.getAssetAmountForBuyAsset(
-            BigInt(ghoAmount),
-            poolState,
-          ).toString()
-        : this.getAssetAmountForSellAsset(
-            BigInt(ghoAmount),
-            poolState,
-          ).toString();
+      assetAmount = this.getAssetAmountForBuyAsset(
+        BigInt(srcAmount),
+        poolState,
+      ).toString();
     }
 
     const exchangeData = AaveGsm.gsmInterface.encodeFunctionData(swapFunction, [
