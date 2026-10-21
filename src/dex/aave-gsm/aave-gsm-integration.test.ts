@@ -90,6 +90,11 @@ async function checkOnChainPricing(
     );
   }
 
+  // GHO -> asset quotes 1e-6 less than the GSM so buyAsset survives rate accrual
+  if (funcName === 'getAssetAmountForBuyAsset') {
+    expectedPrices = expectedPrices.map(price => price - price / 1_000_000n);
+  }
+
   expect(JSON.stringify(prices.map(n => n.toString()))).toEqual(
     JSON.stringify(expectedPrices.map(n => n.toString())),
   );
