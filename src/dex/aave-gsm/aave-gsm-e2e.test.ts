@@ -96,6 +96,27 @@ describe('AaveGsm E2E', () => {
     );
   });
 
+  // At size the stata rate accrued between pricing and execution is no longer
+  // lost in rounding, so this is where a buyAsset over-ask would revert
+  describe('Mainnet GHO -> waEthUSDT large', () => {
+    const network = Network.MAINNET;
+
+    const tokenASymbol: string = 'GHO';
+    const tokenBSymbol: string = 'waEthUSDT';
+
+    const tokenAAmount: string = '1000000000000000000000000';
+    const tokenBAmount: string = '1000000000000';
+
+    testForNetwork(
+      network,
+      dexKey,
+      tokenASymbol,
+      tokenBSymbol,
+      tokenAAmount,
+      tokenBAmount,
+    );
+  });
+
   describe('Mainnet GHO -> waEthUSDC', () => {
     const network = Network.MAINNET;
 

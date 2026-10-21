@@ -210,12 +210,17 @@ export class AaveGsm extends SimpleExchange implements IDex<AaveGsmData> {
       false,
     );
 
-    const result = MMath.mulDiv(
+    const exactResult = MMath.mulDiv(
       vaultAssets,
       1_000_000_000_000_000_000_000_000_000n,
       state.rate,
       false,
     );
+    // buyAsset takes an exact asset amount and charges GHO at the rate of the
+    // block it lands in. The rate only grows (~1e-8 per block), so the amount
+    // priced here would cost slightly more than ghoAmount on-chain and revert;
+    // asking for 1e-6 less leaves room for ~100 blocks of accrual.
+    const result = exactResult - exactResult / 1_000_000n;
 
     if (this.canBuyAsset(result, state)) {
       return result;
@@ -282,15 +287,15 @@ export class AaveGsm extends SimpleExchange implements IDex<AaveGsmData> {
     if (srcTokenAddress === this.config.GHO && side === SwapSide.BUY) {
       // amount = destAmount = assetAmount
       endpoint = this.getGhoAmountForBuyAsset.bind(this);
-      gas = 300_000;
+      gas = 140_000;
     } else if (srcTokenAddress === this.config.GHO && side === SwapSide.SELL) {
       // amount = srcAmount = ghoAmount
       endpoint = this.getAssetAmountForBuyAsset.bind(this);
-      gas = 300_000;
+      gas = 140_000;
     } else {
       // amount = srcAmount = assetAmount
       endpoint = this.getGhoAmountForSellAsset.bind(this);
-      gas = 200_000;
+      gas = 140_000;
     }
 
     const unit = parseUnits(
