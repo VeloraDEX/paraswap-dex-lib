@@ -15,6 +15,7 @@ function testForNetwork(
   tokenBSymbol: string,
   tokenAAmount: string,
   tokenBAmount: string,
+  skipAToB = false,
 ) {
   const provider = new StaticJsonRpcProvider(
     generateConfig(network).privateHttpProvider,
@@ -33,19 +34,22 @@ function testForNetwork(
       describe(`${side}`, () => {
         contractMethods.forEach((contractMethod: ContractMethod) => {
           describe(`${contractMethod}`, () => {
-            it(`${tokenASymbol} -> ${tokenBSymbol}`, async () => {
-              await testE2E(
-                tokens[tokenASymbol],
-                tokens[tokenBSymbol],
-                holders[tokenASymbol],
-                side === SwapSide.SELL ? tokenAAmount : tokenBAmount,
-                side,
-                dexKey,
-                contractMethod,
-                network,
-                provider,
-              );
-            });
+            (skipAToB ? it.skip : it)(
+              `${tokenASymbol} -> ${tokenBSymbol}`,
+              async () => {
+                await testE2E(
+                  tokens[tokenASymbol],
+                  tokens[tokenBSymbol],
+                  holders[tokenASymbol],
+                  side === SwapSide.SELL ? tokenAAmount : tokenBAmount,
+                  side,
+                  dexKey,
+                  contractMethod,
+                  network,
+                  provider,
+                );
+              },
+            );
             it(`${tokenBSymbol} -> ${tokenASymbol}`, async () => {
               await testE2E(
                 tokens[tokenBSymbol],
@@ -97,6 +101,7 @@ describe('AaveGsm E2E', () => {
     const tokenAAmount: string = '1000000000000000000';
     const tokenBAmount: string = '1000000';
 
+    // The USDC GSM is drained (~0.03 USDC), so only waEthUSDC -> GHO routes
     testForNetwork(
       network,
       dexKey,
@@ -104,6 +109,7 @@ describe('AaveGsm E2E', () => {
       tokenBSymbol,
       tokenAAmount,
       tokenBAmount,
+      true,
     );
   });
 });
