@@ -397,6 +397,7 @@ export type Config = {
   bebopAuthName?: string;
   bebopAuthToken?: string;
   nativeApiKey?: string;
+  liquoriceApiKey?: string;
   forceRpcFallbackDexs: string[];
   apiKeyTheGraph: string;
   lidoReferralAddress?: Address;
