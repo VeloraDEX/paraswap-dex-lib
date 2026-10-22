@@ -268,11 +268,11 @@ export class Bebop
     return null;
   }
 
-  getPoolIdentifier(base: string, quote: string): string {
-    const identifier = `${
-      this.dexKey
-    }_${base.toLowerCase()}_${quote.toLowerCase()}`;
-    return identifier;
+  // Keyed by destination token only, like GenericRFQ: makers back several
+  // input pairs with the same inventory, so a route may use Bebop's liquidity
+  // for a destination token on one input pair only.
+  getPoolIdentifier(destToken: string): string {
+    return `${this.dexKey}_${destToken.toLowerCase()}`;
   }
 
   invertLevels(levels: BebopLevel[]): BebopLevel[] {
@@ -416,10 +416,7 @@ export class Bebop
     if (
       (await this.calculateInstructions(srcToken, destToken, side)).length > 0
     ) {
-      const identifier = this.getPoolIdentifier(
-        srcToken.address,
-        destToken.address,
-      );
+      const identifier = this.getPoolIdentifier(destToken.address);
       return [identifier];
     }
 
@@ -527,8 +524,7 @@ export class Bebop
     try {
       let pools = limitPools
         ? limitPools.filter(
-            p =>
-              p === this.getPoolIdentifier(srcToken.address, destToken.address),
+            p => p === this.getPoolIdentifier(destToken.address),
           )
         : await this.getPoolIdentifiers(srcToken, destToken, side, blockNumber);
 
@@ -603,9 +599,7 @@ export class Bebop
           prices: finalOutput,
           unit: BigInt(outDecimals),
           data: {},
-          poolIdentifiers: [
-            this.getPoolIdentifier(srcToken.address, destToken.address),
-          ],
+          poolIdentifiers: [this.getPoolIdentifier(destToken.address)],
           exchange: this.dexKey,
           gasCost: BEBOP_GAS_COST,
           poolAddresses: [this.settlementAddress],

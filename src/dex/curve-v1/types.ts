@@ -26,6 +26,10 @@ export type PoolConfig = {
   trackCoins?: boolean;
   useLending?: boolean[];
   isFeeOnTransferSupported?: boolean;
+  // Quote the pool only for pairs that include one of these tokens. For thin pools
+  // without event support that also list tokens with much deeper pools: they almost
+  // never win those pairs, yet each quote costs an on-chain multicall.
+  onlyPairsWithTokens?: string[];
 };
 
 export type TokenWithReasonableVolume = Token & {

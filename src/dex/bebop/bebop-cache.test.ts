@@ -144,7 +144,7 @@ describe('Bebop per-pair price cache', () => {
     );
 
     // dexKey keeps its casing, addresses are lowercased
-    expect(pools).toEqual([`${dexKey}_${WBTC}_${USDC}`]);
+    expect(pools).toEqual([`${dexKey}_${USDC}`]);
   });
 
   it('rebuilds the whole book from the index for getTopPoolsForToken', async () => {
