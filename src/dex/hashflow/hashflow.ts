@@ -179,18 +179,18 @@ export class Hashflow
   getPairName = (srcAddress: Address, destAddress: Address) =>
     `${srcAddress}_${destAddress}`.toLowerCase();
 
-  getIdentifierPrefix(srcAddress: Address, destAddress: Address) {
-    return `${this.dexKey}_${this.getPairName(
-      srcAddress,
-      destAddress,
-    )}`.toLowerCase();
+  // Keyed by destination token only, like GenericRFQ: a maker backs several
+  // input pairs (and sometimes several mm ids) with the same inventory, so a
+  // route may use Hashflow's liquidity for a destination token on one input
+  // pair only.
+  getPoolIdentifier(destAddress: Address) {
+    return `${this.dexKey}_${destAddress}`.toLowerCase();
   }
 
-  getPoolIdentifier(srcAddress: Address, destAddress: Address, mm: string) {
-    return `${this.getIdentifierPrefix(
-      srcAddress,
-      destAddress,
-    )}_${mm}`.toLowerCase();
+  // Identifier of a single maker's prices. Unique per mm so consumers that
+  // key prices by identifier keep every maker's entry.
+  getMarketMakerPoolIdentifier(destAddress: Address, mm: string) {
+    return `${this.getPoolIdentifier(destAddress)}_${mm}`.toLowerCase();
   }
 
   async getPoolIdentifiers(
@@ -207,20 +207,16 @@ export class Hashflow
     }
 
     const levels = (await this.getCachedLevels()) || {};
-    const makers = Object.keys(levels);
 
-    return makers
-      .filter(m => {
-        const pairs = levels[m]?.map(entry => entry.pair) ?? [];
-        return pairs.some(
-          p =>
-            _srcToken.address.toLowerCase() === p.baseToken.toLowerCase() &&
-            _destToken.address.toLowerCase() === p.quoteToken.toLowerCase(),
-        );
-      })
-      .map(m =>
-        this.getPoolIdentifier(_srcToken.address, _destToken.address, m),
-      );
+    const hasPair = Object.values(levels).some(entries =>
+      entries?.some(
+        ({ pair: p }) =>
+          _srcToken.address.toLowerCase() === p.baseToken.toLowerCase() &&
+          _destToken.address.toLowerCase() === p.quoteToken.toLowerCase(),
+      ),
+    );
+
+    return hasPair ? [this.getPoolIdentifier(_destToken.address)] : [];
   }
 
   private async getFilteredMarketMakers(makers: string[]): Promise<string[]> {
@@ -432,24 +428,14 @@ export class Hashflow
         return null;
       }
 
-      const prefix = this.getIdentifierPrefix(
-        _srcToken.address,
-        _destToken.address,
-      );
-
-      const pools =
-        limitPools ??
-        (await this.getPoolIdentifiers(srcToken, destToken, side, blockNumber));
-
-      const marketMakersToUse = pools.map(p => p.split(`${prefix}_`).pop());
+      if (
+        limitPools &&
+        !limitPools.includes(this.getPoolIdentifier(_destToken.address))
+      ) {
+        return null;
+      }
 
       const levelsMap = (await this.getCachedLevels()) || {};
-
-      Object.keys(levelsMap).forEach(mmKey => {
-        if (!marketMakersToUse.includes(mmKey)) {
-          delete levelsMap[mmKey];
-        }
-      });
 
       const levelEntries: {
         mm: string;
@@ -516,7 +502,7 @@ export class Hashflow
           prices,
           unit: unitPrice,
           poolIdentifiers: [
-            this.getPoolIdentifier(_srcToken.address, _destToken.address, mm),
+            this.getMarketMakerPoolIdentifier(_destToken.address, mm),
           ],
           poolAddresses: [this.routerAddress],
           targetExchange: this.routerAddress,
