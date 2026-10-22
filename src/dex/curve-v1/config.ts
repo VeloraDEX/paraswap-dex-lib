@@ -165,6 +165,9 @@ export const CurveV1Config: DexConfigMap<DexParams> = {
           isLending: true,
           isMetapool: false,
           baseToken: '0x6b175474e89094c44da98b954eedeac495271d0f',
+          // Priced on-chain and only a few $k deep, so on DAI/USDC/USDT pairs it costs an
+          // RPC call per quote and loses to 3pool. Still the best USDP source.
+          onlyPairsWithTokens: ['0x8e870d67f660d95d5be530380d0ec0bd388289e1'],
         },
         '3pool': {
           underlying: [],
@@ -325,6 +328,9 @@ export const CurveV1Config: DexConfigMap<DexParams> = {
           isLending: true,
           isMetapool: false,
           baseToken: '0x6b175474e89094c44da98b954eedeac495271d0f',
+          // Priced on-chain and only ~$12k deep per coin, so on DAI/USDC/USDT pairs it
+          // costs an RPC call per quote and loses to 3pool. Kept for BUSD pairs.
+          onlyPairsWithTokens: ['0x4fabb145d64652a948d72533023f6e7a623c7c53'],
         },
         GUSD: {
           coins: [

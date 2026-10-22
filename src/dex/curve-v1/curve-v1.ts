@@ -188,6 +188,9 @@ export class CurveV1
           ? poolConf.tokenAddress.toLowerCase()
           : undefined,
         isFeeOnTransferSupported: poolConf.isFeeOnTransferSupported,
+        onlyPairsWithTokens: poolConf.onlyPairsWithTokens?.map(t =>
+          t.toLowerCase(),
+        ),
       };
 
       return acc;
@@ -241,6 +244,13 @@ export class CurveV1
     const fromAddress = from.address.toLowerCase();
     const toAddress = to.address.toLowerCase();
     return Object.values(this.pools).filter(config => {
+      if (
+        config.onlyPairsWithTokens &&
+        !config.onlyPairsWithTokens.includes(fromAddress) &&
+        !config.onlyPairsWithTokens.includes(toAddress)
+      )
+        return false;
+
       const underlying = config.underlying.map((add: string) =>
         add.toLowerCase(),
       );
