@@ -7,6 +7,7 @@ import { EventSubscriber, IDexHelper } from '../../dex-helper';
 import { EkuboPool, IEkuboPool } from './pools/pool';
 import {
   ConcentratedPoolTypeConfig,
+  EkuboPoolKey,
   isConcentratedKey,
   isStableswapKey,
   PoolConfig,
@@ -14,7 +15,7 @@ import {
   PoolTypeConfig,
   StableswapPoolTypeConfig,
 } from './pools/utils';
-import { convertAndSortTokens } from './utils';
+import { convertAndSortTokens, NATIVE_TOKEN_ADDRESS } from './utils';
 import { floatSqrtRatioToFixed } from './pools/math/sqrt-ratio';
 import { hexDataSlice, hexlify, hexValue, hexZeroPad } from 'ethers/lib/utils';
 import {
@@ -31,6 +32,10 @@ import { OraclePool } from './pools/oracle';
 import { MevCapturePool } from './pools/mev-capture';
 import { TwammPool, TwammPoolState } from './pools/twamm';
 import { BoostedFeesPool, BoostedFeesPoolState } from './pools/boosted-fees';
+import {
+  MevCaptureV21Pool,
+  MevCaptureV21PoolState,
+} from './pools/mev-capture-v21';
 import { ExtensionType, extensionType } from './extension-type';
 
 export const EVENT_EMITTERS = [
@@ -46,7 +51,7 @@ const SUBGRAPH_EXTENSIONS = [
   MEV_CAPTURE_ADDRESS,
   BOOSTED_FEES_CONCENTRATED_ADDRESS,
 ];
-const SUBGRAPH_QUERY = `query ($lastId: Bytes!) {
+const subgraphQuery = (extensions: string[]) => `query ($lastId: Bytes!) {
   _meta {
     block {
       hash
@@ -59,9 +64,9 @@ const SUBGRAPH_QUERY = `query ($lastId: Bytes!) {
       and: [
         {id_gte: $lastId}
         {or: [
-          {extension_in: [${SUBGRAPH_EXTENSIONS.map(
-            extension => `"${extension.toString()}"`,
-          ).join()}]}
+          {extension_in: [${extensions
+            .map(extension => `"${extension.toString()}"`)
+            .join()}]}
           {extension_lte: "0x1fffffffffffffffffffffffffffffffffffffff"}
           {extension_gte: "0x8000000000000000000000000000000000000000", extension_lte: "0x9fffffffffffffffffffffffffffffffffffffff"}
         ]}
@@ -136,6 +141,8 @@ export class EkuboV3PoolManager implements EventSubscriber {
   >;
   private readonly poolInitializedFragment;
   private readonly poolInitializedTopicHash;
+  private readonly mevCaptureV21Extension?: bigint;
+  private readonly subgraphQuery: string;
 
   public constructor(
     public readonly parentName: string,
@@ -143,7 +150,18 @@ export class EkuboV3PoolManager implements EventSubscriber {
     private readonly dexHelper: IDexHelper,
     private readonly contracts: EkuboContracts,
     private readonly subgraphId: string,
+    mevCaptureV21Address?: string,
   ) {
+    this.mevCaptureV21Extension =
+      typeof mevCaptureV21Address === 'undefined'
+        ? undefined
+        : BigInt(mevCaptureV21Address);
+    this.subgraphQuery = subgraphQuery(
+      typeof mevCaptureV21Address === 'undefined'
+        ? SUBGRAPH_EXTENSIONS
+        : [...SUBGRAPH_EXTENSIONS, mevCaptureV21Address],
+    );
+
     const {
       core: { contract: coreContract, interface: coreIface },
       twamm: { contract: twammContract, interface: twammIface },
@@ -317,7 +335,7 @@ export class EkuboV3PoolManager implements EventSubscriber {
           await this.dexHelper.httpRequest.querySubgraph<SubgraphData>(
             this.subgraphId,
             {
-              query: SUBGRAPH_QUERY,
+              query: this.subgraphQuery,
               variables: {
                 lastId: lastRowInfo.id,
               },
@@ -500,50 +518,54 @@ export class EkuboV3PoolManager implements EventSubscriber {
       this.clearPools();
     }
 
-    const [twammPoolKeys, boostedFeesPoolKeys, otherPoolKeys] = poolKeys.reduce<
-      [
-        PoolKeyWithInitBlockNumber<StableswapPoolTypeConfig>[],
-        PoolKeyWithInitBlockNumber<ConcentratedPoolTypeConfig>[],
-        PoolKeyWithInitBlockNumber<
-          StableswapPoolTypeConfig | ConcentratedPoolTypeConfig
-        >[],
-      ]
-    >(
-      (
-        [twammPoolKeys, boostedFeesPoolKeys, otherPoolKeys],
-        poolKeyWithInitBlockNumber,
-      ) => {
-        switch (
-          extensionType(poolKeyWithInitBlockNumber.key.config.extension)
-        ) {
-          case ExtensionType.Twamm:
-            twammPoolKeys.push(
-              poolKeyWithInitBlockNumber as PoolKeyWithInitBlockNumber<StableswapPoolTypeConfig>,
-            );
-            break;
-          case ExtensionType.BoostedFeesConcentrated:
-            boostedFeesPoolKeys.push(
+    const twammPoolKeys: PoolKeyWithInitBlockNumber<StableswapPoolTypeConfig>[] =
+      [];
+    const boostedFeesPoolKeys: PoolKeyWithInitBlockNumber<ConcentratedPoolTypeConfig>[] =
+      [];
+    const mevCaptureV21PoolKeys: PoolKeyWithInitBlockNumber<ConcentratedPoolTypeConfig>[] =
+      [];
+    const otherPoolKeys: PoolKeyWithInitBlockNumber<
+      StableswapPoolTypeConfig | ConcentratedPoolTypeConfig
+    >[] = [];
+
+    for (const poolKeyWithInitBlockNumber of poolKeys) {
+      const { key } = poolKeyWithInitBlockNumber;
+      switch (this.extensionType(key.config.extension)) {
+        case ExtensionType.Twamm:
+          twammPoolKeys.push(
+            poolKeyWithInitBlockNumber as PoolKeyWithInitBlockNumber<StableswapPoolTypeConfig>,
+          );
+          break;
+        case ExtensionType.BoostedFeesConcentrated:
+          boostedFeesPoolKeys.push(
+            poolKeyWithInitBlockNumber as PoolKeyWithInitBlockNumber<ConcentratedPoolTypeConfig>,
+          );
+          break;
+        case ExtensionType.MevCaptureV21:
+          if (isSupportedMevCaptureV21Key(key)) {
+            mevCaptureV21PoolKeys.push(
               poolKeyWithInitBlockNumber as PoolKeyWithInitBlockNumber<ConcentratedPoolTypeConfig>,
             );
-            break;
-          case ExtensionType.NoSwapCallPoints:
-          case ExtensionType.Oracle:
-          case ExtensionType.MevCapture:
-            otherPoolKeys.push(poolKeyWithInitBlockNumber);
-            break;
-          default:
+          } else {
             this.logger.debug(
-              `Ignoring unknown pool extension ${hexZeroPad(
-                hexlify(poolKeyWithInitBlockNumber.key.config.extension),
-                20,
-              )}`,
+              `Ignoring unsupported MEVCapture v2.1 pool ${key.stringId}`,
             );
-        }
-
-        return [twammPoolKeys, boostedFeesPoolKeys, otherPoolKeys];
-      },
-      [[], [], []],
-    );
+          }
+          break;
+        case ExtensionType.NoSwapCallPoints:
+        case ExtensionType.Oracle:
+        case ExtensionType.MevCapture:
+          otherPoolKeys.push(poolKeyWithInitBlockNumber);
+          break;
+        default:
+          this.logger.debug(
+            `Ignoring unknown pool extension ${hexZeroPad(
+              hexlify(key.config.extension),
+              20,
+            )}`,
+          );
+      }
+    }
 
     const promises: Promise<void>[] = [];
 
@@ -601,7 +623,7 @@ export class EkuboV3PoolManager implements EventSubscriber {
             await Promise.all(
               fetchedData.map(async (data, i) => {
                 const { key: poolKey, initBlockNumber } = batch[i];
-                const extType = extensionType(poolKey.config.extension);
+                const extType = this.extensionType(poolKey.config.extension);
 
                 try {
                   if (isStableswapKey(poolKey)) {
@@ -695,6 +717,21 @@ export class EkuboV3PoolManager implements EventSubscriber {
       }),
     );
 
+    promises.push(
+      ...mevCaptureV21PoolKeys.map(async ({ key, initBlockNumber }) => {
+        // The extension's anchor is read with the rest of the pool state by `generateState`
+        try {
+          await addPool<
+            ConcentratedPoolTypeConfig,
+            MevCaptureV21PoolState.Object,
+            MevCaptureV21Pool
+          >(MevCaptureV21Pool, undefined, initBlockNumber, key);
+        } catch (err) {
+          this.logger.error(`Failed to construct pool ${key.stringId}: ${err}`);
+        }
+      }),
+    );
+
     const boostedFeesDataFetcher = this.contracts.boostedFees.quoteDataFetcher;
     const coreQuoteDataFetcher = this.contracts.core.quoteDataFetcher;
 
@@ -782,6 +819,10 @@ export class EkuboV3PoolManager implements EventSubscriber {
     await Promise.all(promises);
   }
 
+  private extensionType(extension: bigint): ExtensionType {
+    return extensionType(extension, this.mevCaptureV21Extension);
+  }
+
   public getQuotePools(
     tokenA: Token,
     tokenB: Token,
@@ -864,7 +905,7 @@ export class EkuboV3PoolManager implements EventSubscriber {
     };
 
     if (isStableswapKey(poolKey)) {
-      switch (extensionType(extension)) {
+      switch (this.extensionType(extension)) {
         case ExtensionType.NoSwapCallPoints:
           const fullRangeState =
             FullRangePoolState.fromPoolInitialization(state);
@@ -895,7 +936,7 @@ export class EkuboV3PoolManager implements EventSubscriber {
       const concentratedPoolState =
         ConcentratedPoolState.fromPoolInitialization(state);
 
-      switch (extensionType(extension)) {
+      switch (this.extensionType(extension)) {
         case ExtensionType.NoSwapCallPoints:
           return addPool(ConcentratedPool, poolKey, concentratedPoolState);
         case ExtensionType.MevCapture:
@@ -906,6 +947,25 @@ export class EkuboV3PoolManager implements EventSubscriber {
             poolKey,
             BoostedFeesPoolState.fromPoolInitialization(state),
           );
+        case ExtensionType.MevCaptureV21: {
+          if (!isSupportedMevCaptureV21Key(poolKey)) {
+            this.logger.debug(
+              `Ignoring unsupported MEVCapture v2.1 pool ${poolKey.stringId}`,
+            );
+            return;
+          }
+          // The initial anchor and the extension's configuration are read from
+          // the chain; until then the pool has no state and is not quoted.
+          const pool = new MevCaptureV21Pool(...commonArgs, poolKey);
+          pool.isTracking = this.isTracking;
+          this.setPool(pool);
+          pool.updateState(blockNumber).catch(err => {
+            this.logger.error(
+              `Failed to fetch the state of pool ${poolKey.stringId}: ${err}`,
+            );
+          });
+          return;
+        }
         default:
           this.logger.debug(
             `Ignoring unknown pool extension ${hexZeroPad(
@@ -918,6 +978,13 @@ export class EkuboV3PoolManager implements EventSubscriber {
       this.logger.error(`Unknown pool key type config in pool key ${poolKey}`);
     }
   }
+}
+
+// Pools with native ETH are left out: the router their swaps are executed
+// through rejects the token addresses Augustus' multi-path and buy executors
+// append to the call data, which only match ERC-20 tokens already in the route.
+function isSupportedMevCaptureV21Key(key: EkuboPoolKey): boolean {
+  return isConcentratedKey(key) && key.token0 !== NATIVE_TOKEN_ADDRESS;
 }
 
 function parsePoolIdByLogDataOffsetFn(

@@ -12,6 +12,7 @@ export const enum ExtensionType {
   Twamm,
   MevCapture,
   BoostedFeesConcentrated,
+  MevCaptureV21,
 }
 
 const KNOWN_EXTENSION_TYPES = new Map<bigint, ExtensionType>([
@@ -24,10 +25,21 @@ const KNOWN_EXTENSION_TYPES = new Map<bigint, ExtensionType>([
   ],
 ]);
 
-export function extensionType(extension: bigint): ExtensionType {
+/**
+ * @param mevCaptureV21Extension the MEVCapture v2.1 deployment of the network,
+ * if it has one
+ */
+export function extensionType(
+  extension: bigint,
+  mevCaptureV21Extension?: bigint,
+): ExtensionType {
   const known = KNOWN_EXTENSION_TYPES.get(extension);
   if (typeof known !== 'undefined') {
     return known;
+  }
+
+  if (extension === mevCaptureV21Extension) {
+    return ExtensionType.MevCaptureV21;
   }
 
   // Call points are encoded in the first byte of the extension address.
