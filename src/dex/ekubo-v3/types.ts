@@ -35,6 +35,8 @@ export type EkuboData = {
 
 export type DexParams = {
   subgraphId: string;
+  // MEVCapture v2.1 deployment, on the networks where it is supported
+  mevCaptureV21Address?: string;
 };
 
 export type EkuboContract = {

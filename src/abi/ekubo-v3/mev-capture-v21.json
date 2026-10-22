@@ -1,0 +1,71 @@
+[
+  {
+    "type": "function",
+    "name": "getAnchor",
+    "inputs": [
+      { "name": "poolId", "type": "bytes32", "internalType": "PoolId" }
+    ],
+    "outputs": [
+      { "name": "lastUpdateTime", "type": "uint32", "internalType": "uint32" },
+      { "name": "lRefTime", "type": "uint32", "internalType": "uint32" },
+      { "name": "lastPosTime", "type": "uint32", "internalType": "uint32" },
+      { "name": "lRefBits", "type": "uint8", "internalType": "uint8" },
+      { "name": "snapBits", "type": "uint8", "internalType": "uint8" },
+      { "name": "lRefRaiseTime", "type": "uint32", "internalType": "uint32" },
+      { "name": "anchorX16", "type": "int64", "internalType": "int64" }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getConfig",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "tuple",
+        "internalType": "struct IMEVCaptureV21.Config",
+        "components": [
+          { "name": "halfLife", "type": "uint32", "internalType": "uint32" },
+          { "name": "slopeK", "type": "uint8", "internalType": "uint8" },
+          { "name": "segmentExp", "type": "uint8", "internalType": "uint8" },
+          {
+            "name": "segmentWidthMultiplier",
+            "type": "uint32",
+            "internalType": "uint32"
+          },
+          { "name": "jLin", "type": "uint8", "internalType": "uint8" },
+          { "name": "maxFee", "type": "uint64", "internalType": "uint64" },
+          { "name": "clampTicks", "type": "uint32", "internalType": "uint32" },
+          { "name": "mGate", "type": "uint8", "internalType": "uint8" }
+        ]
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "event",
+    "name": "AnchorGateFailed",
+    "inputs": [
+      {
+        "name": "poolId",
+        "type": "bytes32",
+        "indexed": true,
+        "internalType": "PoolId"
+      },
+      {
+        "name": "lObs",
+        "type": "uint8",
+        "indexed": false,
+        "internalType": "uint8"
+      },
+      {
+        "name": "eRef",
+        "type": "uint8",
+        "indexed": false,
+        "internalType": "uint8"
+      }
+    ],
+    "anonymous": false
+  }
+]
