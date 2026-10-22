@@ -18,7 +18,7 @@ export const WooFiV2Config: DexConfigMap<DexParams> = {
     },
     [Network.BSC]: {
       wooPPV2Address: '0x5520385bFcf07Ec87C4c53A7d8d65595Dff69FA4',
-      wooOracleV2Address: WOO_ORACLE_V2_ADDRESS,
+      wooOracleV2Address: '0x00021b2C857A8613DAEC2fd900122833866828a0',
       integrationHelperAddress: '0xAA9c15cd603428cA8ddD45e933F8EfE3Afbcc173',
       // USDT
       quoteToken: {
