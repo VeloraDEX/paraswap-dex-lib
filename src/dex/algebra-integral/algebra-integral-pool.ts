@@ -54,6 +54,9 @@ export class AlgebraIntegralEventPool extends StatefulEventSubscriber<AlgebraInt
 
   public readonly poolIface = new Interface(AlgebraIntegralPoolABI);
 
+  // Skip empty bitmap words like on-chain Integral. Opt-in per fork.
+  protected readonly stopOnlyAtInitializedTicks: boolean = false;
+
   constructor(
     readonly dexHelper: IDexHelper,
     parentName: string,
@@ -542,6 +545,7 @@ export class AlgebraIntegralEventPool extends StatefulEventSubscriber<AlgebraInt
         amounts,
         zeroForOne,
         side,
+        this.stopOnlyAtInitializedTicks,
       );
 
       if (side === SwapSide.SELL) {

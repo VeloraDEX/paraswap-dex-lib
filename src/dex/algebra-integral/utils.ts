@@ -3,6 +3,36 @@ import { extractSuccessAndValue, uint16ToBigInt } from '../../lib/decoders';
 import { MultiCallParams, MultiResult } from '../../lib/multi-wrapper';
 import { DecodedStateMultiCallResultIntegral } from './types';
 import { AlgebraIntegralEventPool } from './algebra-integral-pool';
+import { IDexHelper } from '../../dex-helper/idex-helper';
+import { SUBGRAPH_TIMEOUT } from '../../constants';
+
+export type SubgraphHeaders = Record<string, string | number>;
+
+export type SubgraphRequest = {
+  query: string;
+  variables?: Record<string, any>;
+};
+
+// Self-hosted facades authenticate with headers, which the TheGraph helper
+// cannot send, so those go through a plain POST instead.
+export function querySubgraph<T>(
+  dexHelper: IDexHelper,
+  subgraphURL: string,
+  data: SubgraphRequest,
+  headers?: SubgraphHeaders,
+): Promise<T> {
+  if (headers) {
+    return dexHelper.httpRequest.post<T>(
+      subgraphURL,
+      data,
+      SUBGRAPH_TIMEOUT,
+      headers,
+    );
+  }
+  return dexHelper.httpRequest.querySubgraph<T>(subgraphURL, data, {
+    timeout: SUBGRAPH_TIMEOUT,
+  });
+}
 
 export function decodeStateMultiCallResultIntegral(
   result: MultiResult<BytesLike> | BytesLike,

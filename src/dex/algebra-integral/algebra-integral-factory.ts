@@ -7,10 +7,11 @@ import { StatefulEventSubscriber } from '../../stateful-event-subscriber';
 import { Address, BlockHeader, Log, Logger } from '../../types';
 import { catchParseLogError } from '../../utils';
 import { Pool } from './types';
-import { ETHER_ADDRESS, NULL_ADDRESS, SUBGRAPH_TIMEOUT } from '../../constants';
+import { ETHER_ADDRESS, NULL_ADDRESS } from '../../constants';
 import { MIN_USD_TVL_FOR_PRICING } from './constants';
 import { uint256ToBigInt } from '../../lib/decoders';
 import { getTopicLogDecoder } from '../../lib/topic-log-decoder';
+import { querySubgraph, SubgraphHeaders } from './utils';
 
 export class AlgebraIntegralFactory extends StatefulEventSubscriber<Pool[]> {
   handlers: {
@@ -32,6 +33,7 @@ export class AlgebraIntegralFactory extends StatefulEventSubscriber<Pool[]> {
     logger: Logger,
     protected factoryAddress: Address,
     protected subgraphURL: string,
+    protected subgraphHeaders?: SubgraphHeaders,
     protected factoryIface = new Interface(FactoryABI),
   ) {
     super(parentName, 'factory', dexHelper, logger, false);
@@ -158,7 +160,7 @@ export class AlgebraIntegralFactory extends StatefulEventSubscriber<Pool[]> {
       }
     }`;
 
-    const res = await this.dexHelper.httpRequest.querySubgraph<{
+    const res = await querySubgraph<{
       data: {
         pools: Array<{
           id: string;
@@ -170,6 +172,7 @@ export class AlgebraIntegralFactory extends StatefulEventSubscriber<Pool[]> {
       };
       errors?: { message: string }[];
     }>(
+      this.dexHelper,
       this.subgraphURL,
       {
         query: poolsQuery,
@@ -178,7 +181,7 @@ export class AlgebraIntegralFactory extends StatefulEventSubscriber<Pool[]> {
           first: limit,
         },
       },
-      { timeout: SUBGRAPH_TIMEOUT },
+      this.subgraphHeaders,
     );
 
     if (res.errors && res.errors.length) {

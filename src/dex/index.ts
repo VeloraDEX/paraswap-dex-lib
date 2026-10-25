@@ -102,6 +102,7 @@ import { RingV2 } from './uniswap-v2/ring-v2';
 import { UsdcTransmuter } from './usdc-transmuter/usdc-transmuter';
 import { Blackhole } from './solidly/forks-override/blackhole';
 import { BlackholeCL } from './algebra-integral/forks/blackhole-cl';
+import { NamiV4 } from './algebra-integral/forks/nami-v4';
 import { dETH } from './deth/dETH';
 import { Cap } from './cap/cap';
 import { PancakeSwapInfinity } from './pancakeswap-infinity/pancakeswap-infinity';
@@ -199,6 +200,7 @@ const Dexes = [
   UsdcTransmuter,
   Blackhole,
   BlackholeCL,
+  NamiV4,
   Cap,
 ];
 
