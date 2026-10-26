@@ -38,7 +38,7 @@ import {
 } from './utils';
 
 import { BigNumber } from 'ethers';
-import { concat, zeroPad } from 'ethers/lib/utils';
+import { concat, hexDataLength, zeroPad } from 'ethers/lib/utils';
 import RouterABI from '../../abi/ekubo-v3/mev-capture-router.json';
 import { erc20Iface } from '../../lib/tokens/utils';
 import { EkuboV3PoolManager } from './ekubo-v3-pool-manager';
@@ -244,9 +244,30 @@ export class EkuboV3 extends SimpleExchange implements IDex<EkuboData> {
   ): DexExchangeParam {
     const amount = BigInt(side === SwapSide.BUY ? `-${destAmount}` : srcAmount);
 
-    if (this.isMevCaptureV21(data)) {
-      return this.getMevCaptureV21DexParam(amount, recipient, data);
+    const param = this.isMevCaptureV21(data)
+      ? this.getMevCaptureV21DexParam(amount, recipient, data)
+      : this.getRouterDexParam(side, srcAmount, destAmount, recipient, data);
+
+    // Without a position the executor searches the calldata for the source
+    // amount, and also for its negation. On BUY the only amount encoded is the
+    // negated exact output, so when srcAmount equals destAmount it would
+    // overwrite that with the slippage-buffered input. Point it past the end
+    // instead, which is where an unsuccessful search leaves it anyway.
+    if (side === SwapSide.BUY) {
+      param.insertFromAmountPos = hexDataLength(param.exchangeData);
     }
+
+    return param;
+  }
+
+  private getRouterDexParam(
+    side: SwapSide,
+    srcAmount: NumberAsString,
+    destAmount: NumberAsString,
+    recipient: Address,
+    data: EkuboData,
+  ): DexExchangeParam {
+    const amount = BigInt(side === SwapSide.BUY ? `-${destAmount}` : srcAmount);
 
     const amountStr = (
       side === SwapSide.SELL ? srcAmount : destAmount

@@ -46,6 +46,7 @@ function dexParam(
   side: SwapSide,
   isToken1: boolean,
   amount: string,
+  otherAmount?: string,
 ) {
   const dex = Object.create(EkuboV3.prototype);
   Object.assign(dex, {
@@ -61,8 +62,8 @@ function dexParam(
   return (dex as EkuboV3).getDexParam(
     TOKEN0,
     TOKEN1,
-    side === SwapSide.SELL ? amount : '0',
-    side === SwapSide.BUY ? amount : '1',
+    side === SwapSide.SELL ? amount : otherAmount ?? '0',
+    side === SwapSide.BUY ? amount : otherAmount ?? '1',
     RECIPIENT,
     data,
     side,
@@ -137,7 +138,7 @@ describe('MEVCapture v2.1 execution through the Yul router', () => {
   test('exact output: negative amount and an unbounded input', () => {
     const param = dexParam(MEV_CAPTURE_V21_ADDRESS, SwapSide.BUY, true, '1000');
     const route = param.exchangeData;
-    expect(param.insertFromAmountPos).toBeUndefined();
+    expect(param.insertFromAmountPos).toBe(hexDataLength(route));
     expect(hexDataSlice(route, 2, 22)).toBe(TOKEN1);
     expect(hexDataSlice(route, 22, 42)).toBe(TOKEN0);
     expect(int128At(route, 42)).toBe(MIN_INT128);
@@ -149,6 +150,14 @@ describe('MEVCapture v2.1 execution through the Yul router', () => {
       const param = dexParam(extension, SwapSide.SELL, false, '1000');
       expect(param.targetExchange).toBe(ROUTER_ADDRESS);
       expect(param.insertFromAmountPos).toBeUndefined();
+    }
+  });
+
+  test('exact output never lets the executor overwrite the output amount', () => {
+    // srcAmount equal to destAmount would otherwise match the negated output
+    for (const extension of [MEV_CAPTURE_V21_ADDRESS, MEV_CAPTURE_ADDRESS]) {
+      const param = dexParam(extension, SwapSide.BUY, false, '1000', '1000');
+      expect(param.insertFromAmountPos).toBe(hexDataLength(param.exchangeData));
     }
   });
 });
