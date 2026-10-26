@@ -251,10 +251,15 @@ export class EkuboV3 extends SimpleExchange implements IDex<EkuboData> {
     // Without a position the executor searches the calldata for the source
     // amount, and also for its negation. On BUY the only amount encoded is the
     // negated exact output, so when srcAmount equals destAmount it would
-    // overwrite that with the slippage-buffered input. Point it past the end
-    // instead, which is where an unsuccessful search leaves it anyway.
+    // overwrite that with the slippage-buffered input. Use a scratch word on
+    // the ABI Router path, before any token words the executors may append.
+    // The Yul router rejects trailing data; its ERC20-only routes already
+    // contain both token addresses, so no token word is appended there.
     if (side === SwapSide.BUY) {
       param.insertFromAmountPos = hexDataLength(param.exchangeData);
+      if (param.targetExchange === ROUTER_ADDRESS) {
+        param.exchangeData += '00'.repeat(32);
+      }
     }
 
     return param;

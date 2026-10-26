@@ -41,6 +41,9 @@ import { MevCaptureV21Pool } from './pools/mev-capture-v21';
 //     pnpm test src/dex/ekubo-v3/ekubo-v3-mev-capture-v21-fork.test.ts
 const RPC_URL = process.env.EKUBO_V3_FORK_RPC_URL;
 const POOL_FILE = process.env.EKUBO_V3_FORK_POOL;
+// Optional plain native-ETH pool paired with one of the funded test tokens:
+// {"token1":"0x..."}, fee=5bp, tickSpacing=100, initialized on this fork.
+const NATIVE_POOL_FILE = process.env.EKUBO_V3_FORK_NATIVE_POOL;
 const USER = '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266';
 const SLOT_SECONDS = 12;
 
@@ -363,12 +366,22 @@ describeFork('EkuboV3 MEVCapture v2.1 on a mainnet fork', () => {
     report.push(entry);
     console.log(JSON.stringify(entry));
 
-    return { v21Quotes, executed, extensionCoreSwaps, receipt };
+    return {
+      v21Quotes,
+      executed,
+      extensionCoreSwaps,
+      receipt,
+      quotedAmount,
+      ekuboRouterCalls,
+    };
   }
 
   beforeAll(async () => {
     poolInfo = JSON.parse(readFileSync(POOL_FILE!, 'utf8'));
     provider = new JsonRpcProvider(RPC_URL);
+    // The public Anvil account may have delegated code on mainnet. This local
+    // fixture needs an EOA recipient, not a delegate that forwards received ETH.
+    await provider.send('anvil_setCode', [USER, '0x']);
     sdk = new LocalParaswapSDK(Network.MAINNET, DEX_KEY, RPC_URL!);
     dex = sdk.dexAdapterService.getDexByKey(DEX_KEY) as EkuboV3;
     poolManager = (dex as any).poolManager;
@@ -447,6 +460,66 @@ describeFork('EkuboV3 MEVCapture v2.1 on a mainnet fork', () => {
   });
 
   const E18 = 10n ** 18n;
+
+  (NATIVE_POOL_FILE ? it : it.skip)(
+    'buys native ETH through the existing Router without corrupting appended token data',
+    async () => {
+      const nativePool = JSON.parse(readFileSync(NATIVE_POOL_FILE!, 'utf8'));
+      const key = new PoolKey(
+        0n,
+        BigInt(nativePool.token1),
+        new PoolConfig(
+          0n,
+          9223372036854775n,
+          new ConcentratedPoolTypeConfig(100),
+        ),
+      );
+      await waitForState(key.stringId);
+      await poolManager.poolsByString
+        .get(key.stringId)!
+        .updateState(await provider.getBlockNumber());
+      const src = { address: nativePool.token1.toLowerCase(), decimals: 18 };
+      const dest = {
+        address: '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee',
+        decimals: 18,
+      };
+      const balance = async () =>
+        BigNumber.from(
+          await provider.call({
+            to: src.address,
+            data: erc20Iface.encodeFunctionData('balanceOf', [USER]),
+          }),
+        );
+      const tokensBefore = await balance();
+      const ethBefore = await provider.getBalance(USER);
+      const r = await execute(
+        'BUY native ETH (ABI Router)',
+        src,
+        dest,
+        SwapSide.BUY,
+        [{ poolId: key.stringId, amount: E18 }],
+        undefined,
+        E18 / 100n,
+      );
+      expect(r.ekuboRouterCalls).toHaveLength(1);
+      expect(r.ekuboRouterCalls[0].input.slice(-40).toLowerCase()).toBe(
+        dest.address.slice(2),
+      );
+      // This regression exercises the existing plain-pool Router path, whose
+      // quote can differ from settlement by a few wei. Keep the BUY input
+      // bounded by its explicit slippage limit and require exact ETH output.
+      const tokensSpent = tokensBefore.sub(await balance()).toBigInt();
+      expect(tokensSpent).toBeGreaterThan(0n);
+      expect(tokensSpent).toBeLessThanOrEqual(r.quotedAmount + E18 / 100n);
+      const gas = r.receipt.gasUsed.mul(r.receipt.effectiveGasPrice);
+      expect(
+        (await provider.getBalance(USER, r.receipt.blockNumber))
+          .add(gas)
+          .sub(ethBefore)
+          .toBigInt(),
+      ).toBe(E18);
+    },
+  );
 
   function expectExactV21(
     r: Awaited<ReturnType<typeof execute>>,
