@@ -2,6 +2,10 @@ import { bigNumberify, getDexKeysWithNetwork } from '../../../../utils';
 import { CurveV1 } from '../../curve-v1';
 import { ThreePool } from '../../pools/3pool';
 import { CurvePool } from '../../pools/curve-pool';
+import {
+  Acryptos4Pool,
+  address as Acryptos4PoolAddress,
+} from '../../pools/acryptos-4pool';
 import StableSwap3Pool from '../../../../abi/curve-v1/StableSwap3Pool.json';
 import { Network } from '../../../../constants';
 import { IDexHelper } from '../../../../dex-helper';
@@ -26,6 +30,14 @@ export class CurveFork extends CurveV1 {
   }
 
   getEventPoolInstance(poolAddress: string): CurvePool | null {
+    // ACS4USD emits 4-coin events that the generic 3pool ABI below can't decode
+    if (
+      this.network === Network.BSC &&
+      poolAddress.toLowerCase() === Acryptos4PoolAddress
+    ) {
+      return new Acryptos4Pool(this.dexKey, this.dexHelper);
+    }
+
     const config = Object.values(this.pools).find(
       c => c.address.toLowerCase() === poolAddress.toLowerCase(),
     );

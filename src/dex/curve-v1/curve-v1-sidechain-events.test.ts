@@ -10,6 +10,7 @@ import { SidechainPool } from './pools/sidechain-pool';
 import { Optimism3Pool } from './pools/optimism-3pool';
 import { Gnosis3Pool } from './pools/gnosis-3pool';
 import { Arbitrum2Pool } from './pools/arbitrum-2pool';
+import { Acryptos4Pool } from './pools/acryptos-4pool';
 
 jest.setTimeout(120 * 1000);
 
@@ -85,6 +86,19 @@ const testCases: {
       NewFee: [269217685],
     },
     amounts: [1, 1000, 100000],
+  },
+  {
+    network: Network.BSC,
+    createPool: dexHelper => new Acryptos4Pool('Acryptos', dexHelper),
+    events: {
+      TokenExchange: [130352253, 130341762],
+      AddLiquidity: [126317190],
+      RemoveLiquidity: [128412575, 104167850],
+      RemoveLiquidityOne: [129534623, 128928960],
+      'AddLiquidity + RemoveLiquidityOne': [129403971],
+      RemoveLiquidityImbalance: [26406507, 21976360],
+    },
+    amounts: [1, 100, 1000],
   },
 ];
 
