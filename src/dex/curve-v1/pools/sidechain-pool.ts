@@ -1,5 +1,6 @@
 import BigNumber from 'bignumber.js';
-import { Address, Log } from '../../../types';
+import { DeepReadonly } from 'ts-essentials';
+import { Address, BlockHeader, Log } from '../../../types';
 import { ThreePool } from './3pool';
 import { PoolState } from './curve-pool';
 import { IDexHelper } from '../../../dex-helper';
@@ -43,6 +44,18 @@ export abstract class SidechainPool extends ThreePool {
     delete this.handlers['Transfer'];
   }
 
+  protected async processBlockLogs(
+    state: DeepReadonly<PoolState>,
+    logs: Readonly<Log>[],
+    blockHeader: Readonly<BlockHeader>,
+  ): Promise<DeepReadonly<PoolState> | null> {
+    const newState = await super.processBlockLogs(state, logs, blockHeader);
+    if (newState && newState.isValid === false) {
+      return await this.generateState(blockHeader.number);
+    }
+    return newState;
+  }
+
   handleAddLiquidity(event: any, state: PoolState, log: Log): PoolState {
     super.handleAddLiquidity(event, state, log);
     state.supply = bigNumberify(stringify(event.args.token_supply));
@@ -63,24 +76,19 @@ export abstract class SidechainPool extends ThreePool {
     const tokenAmount = bigNumberify(stringify(event.args.token_amount));
     const coinAmount = bigNumberify(stringify(event.args.coin_amount));
 
-    let coinIndex = 0;
-    let bestDiff: BigNumber | null = null;
-    for (let i = 0; i < this.N_COINS; i++) {
-      const diff = this.calc_withdraw_one_coin(tokenAmount, i, state)
-        .minus(coinAmount)
-        .abs();
-      if (bestDiff === null || diff.lt(bestDiff)) {
-        bestDiff = diff;
-        coinIndex = i;
-      }
-    }
-    if (!bestDiff!.eq(BN_0)) {
-      this.logger.error(
-        `${this.parentName}_${this.address}: no coin matches RemoveLiquidityOne amount ${coinAmount} in tx ${log.transactionHash}, using closest index ${coinIndex}`,
+    // Coins with equal decimals can withdraw the same dust amount
+    const matches = [...Array(this.N_COINS).keys()].filter(i =>
+      this.calc_withdraw_one_coin(tokenAmount, i, state).eq(coinAmount),
+    );
+    if (matches.length !== 1) {
+      this.logger.warn(
+        `${this.parentName}_${this.address}: ${matches.length} coins match RemoveLiquidityOne amount ${coinAmount} in tx ${log.transactionHash}, refetching state at block ${log.blockNumber}`,
       );
+      state.isValid = false;
+      return state;
     }
 
-    this.remove_liquidity_one_coin(tokenAmount, coinIndex, state);
+    this.remove_liquidity_one_coin(tokenAmount, matches[0], state);
     state.supply = bigNumberify(stringify(event.args.token_supply));
     return state;
   }

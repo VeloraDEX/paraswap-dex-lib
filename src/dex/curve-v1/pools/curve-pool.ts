@@ -19,6 +19,8 @@ export interface PoolState {
   admin_fee: BigNumber;
   supply: BigNumber;
   balances: BigNumber[];
+  // Set to false by a handler that can't apply its event exactly
+  isValid?: boolean;
 }
 
 export abstract class CurvePool extends StatefulEventSubscriber<PoolState> {
@@ -89,6 +91,7 @@ export abstract class CurvePool extends StatefulEventSubscriber<PoolState> {
       admin_fee: bigNumberify(state.admin_fee),
       supply: bigNumberify(state.supply),
       balances: state.balances.map(bigNumberify),
+      isValid: state.isValid,
     };
     try {
       const event = this.decoder(log);

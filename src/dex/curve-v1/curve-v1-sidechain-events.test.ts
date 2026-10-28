@@ -145,3 +145,75 @@ testCases.forEach(({ network, createPool, events, amounts }) => {
     });
   });
 });
+
+describe('CurveV1 sidechain pool RemoveLiquidityOne coin ties', () => {
+  const dexHelper = new DummyDexHelper(Network.ARBITRUM);
+  const blockNumber = 519099470;
+
+  const removeLiquidityOneLog = (
+    pool: SidechainPool,
+    tokenAmount: string,
+    coinAmount: string,
+    tokenSupply: string,
+  ) => {
+    const { data, topics } = pool.poolIface.encodeEventLog(
+      pool.poolIface.getEvent('RemoveLiquidityOne'),
+      [
+        '0x000000000000000000000000000000000000dEaD',
+        tokenAmount,
+        coinAmount,
+        tokenSupply,
+      ],
+    );
+    return {
+      address: pool.address,
+      data,
+      topics,
+      logIndex: 0,
+      transactionIndex: 0,
+      transactionHash: `0x${'11'.repeat(32)}`,
+      blockHash: `0x${'22'.repeat(32)}`,
+      blockNumber,
+    };
+  };
+
+  const setup = async (tokenAmount: string) => {
+    const pool = new Arbitrum2Pool('CurveV1', dexHelper);
+    const state = await pool.generateState(blockNumber - 1);
+    pool.setState(state, blockNumber - 1);
+    pool.isTracking = () => true;
+
+    const lp = bigNumberify(tokenAmount);
+    const dys = [0, 1].map(i => pool.calc_withdraw_one_coin(lp, i, state));
+    const log = removeLiquidityOneLog(
+      pool,
+      tokenAmount,
+      dys[1].toFixed(),
+      state.supply.minus(lp).toFixed(),
+    );
+    const refetched = { ...state, supply: bigNumberify(42) };
+    const generateState = jest
+      .spyOn(pool, 'generateState')
+      .mockResolvedValue(refetched);
+    await pool.update([log], {
+      [blockNumber]: { number: blockNumber } as any,
+    });
+    return { pool, dys, generateState, refetched };
+  };
+
+  it('refetches the block when coins withdraw the same amount', async () => {
+    const { pool, dys, generateState, refetched } = await setup(
+      '10000000000000',
+    );
+    expect(dys[0].eq(dys[1])).toBe(true);
+    expect(generateState).toHaveBeenCalledWith(blockNumber);
+    expect(pool.getState(blockNumber)).toEqual(refetched);
+  });
+
+  it('applies the event when one coin matches', async () => {
+    const { pool, dys, generateState } = await setup('1000000000000000000000');
+    expect(dys[0].eq(dys[1])).toBe(false);
+    expect(generateState).not.toHaveBeenCalled();
+    expect(pool.getState(blockNumber)!.supply).not.toEqual(bigNumberify(42));
+  });
+});
