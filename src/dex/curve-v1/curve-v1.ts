@@ -58,6 +58,18 @@ import { USDKPool, address as USDKPoolAddress } from './pools/usdkpool';
 import { USTPool, address as USTPoolAddress } from './pools/ustpool';
 import { SLINKPool, address as SLINKPoolAddress } from './pools/sLinkpool';
 import {
+  Optimism3Pool,
+  address as Optimism3PoolAddress,
+} from './pools/optimism-3pool';
+import {
+  Gnosis3Pool,
+  address as Gnosis3PoolAddress,
+} from './pools/gnosis-3pool';
+import {
+  Arbitrum2Pool,
+  address as Arbitrum2PoolAddress,
+} from './pools/arbitrum-2pool';
+import {
   getBigIntPow,
   getDexKeysWithNetwork,
   interpolate,
@@ -327,7 +339,29 @@ export class CurveV1
   }
 
   getEventPoolInstance(poolAddress: Address): CurvePool | CurveMetapool | null {
-    switch (poolAddress.toLowerCase()) {
+    const address = poolAddress.toLowerCase();
+
+    // The same pool address is reused across chains (e.g. 0x7f90...F353)
+    switch (this.network) {
+      case Network.OPTIMISM:
+        return address === Optimism3PoolAddress
+          ? new Optimism3Pool(this.dexKey, this.dexHelper)
+          : null;
+      case Network.GNOSIS:
+        return address === Gnosis3PoolAddress
+          ? new Gnosis3Pool(this.dexKey, this.dexHelper)
+          : null;
+      case Network.ARBITRUM:
+        return address === Arbitrum2PoolAddress
+          ? new Arbitrum2Pool(this.dexKey, this.dexHelper)
+          : null;
+      case Network.MAINNET:
+        break;
+      default:
+        return null;
+    }
+
+    switch (address) {
       case ThreePoolAddress:
         return new ThreePool(this.dexKey, this.dexHelper);
       case SUSDPoolAddress:

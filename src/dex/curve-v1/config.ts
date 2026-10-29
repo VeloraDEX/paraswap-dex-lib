@@ -19,6 +19,9 @@ import { address as TBTCPoolAddress } from './pools/tBTCpool';
 import { address as USDKPoolAddress } from './pools/usdkpool';
 import { address as USTPoolAddress } from './pools/ustpool';
 import { address as SLINKPoolAddress } from './pools/sLinkpool';
+import { address as Optimism3PoolAddress } from './pools/optimism-3pool';
+import { address as Gnosis3PoolAddress } from './pools/gnosis-3pool';
+import { address as Arbitrum2PoolAddress } from './pools/arbitrum-2pool';
 
 import { DexParams } from './types';
 import { DexConfigMap, AdapterMappings } from '../../types';
@@ -807,7 +810,7 @@ export const CurveV1Config: DexConfigMap<DexParams> = {
           reasonableVolume: 1000000n,
         },
       },
-      eventSupportedPools: [],
+      eventSupportedPools: [Arbitrum2PoolAddress],
       pools: {
         '2pool': {
           underlying: [],
@@ -847,7 +850,7 @@ export const CurveV1Config: DexConfigMap<DexParams> = {
           reasonableVolume: 1000000000000000000000n,
         },
       },
-      eventSupportedPools: [],
+      eventSupportedPools: [Optimism3PoolAddress],
       pools: {
         '3pool': {
           underlying: [],
@@ -883,7 +886,7 @@ export const CurveV1Config: DexConfigMap<DexParams> = {
           reasonableVolume: 1000000000n,
         },
       },
-      eventSupportedPools: [],
+      eventSupportedPools: [Gnosis3PoolAddress],
       pools: {
         '3pool': {
           underlying: [],
