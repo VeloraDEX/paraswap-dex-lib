@@ -6,6 +6,7 @@ import { StatefulEventSubscriber } from '../../stateful-event-subscriber';
 import { IDexHelper } from '../../dex-helper/idex-helper';
 import { MultiCallParams, MultiResult } from '../../lib/multi-wrapper';
 import { generalDecoder } from '../../lib/decoders';
+import { getTopicLogDecoder } from '../../lib/topic-log-decoder';
 import { BytesLike } from 'ethers';
 import { OrbitalPoolInfo, PoolState } from './types';
 import { quoteExactInput, quoteExactOutput } from './contract-math/quote';
@@ -30,7 +31,8 @@ export class OrbitalEventPool extends StatefulEventSubscriber<PoolState> {
     protected poolIface: Interface,
   ) {
     super(parentName, poolInfo.address.toLowerCase(), dexHelper, logger);
-    this.logDecoder = (log: Log) => this.poolIface.parseLog(log);
+    this.logDecoder = (log: Log) =>
+      getTopicLogDecoder(this.poolIface).decode(log);
     this.addressesSubscribed = [poolInfo.address];
   }
 

@@ -9,6 +9,7 @@ import {
   PoolLiquidity,
   Logger,
   DexExchangeParam,
+  GetDexParamOptions,
   NumberAsString,
 } from '../../types';
 import { SwapSide, Network } from '../../constants';
@@ -296,9 +297,13 @@ export class Orbital extends SimpleExchange implements IDex<OrbitalData> {
     recipient: Address,
     data: OrbitalData,
     side: SwapSide,
+    _executorAddress?: Address,
+    options?: GetDexParamOptions,
   ): DexExchangeParam {
     const { exchange, assetIn, assetOut } = data;
-    const deadline = getLocalDeadlineAsFriendlyPlaceholder();
+    const deadline = getLocalDeadlineAsFriendlyPlaceholder(
+      options?.nowTimestampMs,
+    );
     const exchangeData =
       side === SwapSide.SELL
         ? this.poolIface.encodeFunctionData('swapExactInput', [
