@@ -11,7 +11,7 @@ export const BEBOP_GAS_COST = 120_000;
 export const BEBOP_QUOTE_TIMEOUT_MS = 3000;
 // Indicative prices from the WS stream are worsened by this many bps, since
 // the firm /v3/quote comes back a few bps below the stream (DEXLIB-507).
-export const BEBOP_PRICE_HAIRCUT_BPS = 3n;
+export const BEBOP_PRICE_PROTECTIVE_BPS = 3n;
 export const BPS_BASE = 10_000n;
 
 export const SWAP_SINGLE_METHOD = 'swapSingle';

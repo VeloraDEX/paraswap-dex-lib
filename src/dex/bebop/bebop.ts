@@ -49,7 +49,7 @@ import {
   BEBOP_INIT_TIMEOUT_MS,
   BEBOP_PRICES_CACHE_TTL,
   BEBOP_PRICES_LOCAL_CACHE_TTL,
-  BEBOP_PRICE_HAIRCUT_BPS,
+  BEBOP_PRICE_PROTECTIVE_BPS,
   BEBOP_QUOTE_TIMEOUT_MS,
   BPS_BASE,
   BEBOP_TOKENS_CACHE_TTL,
@@ -187,16 +187,17 @@ export class Bebop
     return tokenAmount.minimumAmount;
   }
 
-  private applyHaircut(output: bigint, side: SwapSide): bigint {
+  private applyProtective(output: bigint, side: SwapSide): bigint {
     return side === SwapSide.SELL
-      ? (output * (BPS_BASE - BEBOP_PRICE_HAIRCUT_BPS)) / BPS_BASE
-      : (output * (BPS_BASE + BEBOP_PRICE_HAIRCUT_BPS) + BPS_BASE - 1n) /
+      ? (output * (BPS_BASE - BEBOP_PRICE_PROTECTIVE_BPS)) / BPS_BASE
+      : (output * (BPS_BASE + BEBOP_PRICE_PROTECTIVE_BPS) + BPS_BASE - 1n) /
           BPS_BASE;
   }
 
-  // Indicative vs firm amount for every quote, to calibrate the haircut.
+  // Indicative vs firm amount for every quote, to calibrate the protective bps.
   // `gapBps` > 0 means the firm quote is worse than what we priced, which
-  // already includes the haircut: the gap to the stream is gapBps + haircutBps.
+  // already includes the protective bps: the gap to the stream is
+  // gapBps + protectiveBps.
   private logFirmQuote(
     optimalSwapExchange: OptimalSwapExchange<BebopData>,
     srcToken: Token,
@@ -239,7 +240,7 @@ export class Bebop
           firmMinAmount: firm?.minimumAmount,
           gapBps,
           slippageBps: slippageFactor.minus(1).abs().times(10_000).toFixed(2),
-          haircutBps: Number(BEBOP_PRICE_HAIRCUT_BPS),
+          protectiveBps: Number(BEBOP_PRICE_PROTECTIVE_BPS),
           bookAgeMs: bookUpdateTs ? quotedAtMs - bookUpdateTs : undefined,
           hops,
           requestId: response?.requestId ?? response?.error?.requestId,
@@ -665,7 +666,7 @@ export class Bebop
       return [
         {
           prices: outputs[selectedIndex].map(output =>
-            this.applyHaircut(output, side),
+            this.applyProtective(output, side),
           ),
           unit: BigInt(outDecimals),
           data: {
