@@ -1,0 +1,45 @@
+[
+  {
+    "type": "function",
+    "name": "configFees",
+    "stateMutability": "view",
+    "inputs": [{ "name": "vault", "type": "address" }],
+    "outputs": [
+      { "name": "protocolFee", "type": "uint256" },
+      { "name": "stabilityFee", "type": "uint256" },
+      { "name": "minDeposit", "type": "uint256" },
+      { "name": "oracleAge", "type": "uint256" },
+      { "name": "oracleAgeTrade", "type": "uint256" },
+      { "name": "sellCooldown", "type": "uint256" },
+      { "name": "basketCap", "type": "uint256" }
+    ]
+  },
+  {
+    "type": "function",
+    "name": "managementFeeBps",
+    "stateMutability": "view",
+    "inputs": [{ "name": "vault", "type": "address" }],
+    "outputs": [{ "name": "", "type": "uint256" }]
+  },
+  {
+    "type": "function",
+    "name": "lastManagementFeeAccrual",
+    "stateMutability": "view",
+    "inputs": [{ "name": "vault", "type": "address" }],
+    "outputs": [{ "name": "", "type": "uint256" }]
+  },
+  {
+    "type": "function",
+    "name": "quoteBuy",
+    "stateMutability": "view",
+    "inputs": [
+      { "name": "vault", "type": "address" },
+      { "name": "ethValue", "type": "uint256" }
+    ],
+    "outputs": [
+      { "name": "out", "type": "uint256" },
+      { "name": "protocolFee", "type": "uint256" },
+      { "name": "stabilityFee", "type": "uint256" }
+    ]
+  }
+]

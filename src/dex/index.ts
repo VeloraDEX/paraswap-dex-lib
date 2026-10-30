@@ -48,6 +48,7 @@ import { curveV1Merge } from './curve-v1-factory/optimizer';
 import { GenericRFQ } from './generic-rfq/generic-rfq';
 import { WstETH } from './wsteth/wsteth';
 import { ERC4626 } from './erc4626/erc4626';
+import { Gblin } from './gblin/gblin';
 import { Camelot } from './camelot/camelot';
 import { Hashflow } from './hashflow/hashflow';
 import { SolidlyEthereum } from './solidly/solidly-ethereum';
@@ -159,6 +160,7 @@ const Dexes = [
   CurveV1StableNg,
   WstETH,
   ERC4626,
+  Gblin,
   Hashflow,
   Native,
   MaverickV1,

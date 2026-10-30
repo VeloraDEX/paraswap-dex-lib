@@ -1,0 +1,111 @@
+[
+  {
+    "type": "function",
+    "name": "buyGBLINWithWeth",
+    "stateMutability": "nonpayable",
+    "inputs": [
+      { "name": "amount", "type": "uint256" },
+      { "name": "minOut", "type": "uint256" },
+      { "name": "receiver", "type": "address" }
+    ],
+    "outputs": []
+  },
+  {
+    "type": "function",
+    "name": "totalSupply",
+    "stateMutability": "view",
+    "inputs": [],
+    "outputs": [{ "name": "", "type": "uint256" }]
+  },
+  {
+    "type": "function",
+    "name": "totalEthValue",
+    "stateMutability": "view",
+    "inputs": [{ "name": "excludeWeth", "type": "uint256" }],
+    "outputs": [{ "name": "total", "type": "uint256" }]
+  },
+  {
+    "type": "function",
+    "name": "isNavReliable",
+    "stateMutability": "view",
+    "inputs": [],
+    "outputs": [{ "name": "", "type": "bool" }]
+  },
+  {
+    "type": "event",
+    "name": "Minted",
+    "anonymous": false,
+    "inputs": [
+      { "indexed": true, "name": "receiver", "type": "address" },
+      { "indexed": false, "name": "value", "type": "uint256" },
+      { "indexed": false, "name": "shares", "type": "uint256" }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "Redeemed",
+    "anonymous": false,
+    "inputs": [
+      { "indexed": true, "name": "holder", "type": "address" },
+      { "indexed": false, "name": "shares", "type": "uint256" }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "FeeSharesMinted",
+    "anonymous": false,
+    "inputs": [
+      { "indexed": true, "name": "recipient", "type": "address" },
+      { "indexed": false, "name": "kind", "type": "uint8" },
+      { "indexed": false, "name": "value", "type": "uint256" },
+      { "indexed": false, "name": "shares", "type": "uint256" }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "AuctionFill",
+    "anonymous": false,
+    "inputs": [
+      { "indexed": true, "name": "bidder", "type": "address" },
+      { "indexed": true, "name": "tokenIn", "type": "address" },
+      { "indexed": true, "name": "tokenOut", "type": "address" },
+      { "indexed": false, "name": "amountIn", "type": "uint256" },
+      { "indexed": false, "name": "amountOut", "type": "uint256" }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "RedemptionClaimed",
+    "anonymous": false,
+    "inputs": [
+      { "indexed": true, "name": "holder", "type": "address" },
+      { "indexed": true, "name": "token", "type": "address" },
+      { "indexed": false, "name": "amount", "type": "uint256" }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "ParamUpdated",
+    "anonymous": false,
+    "inputs": [
+      { "indexed": true, "name": "key", "type": "uint256" },
+      { "indexed": false, "name": "values", "type": "uint256[7]" }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "OracleUpdated",
+    "anonymous": false,
+    "inputs": [
+      { "indexed": true, "name": "token", "type": "address" },
+      { "indexed": true, "name": "oldOracle", "type": "address" },
+      { "indexed": true, "name": "newOracle", "type": "address" }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "AssetAbandoned",
+    "anonymous": false,
+    "inputs": [{ "indexed": true, "name": "token", "type": "address" }]
+  }
+]
