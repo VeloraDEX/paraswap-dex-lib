@@ -73,7 +73,7 @@ export abstract class StatefulRpcPoller<State, M>
   // Derived classes should not set these directly, and instead use setState()
   protected _stateWithUpdateInfo?: ObjWithUpdateInfo<State>;
 
-  // This values is used to determine if current pool will participate in update or not
+  // This values is used to determine if the current pool will participate in update or not
   // We don't want to keep track of state for pools without liquidity
   protected _liquidityInUSDWithUpdateInfo: ObjWithUpdateInfo<number> = {
     value: 0,
@@ -142,7 +142,7 @@ export abstract class StatefulRpcPoller<State, M>
     protected liquidityUpdatePeriodMs = DEFAULT_LIQUIDITY_UPDATE_PERIOD_MS,
   ) {
     // Don't make it too custom, like adding poolIdentifier. It will break log suppressor
-    // If we are really need to do that, update log Suppressor to handle that case
+    // If we really need to do that, update log Suppressor to handle that case
     // The idea is to have one entity name per Dex level, not pool level
     this.entityName = `StatefulPoller-${this.dexKey}-${this.dexHelper.config.data.network}`;
 
