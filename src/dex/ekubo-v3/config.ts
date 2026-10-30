@@ -17,6 +17,10 @@ export const TWAMM_DATA_FETCHER_ADDRESS =
 export const BOOSTED_FEES_DATA_FETCHER_ADDRESS =
   '0x7A2fF5819Dc71Bb99133a97c38dA512E60c30475';
 export const ROUTER_ADDRESS = '0xd26f20001a72a18C002b00e6710000d68700ce00';
+// Forward-only extension; its swaps are executed through the Yul router
+export const MEV_CAPTURE_V21_ADDRESS =
+  '0x51f831c23fa4051862881Ef8EfC0c3C37905Ce49';
+export const YUL_ROUTER_ADDRESS = '0x7B2aA7Ecc0B5936b7C52E6259A19C3BA557d0748';
 
 export type EkuboSupportedNetwork = Network.MAINNET | Network.ARBITRUM;
 
@@ -24,6 +28,7 @@ export const EKUBO_V3_CONFIG: DexConfigMap<DexParams> = {
   [DEX_KEY]: {
     [Network.MAINNET]: {
       subgraphId: '6MLKVikss1iYdhhggAR1w6Vqw2Z386AqNLMZYr8qaeG9',
+      mevCaptureV21Address: MEV_CAPTURE_V21_ADDRESS,
     },
     [Network.ARBITRUM]: {
       subgraphId: 'FdPuN6GM73kviG7XfLG72yHKqFczeSd4yzEXeBxESvtG',
