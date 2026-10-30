@@ -21,7 +21,6 @@ import {
   Network,
   DEST_TOKEN_DEX_TRANSFERS,
   SRC_TOKEN_DEX_TRANSFERS,
-  SUBGRAPH_TIMEOUT,
   CACHE_PREFIX,
 } from '../../constants';
 import * as CALLDATA_GAS_COST from '../../calldata-gas-cost';
@@ -63,7 +62,7 @@ import {
 } from './constants';
 import { uint256ToBigInt } from '../../lib/decoders';
 import AlgebraIntegralStateMulticallABI from '../../abi/algebra-integral/AlgebraIntegralStateMulticall.abi.json';
-import { buildFeeCallData } from './utils';
+import { buildFeeCallData, querySubgraph, SubgraphHeaders } from './utils';
 import {
   PoolsWriter,
   TokenPoolDescriptor,
@@ -121,6 +120,7 @@ export class AlgebraIntegral
       this.logger,
       this.config.factory,
       this.config.subgraphURL,
+      this.getSubgraphHeaders(),
     );
     this.poolsWriter = new PoolsWriter({
       cache: dexHelper.cache,
@@ -128,6 +128,10 @@ export class AlgebraIntegral
       logger: this.logger,
       listPools: () => this.listPoolDescriptors(),
     });
+  }
+
+  protected getSubgraphHeaders(): SubgraphHeaders | undefined {
+    return undefined;
   }
 
   async initializePricing(blockNumber: number) {
@@ -837,7 +841,7 @@ export class AlgebraIntegral
       }
     }`;
 
-    const res = await this.dexHelper.httpRequest.querySubgraph<{
+    const res = await querySubgraph<{
       data: {
         pools: Array<{
           id: string;
@@ -847,9 +851,10 @@ export class AlgebraIntegral
         }>;
       };
     }>(
+      this.dexHelper,
       this.config.subgraphURL,
       { query, variables: { first: 1000 } },
-      { timeout: SUBGRAPH_TIMEOUT },
+      this.getSubgraphHeaders(),
     );
 
     return res.data.pools.map(pool => ({
