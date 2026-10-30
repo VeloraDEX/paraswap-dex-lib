@@ -49,7 +49,9 @@ import {
   BEBOP_INIT_TIMEOUT_MS,
   BEBOP_PRICES_CACHE_TTL,
   BEBOP_PRICES_LOCAL_CACHE_TTL,
+  BEBOP_PRICE_HAIRCUT_BPS,
   BEBOP_QUOTE_TIMEOUT_MS,
+  BPS_BASE,
   BEBOP_TOKENS_CACHE_TTL,
   BEBOP_TOKENS_POLLING_INTERVAL_MS,
   BEBOP_WS_API_URL,
@@ -183,6 +185,70 @@ export class Bebop
     );
 
     return tokenAmount.minimumAmount;
+  }
+
+  private applyHaircut(output: bigint, side: SwapSide): bigint {
+    return side === SwapSide.SELL
+      ? (output * (BPS_BASE - BEBOP_PRICE_HAIRCUT_BPS)) / BPS_BASE
+      : (output * (BPS_BASE + BEBOP_PRICE_HAIRCUT_BPS) + BPS_BASE - 1n) /
+          BPS_BASE;
+  }
+
+  // Indicative vs firm amount for every quote, to calibrate the haircut.
+  // `gapBps` > 0 means the firm quote is worse than what we priced, which
+  // already includes the haircut: the gap to the stream is gapBps + haircutBps.
+  private logFirmQuote(
+    optimalSwapExchange: OptimalSwapExchange<BebopData>,
+    srcToken: Token,
+    destToken: Token,
+    side: SwapSide,
+    slippageFactor: BigNumber,
+    response: BebopData | undefined,
+    outcome: string,
+    quotedAtMs: number,
+  ): void {
+    try {
+      const isSell = side === SwapSide.SELL;
+      const indicative = isSell
+        ? optimalSwapExchange.destAmount
+        : optimalSwapExchange.srcAmount;
+      const firmTokens = isSell ? response?.buyTokens : response?.sellTokens;
+      const firm = firmTokens
+        ? this.getTokenAmount(
+            firmTokens,
+            isSell ? destToken.address : srcToken.address,
+          )
+        : undefined;
+      const gapBps = firm
+        ? new BigNumber(indicative)
+            .minus(firm.amount)
+            .times(isSell ? 1 : -1)
+            .div(indicative)
+            .times(10_000)
+            .toFixed(2)
+        : undefined;
+      const { bookUpdateTs, hops } = optimalSwapExchange.data ?? {};
+
+      this.logger.warn(
+        `Bebop firm quote: ${JSON.stringify({
+          outcome,
+          side,
+          pair: `${srcToken.address}-${destToken.address}`,
+          indicative,
+          firmAmount: firm?.amount,
+          firmMinAmount: firm?.minimumAmount,
+          gapBps,
+          slippageBps: slippageFactor.minus(1).abs().times(10_000).toFixed(2),
+          haircutBps: Number(BEBOP_PRICE_HAIRCUT_BPS),
+          bookAgeMs: bookUpdateTs ? quotedAtMs - bookUpdateTs : undefined,
+          hops,
+          requestId: response?.requestId ?? response?.error?.requestId,
+          quoteId: response?.quoteId,
+        })}`,
+      );
+    } catch (e) {
+      this.logger.warn(`Bebop firm quote log failed: ${e}`);
+    }
   }
 
   private getQuoteSlippage(side: SwapSide, slippageFactor: BigNumber): string {
@@ -553,7 +619,7 @@ export class Bebop
       );
 
       // Select output with biggest average diff compared to first output
-      let finalOutput = outputs[0];
+      let selectedIndex = 0;
 
       if (outputs.length > 1) {
         const firstOutput = outputs[0];
@@ -583,8 +649,10 @@ export class Bebop
           }
         }
 
-        finalOutput = outputs[maxDiffIndex];
+        selectedIndex = maxDiffIndex;
       }
+
+      const selectedInstructions = instructions[selectedIndex];
 
       // Up to 3bps deviation is expected in the output compared to the on-chain result
       // On SwapSide.Sell, outputs compared  to quoting are coming out: -0.1 bips -> USDC, -1 bips Alt -> Alt.
@@ -596,9 +664,16 @@ export class Bebop
 
       return [
         {
-          prices: finalOutput,
+          prices: outputs[selectedIndex].map(output =>
+            this.applyHaircut(output, side),
+          ),
           unit: BigInt(outDecimals),
-          data: {},
+          data: {
+            bookUpdateTs: Math.min(
+              ...selectedInstructions.map(i => i.book.last_update_ts),
+            ),
+            hops: selectedInstructions.length,
+          },
           poolIdentifiers: [this.getPoolIdentifier(destToken.address)],
           exchange: this.dexKey,
           gasCost: BEBOP_GAS_COST,
@@ -917,9 +992,11 @@ export class Bebop
 
     let requestId: string | undefined;
     let quoteId: string | undefined;
+    let response: BebopData | undefined;
+    const quotedAtMs = Date.now();
 
     try {
-      const response: BebopData = await this.dexHelper.httpRequest.get(
+      response = await this.dexHelper.httpRequest.get(
         `${BEBOP_API_URL}/pmm/${
           BebopConfig['Bebop'][this.network].chainName
         }/v3/quote?${qs.stringify(params)}`,
@@ -1018,6 +1095,17 @@ export class Bebop
         }
       }
 
+      this.logFirmQuote(
+        optimalSwapExchange,
+        srcToken,
+        destToken,
+        side,
+        options.slippageFactor,
+        response,
+        'ok',
+        quotedAtMs,
+      );
+
       return [
         {
           ...optimalSwapExchange,
@@ -1031,6 +1119,18 @@ export class Bebop
       const message = `requestId: ${requestId}, quoteId: ${quoteId}, pair: ${srcToken.address}-${destToken.address}, error: ${e}`;
 
       this.logger.error(message);
+      this.logFirmQuote(
+        optimalSwapExchange,
+        srcToken,
+        destToken,
+        side,
+        options.slippageFactor,
+        response,
+        e?.isSlippageError
+          ? 'slippage'
+          : String(response?.error?.errorCode ?? 'error'),
+        quotedAtMs,
+      );
       if (!e?.isSlippageError && !e?.isBlacklistError) {
         const restrictMessage =
           e instanceof Error ? `${e.name}: ${e.message}` : 'Unknown error';

@@ -80,6 +80,9 @@ export type BebopData = {
   requestId?: string;
   chainId?: number;
   partialFillOffset?: number | null;
+  // Set at pricing time, replaced by the firm quote in preProcessTransaction
+  bookUpdateTs?: number;
+  hops?: number;
 };
 
 export type DexParams = {
