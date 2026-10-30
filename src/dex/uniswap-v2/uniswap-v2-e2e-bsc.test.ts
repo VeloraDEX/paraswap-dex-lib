@@ -525,4 +525,59 @@ describe('UniswapV2 E2E BSC', () => {
       });
     });
   });
+
+  describe('RingV2', () => {
+    jest.setTimeout(1000 * 60 * 3);
+
+    const dexKey = 'RingV2';
+
+    const sideToContractMethods = new Map([
+      [SwapSide.SELL, [ContractMethod.swapExactAmountIn]],
+      [SwapSide.BUY, [ContractMethod.swapExactAmountOut]],
+    ]);
+
+    const amounts: Record<string, string> = {
+      BNB: '1000000000000000',
+      ETH: '1000000000000000',
+    };
+
+    const pairs = [{ from: 'BNB', to: 'ETH' }];
+
+    sideToContractMethods.forEach((contractMethods, side) =>
+      describe(`${side}`, () => {
+        contractMethods.forEach((contractMethod: ContractMethod) => {
+          pairs.forEach(({ from, to }) => {
+            describe(`${contractMethod}`, () => {
+              it(`${from} -> ${to}`, async () => {
+                await testE2E(
+                  tokens[from],
+                  tokens[to],
+                  holders[from],
+                  side === SwapSide.SELL ? amounts[from] : amounts[to],
+                  side,
+                  dexKey,
+                  contractMethod,
+                  network,
+                  provider,
+                );
+              });
+              it(`${to} -> ${from}`, async () => {
+                await testE2E(
+                  tokens[to],
+                  tokens[from],
+                  holders[to],
+                  side === SwapSide.SELL ? amounts[to] : amounts[from],
+                  side,
+                  dexKey,
+                  contractMethod,
+                  network,
+                  provider,
+                );
+              });
+            });
+          });
+        });
+      }),
+    );
+  });
 });
