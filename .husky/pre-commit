@@ -1,7 +1,7 @@
 #!/bin/sh
 . "$(dirname "$0")/_/husky.sh"
 
-if ! command -v git-secrets &> /dev/null
+if ! command -v git-secrets > /dev/null 2>&1
 then
     echo "git-secrets is not installed. Please run 'brew install git-secrets' or visit https://github.com/awslabs/git-secrets#installing-git-secrets"
     exit 1
@@ -9,7 +9,7 @@ fi
 
 
 HOOK_FLAG=".husky/.git-secrets-installed"
-if [[ ! -f "$HOOK_FLAG" ]]; then
+if [ ! -f "$HOOK_FLAG" ]; then
     git-secrets --register-aws > /dev/null
     git secrets --add -- 'ghp_[A-Za-z0-9_]\{36\}'
     git secrets --add -- 'github_pat_[A-Za-z0-9_]\{36\}'
