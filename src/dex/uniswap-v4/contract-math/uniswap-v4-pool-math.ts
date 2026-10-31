@@ -509,7 +509,7 @@ class UniswapV4PoolMath {
   }
 
   setProtocolFee(poolState: PoolState, protocolFee: bigint): void {
-    poolState.slot0.lpFee = protocolFee;
+    poolState.slot0.protocolFee = protocolFee;
   }
 
   donate(poolState: PoolState, amount0: bigint, amount1: bigint): bigint {

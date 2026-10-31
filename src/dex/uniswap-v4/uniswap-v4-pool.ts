@@ -242,7 +242,8 @@ export class UniswapV4Pool extends StatefulEventSubscriber<PoolState> {
   }
 
   handleProtocolFeeUpdatedEvent(event: any, poolState: PoolState) {
-    const protocolFee = event.args.protocolFee;
+    // uint24 is decoded by ethers as a JS number; slot0 fields are bigint
+    const protocolFee = BigInt(event.args.protocolFee);
 
     uniswapV4PoolMath.checkPoolInitialized(poolState);
     uniswapV4PoolMath.setProtocolFee(poolState, protocolFee);
