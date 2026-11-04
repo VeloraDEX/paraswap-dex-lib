@@ -893,6 +893,32 @@ describe('UniswapV3 E2E', () => {
     });
   });
 
+  describe('VectaSwapV3 E2E', () => {
+    const dexKey = 'VectaSwapV3';
+
+    describe('Base', () => {
+      const network = Network.BASE;
+
+      const tokenASymbol: string = 'WETH';
+      const tokenBSymbol: string = 'USDC';
+
+      // Small amounts: the WETH/USDC 0.05% pool holds a few thousand dollars.
+      const tokenAAmount: string = '10000000000000000';
+      const tokenBAmount: string = '10000000';
+      const nativeTokenAmount = '10000000000000000';
+
+      testForNetwork(
+        network,
+        dexKey,
+        tokenASymbol,
+        tokenBSymbol,
+        tokenAAmount,
+        tokenBAmount,
+        nativeTokenAmount,
+      );
+    });
+  });
+
   describe('Slipstream', () => {
     describe('VelodromeSlipstreamNewFactory', () => {
       const dexKey = 'VelodromeSlipstreamNewFactory';

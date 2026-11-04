@@ -304,6 +304,20 @@ export const UniswapV3Config: DexConfigMap<DexParams> = {
       liquidityField: 'liquidity',
     },
   },
+  VectaSwapV3: {
+    [Network.BASE]: {
+      factory: '0xe84FA17C2Ea423E0dea3C986EE3E1560D684bb2d',
+      quoter: '0xd8148115Dd02787A5e2E6Ebf895F6C8b9819027b',
+      router: '0xa3B64a58F324eCCCdd70B585853eE3CbA5340d81',
+      supportedFees: [...SUPPORTED_FEES, 350n],
+      stateMulticall: '0x7160f736c52e1e78e92FD4eE4D73e21A7Cf4F950',
+      uniswapMulticall: '0x091e99cb1C49331a94dD62755D168E941AbD0693',
+      chunksCount: 10,
+      initRetryFrequency: 10,
+      initHash: `0xe34f199b19b2b4f47f68442619d555527d244f78a3297ea89325f843f87b8b54`,
+      subgraphURL: '5pxPDppXPqnpRjNPxQmerfkuGRKHMcnxHwxdv1MkBcjD',
+    },
+  },
   OkuTradeV3: {
     [Network.GNOSIS]: {
       factory: '0xe32f7dd7e3f098d518ff19a22d5f028e076489b1',
