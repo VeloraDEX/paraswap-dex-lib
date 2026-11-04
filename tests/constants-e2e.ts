@@ -5,6 +5,10 @@ export const Tokens: {
   [network: number]: { [symbol: string]: Token };
 } = {
   [Network.MAINNET]: {
+    NZDS: {
+      address: '0xda446fad08277b4d2591536f204e018f32b6831c',
+      decimals: 6,
+    },
     MPS: {
       address: '0x96c645d3d3706f793ef52c19bbace441900ed47d',
       decimals: 0,
@@ -674,6 +678,10 @@ export const Tokens: {
     },
   },
   [Network.POLYGON]: {
+    BRZ: {
+      address: '0x4ed141110f6eeeaba9a1df36d8c26f684d2475dc',
+      decimals: 18,
+    },
     jGBP: {
       address: '0x767058f11800fba6a682e73a6e79ec5eb74fac8c',
       decimals: 18,

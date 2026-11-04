@@ -1,0 +1,15 @@
+[
+  "function numeraires(uint256) view returns (address)",
+  "function reserves(uint256) view returns (address)",
+  "function assimilator(address) view returns (address)",
+  "function curve() view returns (int128 alpha,int128 beta,int128 delta,int128 epsilon,int128 lambda,uint256 totalSupply)",
+  "function frozen() view returns (bool)",
+  "function emergency() view returns (bool)",
+  "function viewOriginSwap(address,address,uint256) view returns (uint256)",
+  "function originSwap(address,address,uint256,uint256,uint256) returns (uint256 amountOut)",
+  "event Trade(address indexed trader,address indexed origin,address indexed target,uint256 originAmount,uint256 targetAmount,int128 rawProtocolFee)",
+  "event AssetIncluded(address indexed numeraire,address indexed reserve,uint256 weight)",
+  "event ParametersSet(uint256 alpha,uint256 beta,uint256 delta,uint256 epsilon,uint256 lambda)",
+  "event FrozenSet(bool isFrozen)",
+  "event EmergencyAlarm(bool isEmergency)"
+]

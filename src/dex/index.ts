@@ -1,6 +1,7 @@
 import _ from 'lodash';
 import { UnoptimizedRate, PoolsStorage, PoolReserves } from '../types';
 import { CurveV2 } from './curve-v2/curve-v2';
+import { Stabull } from './stabull/stabull';
 import {
   IDexTxBuilder,
   DexConstructor,
@@ -200,6 +201,7 @@ const Dexes = [
   Blackhole,
   BlackholeCL,
   Cap,
+  Stabull,
 ];
 
 export type LegacyDexConstructor = new (dexHelper: IDexHelper) => IDexTxBuilder<
