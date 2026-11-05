@@ -50,6 +50,12 @@ export type LunarBasePoolState = {
   paused: boolean;
 };
 
+export type LunarBaseMevTaxContext = {
+  priorityFeeWei: bigint;
+  thresholdWei: bigint;
+  scaleWei: bigint;
+};
+
 export type LunarBaseQuoteResult = {
   amountOut: bigint;
   sqrtPriceNext: bigint;

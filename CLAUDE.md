@@ -9,6 +9,9 @@ When making fixes based on code review comments or feedback, add a concise descr
 ### Fix Log
 
 <!-- Add new fixes at the top of this list -->
+
+- **[2026-11] LunarBase execution fees**: Validate quotes against the actual executor, tx.origin blacklist and transaction gas fees at build time. Current prod MEV settings have no getter or event, so read the appended PoolAccess storage fields at the execution block. Never reuse a prior fee-policy check when building calldata.
+
 <!-- Format: - **[Date] Issue**: Brief description of fix -->
 
 - **[2025-01] Block manager unavailable in certain methods**: `dexHelper.blockManager` is not available in `getTopPoolsForToken()` and `updatePoolState()` methods since these are called on a service that does not have it implemented. Use direct RPC calls (e.g., `dexHelper.provider.getBlock('latest')`) instead when block data is needed in these methods.

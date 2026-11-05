@@ -14,6 +14,11 @@ import { LunarBaseData } from './types';
 const recipient = '0x1111111111111111111111111111111111111111';
 const executor = '0x2222222222222222222222222222222222222222';
 const WETH = '0x4200000000000000000000000000000000000006';
+const executionContext = {
+  txOrigin: recipient,
+  gasPrice: '0',
+  minimumAmountOut: '1',
+};
 const poolIface = new Interface(PoolABI as JsonFragment[]);
 
 const ethPool = LunarBaseConfig.LunarBase[Network.BASE].pools[0];
@@ -39,7 +44,9 @@ function buildDex(): LunarBase {
     getLogger: () => console,
   };
 
-  return new LunarBase(Network.BASE, 'LunarBase', dexHelper as any);
+  const dex = new LunarBase(Network.BASE, 'LunarBase', dexHelper as any);
+  jest.spyOn(dex as any, 'getExecutionQuote').mockResolvedValue(10n ** 30n);
+  return dex;
 }
 
 const ethToUsdc: LunarBaseData = {
@@ -57,8 +64,8 @@ const usdcToEth: LunarBaseData = {
 };
 
 describe('LunarBase calldata', () => {
-  it('encodes ETH -> USDC through swapExactInNative', () => {
-    const param = buildDex().getDexParam(
+  it('encodes ETH -> USDC through swapExactInNative', async () => {
+    const param = await buildDex().getDexParam(
       ETHER_ADDRESS,
       USDC,
       '10000000000000000',
@@ -67,6 +74,7 @@ describe('LunarBase calldata', () => {
       ethToUsdc,
       SwapSide.SELL,
       executor,
+      { executionContext },
     );
     const decoded = poolIface.decodeFunctionData(
       'swapExactInNative',
@@ -83,8 +91,8 @@ describe('LunarBase calldata', () => {
     expect(decoded.amountOutMinimum.toString()).toBe('1');
   });
 
-  it('encodes WETH -> USDC as a native swap the executor unwraps for', () => {
-    const param = buildDex().getDexParam(
+  it('encodes WETH -> USDC as a native swap the executor unwraps for', async () => {
+    const param = await buildDex().getDexParam(
       WETH,
       USDC,
       '10000000000000000',
@@ -93,6 +101,7 @@ describe('LunarBase calldata', () => {
       ethToUsdc,
       SwapSide.SELL,
       executor,
+      { executionContext },
     );
 
     expect(param.needUnwrapNative).toBe(true);
@@ -103,8 +112,8 @@ describe('LunarBase calldata', () => {
     ).toBe(recipient);
   });
 
-  it('encodes USDC -> ETH through swapExactIn with the pool as spender', () => {
-    const param = buildDex().getDexParam(
+  it('encodes USDC -> ETH through swapExactIn with the pool as spender', async () => {
+    const param = await buildDex().getDexParam(
       USDC,
       ETHER_ADDRESS,
       '20000000',
@@ -113,6 +122,7 @@ describe('LunarBase calldata', () => {
       usdcToEth,
       SwapSide.SELL,
       executor,
+      { executionContext },
     );
     const { params } = poolIface.decodeFunctionData(
       'swapExactIn',
@@ -127,8 +137,8 @@ describe('LunarBase calldata', () => {
     expect(params.amountIn.toString()).toBe('20000000');
   });
 
-  it('sends the ETH of a USDC -> WETH swap to the executor to wrap', () => {
-    const param = buildDex().getDexParam(
+  it('sends the ETH of a USDC -> WETH swap to the executor to wrap', async () => {
+    const param = await buildDex().getDexParam(
       USDC,
       WETH,
       '20000000',
@@ -137,6 +147,7 @@ describe('LunarBase calldata', () => {
       usdcToEth,
       SwapSide.SELL,
       executor,
+      { executionContext },
     );
     const { params } = poolIface.decodeFunctionData(
       'swapExactIn',
@@ -148,7 +159,7 @@ describe('LunarBase calldata', () => {
     expect(params.recipient.toLowerCase()).toBe(executor);
   });
 
-  it('pins the pool deadline to the build timestamp', () => {
+  it('pins the pool deadline to the build timestamp', async () => {
     const nowTimestampMs = 1_800_000_000_000;
     const params = [
       USDC,
@@ -159,10 +170,10 @@ describe('LunarBase calldata', () => {
       usdcToEth,
       SwapSide.SELL,
       executor,
-      { nowTimestampMs },
+      { nowTimestampMs, executionContext },
     ] as const;
-    const first = buildDex().getDexParam(...params);
-    const second = buildDex().getDexParam(...params);
+    const first = await buildDex().getDexParam(...params);
+    const second = await buildDex().getDexParam(...params);
     const { params: decoded } = poolIface.decodeFunctionData(
       'swapExactIn',
       first.exchangeData,
@@ -174,8 +185,8 @@ describe('LunarBase calldata', () => {
     );
   });
 
-  it('rejects BUY', () => {
-    expect(() =>
+  it('rejects BUY', async () => {
+    await expect(
       buildDex().getDexParam(
         USDC,
         ETHER_ADDRESS,
@@ -186,6 +197,6 @@ describe('LunarBase calldata', () => {
         SwapSide.BUY,
         executor,
       ),
-    ).toThrow();
+    ).rejects.toThrow();
   });
 });

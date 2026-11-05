@@ -227,3 +227,81 @@ describe('LunarBase math matches recorded contract quotes', () => {
     }
   });
 });
+
+describe('LunarBase prod MEV tax', () => {
+  const state = {
+    ...fixtures[0].state,
+    anchorPrice: 1n << 96n,
+    reserveX: 1_000_000n,
+    reserveY: 1_000_000n,
+    feeAskX24: 1 << 22,
+    feeBidX24: 1 << 22,
+    maxPunishmentX24: 0,
+  };
+
+  it.each([
+    [0n, 7500n],
+    [5n, 7500n],
+    [6n, 6000n],
+    [10n, 5000n],
+    [20n, 2500n],
+    [30n, 0n],
+  ])('taxes the full priority fee %s after the threshold', (tip, expected) => {
+    for (const quote of [quoteXToY, quoteYToX]) {
+      expect(
+        quote(state, 10_000n, 1n, {
+          priorityFeeWei: tip,
+          thresholdWei: 5n,
+          scaleWei: 10n,
+        }).amountOut,
+      ).toBe(expected);
+    }
+  });
+
+  it('applies tax after the origin/sender fee multiplier', () => {
+    expect(
+      quoteXToY(state, 10_000n, 2n, {
+        priorityFeeWei: 6n,
+        thresholdWei: 5n,
+        scaleWei: 10n,
+      }),
+    ).toMatchObject({
+      amountOut: 2000n,
+      fee: 8000n,
+    });
+  });
+
+  it('does not tax a zero-fee trade or a disabled tax', () => {
+    expect(
+      quoteXToY({ ...state, feeBidX24: 0 }, 10_000n, 1n, {
+        priorityFeeWei: 100n,
+        thresholdWei: 5n,
+        scaleWei: 10n,
+      }).amountOut,
+    ).toBe(10_000n);
+    expect(
+      quoteYToX(state, 10_000n, 1n, {
+        priorityFeeWei: 100n,
+        thresholdWei: 5n,
+        scaleWei: 0n,
+      }).amountOut,
+    ).toBe(7500n);
+  });
+
+  it('rounds the extra fee down and caps it at gross output', () => {
+    expect(
+      quoteXToY(state, 11n, 1n, {
+        priorityFeeWei: 6n,
+        thresholdWei: 5n,
+        scaleWei: 10n,
+      }),
+    ).toMatchObject({ amountOut: 8n, fee: 3n });
+    expect(
+      quoteXToY(state, 10_000n, 1n, {
+        priorityFeeWei: (1n << 256n) - 1n,
+        thresholdWei: 5n,
+        scaleWei: 10n,
+      }),
+    ).toMatchObject({ amountOut: 0n, fee: 10_000n });
+  });
+});

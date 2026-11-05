@@ -7,7 +7,11 @@
 //    whose width depends on the swap size relative to the inventory.
 // Every helper mirrors the Solidity rounding of the corresponding contract
 // function, so quotes match `quoteXToY` / `quoteYToX` to the wei.
-import { LunarBasePoolState, LunarBaseQuoteResult } from './types';
+import {
+  LunarBasePoolState,
+  LunarBaseQuoteResult,
+  LunarBaseMevTaxContext,
+} from './types';
 
 const Q12 = 1n << 12n;
 const Q24 = 1n << 24n;
@@ -79,27 +83,34 @@ function yValueInX(amountY: bigint, anchorPrice: bigint): bigint {
   return mulDiv(mulDiv(amountY, Q96, anchorPrice), Q96, anchorPrice);
 }
 
-// SwapLib.applyFee. The MEV tax that the current impl adds when the tx
-// priority fee is above the pool threshold is not modelled: it depends on the
-// gas price of the user's transaction, which is unknown at pricing time.
+// SwapLib.applyFee: multiplier first, then the tax on the full priority fee.
 function applyFee(
   grossOutput: bigint,
   feeQ24: bigint,
   feeMultiplier: bigint,
   saturatesAtMax: boolean,
+  tax?: LunarBaseMevTaxContext,
 ): { amountOut: bigint; fee: bigint } {
   if (saturatesAtMax && feeQ24 === MAX_U24) {
     return { amountOut: 0n, fee: grossOutput };
   }
   let fee = mulDiv(grossOutput, feeQ24, Q24);
-  if (fee === 0n || feeMultiplier <= 1n) {
-    return { amountOut: grossOutput - fee, fee };
+  if (fee === 0n) return { amountOut: grossOutput, fee: 0n };
+  if (feeMultiplier > 1n) {
+    if (feeMultiplier > MAX_U256 / fee) {
+      return { amountOut: 0n, fee: grossOutput };
+    }
+    fee *= feeMultiplier;
   }
-  if (feeMultiplier > MAX_U256 / fee) {
-    return { amountOut: 0n, fee: grossOutput };
-  }
-  fee *= feeMultiplier;
   if (fee >= grossOutput) return { amountOut: 0n, fee: grossOutput };
+  if (tax && tax.scaleWei > 0n && tax.priorityFeeWei > tax.thresholdWei) {
+    // BigInt preserves the widened product of the Solidity split mulDiv.
+    const extraFee = (fee * tax.priorityFeeWei) / tax.scaleWei;
+    if (extraFee >= grossOutput - fee) {
+      return { amountOut: 0n, fee: grossOutput };
+    }
+    fee += extraFee;
+  }
   return { amountOut: grossOutput - fee, fee };
 }
 
@@ -143,6 +154,7 @@ function punishmentQuoteXToY(
   state: LunarBasePoolState,
   dx: bigint,
   feeMultiplier: bigint,
+  tax?: LunarBaseMevTaxContext,
 ): LunarBaseQuoteResult {
   const effectiveFee = saturatingFeeX24(
     BigInt(state.feeBidX24),
@@ -151,7 +163,7 @@ function punishmentQuoteXToY(
   const dy = xValueInY(dx, state.anchorPrice);
   if (dy === 0n || dy > state.reserveY) return rejected(state.anchorPrice);
   return {
-    ...applyFee(dy, effectiveFee, feeMultiplier, true),
+    ...applyFee(dy, effectiveFee, feeMultiplier, true, tax),
     sqrtPriceNext: state.anchorPrice,
   };
 }
@@ -160,6 +172,7 @@ function punishmentQuoteYToX(
   state: LunarBasePoolState,
   dy: bigint,
   feeMultiplier: bigint,
+  tax?: LunarBaseMevTaxContext,
 ): LunarBaseQuoteResult {
   const effectiveFee = saturatingFeeX24(
     BigInt(state.feeAskX24),
@@ -169,7 +182,7 @@ function punishmentQuoteYToX(
   const dx = yValueInX(dy, state.anchorPrice);
   if (dx === 0n || dx > state.reserveX) return rejected(state.anchorPrice);
   return {
-    ...applyFee(dx, effectiveFee, feeMultiplier, true),
+    ...applyFee(dx, effectiveFee, feeMultiplier, true, tax),
     sqrtPriceNext: state.anchorPrice,
   };
 }
@@ -327,10 +340,11 @@ export function quoteXToY(
   state: LunarBasePoolState,
   dx: bigint,
   feeMultiplier = 1n,
+  tax?: LunarBaseMevTaxContext,
 ): LunarBaseQuoteResult {
   try {
     return state.model === 'punishment'
-      ? punishmentQuoteXToY(state, dx, feeMultiplier)
+      ? punishmentQuoteXToY(state, dx, feeMultiplier, tax)
       : concentrationQuoteXToY(state, dx, feeMultiplier);
   } catch (e) {
     if (e instanceof LunarBaseMathError) return rejected(state.anchorPrice);
@@ -342,10 +356,11 @@ export function quoteYToX(
   state: LunarBasePoolState,
   dy: bigint,
   feeMultiplier = 1n,
+  tax?: LunarBaseMevTaxContext,
 ): LunarBaseQuoteResult {
   try {
     return state.model === 'punishment'
-      ? punishmentQuoteYToX(state, dy, feeMultiplier)
+      ? punishmentQuoteYToX(state, dy, feeMultiplier, tax)
       : concentrationQuoteYToX(state, dy, feeMultiplier);
   } catch (e) {
     if (e instanceof LunarBaseMathError) return rejected(state.anchorPrice);

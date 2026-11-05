@@ -13,6 +13,7 @@ import {
   Token,
   TransferFeeParams,
   TxObject,
+  TransactionGasPriceOptions,
 } from '../types';
 import { ContractMethod, NULL_ADDRESS } from '../constants';
 import { LimitOrderExchange } from '../dex/limit-order-exchange';
@@ -42,6 +43,7 @@ export interface IParaSwapSDK {
     priceRoute: OptimalRate,
     minMaxAmount: BigInt,
     userAddress: Address,
+    gasOptions?: TransactionGasPriceOptions,
   ): Promise<TxObject>;
 
   initializePricing?(): Promise<void>;
@@ -233,7 +235,11 @@ export class LocalParaswapSDK implements IParaSwapSDK {
     priceRoute: OptimalRate,
     minMaxAmount: BigInt,
     userAddress: Address,
+    gasOptions?: TransactionGasPriceOptions,
   ) {
+    const transactionGas = gasOptions ?? {
+      gasPrice: (await this.dexHelper.provider.getGasPrice()).toString(),
+    };
     // Set deadline to be 10 min from now
     let deadline = Number((Math.floor(Date.now() / 1000) + 10 * 60).toFixed());
 
@@ -312,6 +318,7 @@ export class LocalParaswapSDK implements IParaSwapSDK {
                         destToken,
                         priceRoute.side,
                         {
+                          ...transactionGas,
                           slippageFactor,
                           txOrigin: userAddress,
                           userAddress,
@@ -350,6 +357,7 @@ export class LocalParaswapSDK implements IParaSwapSDK {
         : this.transactionBuilder;
 
     return await txBuilder.build({
+      ...transactionGas,
       priceRoute,
       minMaxAmount: minMaxAmount.toString(),
       userAddress,

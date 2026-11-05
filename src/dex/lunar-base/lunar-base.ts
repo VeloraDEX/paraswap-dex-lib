@@ -1,9 +1,14 @@
+import BigNumber from 'bignumber.js';
 import { Interface, JsonFragment } from '@ethersproject/abi';
 import { DeepReadonly } from 'ts-essentials';
 import {
   AdapterExchangeParam,
   Address,
   DexExchangeParam,
+  DexExecutionContext,
+  ExchangeTxInfo,
+  OptimalSwapExchange,
+  PreprocessTransactionOptions,
   ExchangePrices,
   GetDexParamOptions,
   Logger,
@@ -36,7 +41,9 @@ import {
   LunarBasePoolState,
   DexParams,
 } from './types';
-import { LunarBaseEventPool } from './lunar-base-pool';
+import { LunarBaseEventPool, getOnChainState } from './lunar-base-pool';
+import { priorityFeeWei, readExecutionFeePolicy } from './fees';
+import { SlippageCheckError } from '../generic-rfq/types';
 import { quoteXToY, quoteYToX } from './math';
 
 export class LunarBase extends SimpleExchange implements IDex<LunarBaseData> {
@@ -137,6 +144,8 @@ export class LunarBase extends SimpleExchange implements IDex<LunarBaseData> {
     if (!state || !this.isStateUsable(state, blockNumber)) return null;
 
     const isXToY = this.isTokenX(pool, srcToken.address);
+    // Indicative pricing has no origin/gas context. Both build entrypoints
+    // re-read execution fees and enforce the user's minimum before encoding.
     const feeMultiplier = this.feeMultiplier(state);
     const quote = (amount: bigint) =>
       isXToY
@@ -186,7 +195,7 @@ export class LunarBase extends SimpleExchange implements IDex<LunarBaseData> {
     };
   }
 
-  getDexParam(
+  async getDexParam(
     srcToken: Address,
     destToken: Address,
     srcAmount: NumberAsString,
@@ -196,10 +205,29 @@ export class LunarBase extends SimpleExchange implements IDex<LunarBaseData> {
     side: SwapSide,
     executorAddress: Address,
     options?: GetDexParamOptions,
-  ): DexExchangeParam {
+  ): Promise<DexExchangeParam> {
     if (side === SwapSide.BUY) {
       throw new Error(`${this.dexKey}: BUY is not supported`);
     }
+
+    const context = options?.executionContext;
+    if (!context)
+      throw new Error(
+        'LunarBase: execution context with tx.origin is required',
+      );
+    if (context.minimumAmountOut === undefined) {
+      throw new Error(
+        'LunarBase: execution context minimumAmountOut is required',
+      );
+    }
+    const output = await this.getExecutionQuote(
+      data,
+      BigInt(srcAmount),
+      executorAddress,
+      context,
+    );
+    this.checkSlippage(output, BigInt(context.minimumAmountOut));
+    this.checkSlippage(output, BigInt(destAmount));
 
     const deadline = getLocalDeadlineAsFriendlyPlaceholder(
       options?.nowTimestampMs,
@@ -255,6 +283,99 @@ export class LunarBase extends SimpleExchange implements IDex<LunarBaseData> {
         'amountOut',
       ),
     };
+  }
+
+  async preProcessTransaction(
+    exchange: OptimalSwapExchange<LunarBaseData>,
+    _srcToken: Token,
+    _destToken: Token,
+    side: SwapSide,
+    options: PreprocessTransactionOptions,
+  ): Promise<[OptimalSwapExchange<LunarBaseData>, ExchangeTxInfo]> {
+    if (side !== SwapSide.SELL || !exchange.data) {
+      throw new Error('LunarBase: SELL exchange data is required');
+    }
+    if (!options.slippageFactor.isFinite() || options.slippageFactor.lte(0)) {
+      throw new Error('LunarBase: invalid slippage factor');
+    }
+    const output = await this.getExecutionQuote(
+      exchange.data,
+      BigInt(exchange.srcAmount),
+      options.executionContractAddress,
+      options,
+    );
+    const minimum = new BigNumber(exchange.destAmount)
+      .times(options.slippageFactor)
+      .integerValue(BigNumber.ROUND_CEIL);
+    this.checkSlippage(output, BigInt(minimum.toFixed(0)));
+    return [exchange, {}];
+  }
+
+  private checkSlippage(output: bigint, minimum: bigint) {
+    if (minimum < 0n || output === 0n || output < minimum) {
+      throw new SlippageCheckError(
+        this.dexKey,
+        this.network,
+        SwapSide.SELL,
+        minimum.toString(),
+        output.toString(),
+        new BigNumber(1),
+        true,
+      );
+    }
+  }
+
+  private async getExecutionQuote(
+    data: LunarBaseData,
+    amount: bigint,
+    executor: Address,
+    context: DexExecutionContext,
+  ): Promise<bigint> {
+    const config = this.config.pools.find(
+      p => p.address === data.pool.toLowerCase(),
+    );
+    if (
+      !config ||
+      amount <= 0n ||
+      data.tokenIn.toLowerCase() !==
+        (data.isXToY ? config.tokenX : config.tokenY).poolAddress ||
+      data.tokenOut.toLowerCase() !==
+        (data.isXToY ? config.tokenY : config.tokenX).poolAddress
+    ) {
+      throw new Error('LunarBase: invalid pool swap data');
+    }
+    const block = await this.dexHelper.provider.getBlock('latest');
+    if (!block) throw new Error('LunarBase: execution block unavailable');
+    const caller = executor.toLowerCase();
+    const [state, policy] = await Promise.all([
+      getOnChainState(this.dexHelper, config.address, [caller], block.number),
+      readExecutionFeePolicy(
+        this.dexHelper,
+        config.address,
+        block.number,
+        context.txOrigin,
+      ),
+    ]);
+    if (!this.isStateUsable(state, block.number)) {
+      throw new Error('LunarBase: pool is paused or price is stale');
+    }
+    const scaleWei = state.model === 'punishment' ? policy.scaleWei : 0n;
+    const priority = priorityFeeWei(
+      context,
+      BigInt(block.baseFeePerGas?.toString() ?? '0'),
+      scaleWei > 0n,
+    );
+    const multiplier =
+      state.executorsWhitelist[caller] && !policy.originBlacklisted
+        ? 1n
+        : state.blacklistFeeMultiplier;
+    const tax = {
+      priorityFeeWei: priority,
+      thresholdWei: policy.thresholdWei,
+      scaleWei,
+    };
+    return (data.isXToY ? quoteXToY : quoteYToX)(state, amount, multiplier, tax)
+      .amountOut;
   }
 
   async updatePoolState(): Promise<void> {
