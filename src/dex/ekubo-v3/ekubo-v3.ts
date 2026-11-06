@@ -37,6 +37,12 @@ import { concat, zeroPad } from 'ethers/lib/utils';
 import RouterABI from '../../abi/ekubo-v3/mev-capture-router.json';
 import { erc20Iface } from '../../lib/tokens/utils';
 import { EkuboV3PoolManager } from './ekubo-v3-pool-manager';
+import {
+  ZeroSeedLaunchPool,
+  ZERO_SEED_LAUNCH_CHAIN,
+} from './pools/zero-seed-launch';
+import { ExtensionType, extensionType } from './extension-type';
+import { PoolKey } from './pools/utils';
 import { uint8ToNumber } from '../../lib/decoders';
 import { PoolsWriter, toReserves } from '../../lib/pools-storage';
 
@@ -84,6 +90,8 @@ export class EkuboV3 extends SimpleExchange implements IDex<EkuboData> {
       this.dexHelper,
       this.contracts,
       this.config.subgraphId,
+      Number(this.network) === ZERO_SEED_LAUNCH_CHAIN &&
+        !!this.config.zeroSeedLaunchRouter,
     );
     this.poolsWriter = new PoolsWriter({
       cache: dexHelper.cache,
@@ -163,6 +171,10 @@ export class EkuboV3 extends SimpleExchange implements IDex<EkuboData> {
       const poolId = pool.key.stringId;
 
       try {
+        // Fees decay even in blocks without pool logs. Pin Core, the immutable
+        // schedule and the timestamp before producing any launch price.
+        if (pool instanceof ZeroSeedLaunchPool)
+          await pool.updateState(blockNumber);
         const quotes = [];
         const skipAheadMap: Record<string, number> = {};
 
@@ -224,6 +236,13 @@ export class EkuboV3 extends SimpleExchange implements IDex<EkuboData> {
     side: SwapSide,
     _executorAddress: Address,
   ): DexExchangeParam {
+    const launch =
+      extensionType(
+        PoolKey.fromAbi(data.poolKeyAbi).config.extension,
+        this.network,
+      ) === ExtensionType.ZeroSeedLaunch;
+    if (launch && !this.config.zeroSeedLaunchRouter)
+      throw new Error('Launch forwarding router is not configured');
     const amount = BigInt(side === SwapSide.BUY ? `-${destAmount}` : srcAmount);
     const amountStr = (
       side === SwapSide.SELL ? srcAmount : destAmount
@@ -250,7 +269,9 @@ export class EkuboV3 extends SimpleExchange implements IDex<EkuboData> {
         [data.poolKeyAbi, params, recipient],
       ),
       sendEthButSupportsInsertFromAmount: true,
-      targetExchange: ROUTER_ADDRESS,
+      targetExchange: launch
+        ? this.config.zeroSeedLaunchRouter!
+        : ROUTER_ADDRESS,
       dexFuncHasRecipient: true,
       returnAmountPos: undefined,
       amountsPacked128: true,

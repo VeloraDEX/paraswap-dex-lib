@@ -98,6 +98,7 @@ export function quoteConcentrated(
     >
   >,
   sqrtRatioLimit?: bigint,
+  roundCompact = false,
 ): Quote<
   Pick<
     ConcentratedPoolState.Object,
@@ -142,6 +143,7 @@ export function quoteConcentrated(
       isToken1,
       sqrtRatioLimit: stepSqrtRatioLimit,
       amount: amountRemaining,
+      roundCompact,
     });
 
     amountRemaining -= step.consumedAmount;

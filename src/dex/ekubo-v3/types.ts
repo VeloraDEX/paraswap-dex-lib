@@ -35,6 +35,9 @@ export type EkuboData = {
 
 export type DexParams = {
   subgraphId: string;
+  // Must implement the Router ABI and forward the final launch extension.
+  // Unset until a provider-approved Robinhood router is deployed and verified.
+  zeroSeedLaunchRouter?: string;
 };
 
 export type EkuboContract = {

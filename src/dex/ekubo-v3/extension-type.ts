@@ -4,6 +4,10 @@ import {
   ORACLE_ADDRESS,
   TWAMM_ADDRESS,
 } from './config';
+import {
+  ZERO_SEED_LAUNCH_CHAIN,
+  ZERO_SEED_LAUNCH_ROBINHOOD,
+} from './pools/zero-seed-launch';
 
 export const enum ExtensionType {
   Unknown,
@@ -12,6 +16,7 @@ export const enum ExtensionType {
   Twamm,
   MevCapture,
   BoostedFeesConcentrated,
+  ZeroSeedLaunch,
 }
 
 const KNOWN_EXTENSION_TYPES = new Map<bigint, ExtensionType>([
@@ -24,7 +29,15 @@ const KNOWN_EXTENSION_TYPES = new Map<bigint, ExtensionType>([
   ],
 ]);
 
-export function extensionType(extension: bigint): ExtensionType {
+export function extensionType(
+  extension: bigint,
+  chainId?: number,
+): ExtensionType {
+  if (
+    chainId === ZERO_SEED_LAUNCH_CHAIN &&
+    extension === BigInt(ZERO_SEED_LAUNCH_ROBINHOOD)
+  )
+    return ExtensionType.ZeroSeedLaunch;
   const known = KNOWN_EXTENSION_TYPES.get(extension);
   if (typeof known !== 'undefined') {
     return known;
