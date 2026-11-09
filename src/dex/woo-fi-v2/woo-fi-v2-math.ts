@@ -116,17 +116,17 @@ export class WooFiV2Math {
     base1Amounts: bigint[],
   ): bigint[] | null {
     try {
-      let state1: TokenState = this.state.tokenStates[baseToken1];
-      let state2: TokenState = this.state.tokenStates[baseToken2];
+      const s1 = this.state.tokenStates[baseToken1];
+      const s2 = this.state.tokenStates[baseToken2];
 
-      if (!state1.woFeasible || !state2.woFeasible) {
+      if (!s1.woFeasible || !s2.woFeasible) {
         let errorMessage = 'Oracle state is not feasible for base token';
-        const logBoth = !state1.woFeasible && !state2.woFeasible;
+        const logBoth = !s1.woFeasible && !s2.woFeasible;
 
         if (logBoth) {
           errorMessage += `s ${baseToken1} and ${baseToken2}`;
         } else {
-          const token = !state1.woFeasible ? baseToken1 : baseToken2;
+          const token = !s1.woFeasible ? baseToken1 : baseToken2;
           errorMessage += ` ${token}`;
         }
 
@@ -139,11 +139,13 @@ export class WooFiV2Math {
       const feeRate1 = this.state.tokenInfos[baseToken1].feeRate;
       const feeRate2 = this.state.tokenInfos[baseToken2].feeRate;
 
-      const spread = max(state1.spread, state2.spread) / 2n;
+      const spread = max(s1.spread, s2.spread) / 2n;
       const feeRate = max(feeRate1, feeRate2);
 
-      state1.spread = spread;
-      state2.spread = spread;
+      // Copies: the contract does this on memory structs, while this.state is
+      // the poller's shared cached state.
+      const state1: TokenState = { ...s1, spread };
+      const state2: TokenState = { ...s2, spread };
 
       let quoteAmounts = this._calcQuoteAmountSellBase(
         baseToken1,
