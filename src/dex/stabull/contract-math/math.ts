@@ -238,9 +238,8 @@ function calculateTrade(
     inputAmount,
     'input balance after intake',
   );
-  // viewOriginSwapData pre-debits the output balance by the input amount before
-  // calculateTrade's first psi calculation. Later iterations replace this with
-  // oldOutputBalance + the current signed output estimate.
+  // Both swap paths subtract the signed specified amount from the calculated
+  // token's balance before the first fee iteration.
   newBalances[outputIndex] = sub(
     newBalances[outputIndex],
     inputAmount,
@@ -336,7 +335,7 @@ export function quoteSell(
   inputIndex: number,
   amount: bigint,
 ): bigint {
-  return calculateSell(state, inputIndex, amount, false);
+  return calculateQuote(state, inputIndex, amount, false, false);
 }
 
 /** Reproduces viewOriginSwap for independent comparisons with the read-only contract. */
@@ -345,15 +344,34 @@ export function quoteViewSell(
   inputIndex: number,
   amount: bigint,
 ): bigint {
-  return calculateSell(state, inputIndex, amount, true);
+  return calculateQuote(state, inputIndex, amount, true, false);
 }
 
-/** Shares curve math while preserving each contract path's balance rounding. */
-function calculateSell(
+/** Quotes exact-output BUY through targetSwap's execution path. */
+export function quoteBuy(
+  state: DeepReadonly<PoolState>,
+  inputIndex: number,
+  amount: bigint,
+): bigint {
+  return calculateQuote(state, 1 - inputIndex, amount, false, true);
+}
+
+/** Reproduces viewTargetSwap for independent on-chain comparisons. */
+export function quoteViewBuy(
+  state: DeepReadonly<PoolState>,
+  inputIndex: number,
+  amount: bigint,
+): bigint {
+  return calculateQuote(state, 1 - inputIndex, amount, true, true);
+}
+
+/** BUY supplies a negative target amount and solves for positive origin input. */
+function calculateQuote(
   state: DeepReadonly<PoolState>,
   inputIndex: number,
   amount: bigint,
   useViewBalance: boolean,
+  isBuy: boolean,
 ): bigint {
   if (amount === 0n) return 0n;
   requireCondition(
@@ -423,13 +441,14 @@ function calculateSell(
     'lambda is outside contract bounds',
   );
 
-  const inputAmount = toNumeraire(
+  const numeraireAmount = toNumeraire(
     amount,
     input.decimals,
     input.oracleDecimals,
     input.answer,
   );
-  requireCondition(inputAmount > 0n, 'input rounds to zero numeraire');
+  requireCondition(numeraireAmount > 0n, 'amount rounds to zero numeraire');
+  const inputAmount = isBuy ? -numeraireAmount : numeraireAmount;
   const oldBalances: [bigint, bigint] = [
     toNumeraire(
       state.tokens[0].balance,
@@ -444,14 +463,15 @@ function calculateSell(
       state.tokens[1].answer,
     ),
   ];
-  // originSwap transfers first, converts the new balance, then subtracts the
-  // separately converted input. Independent floors make this differ from the
-  // view function's conversion of the old balance, especially for 6-decimal input.
+  // Execution converts the balance after intake (SELL) or payout (BUY), then
+  // subtracts the signed amount. Separate floors can differ from the view path.
   if (!useViewBalance) {
-    const postTransferBalance = input.balance + amount;
+    const postTransferBalance = input.balance + (isBuy ? -amount : amount);
     requireCondition(
-      postTransferBalance <= MAX_U256,
-      'input balance after transfer overflows uint256',
+      postTransferBalance >= 0n && postTransferBalance <= MAX_U256,
+      isBuy
+        ? 'target amount exceeds pool balance'
+        : 'input balance after transfer overflows uint256',
     );
     oldBalances[inputIndex] = sub(
       toNumeraire(
@@ -476,19 +496,23 @@ function calculateSell(
     outputIndex,
     state,
   );
-  requireCondition(curveOutput < 0n, 'curve returned a non-output amount');
-  const epsilonMultiplier = sub(
-    ONE,
-    state.parameters.epsilon,
-    'epsilon multiplier',
+  requireCondition(
+    isBuy ? curveOutput > 0n : curveOutput < 0n,
+    'curve returned an invalid amount',
   );
-  // Solidity multiplies the negative signed output first, then AssimilatorV2
-  // applies checked abs(). For negative products, arithmetic shift rounds down;
-  // taking abs before multiplication would round the opposite way by one ULP.
+  const epsilonMultiplier = isBuy
+    ? add(ONE, state.parameters.epsilon, 'epsilon multiplier')
+    : sub(ONE, state.parameters.epsilon, 'epsilon multiplier');
+  // SELL multiplies the negative output before taking abs(); BUY multiplies
+  // positive input. Preserve the signed shift and unchecked int128 wrap.
   const signedNetOutput = uncheckedMul(curveOutput, epsilonMultiplier);
   requireCondition(
     signedNetOutput !== MIN_I128,
     'epsilon-adjusted output cannot be represented as absolute int128',
+  );
+  requireCondition(
+    !isBuy || signedNetOutput > 0n,
+    'invalid fee-adjusted input',
   );
   const netOutput = signedNetOutput < 0n ? -signedNetOutput : signedNetOutput;
   const rawNumerator =

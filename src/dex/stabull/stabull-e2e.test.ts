@@ -34,6 +34,7 @@ function testForNetwork(
   const poolIdentifiers = { [dexKey]: [`${dexKey}_${poolAddress}`] };
   const sideToContractMethods = new Map([
     [SwapSide.SELL, [ContractMethod.swapExactAmountIn]],
+    [SwapSide.BUY, [ContractMethod.swapExactAmountOut]],
   ]);
 
   describe(`${network}`, () => {
@@ -46,7 +47,7 @@ function testForNetwork(
                 tokens[tokenASymbol],
                 tokens[tokenBSymbol],
                 holders[tokenASymbol] ?? NULL_ADDRESS,
-                tokenAAmount,
+                side === SwapSide.SELL ? tokenAAmount : tokenBAmount,
                 side,
                 dexKey,
                 contractMethod,
@@ -60,7 +61,7 @@ function testForNetwork(
                 tokens[tokenBSymbol],
                 tokens[tokenASymbol],
                 holders[tokenBSymbol] ?? NULL_ADDRESS,
-                tokenBAmount,
+                side === SwapSide.SELL ? tokenBAmount : tokenAAmount,
                 side,
                 dexKey,
                 contractMethod,

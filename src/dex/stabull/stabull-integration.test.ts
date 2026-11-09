@@ -15,7 +15,12 @@ import {
 } from '../../../tests/utils';
 import { poolInterface } from './abi';
 import { Stabull } from './stabull';
-import { quoteSell, quoteViewSell } from './contract-math/math';
+import {
+  quoteBuy,
+  quoteSell,
+  quoteViewBuy,
+  quoteViewSell,
+} from './contract-math/math';
 
 const schedulerRun = jest
   .spyOn(PromiseScheduler.prototype as any, 'run')
@@ -132,14 +137,25 @@ async function testPricingOnNetwork(
   expect(inputIndex).toBeGreaterThanOrEqual(0);
 
   const executionPrices = amounts.map(amount =>
-    quoteSell(state, inputIndex, amount),
+    (side === SwapSide.SELL ? quoteSell : quoteBuy)(state, inputIndex, amount),
   );
   expect(poolPrices![0].prices).toEqual(executionPrices);
+  const unitToken = side === SwapSide.SELL ? srcToken : destToken;
+  expect(poolPrices![0].unit).toBe(
+    (side === SwapSide.SELL ? quoteSell : quoteBuy)(
+      state,
+      inputIndex,
+      BI_POWS[unitToken.decimals],
+    ),
+  );
 
-  // The public quote uses originSwap arithmetic. The view quote is checked
-  // separately because the two paths floor input balances in a different order.
+  // Execution and view paths floor the transferred token balance differently.
   const viewPrices = amounts.map(amount =>
-    quoteViewSell(state, inputIndex, amount),
+    (side === SwapSide.SELL ? quoteViewSell : quoteViewBuy)(
+      state,
+      inputIndex,
+      amount,
+    ),
   );
   await checkOnChainPricing(
     stabull,
@@ -249,6 +265,34 @@ describe('Stabull', () => {
           SwapSide.SELL,
           amountsForReverseSell,
           'viewOriginSwap',
+        );
+      });
+
+      it('getPoolIdentifiers and getPricesVolume BUY', async () => {
+        await testPricingOnNetwork(
+          stabull,
+          network,
+          dexKey,
+          blockNumber,
+          srcTokenSymbol,
+          destTokenSymbol,
+          SwapSide.BUY,
+          amountsForReverseSell,
+          'viewTargetSwap',
+        );
+      });
+
+      it('getPoolIdentifiers and getPricesVolume reverse BUY', async () => {
+        await testPricingOnNetwork(
+          stabull,
+          network,
+          dexKey,
+          blockNumber,
+          destTokenSymbol,
+          srcTokenSymbol,
+          SwapSide.BUY,
+          amountsForSell,
+          'viewTargetSwap',
         );
       });
 

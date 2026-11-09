@@ -31,7 +31,7 @@ import { poolInterface } from './abi';
 import { StabullFactory } from './stabull-factory';
 import { StabullEventPool } from './stabull-pool';
 import { StabullData } from './types';
-import { quoteSell } from './contract-math/math';
+import { quoteBuy, quoteSell } from './contract-math/math';
 
 const STABULL_GAS_COST = 250_000;
 
@@ -66,14 +66,14 @@ export class Stabull extends SimpleExchange implements IDex<StabullData> {
     return null;
   }
 
-  // Return enabled pools that contain both tokens for a supported SELL.
+  // Return enabled pools that contain both tokens for either swap side.
   async getPoolIdentifiers(
     srcToken: Token,
     destToken: Token,
-    side: SwapSide,
+    _side: SwapSide,
     _blockNumber: number,
   ): Promise<string[]> {
-    if (side !== SwapSide.SELL || !this.factoryReady()) return [];
+    if (!this.factoryReady()) return [];
     const src = srcToken.address.toLowerCase();
     const dest = destToken.address.toLowerCase();
     return [...this.factory.pools.values()]
@@ -98,7 +98,7 @@ export class Stabull extends SimpleExchange implements IDex<StabullData> {
     blockNumber: number,
     limitPools?: string[],
   ): Promise<null | ExchangePrices<StabullData>> {
-    if (side !== SwapSide.SELL || !this.factoryReady()) return null;
+    if (!this.factoryReady()) return null;
     const src = srcToken.address.toLowerCase();
     const dest = destToken.address.toLowerCase();
     if (src === dest) return null;
@@ -125,7 +125,11 @@ export class Stabull extends SimpleExchange implements IDex<StabullData> {
       if (inputIndex < 0) continue;
       const quoteEach = (amount: bigint): bigint => {
         try {
-          return quoteSell(state, inputIndex, amount);
+          return (side === SwapSide.SELL ? quoteSell : quoteBuy)(
+            state,
+            inputIndex,
+            amount,
+          );
         } catch (_error) {
           // Keep valid sizes usable when a larger requested amount hits a halt.
           return 0n;
@@ -133,7 +137,12 @@ export class Stabull extends SimpleExchange implements IDex<StabullData> {
       };
       prices.push({
         prices: amounts.map(quoteEach),
-        unit: quoteEach(10n ** BigInt(srcToken.decimals)),
+        unit: quoteEach(
+          10n **
+            BigInt(
+              side === SwapSide.SELL ? srcToken.decimals : destToken.decimals,
+            ),
+        ),
         gasCost: STABULL_GAS_COST,
         exchange: this.dexKey,
         data: { pool: pool.poolConfig.address },
@@ -144,7 +153,7 @@ export class Stabull extends SimpleExchange implements IDex<StabullData> {
     return prices.length > 0 ? prices : null;
   }
 
-  // Estimate the fixed calldata size of an originSwap call.
+  // Estimate the fixed calldata size shared by both swap calls.
   getCalldataGasCost(_poolPrices: PoolPrices<StabullData>): number | number[] {
     return (
       CALLDATA_GAS_COST.DEX_OVERHEAD +
@@ -167,7 +176,7 @@ export class Stabull extends SimpleExchange implements IDex<StabullData> {
     throw new Error('Stabull: V5 adapters are not supported');
   }
 
-  // Encode the pool's exact-input swap call for Augustus V6.
+  // Both entrypoints use (origin, target, input amount/limit, output amount/limit, deadline).
   getDexParam(
     srcToken: Address,
     destToken: Address,
@@ -179,11 +188,9 @@ export class Stabull extends SimpleExchange implements IDex<StabullData> {
     _executorAddress: Address,
     options?: GetDexParamOptions,
   ): DexExchangeParam {
-    if (side !== SwapSide.SELL) {
-      throw new Error('Stabull: only SELL swaps are supported');
-    }
     const pool = data.pool;
-    const swapData = poolInterface.encodeFunctionData('originSwap', [
+    const swapFunction = side === SwapSide.SELL ? 'originSwap' : 'targetSwap';
+    const swapData = poolInterface.encodeFunctionData(swapFunction, [
       srcToken,
       destToken,
       srcAmount,
@@ -195,11 +202,14 @@ export class Stabull extends SimpleExchange implements IDex<StabullData> {
       dexFuncHasRecipient: false,
       exchangeData: swapData,
       targetExchange: pool,
-      returnAmountPos: extractReturnAmountPosition(
-        poolInterface,
-        'originSwap',
-        'amountOut',
-      ),
+      returnAmountPos:
+        side === SwapSide.SELL
+          ? extractReturnAmountPosition(
+              poolInterface,
+              'originSwap',
+              'amountOut',
+            )
+          : undefined,
     };
   }
 
