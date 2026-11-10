@@ -52,21 +52,12 @@ class UniswapV4PoolMath {
     const isSell = side === SwapSide.SELL;
 
     if (hook?.getHookPermissions().beforeSwap) {
-      try {
-        hook.beforeSwap!(
-          NULL_ADDRESS,
-          pool.key,
-          {
-            zeroForOne,
-            amountSpecified: '0',
-            sqrtPriceLimitX96: '0',
-          },
-          '0x',
-        );
-      } catch (e) {
-        // the hook reverts this swap on chain, so the pool has no price for it
-        return amounts.map(() => 0n);
-      }
+      hook.beforeSwap!(
+        NULL_ADDRESS,
+        pool.key,
+        { zeroForOne, amountSpecified: '0', sqrtPriceLimitX96: '0' },
+        '0x',
+      );
     }
 
     if (isSell) {

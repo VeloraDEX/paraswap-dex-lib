@@ -9,23 +9,24 @@ import {
   SwapParams,
 } from '../types';
 import { _require } from '../../../../utils';
-import { SellOnlyHookConfig } from './config';
+import { SellOnlyHookConfig, SellOnlyParams } from './config';
 
 const BEFORE_SWAP_SELECTOR = '0x575e24b4';
 
-// SellOnly lets anyone sell currency0 into the pool's liquidity; every other
-// swap reverts on chain unless the pool's owner sends it. It takes no fee and
-// returns no delta, so a permitted swap prices exactly as a hookless pool.
+// Any other swap reverts on chain unless the pool's owner sends it.
 export class SellOnlyHook implements IBaseHook {
   readonly name = this.constructor.name;
   readonly address: string;
+  readonly sellsCurrency0: boolean;
 
   constructor(
     readonly dexHelper: IDexHelper,
     readonly network: Network,
     readonly logger: Logger,
+    config: SellOnlyParams = SellOnlyHookConfig[network],
   ) {
-    this.address = SellOnlyHookConfig[network].hookAddress.toLowerCase();
+    this.address = config.hookAddress.toLowerCase();
+    this.sellsCurrency0 = config.sellsCurrency0;
   }
 
   registerPool(_poolId: string, _poolKey: PoolKey) {}
@@ -58,10 +59,12 @@ export class SellOnlyHook implements IBaseHook {
     _hookData: string,
   ): [string, BeforeSwapDelta, number] {
     _require(
-      params.zeroForOne,
-      'SellOnly: only currency0 can be sold into the pool',
+      params.zeroForOne === this.sellsCurrency0,
+      `${this.name}: only ${
+        this.sellsCurrency0 ? 'currency0' : 'currency1'
+      } can be sold into the pool`,
       { zeroForOne: params.zeroForOne },
-      'params.zeroForOne',
+      `params.zeroForOne === ${this.sellsCurrency0}`,
     );
 
     return [BEFORE_SWAP_SELECTOR, { amount0: 0n, amount1: 0n }, 0];
