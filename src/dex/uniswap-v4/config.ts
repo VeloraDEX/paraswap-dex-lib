@@ -2,6 +2,7 @@ import { DexConfigMap } from '../../types';
 import { Network } from '../../constants';
 import { DexParams, SubgraphPool } from './types';
 import { ArenaHook } from './hooks/arena/arena-hook';
+import { SellOnlyHook } from './hooks/sell-only/sell-only-hook';
 
 export const UniswapV4Config: DexConfigMap<DexParams> = {
   UniswapV4: {
@@ -12,6 +13,7 @@ export const UniswapV4Config: DexConfigMap<DexParams> = {
       router: '0x66a9893cc07d91d95644aedd05d03f95e1dba8af',
       stateView: '0x7ffe42c4a5deea5b0fec41c94c136cf115597227',
       stateMulticall: '0xDCf1849caCdfF839f93682262a04915f83a9dB0e',
+      supportedHooks: [SellOnlyHook],
     },
     [Network.BASE]: {
       poolManager: '0x498581ff718922c3f8e6a244956af099b2652b2b',
