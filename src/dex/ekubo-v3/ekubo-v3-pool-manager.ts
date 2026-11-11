@@ -32,6 +32,10 @@ import { MevCapturePool } from './pools/mev-capture';
 import { TwammPool, TwammPoolState } from './pools/twamm';
 import { BoostedFeesPool, BoostedFeesPoolState } from './pools/boosted-fees';
 import { ExtensionType, extensionType } from './extension-type';
+import {
+  ZeroSeedLaunchPool,
+  ZERO_SEED_LAUNCH_ROBINHOOD,
+} from './pools/zero-seed-launch';
 
 export const EVENT_EMITTERS = [
   CORE_ADDRESS,
@@ -41,6 +45,7 @@ export const EVENT_EMITTERS = [
 
 const SUBGRAPH_PAGE_SIZE = 1000;
 const SUBGRAPH_EXTENSIONS = [
+  ZERO_SEED_LAUNCH_ROBINHOOD,
   ORACLE_ADDRESS,
   TWAMM_ADDRESS,
   MEV_CAPTURE_ADDRESS,
@@ -143,6 +148,7 @@ export class EkuboV3PoolManager implements EventSubscriber {
     private readonly dexHelper: IDexHelper,
     private readonly contracts: EkuboContracts,
     private readonly subgraphId: string,
+    private readonly launchExecutionEnabled = false,
   ) {
     const {
       core: { contract: coreContract, interface: coreIface },
@@ -245,7 +251,7 @@ export class EkuboV3PoolManager implements EventSubscriber {
         }
 
         try {
-          this.handlePoolInitialized(
+          await this.handlePoolInitialized(
             this.contracts.core.interface.decodeEventLog(
               this.poolInitializedFragment,
               log.data,
@@ -514,7 +520,10 @@ export class EkuboV3PoolManager implements EventSubscriber {
         poolKeyWithInitBlockNumber,
       ) => {
         switch (
-          extensionType(poolKeyWithInitBlockNumber.key.config.extension)
+          extensionType(
+            poolKeyWithInitBlockNumber.key.config.extension,
+            this.dexHelper.config.data.network,
+          )
         ) {
           case ExtensionType.Twamm:
             twammPoolKeys.push(
@@ -530,6 +539,10 @@ export class EkuboV3PoolManager implements EventSubscriber {
           case ExtensionType.Oracle:
           case ExtensionType.MevCapture:
             otherPoolKeys.push(poolKeyWithInitBlockNumber);
+            break;
+          case ExtensionType.ZeroSeedLaunch:
+            if (this.launchExecutionEnabled)
+              otherPoolKeys.push(poolKeyWithInitBlockNumber);
             break;
           default:
             this.logger.debug(
@@ -601,7 +614,10 @@ export class EkuboV3PoolManager implements EventSubscriber {
             await Promise.all(
               fetchedData.map(async (data, i) => {
                 const { key: poolKey, initBlockNumber } = batch[i];
-                const extType = extensionType(poolKey.config.extension);
+                const extType = extensionType(
+                  poolKey.config.extension,
+                  this.dexHelper.config.data.network,
+                );
 
                 try {
                   if (isStableswapKey(poolKey)) {
@@ -636,6 +652,18 @@ export class EkuboV3PoolManager implements EventSubscriber {
                     }
                   } else if (isConcentratedKey(poolKey)) {
                     switch (extType) {
+                      case ExtensionType.ZeroSeedLaunch:
+                        await addPool<
+                          ConcentratedPoolTypeConfig,
+                          ConcentratedPoolState.Object,
+                          ZeroSeedLaunchPool
+                        >(
+                          ZeroSeedLaunchPool,
+                          undefined,
+                          initBlockNumber,
+                          poolKey,
+                        );
+                        break;
                       case ExtensionType.NoSwapCallPoints:
                         await addPool(
                           ConcentratedPool,
@@ -831,7 +859,7 @@ export class EkuboV3PoolManager implements EventSubscriber {
     this.poolsByString.clear();
   }
 
-  private handlePoolInitialized(
+  private async handlePoolInitialized(
     ev: Result,
     blockHeader: Readonly<BlockHeader>,
   ) {
@@ -892,6 +920,17 @@ export class EkuboV3PoolManager implements EventSubscriber {
           );
       }
     } else if (isConcentratedKey(poolKey)) {
+      if (
+        extensionType(extension, this.dexHelper.config.data.network) ===
+        ExtensionType.ZeroSeedLaunch
+      ) {
+        if (!this.launchExecutionEnabled) return;
+        const pool = new ZeroSeedLaunchPool(...commonArgs, poolKey);
+        pool.isTracking = this.isTracking;
+        await pool.updateState(blockNumber);
+        this.setPool(pool);
+        return;
+      }
       const concentratedPoolState =
         ConcentratedPoolState.fromPoolInitialization(state);
 

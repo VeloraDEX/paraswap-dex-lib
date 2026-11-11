@@ -52,6 +52,7 @@ export function computeStep({
   amount,
   isToken1,
   fee,
+  roundCompact = false,
 }: {
   sqrtRatio: bigint;
   liquidity: bigint;
@@ -59,6 +60,7 @@ export function computeStep({
   amount: bigint;
   isToken1: boolean;
   fee: bigint;
+  roundCompact?: boolean;
 }): SwapResult {
   if (amount === 0n || sqrtRatio === sqrtRatioLimit) {
     return noOp(sqrtRatio);
@@ -94,6 +96,25 @@ export function computeStep({
       liquidity,
       priceImpactAmount,
     );
+  }
+
+  // Launch pools use Core's stored 94-bit mantissa at every step. Keep the
+  // existing adapters' quoting mode explicit while introducing the new path.
+  if (roundCompact && sqrtRatioNextFromAmount !== null) {
+    const value = sqrtRatioNextFromAmount;
+    if (value >= 1n << 192n) sqrtRatioNextFromAmount = null;
+    else {
+      const shift =
+        value >= 1n << 160n
+          ? 98n
+          : value >= 1n << 128n
+          ? 66n
+          : value >= 1n << 96n
+          ? 34n
+          : 2n;
+      sqrtRatioNextFromAmount =
+        ((value + (isToken1 ? 0n : (1n << shift) - 1n)) >> shift) << shift;
+    }
   }
 
   if (
