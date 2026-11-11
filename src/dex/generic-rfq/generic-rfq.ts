@@ -84,6 +84,12 @@ export class GenericRFQ extends ParaSwapLimitOrders {
     return;
   }
 
+  initializeBlacklist(): void {
+    if (!this.dexHelper.config.isSlave) {
+      this.rateFetcher.startBlacklist();
+    }
+  }
+
   getIdentifier(srcToken: Address, destToken: Address) {
     // Keep only destination token in order to prevent taping into the same market maker liquidity during same swap (double spending)
     return `${this.dexKey}_${destToken}`.toLowerCase();

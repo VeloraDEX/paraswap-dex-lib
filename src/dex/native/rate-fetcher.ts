@@ -63,7 +63,13 @@ export class RateFetcher {
 
   start() {
     this.orderbookFetcher.startPolling();
-    this.blacklistFetcher.startPolling();
+    this.startBlacklist();
+  }
+
+  startBlacklist() {
+    if (!this.blacklistFetcher.isPolling()) {
+      this.blacklistFetcher.startPolling();
+    }
   }
 
   stop() {

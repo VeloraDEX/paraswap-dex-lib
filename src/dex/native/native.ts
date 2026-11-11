@@ -143,6 +143,12 @@ export class Native
     }
   }
 
+  initializeBlacklist(): void {
+    if (!this.dexHelper.config.isSlave) {
+      this.rateFetcher.startBlacklist();
+    }
+  }
+
   releaseResources(): void {
     if (!this.dexHelper.config.isSlave) {
       this.rateFetcher.stop();

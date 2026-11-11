@@ -212,6 +212,11 @@ export interface IDexPricing<ExchangeData> {
   // implement this function
   initializePricing?(blockNumber: number): AsyncOrSync<void>;
 
+  // Starts only the blacklist polling, for a DEX that is priced elsewhere
+  // (api-go) but whose transactions are still built here, so its blacklist
+  // must stay fresh without initializePricing.
+  initializeBlacklist?(): AsyncOrSync<void>;
+
   // Returns the list of contract adapters (name and index)
   // for a buy/sell. Return null if there are no adapters.
   getAdapters(side: SwapSide): { name: string; index: number }[] | null;

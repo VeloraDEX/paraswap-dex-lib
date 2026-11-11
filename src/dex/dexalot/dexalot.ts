@@ -155,6 +155,12 @@ export class Dexalot
     return;
   }
 
+  initializeBlacklist(): void {
+    if (!this.dexHelper.config.isSlave) {
+      this.rateFetcher.startBlacklist();
+    }
+  }
+
   getAdapters(side: SwapSide): { name: string; index: number }[] | null {
     return this.adapters[side] ? this.adapters[side] : null;
   }

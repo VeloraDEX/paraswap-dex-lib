@@ -166,7 +166,11 @@ export class RateFetcher {
     this.tokensFetcher.startPolling();
     this.rateFetcher.startPolling();
     this.pairsFetcher.startPolling();
-    if (this.blackListFetcher) {
+    this.startBlacklist();
+  }
+
+  startBlacklist() {
+    if (this.blackListFetcher && !this.blackListFetcher.isPolling()) {
       this.blackListFetcher.startPolling();
     }
   }

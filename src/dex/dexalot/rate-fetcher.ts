@@ -107,7 +107,13 @@ export class RateFetcher {
   start() {
     this.pairsFetcher.startPolling();
     this.rateFetcher.startPolling();
-    this.blacklistFetcher.startPolling();
+    this.startBlacklist();
+  }
+
+  startBlacklist() {
+    if (!this.blacklistFetcher.isPolling()) {
+      this.blacklistFetcher.startPolling();
+    }
   }
 
   stop() {
