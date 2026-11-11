@@ -1,0 +1,6 @@
+[
+  "function token() view returns (address)",
+  "function oracle() view returns (address)",
+  "function tokenDecimals() view returns (uint256)",
+  "function oracleDecimals() view returns (uint256)"
+]

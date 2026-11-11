@@ -1,0 +1,4 @@
+[
+  "function getGlobalFrozenState() view returns (bool)",
+  "event GlobalFrozenSet(bool isFrozen)"
+]

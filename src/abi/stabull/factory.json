@@ -1,0 +1,4 @@
+[
+  "function config() view returns (address)",
+  "event NewCurve(address indexed caller,bytes32 indexed id,address indexed curve)"
+]
