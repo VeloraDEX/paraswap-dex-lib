@@ -35,4 +35,30 @@ export const AlgebraIntegralConfig: DexConfigMap<DexParams> = {
       stateMulticall: '0xFC18433f203c58b8104eCb9b2e995032bc29f64f',
     },
   },
+  NamiV4: {
+    [Network.MAINNET]: {
+      factory: '0xD1Bf4A24DC17Da21410a7b047471E191eA538d43',
+      subgraphURL: 'https://subgraph.nami.fi/ethereum',
+      quoter: '0x8c9f3B1f8a82253A58C5013483cEB91728c3A909',
+      router: '0xD50c67eA041eDeDBEF203F8A92B0E71dA2d72245',
+      chunksCount: 10,
+      stateMulticall: '0xFC18433f203c58b8104eCb9b2e995032bc29f64f',
+    },
+    [Network.BASE]: {
+      factory: '0xf4502A98A15e82D66d28D2381E2F3A407ea45b83',
+      subgraphURL: 'https://subgraph.nami.fi/base',
+      quoter: '0x5Ed0C723cd5680F0f6a4c8f334876E9cD92F3Bcb',
+      router: '0xDB5F3B86f2CE75a8b2aD0120C01193CaDA30F4c8',
+      chunksCount: 10,
+      stateMulticall: '0x0062C27357c71792c6767fA799f974B30BfB8630',
+    },
+    [Network.ROBINHOOD]: {
+      factory: '0xDeDB80903df19f9dB9b393eb66E07511CB9ABdA2',
+      subgraphURL: 'https://subgraph.nami.fi/robinhood',
+      quoter: '0xb6167Dea933239D42553EE0fba1dF59Da096706d',
+      router: '0x77CCb6e518e86C0d6cebE8C34Cb392267213E6bA',
+      chunksCount: 10,
+      stateMulticall: '0xfdd8e6d7324d976056a2eaf6ebf717bff431a3e2',
+    },
+  },
 };

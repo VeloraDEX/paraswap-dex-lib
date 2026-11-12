@@ -61,6 +61,7 @@ function _priceComputationCycles(
   sqrtPriceLimitX96: bigint,
   zeroForOne: boolean,
   exactInput: boolean,
+  stopOnlyAtInitializedTicks = false,
 ): [
   // result
   PriceComputationState,
@@ -119,6 +120,25 @@ function _priceComputationCycles(
           true,
           poolState.areTicksCompressed ? poolState.tickSpacing : undefined,
         );
+      // Algebra Integral walks a linked list of initialized ticks, so a swap
+      // never pauses at an empty bitmap word. Pausing there would round the
+      // output down once per word and drift from the on-chain quote.
+      while (
+        stopOnlyAtInitializedTicks &&
+        !step.initialized &&
+        step.tickNext > TickMath.MIN_TICK &&
+        step.tickNext < TickMath.MAX_TICK
+      ) {
+        [step.tickNext, step.initialized] =
+          TickTable.nextInitializedTickWithinOneWord(
+            networkId,
+            poolState,
+            zeroForOne ? step.tickNext - 1n : step.tickNext,
+            zeroForOne,
+            true,
+            poolState.areTicksCompressed ? poolState.tickSpacing : undefined,
+          );
+      }
     } catch (e) {
       if (
         e instanceof Error &&
@@ -228,6 +248,7 @@ class AlgebraMathClass {
     amounts: bigint[],
     zeroForOne: boolean,
     side: SwapSide,
+    stopOnlyAtInitializedTicks = false,
   ): OutputResult {
     const slot0Start = poolState.globalState;
 
@@ -309,6 +330,7 @@ class AlgebraMathClass {
             sqrtPriceLimitX96,
             zeroForOne,
             exactInput,
+            stopOnlyAtInitializedTicks,
           );
         if (
           finalState.amountSpecifiedRemaining === 0n &&

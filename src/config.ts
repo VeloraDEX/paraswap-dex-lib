@@ -36,6 +36,7 @@ type BaseConfig = {
   bebopAuthName?: string;
   bebopAuthToken?: string;
   nativeApiKey?: string;
+  namiV4SubgraphApiKey?: string;
   forceRpcFallbackDexs: string[];
 };
 
@@ -78,6 +79,7 @@ const baseConfigs: { [network: number]: BaseConfig } = {
     bebopAuthName: process.env.API_KEY_BEBOP_AUTH_NAME || '',
     bebopAuthToken: process.env.API_KEY_BEBOP_AUTH_TOKEN || '',
     nativeApiKey: process.env.API_KEY_NATIVE || '',
+    namiV4SubgraphApiKey: process.env.API_KEY_NAMI_V4_SUBGRAPH || '',
     hashFlowDisabledMMs:
       process.env[`HASHFLOW_DISABLED_MMS_1`]?.split(',') || [],
     uniswapV3EventLoggingSampleRate: 0,
@@ -393,6 +395,36 @@ const baseConfigs: { [network: number]: BaseConfig } = {
     uniswapV2ExchangeRouterAddress:
       '0xfa39c1c670b48956eeF9fd0BbD0E81A290326330',
   },
+  [Network.ROBINHOOD]: {
+    network: Network.ROBINHOOD,
+    networkName: 'Robinhood',
+    isTestnet: false,
+    nativeTokenName: 'Ether',
+    nativeTokenSymbol: 'ETH',
+    wrappedNativeTokenAddress: '0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73',
+    hasEIP1559: true,
+    augustusAddress: '0x0000000000000000000000000000000000000000',
+    tokenTransferProxyAddress: '0x0000000000000000000000000000000000000000',
+    multicallV2Address: '0xcA11bde05977b3631167028862bE2a173976CA11',
+    privateHttpProvider: process.env.HTTP_PROVIDER_4663,
+    namiV4SubgraphApiKey: process.env.API_KEY_NAMI_V4_SUBGRAPH || '',
+    adapterAddresses: {},
+    augustusRFQAddress: '0xD8b841de9C1370f3C362531024AAF18974Eb11ef',
+    augustusV6Address: '0x6a000f20005980200259b80c5102003040001068',
+    executorsAddresses: {
+      Executor01: '0x006d0e0d006109f0020f3050000a713780b7b000',
+      Executor02: '0x082738d007001080a00099a000004f3006152085',
+      Executor03: '0xa000b020c290d000020aac04026b5306d60050f0',
+    },
+    rpcPollingMaxAllowedStateDelayInBlocks: 0,
+    rpcPollingBlocksBackToTriggerUpdate: 0,
+    hashFlowDisabledMMs: [],
+    uniswapV3EventLoggingSampleRate: 0,
+    rfqConfigs: {},
+    forceRpcFallbackDexs: [],
+    uniswapV2ExchangeRouterAddress:
+      '0x0000000000000000000000000000000000000000',
+  },
   [Network.BASE]: {
     network: Network.BASE,
     networkName: 'Base',
@@ -412,6 +444,7 @@ const baseConfigs: { [network: number]: BaseConfig } = {
     hashFlowAuthToken: process.env.API_KEY_HASHFLOW_AUTH_TOKEN || '',
     swaapV2AuthToken: process.env.API_KEY_SWAAP_V2_AUTH_TOKEN || '',
     nativeApiKey: process.env.API_KEY_NATIVE || '',
+    namiV4SubgraphApiKey: process.env.API_KEY_NAMI_V4_SUBGRAPH || '',
     hashFlowDisabledMMs: [],
     augustusV6Address: '0x6a000f20005980200259b80c5102003040001068',
     executorsAddresses: {
@@ -566,6 +599,7 @@ export function generateConfig(network: number): Config {
     bebopAuthName: baseConfig.bebopAuthName,
     bebopAuthToken: baseConfig.bebopAuthToken,
     nativeApiKey: baseConfig.nativeApiKey,
+    namiV4SubgraphApiKey: baseConfig.namiV4SubgraphApiKey,
     hashFlowDisabledMMs: baseConfig.hashFlowDisabledMMs,
     forceRpcFallbackDexs: baseConfig.forceRpcFallbackDexs,
     apiKeyTheGraph: process.env.API_KEY_THE_GRAPH || '',

@@ -397,6 +397,7 @@ export type Config = {
   bebopAuthName?: string;
   bebopAuthToken?: string;
   nativeApiKey?: string;
+  namiV4SubgraphApiKey?: string;
   forceRpcFallbackDexs: string[];
   apiKeyTheGraph: string;
   lidoReferralAddress?: Address;
