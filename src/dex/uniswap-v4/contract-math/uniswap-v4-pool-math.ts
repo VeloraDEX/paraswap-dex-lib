@@ -51,6 +51,15 @@ class UniswapV4PoolMath {
   ): bigint[] {
     const isSell = side === SwapSide.SELL;
 
+    if (hook?.getHookPermissions().beforeSwap) {
+      hook.beforeSwap!(
+        NULL_ADDRESS,
+        pool.key,
+        { zeroForOne, amountSpecified: '0', sqrtPriceLimitX96: '0' },
+        '0x',
+      );
+    }
+
     if (isSell) {
       return amounts.map(amount => {
         if (amount === 0n) {
