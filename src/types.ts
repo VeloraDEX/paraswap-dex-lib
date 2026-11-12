@@ -176,7 +176,21 @@ export type GetDexParamPreProcessOptions = Omit<
   destAmount: NumberAsString;
 };
 
+export type TransactionGasPriceOptions = {
+  gasPrice?: NumberAsString;
+  maxFeePerGas?: NumberAsString;
+  maxPriorityFeePerGas?: NumberAsString;
+};
+
+// Transaction fields used by DEXes with origin/gas-dependent pricing.
+// The builder replaces fee fields with the ones returned on the transaction.
+export type DexExecutionContext = TransactionGasPriceOptions & {
+  txOrigin: Address;
+  minimumAmountOut?: NumberAsString;
+};
+
 export type GetDexParamOptions = {
+  executionContext?: DexExecutionContext;
   nowTimestampMs?: number;
   preProcess?: GetDexParamPreProcessOptions;
 };
@@ -408,7 +422,7 @@ export type ExchangeTxInfo = {
   deadline?: bigint;
 };
 
-export type PreprocessTransactionOptions = {
+export type PreprocessTransactionOptions = TransactionGasPriceOptions & {
   slippageFactor: BigNumber;
   txOrigin: Address;
   userAddress: Address;

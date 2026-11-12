@@ -685,7 +685,18 @@ export class GenericSwapTransactionBuilder {
         _beneficiary,
         permit || '0x',
         uuid,
-        getDexParamOptions,
+        {
+          ...getDexParamOptions,
+          executionContext: {
+            txOrigin:
+              getDexParamOptions?.executionContext?.txOrigin ??
+              getDexParamOptions?.preProcess?.txOrigin ??
+              userAddress,
+            gasPrice,
+            maxFeePerGas,
+            maxPriorityFeePerGas,
+          },
+        },
       ));
     }
 
@@ -950,6 +961,21 @@ export class GenericSwapTransactionBuilder {
       executorAddress,
       groupFallback,
     );
+
+    if (getDexParamOptions?.executionContext && side === SwapSide.SELL) {
+      const quotedOutput = BigInt(priceRoute.destAmount);
+      const numerator = BigInt(se.destAmount) * BigInt(minMaxAmount);
+      getDexParamOptions = {
+        ...getDexParamOptions,
+        executionContext: {
+          ...getDexParamOptions.executionContext,
+          minimumAmountOut: (
+            (numerator + quotedOutput - 1n) /
+            quotedOutput
+          ).toString(),
+        },
+      };
+    }
 
     // A lazy preProcessTransaction inside getDexParam has side effects (it
     // requests a firm quote and can reserve orders), so under compareOnly the
