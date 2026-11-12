@@ -47,13 +47,5 @@ export const BebopConfig: DexConfigMap<DexParams> = {
       chainName: 'polygon',
       middleTokens: ['0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174'],
     },
-    [Network.AVALANCHE]: {
-      settlementAddress: '0xbbbbbBB520d69a9775E85b458C58c648259FAD5F',
-      chainName: 'avalanche',
-      middleTokens: [
-        '0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E', // USDC
-        '0x9702230A8Ea53601f5cD2dc00fDBc13d4dF4A8c7', // USDT
-      ],
-    },
   },
 };
