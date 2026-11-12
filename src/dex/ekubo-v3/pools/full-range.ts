@@ -7,7 +7,7 @@ import {
   EkuboContracts,
   PoolInitializationState,
 } from '../types';
-import { EkuboPool, Quote } from './pool';
+import { EkuboPool, NamedEventHandlers, Quote } from './pool';
 import { floatSqrtRatioToFixed } from './math/sqrt-ratio';
 import { computeStep, isPriceIncreasing } from './math/swap';
 import { MAX_SQRT_RATIO, MIN_SQRT_RATIO } from './math/tick';
@@ -28,6 +28,7 @@ export abstract class FullRangePoolBase<
     contracts: EkuboContracts,
     initBlockNumber: number,
     key: PoolKey<StableswapPoolTypeConfig>,
+    extraNamedEventHandlers: Record<string, NamedEventHandlers<S>> = {},
   ) {
     const {
       contract: { address },
@@ -35,7 +36,16 @@ export abstract class FullRangePoolBase<
       quoteDataFetcher,
     } = contracts.core;
 
-    super(parentName, dexHelper, logger, initBlockNumber, key, address, iface);
+    super(
+      parentName,
+      dexHelper,
+      logger,
+      initBlockNumber,
+      key,
+      address,
+      iface,
+      extraNamedEventHandlers,
+    );
 
     this.quoteDataFetcher = quoteDataFetcher;
   }

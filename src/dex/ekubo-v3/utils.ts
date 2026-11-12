@@ -12,6 +12,8 @@ import TwammDataFetcherABI from '../../abi/ekubo-v3/twamm-data-fetcher.json';
 import TwammABI from '../../abi/ekubo-v3/twamm.json';
 import BoostedFeesDataFetcherABI from '../../abi/ekubo-v3/boosted-fees-data-fetcher.json';
 import BoostedFeesABI from '../../abi/ekubo-v3/boosted-fees.json';
+import Ve33ABI from '../../abi/ekubo-v3/ve33.json';
+import Ve33DataFetcherABI from '../../abi/ekubo-v3/ve33-data-fetcher.json';
 import {
   BOOSTED_FEES_CONCENTRATED_ADDRESS,
   BOOSTED_FEES_DATA_FETCHER_ADDRESS,
@@ -19,6 +21,8 @@ import {
   QUOTE_DATA_FETCHER_ADDRESS,
   TWAMM_ADDRESS,
   TWAMM_DATA_FETCHER_ADDRESS,
+  VE33_ADDRESS,
+  VE33_DATA_FETCHER_ADDRESS,
 } from './config';
 
 export const NATIVE_TOKEN_ADDRESS = 0x0000000000000000000000000000000000000000n;
@@ -74,6 +78,15 @@ export function ekuboContracts(provider: Provider): EkuboContracts {
       quoteDataFetcher: new Contract(
         BOOSTED_FEES_DATA_FETCHER_ADDRESS,
         BoostedFeesDataFetcherABI,
+        provider,
+      ),
+    },
+    ve33: {
+      contract: new Contract(VE33_ADDRESS, Ve33ABI, provider),
+      interface: new Interface(Ve33ABI),
+      quoteDataFetcher: new Contract(
+        VE33_DATA_FETCHER_ADDRESS,
+        Ve33DataFetcherABI,
         provider,
       ),
     },

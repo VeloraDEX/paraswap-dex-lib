@@ -3,6 +3,7 @@ import {
   MEV_CAPTURE_ADDRESS,
   ORACLE_ADDRESS,
   TWAMM_ADDRESS,
+  VE33_ADDRESS,
 } from './config';
 
 export const enum ExtensionType {
@@ -12,6 +13,7 @@ export const enum ExtensionType {
   Twamm,
   MevCapture,
   BoostedFeesConcentrated,
+  Ve33,
 }
 
 const KNOWN_EXTENSION_TYPES = new Map<bigint, ExtensionType>([
@@ -22,6 +24,7 @@ const KNOWN_EXTENSION_TYPES = new Map<bigint, ExtensionType>([
     BigInt(BOOSTED_FEES_CONCENTRATED_ADDRESS),
     ExtensionType.BoostedFeesConcentrated,
   ],
+  [BigInt(VE33_ADDRESS), ExtensionType.Ve33],
 ]);
 
 export function extensionType(extension: bigint): ExtensionType {

@@ -1,0 +1,15 @@
+[
+  {
+    "type": "event",
+    "name": "VoteWeightApplied",
+    "inputs": [
+      { "name": "owner", "type": "address", "indexed": false },
+      { "name": "stakeId", "type": "bytes32", "indexed": false },
+      { "name": "poolId", "type": "bytes32", "indexed": false },
+      { "name": "weight", "type": "uint128", "indexed": false },
+      { "name": "votedSwapFee", "type": "uint64", "indexed": false },
+      { "name": "swapFee", "type": "uint64", "indexed": false }
+    ],
+    "anonymous": false
+  }
+]

@@ -1,5 +1,10 @@
 import { Result } from '@ethersproject/abi';
-import { BasicQuoteData, BoostedFeesQuoteData, EkuboContracts } from './types';
+import {
+  BasicQuoteData,
+  BoostedFeesQuoteData,
+  EkuboContracts,
+  Ve33QuoteData,
+} from './types';
 import { DeepReadonly } from 'ts-essentials';
 import { BlockHeader } from 'web3-eth';
 import { Log, Logger, Token } from '../../types';
@@ -23,6 +28,7 @@ import {
   MEV_CAPTURE_ADDRESS,
   ORACLE_ADDRESS,
   TWAMM_ADDRESS,
+  VE33_ADDRESS,
 } from './config';
 import { FullRangePool, FullRangePoolState } from './pools/full-range';
 import { StableswapPool } from './pools/stableswap';
@@ -32,11 +38,18 @@ import { MevCapturePool } from './pools/mev-capture';
 import { TwammPool, TwammPoolState } from './pools/twamm';
 import { BoostedFeesPool, BoostedFeesPoolState } from './pools/boosted-fees';
 import { ExtensionType, extensionType } from './extension-type';
+import {
+  VE33_MIN_BITMAPS_SEARCHED,
+  Ve33ConcentratedPool,
+  Ve33FullRangePool,
+  Ve33StableswapPool,
+} from './pools/ve33';
 
 export const EVENT_EMITTERS = [
   CORE_ADDRESS,
   TWAMM_ADDRESS,
   BOOSTED_FEES_CONCENTRATED_ADDRESS,
+  VE33_ADDRESS,
 ];
 
 const SUBGRAPH_PAGE_SIZE = 1000;
@@ -45,6 +58,7 @@ const SUBGRAPH_EXTENSIONS = [
   TWAMM_ADDRESS,
   MEV_CAPTURE_ADDRESS,
   BOOSTED_FEES_CONCENTRATED_ADDRESS,
+  VE33_ADDRESS,
 ];
 const SUBGRAPH_QUERY = `query ($lastId: Bytes!) {
   _meta {
@@ -151,6 +165,7 @@ export class EkuboV3PoolManager implements EventSubscriber {
         contract: boostedFeesContract,
         interface: boostedFeesIface,
       },
+      ve33: { contract: ve33Contract, interface: ve33Iface },
     } = contracts;
 
     this.poolInitializedFragment = coreIface.getEvent('PoolInitialized');
@@ -188,6 +203,17 @@ export class EkuboV3PoolManager implements EventSubscriber {
         [
           boostedFeesIface.getEventTopic('PoolBoosted'),
           parsePoolIdByLogDataOffsetFn(0),
+        ],
+      ]),
+      [ve33Contract.address]: new Map([
+        [
+          ve33Iface.getEventTopic('VoteWeightApplied'),
+          data =>
+            BigInt(
+              ve33Iface.decodeEventLog('VoteWeightApplied', data, [
+                ve33Iface.getEventTopic('VoteWeightApplied'),
+              ]).poolId,
+            ),
         ],
       ]),
     };
@@ -245,7 +271,7 @@ export class EkuboV3PoolManager implements EventSubscriber {
         }
 
         try {
-          this.handlePoolInitialized(
+          await this.handlePoolInitialized(
             this.contracts.core.interface.decodeEventLog(
               this.poolInitializedFragment,
               log.data,
@@ -500,50 +526,62 @@ export class EkuboV3PoolManager implements EventSubscriber {
       this.clearPools();
     }
 
-    const [twammPoolKeys, boostedFeesPoolKeys, otherPoolKeys] = poolKeys.reduce<
-      [
-        PoolKeyWithInitBlockNumber<StableswapPoolTypeConfig>[],
-        PoolKeyWithInitBlockNumber<ConcentratedPoolTypeConfig>[],
-        PoolKeyWithInitBlockNumber<
-          StableswapPoolTypeConfig | ConcentratedPoolTypeConfig
-        >[],
-      ]
-    >(
-      (
-        [twammPoolKeys, boostedFeesPoolKeys, otherPoolKeys],
-        poolKeyWithInitBlockNumber,
-      ) => {
-        switch (
-          extensionType(poolKeyWithInitBlockNumber.key.config.extension)
-        ) {
-          case ExtensionType.Twamm:
-            twammPoolKeys.push(
-              poolKeyWithInitBlockNumber as PoolKeyWithInitBlockNumber<StableswapPoolTypeConfig>,
-            );
-            break;
-          case ExtensionType.BoostedFeesConcentrated:
-            boostedFeesPoolKeys.push(
-              poolKeyWithInitBlockNumber as PoolKeyWithInitBlockNumber<ConcentratedPoolTypeConfig>,
-            );
-            break;
-          case ExtensionType.NoSwapCallPoints:
-          case ExtensionType.Oracle:
-          case ExtensionType.MevCapture:
-            otherPoolKeys.push(poolKeyWithInitBlockNumber);
-            break;
-          default:
-            this.logger.debug(
-              `Ignoring unknown pool extension ${hexZeroPad(
-                hexlify(poolKeyWithInitBlockNumber.key.config.extension),
-                20,
-              )}`,
-            );
-        }
+    const [twammPoolKeys, boostedFeesPoolKeys, ve33PoolKeys, otherPoolKeys] =
+      poolKeys.reduce<
+        [
+          PoolKeyWithInitBlockNumber<StableswapPoolTypeConfig>[],
+          PoolKeyWithInitBlockNumber<ConcentratedPoolTypeConfig>[],
+          PoolKeyWithInitBlockNumber<
+            StableswapPoolTypeConfig | ConcentratedPoolTypeConfig
+          >[],
+          PoolKeyWithInitBlockNumber<
+            StableswapPoolTypeConfig | ConcentratedPoolTypeConfig
+          >[],
+        ]
+      >(
+        (
+          [twammPoolKeys, boostedFeesPoolKeys, ve33PoolKeys, otherPoolKeys],
+          poolKeyWithInitBlockNumber,
+        ) => {
+          switch (
+            extensionType(poolKeyWithInitBlockNumber.key.config.extension)
+          ) {
+            case ExtensionType.Twamm:
+              twammPoolKeys.push(
+                poolKeyWithInitBlockNumber as PoolKeyWithInitBlockNumber<StableswapPoolTypeConfig>,
+              );
+              break;
+            case ExtensionType.BoostedFeesConcentrated:
+              boostedFeesPoolKeys.push(
+                poolKeyWithInitBlockNumber as PoolKeyWithInitBlockNumber<ConcentratedPoolTypeConfig>,
+              );
+              break;
+            case ExtensionType.Ve33:
+              ve33PoolKeys.push(poolKeyWithInitBlockNumber);
+              break;
+            case ExtensionType.NoSwapCallPoints:
+            case ExtensionType.Oracle:
+            case ExtensionType.MevCapture:
+              otherPoolKeys.push(poolKeyWithInitBlockNumber);
+              break;
+            default:
+              this.logger.debug(
+                `Ignoring unknown pool extension ${hexZeroPad(
+                  hexlify(poolKeyWithInitBlockNumber.key.config.extension),
+                  20,
+                )}`,
+              );
+          }
 
-        return [twammPoolKeys, boostedFeesPoolKeys, otherPoolKeys];
-      },
-      [[], [], []],
-    );
+          return [
+            twammPoolKeys,
+            boostedFeesPoolKeys,
+            ve33PoolKeys,
+            otherPoolKeys,
+          ];
+        },
+        [[], [], [], []],
+      );
 
     const promises: Promise<void>[] = [];
 
@@ -695,6 +733,70 @@ export class EkuboV3PoolManager implements EventSubscriber {
       }),
     );
 
+    for (
+      let batchStart = 0;
+      batchStart < ve33PoolKeys.length;
+      batchStart += MAX_BATCH_SIZE
+    ) {
+      const batch = ve33PoolKeys.slice(batchStart, batchStart + MAX_BATCH_SIZE);
+
+      promises.push(
+        (
+          this.contracts.ve33.quoteDataFetcher.getVe33QuoteData(
+            batch.map(({ key }) => key.toAbi()),
+            VE33_MIN_BITMAPS_SEARCHED,
+            { blockTag: blockNumber },
+          ) as Promise<Ve33QuoteData[]>
+        )
+          .then(async fetchedData => {
+            await Promise.all(
+              fetchedData.map(async (data, i) => {
+                const { key, initBlockNumber } = batch[i];
+                const swapFee = data.swapFee.toBigInt();
+
+                try {
+                  if (isStableswapKey(key)) {
+                    const state = {
+                      ...FullRangePoolState.fromQuoter(data.quoteData),
+                      swapFee,
+                    };
+                    await (key.config.poolTypeConfig.isFullRange()
+                      ? addPool(Ve33FullRangePool, state, initBlockNumber, key)
+                      : addPool(
+                          Ve33StableswapPool,
+                          state,
+                          initBlockNumber,
+                          key,
+                        ));
+                  } else if (isConcentratedKey(key)) {
+                    await addPool(
+                      Ve33ConcentratedPool,
+                      {
+                        ...ConcentratedPoolState.fromQuoter(data.quoteData),
+                        swapFee,
+                      },
+                      initBlockNumber,
+                      key,
+                    );
+                  }
+                } catch (err) {
+                  this.logger.error(
+                    `Failed to construct Ve33 pool ${key.stringId}: ${err}`,
+                  );
+                }
+              }),
+            );
+          })
+          .catch((err: any) => {
+            this.logger.error(
+              `Fetching Ve33 batch failed. Pool keys: ${batch.map(
+                ({ key }) => key.stringId,
+              )}. Error: ${err}`,
+            );
+          }),
+      );
+    }
+
     const boostedFeesDataFetcher = this.contracts.boostedFees.quoteDataFetcher;
     const coreQuoteDataFetcher = this.contracts.core.quoteDataFetcher;
 
@@ -831,10 +933,10 @@ export class EkuboV3PoolManager implements EventSubscriber {
     this.poolsByString.clear();
   }
 
-  private handlePoolInitialized(
+  private async handlePoolInitialized(
     ev: Result,
     blockHeader: Readonly<BlockHeader>,
-  ) {
+  ): Promise<void> {
     const poolKey = PoolKey.fromAbi(ev.poolKey);
     const { extension } = poolKey.config;
     const blockNumber = blockHeader.number;
@@ -863,6 +965,18 @@ export class EkuboV3PoolManager implements EventSubscriber {
       this.setPool(pool);
     };
 
+    const fetchAndAddPool = async <C extends PoolTypeConfig>(
+      constructor: {
+        new (...args: [...typeof commonArgs, PoolKey<C>]): IEkuboPool<C>;
+      },
+      poolKey: PoolKey<C>,
+    ): Promise<void> => {
+      const pool = new constructor(...commonArgs, poolKey);
+      pool.isTracking = this.isTracking;
+      await pool.updateState(blockNumber);
+      this.setPool(pool);
+    };
+
     if (isStableswapKey(poolKey)) {
       switch (extensionType(extension)) {
         case ExtensionType.NoSwapCallPoints:
@@ -883,6 +997,10 @@ export class EkuboV3PoolManager implements EventSubscriber {
             poolKey,
             TwammPoolState.fromPoolInitialization(state),
           );
+        case ExtensionType.Ve33:
+          return poolKey.config.poolTypeConfig.isFullRange()
+            ? fetchAndAddPool(Ve33FullRangePool, poolKey)
+            : fetchAndAddPool(Ve33StableswapPool, poolKey);
         default:
           this.logger.debug(
             `Ignoring unknown pool extension ${hexZeroPad(
@@ -906,6 +1024,8 @@ export class EkuboV3PoolManager implements EventSubscriber {
             poolKey,
             BoostedFeesPoolState.fromPoolInitialization(state),
           );
+        case ExtensionType.Ve33:
+          return fetchAndAddPool(Ve33ConcentratedPool, poolKey);
         default:
           this.logger.debug(
             `Ignoring unknown pool extension ${hexZeroPad(
