@@ -1,0 +1,3146 @@
+{
+  "units": "ticks int; anchorX16 = tick * 65536 (Q48.16); fees 0.16 fixed point; times uint32 seconds; all integers are decimal strings",
+  "config": {
+    "halfLife": "120",
+    "slopeK": "4",
+    "segmentExp": "0",
+    "jLin": "16",
+    "maxFee": "32768",
+    "clampTicks": "2500",
+    "mGate": "3",
+    "maxSegments": "40"
+  },
+  "rules": {
+    "eRef": "lRefBits - min(lRefBits, (now - lRefTime) / tau)",
+    "gate": "lObs + mGate >= eRef, lObs = snapBits if lastPosTime == now else bitlen(activeLiquidity)",
+    "decay": "off = anchor - tick*65536; |off'| = ((|off| >> (dt / tau)) << 64) / exp2(((dt % tau) << 64) / tau) (src/math/exp2.sol, 5.64 in, 64.64 out); move = clamp(off' - off, +-(clamp << 16) * min(dt, tau) / tau)",
+    "raise": "e + 1 if L > e and now - lRefRaiseTime >= tau (then lRefRaiseTime = now), else e",
+    "segmentFee": "min(maxFee, poolFee + ceil(slopeK * poolFee * (lo + hi - 2 * anchor) / (4 * spacing * 65536)))",
+    "boundaries": "first jLin on the W grid strictly beyond the anchor, then widths 2W, 4W, ...; segments are visited starting with the first boundary strictly beyond the current sqrt ratio",
+    "toward": "one call with the caller's minFee to tickToSqrtRatio(floor(anchor)) (increasing) or ceil (decreasing)",
+    "budget": "at most jLin + 24 away calls; merge to the user limit once the fee is maxFee or at the last call"
+  },
+  "anchorUpdates": [
+    {
+      "stateIn": {
+        "lastUpdateTime": "1700035281",
+        "lRefTime": "1700035162",
+        "lastPosTime": "1700035277",
+        "lRefBits": "64",
+        "snapBits": "30",
+        "lRefRaiseTime": "1700035162",
+        "anchorX16": "32284344320"
+      },
+      "tick": "492620",
+      "liquidity": "1",
+      "timestamp": "1700035282",
+      "passed": false,
+      "lObs": "1",
+      "eRef": "63",
+      "expected": {
+        "lastUpdateTime": "1700035282",
+        "lRefTime": "1700035162",
+        "lastPosTime": "1700035277",
+        "lRefBits": "64",
+        "snapBits": "30",
+        "lRefRaiseTime": "1700035162",
+        "anchorX16": "32284344320"
+      }
+    },
+    {
+      "stateIn": {
+        "lastUpdateTime": "1700662729",
+        "lRefTime": "1700657736",
+        "lastPosTime": "1700662736",
+        "lRefBits": "40",
+        "snapBits": "0",
+        "lRefRaiseTime": "1700662736",
+        "anchorX16": "-22275162111"
+      },
+      "tick": "-339892",
+      "liquidity": "610110186574",
+      "timestamp": "1700662736",
+      "passed": true,
+      "lObs": "0",
+      "eRef": "0",
+      "expected": {
+        "lastUpdateTime": "1700662736",
+        "lRefTime": "1700662736",
+        "lastPosTime": "1700662736",
+        "lRefBits": "0",
+        "snapBits": "0",
+        "lRefRaiseTime": "1700662736",
+        "anchorX16": "-22275162112"
+      }
+    },
+    {
+      "stateIn": {
+        "lastUpdateTime": "1700614257",
+        "lRefTime": "1700614149",
+        "lastPosTime": "1700614264",
+        "lRefBits": "40",
+        "snapBits": "64",
+        "lRefRaiseTime": "1700614149",
+        "anchorX16": "5663948799"
+      },
+      "tick": "86425",
+      "liquidity": "979007415875",
+      "timestamp": "1700614269",
+      "passed": true,
+      "lObs": "40",
+      "eRef": "39",
+      "expected": {
+        "lastUpdateTime": "1700614269",
+        "lRefTime": "1700614269",
+        "lastPosTime": "1700614264",
+        "lRefBits": "40",
+        "snapBits": "64",
+        "lRefRaiseTime": "1700614149",
+        "anchorX16": "5663948800"
+      }
+    },
+    {
+      "stateIn": {
+        "lastUpdateTime": "1700351796",
+        "lRefTime": "1700351255",
+        "lastPosTime": "1700351850",
+        "lRefBits": "1",
+        "snapBits": "0",
+        "lRefRaiseTime": "1700351735",
+        "anchorX16": "64978223103"
+      },
+      "tick": "991488",
+      "liquidity": "1",
+      "timestamp": "1700351855",
+      "passed": true,
+      "lObs": "1",
+      "eRef": "0",
+      "expected": {
+        "lastUpdateTime": "1700351855",
+        "lRefTime": "1700351855",
+        "lastPosTime": "1700351850",
+        "lRefBits": "1",
+        "snapBits": "0",
+        "lRefRaiseTime": "1700351735",
+        "anchorX16": "64978204176"
+      }
+    },
+    {
+      "stateIn": {
+        "lastUpdateTime": "1700129844",
+        "lRefTime": "1700129784",
+        "lastPosTime": "1700129899",
+        "lRefBits": "1",
+        "snapBits": "30",
+        "lRefRaiseTime": "1700129844",
+        "anchorX16": "7811039233"
+      },
+      "tick": "119188",
+      "liquidity": "87372899229508876891",
+      "timestamp": "1700129904",
+      "passed": true,
+      "lObs": "67",
+      "eRef": "0",
+      "expected": {
+        "lastUpdateTime": "1700129904",
+        "lRefTime": "1700129904",
+        "lastPosTime": "1700129899",
+        "lRefBits": "1",
+        "snapBits": "30",
+        "lRefRaiseTime": "1700129844",
+        "anchorX16": "7811058428"
+      }
+    },
+    {
+      "stateIn": {
+        "lastUpdateTime": "1700290832",
+        "lRefTime": "1700290832",
+        "lastPosTime": "1700290946",
+        "lRefBits": "67",
+        "snapBits": "0",
+        "lRefRaiseTime": "1700290831",
+        "anchorX16": "-28549304263"
+      },
+      "tick": "-435928",
+      "liquidity": "113655361795910335326",
+      "timestamp": "1700290951",
+      "passed": true,
+      "lObs": "67",
+      "eRef": "67",
+      "expected": {
+        "lastUpdateTime": "1700290951",
+        "lRefTime": "1700290951",
+        "lastPosTime": "1700290946",
+        "lRefBits": "67",
+        "snapBits": "0",
+        "lRefRaiseTime": "1700290831",
+        "anchorX16": "-28559083853"
+      }
+    },
+    {
+      "stateIn": {
+        "lastUpdateTime": "1700351252",
+        "lRefTime": "1700351253",
+        "lastPosTime": "1700351367",
+        "lRefBits": "3",
+        "snapBits": "30",
+        "lRefRaiseTime": "1700351252",
+        "anchorX16": "-8659665673"
+      },
+      "tick": "-131836",
+      "liquidity": "1",
+      "timestamp": "1700351372",
+      "passed": true,
+      "lObs": "1",
+      "eRef": "3",
+      "expected": {
+        "lastUpdateTime": "1700351372",
+        "lRefTime": "1700351372",
+        "lastPosTime": "1700351367",
+        "lRefBits": "3",
+        "snapBits": "30",
+        "lRefRaiseTime": "1700351252",
+        "anchorX16": "-8649834884"
+      }
+    },
+    {
+      "stateIn": {
+        "lastUpdateTime": "1700878291",
+        "lRefTime": "1700873412",
+        "lastPosTime": "1700878407",
+        "lRefBits": "3",
+        "snapBits": "30",
+        "lRefRaiseTime": "1700877412",
+        "anchorX16": "-26839154688"
+      },
+      "tick": "-412032",
+      "liquidity": "973842355790040567",
+      "timestamp": "1700878412",
+      "passed": true,
+      "lObs": "60",
+      "eRef": "0",
+      "expected": {
+        "lastUpdateTime": "1700878412",
+        "lRefTime": "1700878412",
+        "lastPosTime": "1700878407",
+        "lRefBits": "4",
+        "snapBits": "30",
+        "lRefRaiseTime": "1700878412",
+        "anchorX16": "-26921513556"
+      }
+    },
+    {
+      "stateIn": {
+        "lastUpdateTime": "1700633155",
+        "lRefTime": "1700633274",
+        "lastPosTime": "1700633394",
+        "lRefBits": "100",
+        "snapBits": "64",
+        "lRefRaiseTime": "1700633274",
+        "anchorX16": "-47991226368"
+      },
+      "tick": "-734789",
+      "liquidity": "0",
+      "timestamp": "1700633394",
+      "passed": false,
+      "lObs": "64",
+      "eRef": "99",
+      "expected": {
+        "lastUpdateTime": "1700633394",
+        "lRefTime": "1700633274",
+        "lastPosTime": "1700633394",
+        "lRefBits": "100",
+        "snapBits": "64",
+        "lRefRaiseTime": "1700633274",
+        "anchorX16": "-47991226368"
+      }
+    },
+    {
+      "stateIn": {
+        "lastUpdateTime": "1700729553",
+        "lRefTime": "1700629793",
+        "lastPosTime": "1700729793",
+        "lRefBits": "64",
+        "snapBits": "0",
+        "lRefRaiseTime": "1700729673",
+        "anchorX16": "-35113861121"
+      },
+      "tick": "-485795",
+      "liquidity": "0",
+      "timestamp": "1700729793",
+      "passed": true,
+      "lObs": "0",
+      "eRef": "0",
+      "expected": {
+        "lastUpdateTime": "1700729793",
+        "lRefTime": "1700729793",
+        "lastPosTime": "1700729793",
+        "lRefBits": "0",
+        "snapBits": "0",
+        "lRefRaiseTime": "1700729673",
+        "anchorX16": "-34950021121"
+      }
+    },
+    {
+      "stateIn": {
+        "lastUpdateTime": "1700928828",
+        "lRefTime": "1700928469",
+        "lastPosTime": "1700929069",
+        "lRefBits": "40",
+        "snapBits": "70",
+        "lRefRaiseTime": "1700929009",
+        "anchorX16": "5784047386624"
+      },
+      "tick": "257559",
+      "liquidity": "126968096320755804950",
+      "timestamp": "1700929069",
+      "passed": true,
+      "lObs": "70",
+      "eRef": "35",
+      "expected": {
+        "lastUpdateTime": "1700929069",
+        "lRefTime": "1700929069",
+        "lastPosTime": "1700929069",
+        "lRefBits": "40",
+        "snapBits": "70",
+        "lRefRaiseTime": "1700929009",
+        "anchorX16": "5783883546624"
+      }
+    },
+    {
+      "stateIn": {
+        "lastUpdateTime": "1700627922",
+        "lRefTime": "1700623522",
+        "lastPosTime": "1700628517",
+        "lRefBits": "40",
+        "snapBits": "30",
+        "lRefRaiseTime": "1700628522",
+        "anchorX16": "-5792443990016"
+      },
+      "tick": "-385681",
+      "liquidity": "14060436950212645949",
+      "timestamp": "1700628522",
+      "passed": true,
+      "lObs": "64",
+      "eRef": "0",
+      "expected": {
+        "lastUpdateTime": "1700628522",
+        "lRefTime": "1700628522",
+        "lastPosTime": "1700628517",
+        "lRefBits": "40",
+        "snapBits": "30",
+        "lRefRaiseTime": "1700628522",
+        "anchorX16": "-5792280150016"
+      }
+    },
+    {
+      "stateIn": {
+        "lastUpdateTime": "1700866871",
+        "lRefTime": "1700870470",
+        "lastPosTime": "1700870466",
+        "lRefBits": "40",
+        "snapBits": "70",
+        "lRefRaiseTime": "1700869471",
+        "anchorX16": "64292257792"
+      },
+      "tick": "981022",
+      "liquidity": "889244194037614852937917900",
+      "timestamp": "1700870471",
+      "passed": true,
+      "lObs": "90",
+      "eRef": "40",
+      "expected": {
+        "lastUpdateTime": "1700870471",
+        "lRefTime": "1700870471",
+        "lastPosTime": "1700870466",
+        "lRefBits": "41",
+        "snapBits": "70",
+        "lRefRaiseTime": "1700870471",
+        "anchorX16": "64292257792"
+      }
+    },
+    {
+      "stateIn": {
+        "lastUpdateTime": "1700914870",
+        "lRefTime": "1700945351",
+        "lastPosTime": "1700945470",
+        "lRefBits": "128",
+        "snapBits": "30",
+        "lRefRaiseTime": "1700944470",
+        "anchorX16": "43398004737"
+      },
+      "tick": "662201",
+      "liquidity": "2158753107591751044",
+      "timestamp": "1700945470",
+      "passed": false,
+      "lObs": "30",
+      "eRef": "128",
+      "expected": {
+        "lastUpdateTime": "1700945470",
+        "lRefTime": "1700945351",
+        "lastPosTime": "1700945470",
+        "lRefBits": "128",
+        "snapBits": "30",
+        "lRefRaiseTime": "1700944470",
+        "anchorX16": "43398004737"
+      }
+    },
+    {
+      "stateIn": {
+        "lastUpdateTime": "1700221524",
+        "lRefTime": "1700257404",
+        "lastPosTime": "1700257524",
+        "lRefBits": "40",
+        "snapBits": "70",
+        "lRefRaiseTime": "1700257524",
+        "anchorX16": "-26813923329"
+      },
+      "tick": "-409148",
+      "liquidity": "1",
+      "timestamp": "1700257524",
+      "passed": true,
+      "lObs": "70",
+      "eRef": "39",
+      "expected": {
+        "lastUpdateTime": "1700257524",
+        "lRefTime": "1700257524",
+        "lastPosTime": "1700257524",
+        "lRefBits": "40",
+        "snapBits": "70",
+        "lRefRaiseTime": "1700257524",
+        "anchorX16": "-26813923328"
+      }
+    },
+    {
+      "stateIn": {
+        "lastUpdateTime": "1700494574",
+        "lRefTime": "1700494453",
+        "lastPosTime": "1700494573",
+        "lRefBits": "3",
+        "snapBits": "0",
+        "lRefRaiseTime": "1700493573",
+        "anchorX16": "34285027327"
+      },
+      "tick": "523147",
+      "liquidity": "816429514345760188773692020",
+      "timestamp": "1700494573",
+      "passed": true,
+      "lObs": "0",
+      "eRef": "2",
+      "expected": {
+        "lastUpdateTime": "1700494573",
+        "lRefTime": "1700494573",
+        "lastPosTime": "1700494573",
+        "lRefBits": "2",
+        "snapBits": "0",
+        "lRefRaiseTime": "1700493573",
+        "anchorX16": "34284961792"
+      }
+    },
+    {
+      "stateIn": {
+        "lastUpdateTime": "1700389510",
+        "lRefTime": "1700388911",
+        "lastPosTime": "1700389511",
+        "lRefBits": "0",
+        "snapBits": "30",
+        "lRefRaiseTime": "1700388511",
+        "anchorX16": "-24313528319"
+      },
+      "tick": "-370994",
+      "liquidity": "1025391111455349784203942096",
+      "timestamp": "1700389511",
+      "passed": true,
+      "lObs": "30",
+      "eRef": "0",
+      "expected": {
+        "lastUpdateTime": "1700389511",
+        "lRefTime": "1700389511",
+        "lastPosTime": "1700389511",
+        "lRefBits": "1",
+        "snapBits": "30",
+        "lRefRaiseTime": "1700389511",
+        "anchorX16": "-24313527941"
+      }
+    },
+    {
+      "stateIn": {
+        "lastUpdateTime": "1700080075",
+        "lRefTime": "1700080082",
+        "lastPosTime": "1700080077",
+        "lRefBits": "0",
+        "snapBits": "70",
+        "lRefRaiseTime": "1700080022",
+        "anchorX16": "59343843385"
+      },
+      "tick": "905215",
+      "liquidity": "10569820574592964537",
+      "timestamp": "1700080082",
+      "passed": true,
+      "lObs": "64",
+      "eRef": "0",
+      "expected": {
+        "lastUpdateTime": "1700080082",
+        "lRefTime": "1700080082",
+        "lastPosTime": "1700080077",
+        "lRefBits": "0",
+        "snapBits": "70",
+        "lRefRaiseTime": "1700080022",
+        "anchorX16": "59343063796"
+      }
+    },
+    {
+      "stateIn": {
+        "lastUpdateTime": "1700637188",
+        "lRefTime": "1700637199",
+        "lastPosTime": "1700637195",
+        "lRefBits": "128",
+        "snapBits": "0",
+        "lRefRaiseTime": "1700637080",
+        "anchorX16": "-33346749193"
+      },
+      "tick": "-508531",
+      "liquidity": "959807079530304765",
+      "timestamp": "1700637200",
+      "passed": false,
+      "lObs": "60",
+      "eRef": "128",
+      "expected": {
+        "lastUpdateTime": "1700637200",
+        "lRefTime": "1700637199",
+        "lastPosTime": "1700637195",
+        "lRefBits": "128",
+        "snapBits": "0",
+        "lRefRaiseTime": "1700637080",
+        "anchorX16": "-33346749193"
+      }
+    },
+    {
+      "stateIn": {
+        "lastUpdateTime": "1700438841",
+        "lRefTime": "1700438900",
+        "lastPosTime": "1700438895",
+        "lRefBits": "0",
+        "snapBits": "0",
+        "lRefRaiseTime": "1700438840",
+        "anchorX16": "-64422412288"
+      },
+      "tick": "-985507",
+      "liquidity": "193345312208109315636391103989617035099",
+      "timestamp": "1700438900",
+      "passed": true,
+      "lObs": "128",
+      "eRef": "0",
+      "expected": {
+        "lastUpdateTime": "1700438900",
+        "lRefTime": "1700438900",
+        "lastPosTime": "1700438895",
+        "lRefBits": "0",
+        "snapBits": "0",
+        "lRefRaiseTime": "1700438840",
+        "anchorX16": "-64469709861"
+      }
+    },
+    {
+      "stateIn": {
+        "lastUpdateTime": "1700405948",
+        "lRefTime": "1700406007",
+        "lastPosTime": "1700406008",
+        "lRefBits": "3",
+        "snapBits": "30",
+        "lRefRaiseTime": "1700405008",
+        "anchorX16": "-27955036160"
+      },
+      "tick": "-429061",
+      "liquidity": "2278316447308517650",
+      "timestamp": "1700406008",
+      "passed": true,
+      "lObs": "30",
+      "eRef": "3",
+      "expected": {
+        "lastUpdateTime": "1700406008",
+        "lRefTime": "1700406008",
+        "lastPosTime": "1700406008",
+        "lRefBits": "4",
+        "snapBits": "30",
+        "lRefRaiseTime": "1700406008",
+        "anchorX16": "-28003042981"
+      }
+    },
+    {
+      "stateIn": {
+        "lastUpdateTime": "1700585144",
+        "lRefTime": "1700585262",
+        "lastPosTime": "1700585258",
+        "lRefBits": "0",
+        "snapBits": "64",
+        "lRefRaiseTime": "1700584263",
+        "anchorX16": "-66417197057"
+      },
+      "tick": "-963446",
+      "liquidity": "253018513417766231442704571166842036100",
+      "timestamp": "1700585263",
+      "passed": true,
+      "lObs": "128",
+      "eRef": "0",
+      "expected": {
+        "lastUpdateTime": "1700585263",
+        "lRefTime": "1700585263",
+        "lastPosTime": "1700585258",
+        "lRefBits": "1",
+        "snapBits": "64",
+        "lRefRaiseTime": "1700585263",
+        "anchorX16": "-66254722391"
+      }
+    },
+    {
+      "stateIn": {
+        "lastUpdateTime": "1700269647",
+        "lRefTime": "1700269767",
+        "lastPosTime": "1700269762",
+        "lRefBits": "67",
+        "snapBits": "70",
+        "lRefRaiseTime": "1700269707",
+        "anchorX16": "5808294592512"
+      },
+      "tick": "627542",
+      "liquidity": "1122034437896062529",
+      "timestamp": "1700269767",
+      "passed": false,
+      "lObs": "60",
+      "eRef": "67",
+      "expected": {
+        "lastUpdateTime": "1700269767",
+        "lRefTime": "1700269767",
+        "lastPosTime": "1700269762",
+        "lRefBits": "67",
+        "snapBits": "70",
+        "lRefRaiseTime": "1700269707",
+        "anchorX16": "5808294592512"
+      }
+    },
+    {
+      "stateIn": {
+        "lastUpdateTime": "1700971746",
+        "lRefTime": "1700971267",
+        "lastPosTime": "1700971867",
+        "lRefBits": "128",
+        "snapBits": "30",
+        "lRefRaiseTime": "1700971747",
+        "anchorX16": "-5808599924736"
+      },
+      "tick": "-632201",
+      "liquidity": "1",
+      "timestamp": "1700971867",
+      "passed": false,
+      "lObs": "30",
+      "eRef": "123",
+      "expected": {
+        "lastUpdateTime": "1700971867",
+        "lRefTime": "1700971267",
+        "lastPosTime": "1700971867",
+        "lRefBits": "128",
+        "snapBits": "30",
+        "lRefRaiseTime": "1700971747",
+        "anchorX16": "-5808599924736"
+      }
+    },
+    {
+      "stateIn": {
+        "lastUpdateTime": "1700074976",
+        "lRefTime": "1700074615",
+        "lastPosTime": "1700075215",
+        "lRefBits": "64",
+        "snapBits": "0",
+        "lRefRaiseTime": "1700075215",
+        "anchorX16": "55256023040"
+      },
+      "tick": "843140",
+      "liquidity": "1",
+      "timestamp": "1700075215",
+      "passed": false,
+      "lObs": "0",
+      "eRef": "59",
+      "expected": {
+        "lastUpdateTime": "1700075215",
+        "lRefTime": "1700074615",
+        "lastPosTime": "1700075215",
+        "lRefBits": "64",
+        "snapBits": "0",
+        "lRefRaiseTime": "1700075215",
+        "anchorX16": "55256023040"
+      }
+    },
+    {
+      "stateIn": {
+        "lastUpdateTime": "1700494064",
+        "lRefTime": "1700494185",
+        "lastPosTime": "1700494299",
+        "lRefBits": "128",
+        "snapBits": "30",
+        "lRefRaiseTime": "1700494304",
+        "anchorX16": "-64189890559"
+      },
+      "tick": "-979460",
+      "liquidity": "211101139729728280589913988594978265336",
+      "timestamp": "1700494304",
+      "passed": true,
+      "lObs": "128",
+      "eRef": "128",
+      "expected": {
+        "lastUpdateTime": "1700494304",
+        "lRefTime": "1700494304",
+        "lastPosTime": "1700494299",
+        "lRefBits": "128",
+        "snapBits": "30",
+        "lRefRaiseTime": "1700494304",
+        "anchorX16": "-64189890560"
+      }
+    },
+    {
+      "stateIn": {
+        "lastUpdateTime": "1700480065",
+        "lRefTime": "1700480305",
+        "lastPosTime": "1700480301",
+        "lRefBits": "100",
+        "snapBits": "70",
+        "lRefRaiseTime": "1700480306",
+        "anchorX16": "12929335295"
+      },
+      "tick": "197286",
+      "liquidity": "736709270634",
+      "timestamp": "1700480306",
+      "passed": false,
+      "lObs": "40",
+      "eRef": "100",
+      "expected": {
+        "lastUpdateTime": "1700480306",
+        "lRefTime": "1700480305",
+        "lastPosTime": "1700480301",
+        "lRefBits": "100",
+        "snapBits": "70",
+        "lRefRaiseTime": "1700480306",
+        "anchorX16": "12929335295"
+      }
+    },
+    {
+      "stateIn": {
+        "lastUpdateTime": "1700959349",
+        "lRefTime": "1700954949",
+        "lastPosTime": "1700959944",
+        "lRefBits": "128",
+        "snapBits": "70",
+        "lRefRaiseTime": "1700959829",
+        "anchorX16": "52671545343"
+      },
+      "tick": "803703",
+      "liquidity": "0",
+      "timestamp": "1700959949",
+      "passed": false,
+      "lObs": "0",
+      "eRef": "87",
+      "expected": {
+        "lastUpdateTime": "1700959949",
+        "lRefTime": "1700954949",
+        "lastPosTime": "1700959944",
+        "lRefBits": "128",
+        "snapBits": "70",
+        "lRefRaiseTime": "1700959829",
+        "anchorX16": "52671545343"
+      }
+    },
+    {
+      "stateIn": {
+        "lastUpdateTime": "1700066349",
+        "lRefTime": "1700064949",
+        "lastPosTime": "1700069944",
+        "lRefBits": "67",
+        "snapBits": "64",
+        "lRefRaiseTime": "1700069949",
+        "anchorX16": "-28363194367"
+      },
+      "tick": "-432787",
+      "liquidity": "761591267972491561",
+      "timestamp": "1700069949",
+      "passed": true,
+      "lObs": "60",
+      "eRef": "26",
+      "expected": {
+        "lastUpdateTime": "1700069949",
+        "lRefTime": "1700069949",
+        "lastPosTime": "1700069944",
+        "lRefBits": "60",
+        "snapBits": "64",
+        "lRefRaiseTime": "1700069949",
+        "anchorX16": "-28363128832"
+      }
+    },
+    {
+      "stateIn": {
+        "lastUpdateTime": "1700656374",
+        "lRefTime": "1700586974",
+        "lastPosTime": "1700686969",
+        "lRefBits": "1",
+        "snapBits": "0",
+        "lRefRaiseTime": "1700685974",
+        "anchorX16": "-26755846087"
+      },
+      "tick": "-408562",
+      "liquidity": "285401771394695425218616285308779360785",
+      "timestamp": "1700686974",
+      "passed": true,
+      "lObs": "128",
+      "eRef": "0",
+      "expected": {
+        "lastUpdateTime": "1700686974",
+        "lRefTime": "1700686974",
+        "lastPosTime": "1700686969",
+        "lRefBits": "2",
+        "snapBits": "0",
+        "lRefRaiseTime": "1700686974",
+        "anchorX16": "-26775519232"
+      }
+    },
+    {
+      "stateIn": {
+        "lastUpdateTime": "1699988689",
+        "lRefTime": "1699924689",
+        "lastPosTime": "1700024684",
+        "lRefBits": "100",
+        "snapBits": "70",
+        "lRefRaiseTime": "1700024629",
+        "anchorX16": "49840127223"
+      },
+      "tick": "760800",
+      "liquidity": "13248795927540118083",
+      "timestamp": "1700024689",
+      "passed": true,
+      "lObs": "64",
+      "eRef": "0",
+      "expected": {
+        "lastUpdateTime": "1700024689",
+        "lRefTime": "1700024689",
+        "lastPosTime": "1700024684",
+        "lRefBits": "64",
+        "snapBits": "70",
+        "lRefRaiseTime": "1700024629",
+        "anchorX16": "49859788800"
+      }
+    },
+    {
+      "stateIn": {
+        "lastUpdateTime": "1700047669",
+        "lRefTime": "1700047549",
+        "lastPosTime": "1700047663",
+        "lRefBits": "100",
+        "snapBits": "70",
+        "lRefRaiseTime": "1700047608",
+        "anchorX16": "-39067058176"
+      },
+      "tick": "-598615",
+      "liquidity": "231203265972586400790486774854422209418",
+      "timestamp": "1700047668",
+      "passed": true,
+      "lObs": "128",
+      "eRef": "100",
+      "expected": {
+        "lastUpdateTime": "1700047668",
+        "lRefTime": "1700047668",
+        "lastPosTime": "1700047663",
+        "lRefBits": "100",
+        "snapBits": "70",
+        "lRefRaiseTime": "1700047608",
+        "anchorX16": "-39230832640"
+      }
+    },
+    {
+      "stateIn": {
+        "lastUpdateTime": "1700339478",
+        "lRefTime": "1700356783",
+        "lastPosTime": "1700356783",
+        "lRefBits": "100",
+        "snapBits": "70",
+        "lRefRaiseTime": "1700356723",
+        "anchorX16": "-6056706048"
+      },
+      "tick": "-94919",
+      "liquidity": "760502399867",
+      "timestamp": "1700356783",
+      "passed": false,
+      "lObs": "70",
+      "eRef": "100",
+      "expected": {
+        "lastUpdateTime": "1700356783",
+        "lRefTime": "1700356783",
+        "lastPosTime": "1700356783",
+        "lRefBits": "100",
+        "snapBits": "70",
+        "lRefRaiseTime": "1700356723",
+        "anchorX16": "-6056706048"
+      }
+    },
+    {
+      "stateIn": {
+        "lastUpdateTime": "1700848530",
+        "lRefTime": "1700856687",
+        "lastPosTime": "1700856806",
+        "lRefBits": "40",
+        "snapBits": "30",
+        "lRefRaiseTime": "1700855806",
+        "anchorX16": "33618722815"
+      },
+      "tick": "562981",
+      "liquidity": "2279896847942937357",
+      "timestamp": "1700856806",
+      "passed": false,
+      "lObs": "30",
+      "eRef": "40",
+      "expected": {
+        "lastUpdateTime": "1700856806",
+        "lRefTime": "1700856687",
+        "lastPosTime": "1700856806",
+        "lRefBits": "40",
+        "snapBits": "30",
+        "lRefRaiseTime": "1700855806",
+        "anchorX16": "33618722815"
+      }
+    },
+    {
+      "stateIn": {
+        "lastUpdateTime": "1700017148",
+        "lRefTime": "1700012494",
+        "lastPosTime": "1700017489",
+        "lRefBits": "128",
+        "snapBits": "0",
+        "lRefRaiseTime": "1700017494",
+        "anchorX16": "5810841583616"
+      },
+      "tick": "666406",
+      "liquidity": "0",
+      "timestamp": "1700017494",
+      "passed": false,
+      "lObs": "0",
+      "eRef": "87",
+      "expected": {
+        "lastUpdateTime": "1700017494",
+        "lRefTime": "1700012494",
+        "lastPosTime": "1700017489",
+        "lRefBits": "128",
+        "snapBits": "0",
+        "lRefRaiseTime": "1700017494",
+        "anchorX16": "5810841583616"
+      }
+    },
+    {
+      "stateIn": {
+        "lastUpdateTime": "1699992975",
+        "lRefTime": "1700004576",
+        "lastPosTime": "1700004572",
+        "lRefBits": "64",
+        "snapBits": "64",
+        "lRefRaiseTime": "1700004517",
+        "anchorX16": "-5707379179520"
+      },
+      "tick": "912305",
+      "liquidity": "634439741968350663525412374",
+      "timestamp": "1700004577",
+      "passed": true,
+      "lObs": "90",
+      "eRef": "64",
+      "expected": {
+        "lastUpdateTime": "1700004577",
+        "lRefTime": "1700004577",
+        "lastPosTime": "1700004572",
+        "lRefBits": "64",
+        "snapBits": "64",
+        "lRefRaiseTime": "1700004517",
+        "anchorX16": "-5707215339520"
+      }
+    },
+    {
+      "stateIn": {
+        "lastUpdateTime": "1700550883",
+        "lRefTime": "1700551129",
+        "lastPosTime": "1700551124",
+        "lRefBits": "3",
+        "snapBits": "70",
+        "lRefRaiseTime": "1700551009",
+        "anchorX16": "19440977438"
+      },
+      "tick": "296382",
+      "liquidity": "178544907550179002871542482133306946395",
+      "timestamp": "1700551129",
+      "passed": true,
+      "lObs": "128",
+      "eRef": "3",
+      "expected": {
+        "lastUpdateTime": "1700551129",
+        "lRefTime": "1700551129",
+        "lastPosTime": "1700551124",
+        "lRefBits": "4",
+        "snapBits": "70",
+        "lRefRaiseTime": "1700551129",
+        "anchorX16": "19427865211"
+      }
+    },
+    {
+      "stateIn": {
+        "lastUpdateTime": "1700401144",
+        "lRefTime": "1700418547",
+        "lastPosTime": "1700418542",
+        "lRefBits": "64",
+        "snapBits": "0",
+        "lRefRaiseTime": "1700418547",
+        "anchorX16": "29885062088"
+      },
+      "tick": "454746",
+      "liquidity": "2238713883482655712",
+      "timestamp": "1700418547",
+      "passed": true,
+      "lObs": "61",
+      "eRef": "64",
+      "expected": {
+        "lastUpdateTime": "1700418547",
+        "lRefTime": "1700418547",
+        "lastPosTime": "1700418542",
+        "lRefBits": "64",
+        "snapBits": "0",
+        "lRefRaiseTime": "1700418547",
+        "anchorX16": "29802233856"
+      }
+    },
+    {
+      "stateIn": {
+        "lastUpdateTime": "1700842348",
+        "lRefTime": "1700842375",
+        "lastPosTime": "1700842490",
+        "lRefBits": "128",
+        "snapBits": "64",
+        "lRefRaiseTime": "1700842435",
+        "anchorX16": "43284219213"
+      },
+      "tick": "660940",
+      "liquidity": "947852719440299757",
+      "timestamp": "1700842495",
+      "passed": false,
+      "lObs": "60",
+      "eRef": "127",
+      "expected": {
+        "lastUpdateTime": "1700842495",
+        "lRefTime": "1700842375",
+        "lastPosTime": "1700842490",
+        "lRefBits": "128",
+        "snapBits": "64",
+        "lRefRaiseTime": "1700842435",
+        "anchorX16": "43284219213"
+      }
+    },
+    {
+      "stateIn": {
+        "lastUpdateTime": "1700632356",
+        "lRefTime": "1700627398",
+        "lastPosTime": "1700632393",
+        "lRefBits": "3",
+        "snapBits": "64",
+        "lRefRaiseTime": "1700631398",
+        "anchorX16": "29097946092"
+      },
+      "tick": "441979",
+      "liquidity": "1313642073445364670",
+      "timestamp": "1700632398",
+      "passed": true,
+      "lObs": "61",
+      "eRef": "0",
+      "expected": {
+        "lastUpdateTime": "1700632398",
+        "lRefTime": "1700632398",
+        "lastPosTime": "1700632393",
+        "lRefBits": "4",
+        "snapBits": "64",
+        "lRefRaiseTime": "1700632398",
+        "anchorX16": "29069422797"
+      }
+    },
+    {
+      "stateIn": {
+        "lastUpdateTime": "1700969411",
+        "lRefTime": "1700977649",
+        "lastPosTime": "1700982644",
+        "lRefBits": "1",
+        "snapBits": "64",
+        "lRefRaiseTime": "1700982589",
+        "anchorX16": "41486008323"
+      },
+      "tick": "632994",
+      "liquidity": "1",
+      "timestamp": "1700982649",
+      "passed": true,
+      "lObs": "1",
+      "eRef": "0",
+      "expected": {
+        "lastUpdateTime": "1700982649",
+        "lRefTime": "1700982649",
+        "lastPosTime": "1700982644",
+        "lRefBits": "1",
+        "snapBits": "64",
+        "lRefRaiseTime": "1700982589",
+        "anchorX16": "41483894784"
+      }
+    },
+    {
+      "stateIn": {
+        "lastUpdateTime": "1700596384",
+        "lRefTime": "1700496628",
+        "lastPosTime": "1700596623",
+        "lRefBits": "1",
+        "snapBits": "70",
+        "lRefRaiseTime": "1700596508",
+        "anchorX16": "-31601762937"
+      },
+      "tick": "-483242",
+      "liquidity": "1685839956923499906",
+      "timestamp": "1700596628",
+      "passed": true,
+      "lObs": "61",
+      "eRef": "0",
+      "expected": {
+        "lastUpdateTime": "1700596628",
+        "lRefTime": "1700596628",
+        "lastPosTime": "1700596623",
+        "lRefBits": "2",
+        "snapBits": "70",
+        "lRefRaiseTime": "1700596628",
+        "anchorX16": "-31653139713"
+      }
+    },
+    {
+      "stateIn": {
+        "lastUpdateTime": "1700884987",
+        "lRefTime": "1700899610",
+        "lastPosTime": "1700899611",
+        "lRefBits": "0",
+        "snapBits": "30",
+        "lRefRaiseTime": "1700898611",
+        "anchorX16": "10338782670"
+      },
+      "tick": "155488",
+      "liquidity": "11237981450353354960",
+      "timestamp": "1700899611",
+      "passed": true,
+      "lObs": "30",
+      "eRef": "0",
+      "expected": {
+        "lastUpdateTime": "1700899611",
+        "lRefTime": "1700899611",
+        "lastPosTime": "1700899611",
+        "lRefBits": "1",
+        "snapBits": "30",
+        "lRefRaiseTime": "1700899611",
+        "anchorX16": "10190061568"
+      }
+    },
+    {
+      "stateIn": {
+        "lastUpdateTime": "1700921636",
+        "lRefTime": "1700931154",
+        "lastPosTime": "1700931149",
+        "lRefBits": "128",
+        "snapBits": "30",
+        "lRefRaiseTime": "1700930154",
+        "anchorX16": "-48425471655"
+      },
+      "tick": "-736655",
+      "liquidity": "899664300145997652",
+      "timestamp": "1700931154",
+      "passed": false,
+      "lObs": "60",
+      "eRef": "128",
+      "expected": {
+        "lastUpdateTime": "1700931154",
+        "lRefTime": "1700931154",
+        "lastPosTime": "1700931149",
+        "lRefBits": "128",
+        "snapBits": "30",
+        "lRefRaiseTime": "1700930154",
+        "anchorX16": "-48425471655"
+      }
+    },
+    {
+      "stateIn": {
+        "lastUpdateTime": "1700582723",
+        "lRefTime": "1700483083",
+        "lastPosTime": "1700583078",
+        "lRefBits": "1",
+        "snapBits": "64",
+        "lRefRaiseTime": "1700582963",
+        "anchorX16": "4295267008"
+      },
+      "tick": "64182",
+      "liquidity": "766969754127620424",
+      "timestamp": "1700583083",
+      "passed": true,
+      "lObs": "60",
+      "eRef": "0",
+      "expected": {
+        "lastUpdateTime": "1700583083",
+        "lRefTime": "1700583083",
+        "lastPosTime": "1700583078",
+        "lRefBits": "2",
+        "snapBits": "64",
+        "lRefRaiseTime": "1700583083",
+        "anchorX16": "4217360984"
+      }
+    },
+    {
+      "stateIn": {
+        "lastUpdateTime": "1700119762",
+        "lRefTime": "1700020108",
+        "lastPosTime": "1700120108",
+        "lRefBits": "0",
+        "snapBits": "0",
+        "lRefRaiseTime": "1700120108",
+        "anchorX16": "21995569893"
+      },
+      "tick": "338216",
+      "liquidity": "1",
+      "timestamp": "1700120108",
+      "passed": true,
+      "lObs": "0",
+      "eRef": "0",
+      "expected": {
+        "lastUpdateTime": "1700120108",
+        "lRefTime": "1700120108",
+        "lastPosTime": "1700120108",
+        "lRefBits": "0",
+        "snapBits": "0",
+        "lRefRaiseTime": "1700120108",
+        "anchorX16": "22142317312"
+      }
+    },
+    {
+      "stateIn": {
+        "lastUpdateTime": "1700641928",
+        "lRefTime": "1700642060",
+        "lastPosTime": "1700642174",
+        "lRefBits": "40",
+        "snapBits": "0",
+        "lRefRaiseTime": "1700642179",
+        "anchorX16": "-7138876798"
+      },
+      "tick": "-105938",
+      "liquidity": "14066992416618449164",
+      "timestamp": "1700642179",
+      "passed": true,
+      "lObs": "64",
+      "eRef": "40",
+      "expected": {
+        "lastUpdateTime": "1700642179",
+        "lRefTime": "1700642179",
+        "lastPosTime": "1700642174",
+        "lRefBits": "40",
+        "snapBits": "0",
+        "lRefRaiseTime": "1700642179",
+        "anchorX16": "-6988765327"
+      }
+    },
+    {
+      "stateIn": {
+        "lastUpdateTime": "1700032341",
+        "lRefTime": "1700045253",
+        "lastPosTime": "1700045848",
+        "lRefBits": "64",
+        "snapBits": "30",
+        "lRefRaiseTime": "1700045733",
+        "anchorX16": "-12697823788"
+      },
+      "tick": "-195738",
+      "liquidity": "726789582953088089010873493",
+      "timestamp": "1700045853",
+      "passed": true,
+      "lObs": "90",
+      "eRef": "59",
+      "expected": {
+        "lastUpdateTime": "1700045853",
+        "lRefTime": "1700045853",
+        "lastPosTime": "1700045848",
+        "lRefBits": "65",
+        "snapBits": "30",
+        "lRefRaiseTime": "1700045853",
+        "anchorX16": "-12827885568"
+      }
+    },
+    {
+      "stateIn": {
+        "lastUpdateTime": "1700639198",
+        "lRefTime": "1700655813",
+        "lastPosTime": "1700655928",
+        "lRefBits": "128",
+        "snapBits": "30",
+        "lRefRaiseTime": "1700655933",
+        "anchorX16": "-49720584009"
+      },
+      "tick": "-758212",
+      "liquidity": "95139132400456083697",
+      "timestamp": "1700655933",
+      "passed": false,
+      "lObs": "67",
+      "eRef": "127",
+      "expected": {
+        "lastUpdateTime": "1700655933",
+        "lRefTime": "1700655813",
+        "lastPosTime": "1700655928",
+        "lRefBits": "128",
+        "snapBits": "30",
+        "lRefRaiseTime": "1700655933",
+        "anchorX16": "-49720584009"
+      }
+    },
+    {
+      "stateIn": {
+        "lastUpdateTime": "1700550823",
+        "lRefTime": "1700555551",
+        "lastPosTime": "1700555666",
+        "lRefBits": "1",
+        "snapBits": "30",
+        "lRefRaiseTime": "1700555551",
+        "anchorX16": "39191381495"
+      },
+      "tick": "595319",
+      "liquidity": "0",
+      "timestamp": "1700555671",
+      "passed": true,
+      "lObs": "0",
+      "eRef": "0",
+      "expected": {
+        "lastUpdateTime": "1700555671",
+        "lRefTime": "1700555671",
+        "lastPosTime": "1700555666",
+        "lRefBits": "0",
+        "snapBits": "30",
+        "lRefRaiseTime": "1700555551",
+        "anchorX16": "39027541495"
+      }
+    },
+    {
+      "stateIn": {
+        "lastUpdateTime": "1700735063",
+        "lRefTime": "1700735330",
+        "lastPosTime": "1700735325",
+        "lRefBits": "67",
+        "snapBits": "70",
+        "lRefRaiseTime": "1700735270",
+        "anchorX16": "-55718767603"
+      },
+      "tick": "-853098",
+      "liquidity": "1",
+      "timestamp": "1700735330",
+      "passed": false,
+      "lObs": "1",
+      "eRef": "67",
+      "expected": {
+        "lastUpdateTime": "1700735330",
+        "lRefTime": "1700735330",
+        "lastPosTime": "1700735325",
+        "lRefBits": "67",
+        "snapBits": "70",
+        "lRefRaiseTime": "1700735270",
+        "anchorX16": "-55718767603"
+      }
+    },
+    {
+      "stateIn": {
+        "lastUpdateTime": "1700500918",
+        "lRefTime": "1700500453",
+        "lastPosTime": "1700501048",
+        "lRefBits": "40",
+        "snapBits": "64",
+        "lRefRaiseTime": "1700500053",
+        "anchorX16": "56210476894"
+      },
+      "tick": "860627",
+      "liquidity": "681809872127",
+      "timestamp": "1700501053",
+      "passed": true,
+      "lObs": "40",
+      "eRef": "35",
+      "expected": {
+        "lastUpdateTime": "1700501053",
+        "lRefTime": "1700501053",
+        "lastPosTime": "1700501048",
+        "lRefBits": "40",
+        "snapBits": "64",
+        "lRefRaiseTime": "1700500053",
+        "anchorX16": "56314213925"
+      }
+    },
+    {
+      "stateIn": {
+        "lastUpdateTime": "1700642960",
+        "lRefTime": "1700643145",
+        "lastPosTime": "1700643259",
+        "lRefBits": "3",
+        "snapBits": "64",
+        "lRefRaiseTime": "1700643144",
+        "anchorX16": "23812297376"
+      },
+      "tick": "366108",
+      "liquidity": "0",
+      "timestamp": "1700643264",
+      "passed": true,
+      "lObs": "0",
+      "eRef": "3",
+      "expected": {
+        "lastUpdateTime": "1700643264",
+        "lRefTime": "1700643264",
+        "lastPosTime": "1700643259",
+        "lRefBits": "3",
+        "snapBits": "64",
+        "lRefRaiseTime": "1700643144",
+        "anchorX16": "23961995622"
+      }
+    },
+    {
+      "stateIn": {
+        "lastUpdateTime": "1700396040",
+        "lRefTime": "1700404633",
+        "lastPosTime": "1700404748",
+        "lRefBits": "100",
+        "snapBits": "64",
+        "lRefRaiseTime": "1700404753",
+        "anchorX16": "-39211838788"
+      },
+      "tick": "-597979",
+      "liquidity": "0",
+      "timestamp": "1700404753",
+      "passed": false,
+      "lObs": "0",
+      "eRef": "99",
+      "expected": {
+        "lastUpdateTime": "1700404753",
+        "lRefTime": "1700404633",
+        "lastPosTime": "1700404748",
+        "lRefBits": "100",
+        "snapBits": "64",
+        "lRefRaiseTime": "1700404753",
+        "anchorX16": "-39211838788"
+      }
+    },
+    {
+      "stateIn": {
+        "lastUpdateTime": "1700605341",
+        "lRefTime": "1700600460",
+        "lastPosTime": "1700605455",
+        "lRefBits": "3",
+        "snapBits": "70",
+        "lRefRaiseTime": "1700605400",
+        "anchorX16": "-46063198726"
+      },
+      "tick": "-705120",
+      "liquidity": "10795550582883940692",
+      "timestamp": "1700605460",
+      "passed": true,
+      "lObs": "64",
+      "eRef": "0",
+      "expected": {
+        "lastUpdateTime": "1700605460",
+        "lRefTime": "1700605460",
+        "lastPosTime": "1700605455",
+        "lRefBits": "3",
+        "snapBits": "70",
+        "lRefRaiseTime": "1700605400",
+        "anchorX16": "-46136544162"
+      }
+    },
+    {
+      "stateIn": {
+        "lastUpdateTime": "1700547698",
+        "lRefTime": "1700547896",
+        "lastPosTime": "1700548010",
+        "lRefBits": "100",
+        "snapBits": "30",
+        "lRefRaiseTime": "1700547895",
+        "anchorX16": "63421633114"
+      },
+      "tick": "965806",
+      "liquidity": "960025457932328524961877751",
+      "timestamp": "1700548015",
+      "passed": false,
+      "lObs": "90",
+      "eRef": "100",
+      "expected": {
+        "lastUpdateTime": "1700548015",
+        "lRefTime": "1700547896",
+        "lastPosTime": "1700548010",
+        "lRefBits": "100",
+        "snapBits": "30",
+        "lRefRaiseTime": "1700547895",
+        "anchorX16": "63421633114"
+      }
+    },
+    {
+      "stateIn": {
+        "lastUpdateTime": "1700356634",
+        "lRefTime": "1700351785",
+        "lastPosTime": "1700356780",
+        "lRefBits": "3",
+        "snapBits": "0",
+        "lRefRaiseTime": "1700356785",
+        "anchorX16": "27537408292"
+      },
+      "tick": "417252",
+      "liquidity": "813912570786",
+      "timestamp": "1700356785",
+      "passed": true,
+      "lObs": "40",
+      "eRef": "0",
+      "expected": {
+        "lastUpdateTime": "1700356785",
+        "lRefTime": "1700356785",
+        "lastPosTime": "1700356780",
+        "lRefBits": "3",
+        "snapBits": "0",
+        "lRefRaiseTime": "1700356785",
+        "anchorX16": "27425447540"
+      }
+    },
+    {
+      "stateIn": {
+        "lastUpdateTime": "1700379602",
+        "lRefTime": "1700383174",
+        "lastPosTime": "1700383169",
+        "lRefBits": "128",
+        "snapBits": "0",
+        "lRefRaiseTime": "1700383114",
+        "anchorX16": "36951092503"
+      },
+      "tick": "561414",
+      "liquidity": "0",
+      "timestamp": "1700383174",
+      "passed": false,
+      "lObs": "0",
+      "eRef": "128",
+      "expected": {
+        "lastUpdateTime": "1700383174",
+        "lRefTime": "1700383174",
+        "lastPosTime": "1700383169",
+        "lRefBits": "128",
+        "snapBits": "0",
+        "lRefRaiseTime": "1700383114",
+        "anchorX16": "36951092503"
+      }
+    },
+    {
+      "stateIn": {
+        "lastUpdateTime": "1700190986",
+        "lRefTime": "1700204772",
+        "lastPosTime": "1700204886",
+        "lRefBits": "1",
+        "snapBits": "70",
+        "lRefRaiseTime": "1700204771",
+        "anchorX16": "-5647199057"
+      },
+      "tick": "-85687",
+      "liquidity": "663361144109519447",
+      "timestamp": "1700204891",
+      "passed": true,
+      "lObs": "60",
+      "eRef": "1",
+      "expected": {
+        "lastUpdateTime": "1700204891",
+        "lRefTime": "1700204891",
+        "lastPosTime": "1700204886",
+        "lRefBits": "2",
+        "snapBits": "70",
+        "lRefRaiseTime": "1700204891",
+        "anchorX16": "-5615583232"
+      }
+    },
+    {
+      "stateIn": {
+        "lastUpdateTime": "1700960728",
+        "lRefTime": "1700971561",
+        "lastPosTime": "1700971556",
+        "lRefBits": "3",
+        "snapBits": "64",
+        "lRefRaiseTime": "1700971441",
+        "anchorX16": "39186754900"
+      },
+      "tick": "595113",
+      "liquidity": "1",
+      "timestamp": "1700971561",
+      "passed": true,
+      "lObs": "1",
+      "eRef": "3",
+      "expected": {
+        "lastUpdateTime": "1700971561",
+        "lRefTime": "1700971561",
+        "lastPosTime": "1700971556",
+        "lRefBits": "3",
+        "snapBits": "64",
+        "lRefRaiseTime": "1700971441",
+        "anchorX16": "39022914900"
+      }
+    },
+    {
+      "stateIn": {
+        "lastUpdateTime": "1700763762",
+        "lRefTime": "1700763324",
+        "lastPosTime": "1700763924",
+        "lRefBits": "3",
+        "snapBits": "30",
+        "lRefRaiseTime": "1700763804",
+        "anchorX16": "57255693076"
+      },
+      "tick": "874261",
+      "liquidity": "252081532388103980612741176264060326798",
+      "timestamp": "1700763924",
+      "passed": true,
+      "lObs": "30",
+      "eRef": "0",
+      "expected": {
+        "lastUpdateTime": "1700763924",
+        "lRefTime": "1700763924",
+        "lastPosTime": "1700763924",
+        "lRefBits": "4",
+        "snapBits": "30",
+        "lRefRaiseTime": "1700763924",
+        "anchorX16": "57279925929"
+      }
+    },
+    {
+      "stateIn": {
+        "lastUpdateTime": "1700376970",
+        "lRefTime": "1700377051",
+        "lastPosTime": "1700377171",
+        "lRefBits": "40",
+        "snapBits": "64",
+        "lRefRaiseTime": "1700376171",
+        "anchorX16": "-4045187393"
+      },
+      "tick": "-59210",
+      "liquidity": "1212189000934955301",
+      "timestamp": "1700377171",
+      "passed": true,
+      "lObs": "64",
+      "eRef": "39",
+      "expected": {
+        "lastUpdateTime": "1700377171",
+        "lRefTime": "1700377171",
+        "lastPosTime": "1700377171",
+        "lRefBits": "41",
+        "snapBits": "64",
+        "lRefRaiseTime": "1700377171",
+        "anchorX16": "-3931996595"
+      }
+    },
+    {
+      "stateIn": {
+        "lastUpdateTime": "1700307560",
+        "lRefTime": "1700307617",
+        "lastPosTime": "1700307612",
+        "lRefBits": "64",
+        "snapBits": "70",
+        "lRefRaiseTime": "1700306617",
+        "anchorX16": "-4200107939"
+      },
+      "tick": "-63961",
+      "liquidity": "16982254001175181380",
+      "timestamp": "1700307617",
+      "passed": true,
+      "lObs": "64",
+      "eRef": "64",
+      "expected": {
+        "lastUpdateTime": "1700307617",
+        "lRefTime": "1700307617",
+        "lastPosTime": "1700307612",
+        "lRefBits": "64",
+        "snapBits": "70",
+        "lRefRaiseTime": "1700306617",
+        "anchorX16": "-4197762725"
+      }
+    },
+    {
+      "stateIn": {
+        "lastUpdateTime": "1700531007",
+        "lRefTime": "1700536447",
+        "lastPosTime": "1700536447",
+        "lRefBits": "100",
+        "snapBits": "0",
+        "lRefRaiseTime": "1700536447",
+        "anchorX16": "63918032261"
+      },
+      "tick": "976202",
+      "liquidity": "119298386503649477703",
+      "timestamp": "1700536447",
+      "passed": false,
+      "lObs": "0",
+      "eRef": "100",
+      "expected": {
+        "lastUpdateTime": "1700536447",
+        "lRefTime": "1700536447",
+        "lastPosTime": "1700536447",
+        "lRefBits": "100",
+        "snapBits": "0",
+        "lRefRaiseTime": "1700536447",
+        "anchorX16": "63918032261"
+      }
+    },
+    {
+      "stateIn": {
+        "lastUpdateTime": "1700373196",
+        "lRefTime": "1700273327",
+        "lastPosTime": "1700373322",
+        "lRefBits": "128",
+        "snapBits": "30",
+        "lRefRaiseTime": "1700373327",
+        "anchorX16": "62729909030"
+      },
+      "tick": "958711",
+      "liquidity": "131532561321296309087",
+      "timestamp": "1700373327",
+      "passed": true,
+      "lObs": "67",
+      "eRef": "0",
+      "expected": {
+        "lastUpdateTime": "1700373327",
+        "lRefTime": "1700373327",
+        "lastPosTime": "1700373322",
+        "lRefBits": "67",
+        "snapBits": "30",
+        "lRefRaiseTime": "1700373327",
+        "anchorX16": "62783080052"
+      }
+    },
+    {
+      "stateIn": {
+        "lastUpdateTime": "1700454086",
+        "lRefTime": "1700454711",
+        "lastPosTime": "1700454706",
+        "lRefBits": "1",
+        "snapBits": "0",
+        "lRefRaiseTime": "1700453711",
+        "anchorX16": "-5337930563"
+      },
+      "tick": "-83815",
+      "liquidity": "894855496513",
+      "timestamp": "1700454711",
+      "passed": true,
+      "lObs": "40",
+      "eRef": "1",
+      "expected": {
+        "lastUpdateTime": "1700454711",
+        "lRefTime": "1700454711",
+        "lastPosTime": "1700454706",
+        "lRefBits": "2",
+        "snapBits": "0",
+        "lRefRaiseTime": "1700454711",
+        "anchorX16": "-5488708230"
+      }
+    },
+    {
+      "stateIn": {
+        "lastUpdateTime": "1700393845",
+        "lRefTime": "1700393340",
+        "lastPosTime": "1700393940",
+        "lRefBits": "100",
+        "snapBits": "30",
+        "lRefRaiseTime": "1700393880",
+        "anchorX16": "48215052550"
+      },
+      "tick": "735061",
+      "liquidity": "1929700625615583201",
+      "timestamp": "1700393940",
+      "passed": false,
+      "lObs": "30",
+      "eRef": "95",
+      "expected": {
+        "lastUpdateTime": "1700393940",
+        "lRefTime": "1700393340",
+        "lastPosTime": "1700393940",
+        "lRefBits": "100",
+        "snapBits": "30",
+        "lRefRaiseTime": "1700393880",
+        "anchorX16": "48215052550"
+      }
+    },
+    {
+      "stateIn": {
+        "lastUpdateTime": "1700639386",
+        "lRefTime": "1700554229",
+        "lastPosTime": "1700654224",
+        "lRefBits": "1",
+        "snapBits": "0",
+        "lRefRaiseTime": "1700654229",
+        "anchorX16": "39120479500"
+      },
+      "tick": "597405",
+      "liquidity": "659201837640977712476712373",
+      "timestamp": "1700654229",
+      "passed": true,
+      "lObs": "90",
+      "eRef": "0",
+      "expected": {
+        "lastUpdateTime": "1700654229",
+        "lRefTime": "1700654229",
+        "lastPosTime": "1700654224",
+        "lRefBits": "1",
+        "snapBits": "0",
+        "lRefRaiseTime": "1700654229",
+        "anchorX16": "39151534080"
+      }
+    },
+    {
+      "stateIn": {
+        "lastUpdateTime": "1700518357",
+        "lRefTime": "1700518534",
+        "lastPosTime": "1700518530",
+        "lRefBits": "100",
+        "snapBits": "70",
+        "lRefRaiseTime": "1700518535",
+        "anchorX16": "-27593739779"
+      },
+      "tick": "-423939",
+      "liquidity": "1068030855235634615493410533",
+      "timestamp": "1700518535",
+      "passed": false,
+      "lObs": "90",
+      "eRef": "100",
+      "expected": {
+        "lastUpdateTime": "1700518535",
+        "lRefTime": "1700518534",
+        "lastPosTime": "1700518530",
+        "lRefBits": "100",
+        "snapBits": "70",
+        "lRefRaiseTime": "1700518535",
+        "anchorX16": "-27593739779"
+      }
+    },
+    {
+      "stateIn": {
+        "lastUpdateTime": "1700689513",
+        "lRefTime": "1700684885",
+        "lastPosTime": "1700689880",
+        "lRefBits": "100",
+        "snapBits": "0",
+        "lRefRaiseTime": "1700689885",
+        "anchorX16": "14057006137"
+      },
+      "tick": "213743",
+      "liquidity": "14268715269639808128",
+      "timestamp": "1700689885",
+      "passed": true,
+      "lObs": "64",
+      "eRef": "59",
+      "expected": {
+        "lastUpdateTime": "1700689885",
+        "lRefTime": "1700689885",
+        "lastPosTime": "1700689880",
+        "lRefBits": "64",
+        "snapBits": "0",
+        "lRefRaiseTime": "1700689885",
+        "anchorX16": "14013592973"
+      }
+    },
+    {
+      "stateIn": {
+        "lastUpdateTime": "1700390356",
+        "lRefTime": "1700390547",
+        "lastPosTime": "1700390542",
+        "lRefBits": "1",
+        "snapBits": "30",
+        "lRefRaiseTime": "1700390547",
+        "anchorX16": "41782395704"
+      },
+      "tick": "635892",
+      "liquidity": "602958677844616754",
+      "timestamp": "1700390547",
+      "passed": true,
+      "lObs": "60",
+      "eRef": "1",
+      "expected": {
+        "lastUpdateTime": "1700390547",
+        "lRefTime": "1700390547",
+        "lastPosTime": "1700390542",
+        "lRefBits": "1",
+        "snapBits": "30",
+        "lRefRaiseTime": "1700390547",
+        "anchorX16": "41709842847"
+      }
+    },
+    {
+      "stateIn": {
+        "lastUpdateTime": "1700619077",
+        "lRefTime": "1700635901",
+        "lastPosTime": "1700635896",
+        "lRefBits": "0",
+        "snapBits": "70",
+        "lRefRaiseTime": "1700635781",
+        "anchorX16": "-63071161776"
+      },
+      "tick": "-959752",
+      "liquidity": "1125299925156591403226094600",
+      "timestamp": "1700635901",
+      "passed": true,
+      "lObs": "90",
+      "eRef": "0",
+      "expected": {
+        "lastUpdateTime": "1700635901",
+        "lRefTime": "1700635901",
+        "lastPosTime": "1700635896",
+        "lRefBits": "1",
+        "snapBits": "70",
+        "lRefRaiseTime": "1700635901",
+        "anchorX16": "-62907321776"
+      }
+    },
+    {
+      "stateIn": {
+        "lastUpdateTime": "1700162173",
+        "lRefTime": "1700162186",
+        "lastPosTime": "1700162181",
+        "lRefBits": "40",
+        "snapBits": "70",
+        "lRefRaiseTime": "1700162186",
+        "anchorX16": "-34198702381"
+      },
+      "tick": "-524276",
+      "liquidity": "12286512648301849730",
+      "timestamp": "1700162186",
+      "passed": true,
+      "lObs": "64",
+      "eRef": "40",
+      "expected": {
+        "lastUpdateTime": "1700162186",
+        "lRefTime": "1700162186",
+        "lastPosTime": "1700162181",
+        "lRefBits": "40",
+        "snapBits": "70",
+        "lRefRaiseTime": "1700162186",
+        "anchorX16": "-34210294976"
+      }
+    },
+    {
+      "stateIn": {
+        "lastUpdateTime": "1700059456",
+        "lRefTime": "1700075385",
+        "lastPosTime": "1700075380",
+        "lRefBits": "128",
+        "snapBits": "30",
+        "lRefRaiseTime": "1700075325",
+        "anchorX16": "-11342517890"
+      },
+      "tick": "-172255",
+      "liquidity": "9578044734685910233",
+      "timestamp": "1700075385",
+      "passed": false,
+      "lObs": "64",
+      "eRef": "128",
+      "expected": {
+        "lastUpdateTime": "1700075385",
+        "lRefTime": "1700075385",
+        "lastPosTime": "1700075380",
+        "lRefBits": "128",
+        "snapBits": "30",
+        "lRefRaiseTime": "1700075325",
+        "anchorX16": "-11342517890"
+      }
+    },
+    {
+      "stateIn": {
+        "lastUpdateTime": "1700821577",
+        "lRefTime": "1700821909",
+        "lastPosTime": "1700821904",
+        "lRefBits": "0",
+        "snapBits": "70",
+        "lRefRaiseTime": "1700820909",
+        "anchorX16": "53568716093"
+      },
+      "tick": "817712",
+      "liquidity": "0",
+      "timestamp": "1700821909",
+      "passed": true,
+      "lObs": "0",
+      "eRef": "0",
+      "expected": {
+        "lastUpdateTime": "1700821909",
+        "lRefTime": "1700821909",
+        "lastPosTime": "1700821904",
+        "lRefBits": "0",
+        "snapBits": "70",
+        "lRefRaiseTime": "1700820909",
+        "anchorX16": "53586508753"
+      }
+    },
+    {
+      "stateIn": {
+        "lastUpdateTime": "1700515068",
+        "lRefTime": "1700520888",
+        "lastPosTime": "1700521007",
+        "lRefBits": "67",
+        "snapBits": "0",
+        "lRefRaiseTime": "1700521007",
+        "anchorX16": "15283684984"
+      },
+      "tick": "230807",
+      "liquidity": "1",
+      "timestamp": "1700521007",
+      "passed": false,
+      "lObs": "0",
+      "eRef": "67",
+      "expected": {
+        "lastUpdateTime": "1700521007",
+        "lRefTime": "1700520888",
+        "lastPosTime": "1700521007",
+        "lRefBits": "67",
+        "snapBits": "0",
+        "lRefRaiseTime": "1700521007",
+        "anchorX16": "15283684984"
+      }
+    },
+    {
+      "stateIn": {
+        "lastUpdateTime": "1700308630",
+        "lRefTime": "1700313681",
+        "lastPosTime": "1700318676",
+        "lRefBits": "40",
+        "snapBits": "64",
+        "lRefRaiseTime": "1700318681",
+        "anchorX16": "3177605763"
+      },
+      "tick": "45769",
+      "liquidity": "287421126518168858952929186192966990734",
+      "timestamp": "1700318681",
+      "passed": true,
+      "lObs": "128",
+      "eRef": "0",
+      "expected": {
+        "lastUpdateTime": "1700318681",
+        "lRefTime": "1700318681",
+        "lastPosTime": "1700318676",
+        "lRefBits": "40",
+        "snapBits": "64",
+        "lRefRaiseTime": "1700318681",
+        "anchorX16": "3013765763"
+      }
+    },
+    {
+      "stateIn": {
+        "lastUpdateTime": "1700222177",
+        "lRefTime": "1700237000",
+        "lastPosTime": "1700237120",
+        "lRefBits": "128",
+        "snapBits": "64",
+        "lRefRaiseTime": "1700237060",
+        "anchorX16": "52390225285"
+      },
+      "tick": "800285",
+      "liquidity": "231148281690244143652321949948827892546",
+      "timestamp": "1700237120",
+      "passed": false,
+      "lObs": "64",
+      "eRef": "127",
+      "expected": {
+        "lastUpdateTime": "1700237120",
+        "lRefTime": "1700237000",
+        "lastPosTime": "1700237120",
+        "lRefBits": "128",
+        "snapBits": "64",
+        "lRefRaiseTime": "1700237060",
+        "anchorX16": "52390225285"
+      }
+    },
+    {
+      "stateIn": {
+        "lastUpdateTime": "1700424052",
+        "lRefTime": "1700424365",
+        "lastPosTime": "1700424360",
+        "lRefBits": "3",
+        "snapBits": "30",
+        "lRefRaiseTime": "1700424365",
+        "anchorX16": "29520271748"
+      },
+      "tick": "448605",
+      "liquidity": "1",
+      "timestamp": "1700424365",
+      "passed": true,
+      "lObs": "1",
+      "eRef": "3",
+      "expected": {
+        "lastUpdateTime": "1700424365",
+        "lRefTime": "1700424365",
+        "lastPosTime": "1700424360",
+        "lRefBits": "3",
+        "snapBits": "30",
+        "lRefRaiseTime": "1700424365",
+        "anchorX16": "29419536988"
+      }
+    },
+    {
+      "stateIn": {
+        "lastUpdateTime": "1700508622",
+        "lRefTime": "1700508929",
+        "lastPosTime": "1700508924",
+        "lRefBits": "40",
+        "snapBits": "70",
+        "lRefRaiseTime": "1700508869",
+        "anchorX16": "14158893745"
+      },
+      "tick": "216010",
+      "liquidity": "0",
+      "timestamp": "1700508929",
+      "passed": false,
+      "lObs": "0",
+      "eRef": "40",
+      "expected": {
+        "lastUpdateTime": "1700508929",
+        "lRefTime": "1700508929",
+        "lastPosTime": "1700508924",
+        "lRefBits": "40",
+        "snapBits": "70",
+        "lRefRaiseTime": "1700508869",
+        "anchorX16": "14158893745"
+      }
+    },
+    {
+      "stateIn": {
+        "lastUpdateTime": "1700039965",
+        "lRefTime": "1700043048",
+        "lastPosTime": "1700043044",
+        "lRefBits": "0",
+        "snapBits": "30",
+        "lRefRaiseTime": "1700043049",
+        "anchorX16": "-17095320340"
+      },
+      "tick": "-259288",
+      "liquidity": "1056966166773",
+      "timestamp": "1700043049",
+      "passed": true,
+      "lObs": "40",
+      "eRef": "0",
+      "expected": {
+        "lastUpdateTime": "1700043049",
+        "lRefTime": "1700043049",
+        "lastPosTime": "1700043044",
+        "lRefBits": "0",
+        "snapBits": "30",
+        "lRefRaiseTime": "1700043049",
+        "anchorX16": "-16992698369"
+      }
+    },
+    {
+      "stateIn": {
+        "lastUpdateTime": "1700664614",
+        "lRefTime": "1700684211",
+        "lastPosTime": "1700684207",
+        "lRefBits": "3",
+        "snapBits": "64",
+        "lRefRaiseTime": "1700684092",
+        "anchorX16": "4135090835"
+      },
+      "tick": "62516",
+      "liquidity": "210748887599299753562586796244962794785",
+      "timestamp": "1700684212",
+      "passed": true,
+      "lObs": "128",
+      "eRef": "3",
+      "expected": {
+        "lastUpdateTime": "1700684212",
+        "lRefTime": "1700684212",
+        "lastPosTime": "1700684207",
+        "lRefBits": "4",
+        "snapBits": "64",
+        "lRefRaiseTime": "1700684212",
+        "anchorX16": "4097048576"
+      }
+    },
+    {
+      "stateIn": {
+        "lastUpdateTime": "1700855738",
+        "lRefTime": "1700859970",
+        "lastPosTime": "1700860085",
+        "lRefBits": "3",
+        "snapBits": "64",
+        "lRefRaiseTime": "1700860090",
+        "anchorX16": "-8707915993"
+      },
+      "tick": "-129983",
+      "liquidity": "1",
+      "timestamp": "1700860090",
+      "passed": true,
+      "lObs": "1",
+      "eRef": "2",
+      "expected": {
+        "lastUpdateTime": "1700860090",
+        "lRefTime": "1700860090",
+        "lastPosTime": "1700860085",
+        "lRefBits": "2",
+        "snapBits": "64",
+        "lRefRaiseTime": "1700860090",
+        "anchorX16": "-8544075993"
+      }
+    },
+    {
+      "stateIn": {
+        "lastUpdateTime": "1700890571",
+        "lRefTime": "1700890652",
+        "lastPosTime": "1700890766",
+        "lRefBits": "40",
+        "snapBits": "0",
+        "lRefRaiseTime": "1700890771",
+        "anchorX16": "-20141813544"
+      },
+      "tick": "-305145",
+      "liquidity": "751490321138",
+      "timestamp": "1700890771",
+      "passed": true,
+      "lObs": "40",
+      "eRef": "40",
+      "expected": {
+        "lastUpdateTime": "1700890771",
+        "lRefTime": "1700890771",
+        "lastPosTime": "1700890766",
+        "lRefBits": "40",
+        "snapBits": "0",
+        "lRefRaiseTime": "1700890771",
+        "anchorX16": "-20043286590"
+      }
+    },
+    {
+      "stateIn": {
+        "lastUpdateTime": "1700175333",
+        "lRefTime": "1700175353",
+        "lastPosTime": "1700175349",
+        "lRefBits": "128",
+        "snapBits": "70",
+        "lRefRaiseTime": "1700175234",
+        "anchorX16": "2522482465"
+      },
+      "tick": "40676",
+      "liquidity": "278824855702386226150060874979486624857",
+      "timestamp": "1700175354",
+      "passed": true,
+      "lObs": "128",
+      "eRef": "128",
+      "expected": {
+        "lastUpdateTime": "1700175354",
+        "lRefTime": "1700175354",
+        "lastPosTime": "1700175349",
+        "lRefBits": "128",
+        "snapBits": "70",
+        "lRefRaiseTime": "1700175234",
+        "anchorX16": "2538847396"
+      }
+    },
+    {
+      "stateIn": {
+        "lastUpdateTime": "1700311685",
+        "lRefTime": "1700319394",
+        "lastPosTime": "1700324389",
+        "lRefBits": "67",
+        "snapBits": "64",
+        "lRefRaiseTime": "1700323394",
+        "anchorX16": "-64483526732"
+      },
+      "tick": "-983635",
+      "liquidity": "313714488437701378678546364555107611525",
+      "timestamp": "1700324394",
+      "passed": true,
+      "lObs": "128",
+      "eRef": "26",
+      "expected": {
+        "lastUpdateTime": "1700324394",
+        "lRefTime": "1700324394",
+        "lastPosTime": "1700324389",
+        "lRefBits": "68",
+        "snapBits": "64",
+        "lRefRaiseTime": "1700324394",
+        "anchorX16": "-64463503360"
+      }
+    },
+    {
+      "stateIn": {
+        "lastUpdateTime": "1700219463",
+        "lRefTime": "1700219705",
+        "lastPosTime": "1700219820",
+        "lRefBits": "128",
+        "snapBits": "70",
+        "lRefRaiseTime": "1700219765",
+        "anchorX16": "-16983288009"
+      },
+      "tick": "-262032",
+      "liquidity": "971975755143399329",
+      "timestamp": "1700219825",
+      "passed": false,
+      "lObs": "60",
+      "eRef": "127",
+      "expected": {
+        "lastUpdateTime": "1700219825",
+        "lRefTime": "1700219705",
+        "lastPosTime": "1700219820",
+        "lRefBits": "128",
+        "snapBits": "70",
+        "lRefRaiseTime": "1700219765",
+        "anchorX16": "-16983288009"
+      }
+    },
+    {
+      "stateIn": {
+        "lastUpdateTime": "1700037733",
+        "lRefTime": "1700045673",
+        "lastPosTime": "1700045673",
+        "lRefBits": "128",
+        "snapBits": "70",
+        "lRefRaiseTime": "1700045613",
+        "anchorX16": "52734712403"
+      },
+      "tick": "807531",
+      "liquidity": "688888134272",
+      "timestamp": "1700045673",
+      "passed": false,
+      "lObs": "70",
+      "eRef": "128",
+      "expected": {
+        "lastUpdateTime": "1700045673",
+        "lRefTime": "1700045673",
+        "lastPosTime": "1700045673",
+        "lRefBits": "128",
+        "snapBits": "70",
+        "lRefRaiseTime": "1700045613",
+        "anchorX16": "52734712403"
+      }
+    },
+    {
+      "stateIn": {
+        "lastUpdateTime": "1700631303",
+        "lRefTime": "1700636765",
+        "lastPosTime": "1700636760",
+        "lRefBits": "40",
+        "snapBits": "30",
+        "lRefRaiseTime": "1700636705",
+        "anchorX16": "-60172608510"
+      },
+      "tick": "-920072",
+      "liquidity": "788227203003",
+      "timestamp": "1700636765",
+      "passed": true,
+      "lObs": "40",
+      "eRef": "40",
+      "expected": {
+        "lastUpdateTime": "1700636765",
+        "lRefTime": "1700636765",
+        "lastPosTime": "1700636760",
+        "lRefBits": "40",
+        "snapBits": "30",
+        "lRefRaiseTime": "1700636705",
+        "anchorX16": "-60297838592"
+      }
+    },
+    {
+      "stateIn": {
+        "lastUpdateTime": "1700816385",
+        "lRefTime": "1700816670",
+        "lastPosTime": "1700816666",
+        "lRefBits": "128",
+        "snapBits": "70",
+        "lRefRaiseTime": "1700816671",
+        "anchorX16": "25174051458"
+      },
+      "tick": "385188",
+      "liquidity": "102780190934932281284",
+      "timestamp": "1700816671",
+      "passed": false,
+      "lObs": "67",
+      "eRef": "128",
+      "expected": {
+        "lastUpdateTime": "1700816671",
+        "lRefTime": "1700816670",
+        "lastPosTime": "1700816666",
+        "lRefBits": "128",
+        "snapBits": "70",
+        "lRefRaiseTime": "1700816671",
+        "anchorX16": "25174051458"
+      }
+    },
+    {
+      "stateIn": {
+        "lastUpdateTime": "1700466206",
+        "lRefTime": "1700481127",
+        "lastPosTime": "1700481127",
+        "lRefBits": "100",
+        "snapBits": "30",
+        "lRefRaiseTime": "1700481067",
+        "anchorX16": "-51797160411"
+      },
+      "tick": "-792893",
+      "liquidity": "1638267277029079023",
+      "timestamp": "1700481127",
+      "passed": false,
+      "lObs": "30",
+      "eRef": "100",
+      "expected": {
+        "lastUpdateTime": "1700481127",
+        "lRefTime": "1700481127",
+        "lastPosTime": "1700481127",
+        "lRefBits": "100",
+        "snapBits": "30",
+        "lRefRaiseTime": "1700481067",
+        "anchorX16": "-51797160411"
+      }
+    },
+    {
+      "stateIn": {
+        "lastUpdateTime": "1700605340",
+        "lRefTime": "1700505454",
+        "lastPosTime": "1700605454",
+        "lRefBits": "100",
+        "snapBits": "64",
+        "lRefRaiseTime": "1700604454",
+        "anchorX16": "11325121931"
+      },
+      "tick": "171320",
+      "liquidity": "1308023027097280654",
+      "timestamp": "1700605454",
+      "passed": true,
+      "lObs": "64",
+      "eRef": "0",
+      "expected": {
+        "lastUpdateTime": "1700605454",
+        "lRefTime": "1700605454",
+        "lastPosTime": "1700605454",
+        "lRefBits": "64",
+        "snapBits": "64",
+        "lRefRaiseTime": "1700604454",
+        "anchorX16": "11278093791"
+      }
+    },
+    {
+      "stateIn": {
+        "lastUpdateTime": "1700218177",
+        "lRefTime": "1700218374",
+        "lastPosTime": "1700218369",
+        "lRefBits": "128",
+        "snapBits": "70",
+        "lRefRaiseTime": "1700218374",
+        "anchorX16": "-20450690743"
+      },
+      "tick": "-310673",
+      "liquidity": "934518090593",
+      "timestamp": "1700218374",
+      "passed": false,
+      "lObs": "40",
+      "eRef": "128",
+      "expected": {
+        "lastUpdateTime": "1700218374",
+        "lRefTime": "1700218374",
+        "lastPosTime": "1700218369",
+        "lRefBits": "128",
+        "snapBits": "70",
+        "lRefRaiseTime": "1700218374",
+        "anchorX16": "-20450690743"
+      }
+    },
+    {
+      "stateIn": {
+        "lastUpdateTime": "1700352734",
+        "lRefTime": "1700352768",
+        "lastPosTime": "1700352888",
+        "lRefBits": "128",
+        "snapBits": "70",
+        "lRefRaiseTime": "1700352768",
+        "anchorX16": "12060991443"
+      },
+      "tick": "185872",
+      "liquidity": "0",
+      "timestamp": "1700352888",
+      "passed": false,
+      "lObs": "70",
+      "eRef": "127",
+      "expected": {
+        "lastUpdateTime": "1700352888",
+        "lRefTime": "1700352768",
+        "lastPosTime": "1700352888",
+        "lRefBits": "128",
+        "snapBits": "70",
+        "lRefRaiseTime": "1700352768",
+        "anchorX16": "12060991443"
+      }
+    },
+    {
+      "stateIn": {
+        "lastUpdateTime": "1700857659",
+        "lRefTime": "1700857696",
+        "lastPosTime": "1700857696",
+        "lRefBits": "0",
+        "snapBits": "64",
+        "lRefRaiseTime": "1700857696",
+        "anchorX16": "-43250213760"
+      },
+      "tick": "-660553",
+      "liquidity": "634198338544",
+      "timestamp": "1700857696",
+      "passed": true,
+      "lObs": "64",
+      "eRef": "0",
+      "expected": {
+        "lastUpdateTime": "1700857696",
+        "lRefTime": "1700857696",
+        "lastPosTime": "1700857696",
+        "lRefBits": "0",
+        "snapBits": "64",
+        "lRefRaiseTime": "1700857696",
+        "anchorX16": "-43257869932"
+      }
+    },
+    {
+      "stateIn": {
+        "lastUpdateTime": "1700360407",
+        "lRefTime": "1700360681",
+        "lastPosTime": "1700360677",
+        "lRefBits": "100",
+        "snapBits": "30",
+        "lRefRaiseTime": "1700360682",
+        "anchorX16": "30615559652"
+      },
+      "tick": "465596",
+      "liquidity": "604861782607103724",
+      "timestamp": "1700360682",
+      "passed": false,
+      "lObs": "60",
+      "eRef": "100",
+      "expected": {
+        "lastUpdateTime": "1700360682",
+        "lRefTime": "1700360681",
+        "lastPosTime": "1700360677",
+        "lRefBits": "100",
+        "snapBits": "30",
+        "lRefRaiseTime": "1700360682",
+        "anchorX16": "30615559652"
+      }
+    },
+    {
+      "stateIn": {
+        "lastUpdateTime": "1700721073",
+        "lRefTime": "1700721080",
+        "lastPosTime": "1700721200",
+        "lRefBits": "1",
+        "snapBits": "70",
+        "lRefRaiseTime": "1700721200",
+        "anchorX16": "-3284749015"
+      },
+      "tick": "-49269",
+      "liquidity": "76257832222035603740",
+      "timestamp": "1700721200",
+      "passed": true,
+      "lObs": "70",
+      "eRef": "0",
+      "expected": {
+        "lastUpdateTime": "1700721200",
+        "lRefTime": "1700721200",
+        "lastPosTime": "1700721200",
+        "lRefBits": "1",
+        "snapBits": "70",
+        "lRefRaiseTime": "1700721200",
+        "anchorX16": "-3255714397"
+      }
+    },
+    {
+      "stateIn": {
+        "lastUpdateTime": "1700153619",
+        "lRefTime": "1700053731",
+        "lastPosTime": "1700153726",
+        "lRefBits": "67",
+        "snapBits": "64",
+        "lRefRaiseTime": "1700152731",
+        "anchorX16": "29765619834"
+      },
+      "tick": "453881",
+      "liquidity": "649554342769085129",
+      "timestamp": "1700153731",
+      "passed": true,
+      "lObs": "60",
+      "eRef": "0",
+      "expected": {
+        "lastUpdateTime": "1700153731",
+        "lRefTime": "1700153731",
+        "lastPosTime": "1700153726",
+        "lRefBits": "60",
+        "snapBits": "64",
+        "lRefRaiseTime": "1700152731",
+        "anchorX16": "29756057230"
+      }
+    },
+    {
+      "stateIn": {
+        "lastUpdateTime": "1700294847",
+        "lRefTime": "1700294868",
+        "lastPosTime": "1700294982",
+        "lRefBits": "100",
+        "snapBits": "0",
+        "lRefRaiseTime": "1700294927",
+        "anchorX16": "-34190301842"
+      },
+      "tick": "-524526",
+      "liquidity": "696628572948591348997848596",
+      "timestamp": "1700294987",
+      "passed": false,
+      "lObs": "90",
+      "eRef": "100",
+      "expected": {
+        "lastUpdateTime": "1700294987",
+        "lRefTime": "1700294868",
+        "lastPosTime": "1700294982",
+        "lRefBits": "100",
+        "snapBits": "0",
+        "lRefRaiseTime": "1700294927",
+        "anchorX16": "-34190301842"
+      }
+    },
+    {
+      "stateIn": {
+        "lastUpdateTime": "1700775340",
+        "lRefTime": "1700770410",
+        "lastPosTime": "1700775410",
+        "lRefBits": "0",
+        "snapBits": "30",
+        "lRefRaiseTime": "1700774410",
+        "anchorX16": "49491040446"
+      },
+      "tick": "754571",
+      "liquidity": "122636969511319661005",
+      "timestamp": "1700775410",
+      "passed": true,
+      "lObs": "30",
+      "eRef": "0",
+      "expected": {
+        "lastUpdateTime": "1700775410",
+        "lRefTime": "1700775410",
+        "lastPosTime": "1700775410",
+        "lRefBits": "1",
+        "snapBits": "30",
+        "lRefRaiseTime": "1700775410",
+        "anchorX16": "49477911717"
+      }
+    },
+    {
+      "stateIn": {
+        "lastUpdateTime": "1700474839",
+        "lRefTime": "1700474963",
+        "lastPosTime": "1700474963",
+        "lRefBits": "67",
+        "snapBits": "0",
+        "lRefRaiseTime": "1700474963",
+        "anchorX16": "53360008980"
+      },
+      "tick": "813247",
+      "liquidity": "730490119622027759985168851",
+      "timestamp": "1700474963",
+      "passed": false,
+      "lObs": "0",
+      "eRef": "67",
+      "expected": {
+        "lastUpdateTime": "1700474963",
+        "lRefTime": "1700474963",
+        "lastPosTime": "1700474963",
+        "lRefBits": "67",
+        "snapBits": "0",
+        "lRefRaiseTime": "1700474963",
+        "anchorX16": "53360008980"
+      }
+    },
+    {
+      "stateIn": {
+        "lastUpdateTime": "1700492212",
+        "lRefTime": "1700392572",
+        "lastPosTime": "1700492567",
+        "lRefBits": "67",
+        "snapBits": "70",
+        "lRefRaiseTime": "1700491572",
+        "anchorX16": "-55186259224"
+      },
+      "tick": "-841122",
+      "liquidity": "609032891315670231",
+      "timestamp": "1700492572",
+      "passed": true,
+      "lObs": "60",
+      "eRef": "0",
+      "expected": {
+        "lastUpdateTime": "1700492572",
+        "lRefTime": "1700492572",
+        "lastPosTime": "1700492567",
+        "lRefBits": "60",
+        "snapBits": "70",
+        "lRefRaiseTime": "1700491572",
+        "anchorX16": "-55131582371"
+      }
+    },
+    {
+      "stateIn": {
+        "lastUpdateTime": "1700182018",
+        "lRefTime": "1700182119",
+        "lastPosTime": "1700182119",
+        "lRefBits": "64",
+        "snapBits": "64",
+        "lRefRaiseTime": "1700181999",
+        "anchorX16": "-63432546731"
+      },
+      "tick": "-969941",
+      "liquidity": "214688837855145910577769487233161866353",
+      "timestamp": "1700182119",
+      "passed": true,
+      "lObs": "64",
+      "eRef": "64",
+      "expected": {
+        "lastUpdateTime": "1700182119",
+        "lRefTime": "1700182119",
+        "lastPosTime": "1700182119",
+        "lRefBits": "64",
+        "snapBits": "64",
+        "lRefRaiseTime": "1700181999",
+        "anchorX16": "-63491556859"
+      }
+    },
+    {
+      "stateIn": {
+        "lastUpdateTime": "1700111738",
+        "lRefTime": "1700115994",
+        "lastPosTime": "1700120994",
+        "lRefBits": "1",
+        "snapBits": "70",
+        "lRefRaiseTime": "1700120934",
+        "anchorX16": "62951979650"
+      },
+      "tick": "958070",
+      "liquidity": "242900460895305025434953527308608273845",
+      "timestamp": "1700120994",
+      "passed": true,
+      "lObs": "70",
+      "eRef": "0",
+      "expected": {
+        "lastUpdateTime": "1700120994",
+        "lRefTime": "1700120994",
+        "lastPosTime": "1700120994",
+        "lRefBits": "1",
+        "snapBits": "70",
+        "lRefRaiseTime": "1700120934",
+        "anchorX16": "62788139650"
+      }
+    },
+    {
+      "stateIn": {
+        "lastUpdateTime": "1700475893",
+        "lRefTime": "1700476042",
+        "lastPosTime": "1700476037",
+        "lRefBits": "1",
+        "snapBits": "30",
+        "lRefRaiseTime": "1700475042",
+        "anchorX16": "-7929297596"
+      },
+      "tick": "-118238",
+      "liquidity": "1038394021556994131",
+      "timestamp": "1700476042",
+      "passed": true,
+      "lObs": "60",
+      "eRef": "1",
+      "expected": {
+        "lastUpdateTime": "1700476042",
+        "lRefTime": "1700476042",
+        "lastPosTime": "1700476037",
+        "lRefBits": "2",
+        "snapBits": "30",
+        "lRefRaiseTime": "1700476042",
+        "anchorX16": "-7825155814"
+      }
+    },
+    {
+      "stateIn": {
+        "lastUpdateTime": "1700590977",
+        "lRefTime": "1700592954",
+        "lastPosTime": "1700593073",
+        "lRefBits": "40",
+        "snapBits": "70",
+        "lRefRaiseTime": "1700593073",
+        "anchorX16": "-62742192888"
+      },
+      "tick": "-955859",
+      "liquidity": "1",
+      "timestamp": "1700593073",
+      "passed": true,
+      "lObs": "70",
+      "eRef": "40",
+      "expected": {
+        "lastUpdateTime": "1700593073",
+        "lRefTime": "1700593073",
+        "lastPosTime": "1700593073",
+        "lRefBits": "40",
+        "snapBits": "70",
+        "lRefRaiseTime": "1700593073",
+        "anchorX16": "-62643175970"
+      }
+    },
+    {
+      "stateIn": {
+        "lastUpdateTime": "1700186706",
+        "lRefTime": "1700186961",
+        "lastPosTime": "1700186961",
+        "lRefBits": "0",
+        "snapBits": "64",
+        "lRefRaiseTime": "1700186901",
+        "anchorX16": "14382072737"
+      },
+      "tick": "221205",
+      "liquidity": "0",
+      "timestamp": "1700186961",
+      "passed": true,
+      "lObs": "64",
+      "eRef": "0",
+      "expected": {
+        "lastUpdateTime": "1700186961",
+        "lRefTime": "1700186961",
+        "lastPosTime": "1700186961",
+        "lRefBits": "0",
+        "snapBits": "64",
+        "lRefRaiseTime": "1700186901",
+        "anchorX16": "14470568706"
+      }
+    },
+    {
+      "stateIn": {
+        "lastUpdateTime": "1700873294",
+        "lRefTime": "1700873354",
+        "lastPosTime": "1700873355",
+        "lRefBits": "3",
+        "snapBits": "30",
+        "lRefRaiseTime": "1700873355",
+        "anchorX16": "39959936950"
+      },
+      "tick": "610190",
+      "liquidity": "329687240982077618659456880638523349074",
+      "timestamp": "1700873355",
+      "passed": true,
+      "lObs": "30",
+      "eRef": "3",
+      "expected": {
+        "lastUpdateTime": "1700873355",
+        "lRefTime": "1700873355",
+        "lastPosTime": "1700873355",
+        "lRefBits": "3",
+        "snapBits": "30",
+        "lRefRaiseTime": "1700873355",
+        "anchorX16": "39968689986"
+      }
+    },
+    {
+      "stateIn": {
+        "lastUpdateTime": "1700584388",
+        "lRefTime": "1700590219",
+        "lastPosTime": "1700590215",
+        "lRefBits": "64",
+        "snapBits": "30",
+        "lRefRaiseTime": "1700590160",
+        "anchorX16": "-52193479364"
+      },
+      "tick": "-796217",
+      "liquidity": "178191616632329041305360556798897973753",
+      "timestamp": "1700590220",
+      "passed": true,
+      "lObs": "128",
+      "eRef": "64",
+      "expected": {
+        "lastUpdateTime": "1700590220",
+        "lRefTime": "1700590220",
+        "lastPosTime": "1700590215",
+        "lRefBits": "64",
+        "snapBits": "30",
+        "lRefRaiseTime": "1700590160",
+        "anchorX16": "-52180877312"
+      }
+    },
+    {
+      "stateIn": {
+        "lastUpdateTime": "1700272691",
+        "lRefTime": "1700172852",
+        "lastPosTime": "1700272847",
+        "lRefBits": "40",
+        "snapBits": "0",
+        "lRefRaiseTime": "1700272852",
+        "anchorX16": "37292178942"
+      },
+      "tick": "569988",
+      "liquidity": "1690792930120316112",
+      "timestamp": "1700272852",
+      "passed": true,
+      "lObs": "61",
+      "eRef": "0",
+      "expected": {
+        "lastUpdateTime": "1700272852",
+        "lRefTime": "1700272852",
+        "lastPosTime": "1700272847",
+        "lRefBits": "40",
+        "snapBits": "0",
+        "lRefRaiseTime": "1700272852",
+        "anchorX16": "37330051729"
+      }
+    },
+    {
+      "stateIn": {
+        "lastUpdateTime": "1700986163",
+        "lRefTime": "1700986296",
+        "lastPosTime": "1700986291",
+        "lRefBits": "40",
+        "snapBits": "64",
+        "lRefRaiseTime": "1700986296",
+        "anchorX16": "-34517426287"
+      },
+      "tick": "-529120",
+      "liquidity": "790877016091",
+      "timestamp": "1700986296",
+      "passed": true,
+      "lObs": "40",
+      "eRef": "40",
+      "expected": {
+        "lastUpdateTime": "1700986296",
+        "lRefTime": "1700986296",
+        "lastPosTime": "1700986291",
+        "lRefBits": "40",
+        "snapBits": "64",
+        "lRefRaiseTime": "1700986296",
+        "anchorX16": "-34602667755"
+      }
+    },
+    {
+      "stateIn": {
+        "lastUpdateTime": "1700723895",
+        "lRefTime": "1700627902",
+        "lastPosTime": "1700727897",
+        "lRefBits": "40",
+        "snapBits": "0",
+        "lRefRaiseTime": "1700727782",
+        "anchorX16": "-44517035773"
+      },
+      "tick": "-676359",
+      "liquidity": "1088680796994370958585495212",
+      "timestamp": "1700727902",
+      "passed": true,
+      "lObs": "90",
+      "eRef": "0",
+      "expected": {
+        "lastUpdateTime": "1700727902",
+        "lRefTime": "1700727902",
+        "lastPosTime": "1700727897",
+        "lRefBits": "41",
+        "snapBits": "0",
+        "lRefRaiseTime": "1700727902",
+        "anchorX16": "-44353195773"
+      }
+    },
+    {
+      "stateIn": {
+        "lastUpdateTime": "1700336442",
+        "lRefTime": "1700337560",
+        "lastPosTime": "1700337555",
+        "lRefBits": "100",
+        "snapBits": "30",
+        "lRefRaiseTime": "1700337500",
+        "anchorX16": "-61487673966"
+      },
+      "tick": "-935917",
+      "liquidity": "1090733318836135897",
+      "timestamp": "1700337560",
+      "passed": false,
+      "lObs": "60",
+      "eRef": "100",
+      "expected": {
+        "lastUpdateTime": "1700337560",
+        "lRefTime": "1700337560",
+        "lastPosTime": "1700337555",
+        "lRefBits": "100",
+        "snapBits": "30",
+        "lRefRaiseTime": "1700337500",
+        "anchorX16": "-61487673966"
+      }
+    },
+    {
+      "stateIn": {
+        "lastUpdateTime": "1700732953",
+        "lRefTime": "1700736029",
+        "lastPosTime": "1700736144",
+        "lRefBits": "3",
+        "snapBits": "70",
+        "lRefRaiseTime": "1700735149",
+        "anchorX16": "43500961837"
+      },
+      "tick": "666036",
+      "liquidity": "705869003769805583190463306",
+      "timestamp": "1700736149",
+      "passed": true,
+      "lObs": "90",
+      "eRef": "2",
+      "expected": {
+        "lastUpdateTime": "1700736149",
+        "lRefTime": "1700736149",
+        "lastPosTime": "1700736144",
+        "lRefBits": "4",
+        "snapBits": "70",
+        "lRefRaiseTime": "1700736149",
+        "anchorX16": "43649335295"
+      }
+    },
+    {
+      "stateIn": {
+        "lastUpdateTime": "1700610568",
+        "lRefTime": "1700618712",
+        "lastPosTime": "1700619307",
+        "lRefBits": "0",
+        "snapBits": "70",
+        "lRefRaiseTime": "1700619252",
+        "anchorX16": "-60623999751"
+      },
+      "tick": "-924025",
+      "liquidity": "691080250685897431642470884",
+      "timestamp": "1700619312",
+      "passed": true,
+      "lObs": "90",
+      "eRef": "0",
+      "expected": {
+        "lastUpdateTime": "1700619312",
+        "lRefTime": "1700619312",
+        "lastPosTime": "1700619307",
+        "lRefBits": "0",
+        "snapBits": "70",
+        "lRefRaiseTime": "1700619252",
+        "anchorX16": "-60556902400"
+      }
+    },
+    {
+      "stateIn": {
+        "lastUpdateTime": "1700202363",
+        "lRefTime": "1700210581",
+        "lastPosTime": "1700211176",
+        "lRefBits": "67",
+        "snapBits": "0",
+        "lRefRaiseTime": "1700211121",
+        "anchorX16": "42573817467"
+      },
+      "tick": "651854",
+      "liquidity": "117264232219312154217",
+      "timestamp": "1700211181",
+      "passed": true,
+      "lObs": "67",
+      "eRef": "62",
+      "expected": {
+        "lastUpdateTime": "1700211181",
+        "lRefTime": "1700211181",
+        "lastPosTime": "1700211176",
+        "lRefBits": "67",
+        "snapBits": "0",
+        "lRefRaiseTime": "1700211121",
+        "anchorX16": "42719903744"
+      }
+    },
+    {
+      "stateIn": {
+        "lastUpdateTime": "1700044687",
+        "lRefTime": "1700062911",
+        "lastPosTime": "1700063506",
+        "lRefBits": "1",
+        "snapBits": "0",
+        "lRefRaiseTime": "1700063391",
+        "anchorX16": "12058492516"
+      },
+      "tick": "181905",
+      "liquidity": "986769712809411734",
+      "timestamp": "1700063511",
+      "passed": true,
+      "lObs": "60",
+      "eRef": "0",
+      "expected": {
+        "lastUpdateTime": "1700063511",
+        "lRefTime": "1700063511",
+        "lastPosTime": "1700063506",
+        "lRefBits": "2",
+        "snapBits": "0",
+        "lRefRaiseTime": "1700063511",
+        "anchorX16": "11921326080"
+      }
+    },
+    {
+      "stateIn": {
+        "lastUpdateTime": "1700996139",
+        "lRefTime": "1700995542",
+        "lastPosTime": "1700996142",
+        "lRefBits": "0",
+        "snapBits": "70",
+        "lRefRaiseTime": "1700995142",
+        "anchorX16": "30896903895"
+      },
+      "tick": "471767",
+      "liquidity": "664830126710374412633515563",
+      "timestamp": "1700996142",
+      "passed": true,
+      "lObs": "70",
+      "eRef": "0",
+      "expected": {
+        "lastUpdateTime": "1700996142",
+        "lRefTime": "1700996142",
+        "lastPosTime": "1700996142",
+        "lRefBits": "1",
+        "snapBits": "70",
+        "lRefRaiseTime": "1700996142",
+        "anchorX16": "30897261540"
+      }
+    },
+    {
+      "stateIn": {
+        "lastUpdateTime": "1700635837",
+        "lRefTime": "1700642225",
+        "lastPosTime": "1700642820",
+        "lRefBits": "3",
+        "snapBits": "64",
+        "lRefRaiseTime": "1700642765",
+        "anchorX16": "-15345997864"
+      },
+      "tick": "-236328",
+      "liquidity": "1009652076685295986133076119",
+      "timestamp": "1700642825",
+      "passed": true,
+      "lObs": "90",
+      "eRef": "0",
+      "expected": {
+        "lastUpdateTime": "1700642825",
+        "lRefTime": "1700642825",
+        "lastPosTime": "1700642820",
+        "lRefBits": "3",
+        "snapBits": "64",
+        "lRefRaiseTime": "1700642765",
+        "anchorX16": "-15487991808"
+      }
+    },
+    {
+      "stateIn": {
+        "lastUpdateTime": "1700532932",
+        "lRefTime": "1700439782",
+        "lastPosTime": "1700539777",
+        "lRefBits": "67",
+        "snapBits": "0",
+        "lRefRaiseTime": "1700539662",
+        "anchorX16": "54947643077"
+      },
+      "tick": "838736",
+      "liquidity": "0",
+      "timestamp": "1700539782",
+      "passed": true,
+      "lObs": "0",
+      "eRef": "0",
+      "expected": {
+        "lastUpdateTime": "1700539782",
+        "lRefTime": "1700539782",
+        "lastPosTime": "1700539777",
+        "lRefBits": "0",
+        "snapBits": "0",
+        "lRefRaiseTime": "1700539662",
+        "anchorX16": "54967402496"
+      }
+    }
+  ],
+  "source": "EkuboProtocol/evm-contracts da368348, test/data/mevcapture-v21 (anchor updates of the variant whose allowance floors)"
+}

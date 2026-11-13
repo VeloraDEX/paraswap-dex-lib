@@ -5,7 +5,7 @@ import {
   PoolInitialization,
   SubgraphData,
 } from './ekubo-v3-pool-manager';
-import { DEX_KEY, EKUBO_V3_CONFIG } from './config';
+import { DEX_KEY, EKUBO_V3_CONFIG, MEV_CAPTURE_V21_ADDRESS } from './config';
 import { ekuboContracts } from './utils';
 import { IDexHelper } from '../../dex-helper';
 
@@ -166,5 +166,36 @@ describe('EkuboV3PoolManager subgraph pagination', () => {
     expect((res.poolKeysRes as Error).message).toBe(
       'Subgraph pool key retrieval failed',
     );
+  });
+
+  test('queries MEVCapture v2.1 pools only where the extension is configured', async () => {
+    const page = {
+      data: {
+        _meta: { block: { number: 200, hash: '0xmeta' } },
+        poolInitializations: [],
+      },
+    };
+    const queries: string[] = [];
+    for (const mevCaptureV21Address of [
+      undefined,
+      EKUBO_V3_CONFIG[DEX_KEY][network].mevCaptureV21Address,
+    ]) {
+      const { dexHelper, contracts, logger, querySubgraph } = makeTestCtx();
+      const manager = new EkuboV3PoolManager(
+        DEX_KEY,
+        logger,
+        dexHelper,
+        contracts,
+        subgraphId,
+        mevCaptureV21Address,
+      );
+      querySubgraph.mockResolvedValue(page);
+      jest.spyOn(dexHelper.provider, 'getBlock').mockResolvedValue({} as any);
+      await (manager as any).fetchCanonicalSubgraphPoolKeys(300, false);
+      queries.push(querySubgraph.mock.calls[0][1].query);
+    }
+    const v21 = MEV_CAPTURE_V21_ADDRESS;
+    expect(queries[0]).not.toContain(v21);
+    expect(queries[1]).toContain(v21);
   });
 });
