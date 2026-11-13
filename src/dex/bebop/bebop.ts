@@ -1139,7 +1139,9 @@ export class Bebop
           throw new RestrictedError(this.dexKey, this.network, message);
         }
       }
-      if (e?.isBlacklistError) throw e;
+      // Callers tell a blacklist and a slippage miss from a dex failure by
+      // their type, so those two keep it.
+      if (e?.isBlacklistError || e?.isSlippageError) throw e;
       throw new Error(message);
     }
   }

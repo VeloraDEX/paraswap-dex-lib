@@ -7,7 +7,11 @@ import { DummyDexHelper } from '../../dex-helper/index';
 import { Network, SwapSide } from '../../constants';
 import { Tokens } from '../../../tests/constants-e2e';
 import { GetDexParamPreProcessOptions } from '../../types';
-import { BlacklistError, RestrictedError } from '../generic-rfq/types';
+import {
+  BlacklistError,
+  RestrictedError,
+  SlippageCheckError,
+} from '../generic-rfq/types';
 import { Bebop } from './bebop';
 
 const dexKey = 'Bebop';
@@ -148,6 +152,21 @@ describe('Bebop getDexParam without preProcessTransaction', () => {
     expect(error.originalError).toBeInstanceOf(BlacklistError);
     expect(error.originalError.reason).toBe('DENY_LISTED');
     expect(error.originalError.user).toBe(userAddress);
+  });
+
+  it('keeps a quote outside the slippage as a SlippageCheckError', async () => {
+    const dexHelper = new DummyDexHelper(network);
+    const quote = buildQuoteResponse();
+    // below destAmount × slippageFactor (990000000)
+    quote.buyTokens[utils.getAddress(tokens['USDC'].address)].minimumAmount =
+      '980000000';
+    (dexHelper.httpRequest.get as any) = jest.fn(async () => quote);
+    const bebop = new Bebop(network, dexKey, dexHelper);
+
+    const error = await getDexParam(bebop, {}, { preProcess }).catch(e => e);
+
+    expect(error.code).toBe('PREPROCESS_FAILED');
+    expect(error.originalError).toBeInstanceOf(SlippageCheckError);
   });
 
   it('throws when there is neither order build nor preProcess context', async () => {
