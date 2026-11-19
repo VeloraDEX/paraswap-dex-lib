@@ -18,7 +18,7 @@ if (process.env.MHOCDESK_ANVIL_RPC)
 
 import { StaticJsonRpcProvider } from '@ethersproject/providers';
 import { DummyDexHelper } from '../../dex-helper/index';
-import { Network, SwapSide } from '../../constants';
+import { ETHER_ADDRESS, Network, SwapSide } from '../../constants';
 import { BI_POWS } from '../../bigint-constants';
 import { Token } from '../../types';
 import { MhocDesk } from './mhoc-desk';
@@ -240,6 +240,12 @@ const amountsFor = (t: { decimals: number }, isBase: boolean) =>
       const liq = await dex.getTopPoolsForToken(p.base.address, 10);
       console.log('top pools', liq);
       checkPoolsLiquidity(liq, p.base.address, dexKey);
+      // native ETH is routed as WETH, so it reports the same pools
+      if (
+        p.base.address ===
+        dexHelper.config.data.wrappedNativeTokenAddress.toLowerCase()
+      )
+        expect(await dex.getTopPoolsForToken(ETHER_ADDRESS, 10)).toEqual(liq);
     });
   },
 );

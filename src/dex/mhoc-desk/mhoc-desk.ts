@@ -30,7 +30,12 @@ import {
 import { StatePollingManager } from '../../lib/stateful-rpc-poller/state-polling-manager';
 import { MultiCallParams } from '../../lib/multi-wrapper';
 import { extractSuccessAndValue } from '../../lib/decoders';
-import { constantsFor, PoolConstants, quote } from './mhoc-desk-math';
+import {
+  constantsFor,
+  PoolConstants,
+  quote,
+  windowTime,
+} from './mhoc-desk-math';
 
 // mhoc_desk, a prop AMM: one maker-owned pool per pair, repriced on chain several times a second. Pricing
 // replicates PropAMM._compute exactly (mhoc-desk-math.ts), from state polled every block (mhoc-desk-pool.ts).
@@ -210,7 +215,8 @@ export class MhocDesk extends SimpleExchange implements IDex<MhocDeskData> {
   // Each amount is priced independently on the polled state, as a swap in the next block (the per-block counter of
   // the polled block no longer counts, the per-card one does while the card is the same, and a card whose
   // validUntilBlock is the polled block itself no longer trades) at the wall clock, never earlier than the state's
-  // own block. Unfillable amounts (expired or halted card, caps, floors) price at 0.
+  // own block. The per-minute budget is counted at windowTime() (the earliest block.timestamp the swap can have),
+  // so a wall clock past the minute boundary never frees it early. Unfillable amounts (expired or halted card, caps, floors) price at 0.
   async getPricesVolume(
     srcToken: Token,
     destToken: Token,
@@ -233,10 +239,11 @@ export class MhocDesk extends SimpleExchange implements IDex<MhocDeskData> {
       const now = BigInt(
         Math.max(Math.floor(Date.now() / 1000), Number(snap.readTimestamp)),
       );
+      const wnow = windowTime(snap, now);
       const tokenIn =
         src.address.toLowerCase() === p.cfg.base.address ? 'base' : 'quote';
       const price = (a: bigint) => {
-        const r = quote(p.consts, snap, tokenIn, a, next, now);
+        const r = quote(p.consts, snap, tokenIn, a, next, now, wnow);
         return r.ok ? r.amountOut : 0n;
       };
       const unit = price(getBigIntPow(src.decimals));
@@ -305,7 +312,8 @@ export class MhocDesk extends SimpleExchange implements IDex<MhocDeskData> {
     tokenAddress: Address,
     limit: number,
   ): Promise<PoolLiquidity[]> {
-    const t = tokenAddress.toLowerCase();
+    // native ETH is priced as WETH (match()), so its liquidity is reported on the pool too
+    const t = this.dexHelper.config.wrapETH(tokenAddress).toLowerCase();
     const out: PoolLiquidity[] = [];
     for (const p of this.pools) {
       if (p.cfg.base.address !== t && p.cfg.quote.address !== t) continue;

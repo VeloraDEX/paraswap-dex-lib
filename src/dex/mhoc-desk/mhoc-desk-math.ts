@@ -143,12 +143,23 @@ export function fillAmount(
   return kf !== 0n ? (out * a) / (a + kf) : out;
 }
 
+// windowTime is the block.timestamp to use for the per-minute budget when the swap's time is a guess (the wall
+// clock): the earliest time the swap can land, the snapshot's own block.timestamp + 1, capped by now. A wall clock
+// that has crossed a minute the chain may not have reached must not free that minute's budget, or sizes would be
+// quoted that revert with ExceedsWindowCap. Counting the snapshot's minute when the swap lands in a later one only
+// makes the quote stricter than the pool.
+export function windowTime(s: PropAMMSnapshot, now: bigint): bigint {
+  const earliest = s.readTimestamp + 1n;
+  return now < earliest ? now : earliest;
+}
+
 export type QuoteResult =
   | { ok: true; amountOut: bigint; notional: bigint; counters: Counters }
   | { ok: false; error: PropAMMError };
 
 // tokenIn: 'base' (taker sells BASE), 'quote' (taker pays QUOTE) or 'other'; the swap runs in block
-// (blockNumber, now)
+// (blockNumber, now). windowNow is the block.timestamp used for the per-minute budget (default: now); see
+// windowTime() for pricing on a wall clock.
 export function quote(
   c: PoolConstants,
   s: PropAMMSnapshot,
@@ -156,6 +167,7 @@ export function quote(
   amountIn: bigint,
   blockNumber: bigint,
   now: bigint,
+  windowNow: bigint = now,
 ): QuoteResult {
   const fail = (error: PropAMMError): QuoteResult => ({ ok: false, error });
   const card = decodeCard(s.stateWord);
@@ -177,7 +189,7 @@ export function quote(
   const limC = s.maxNotionalPerUpdate * c.quoteUnit;
   const fs = s.cardSeq === card.seq ? s.cardFilled : 0n;
   if (fs + q > limC) return fail('ExceedsUpdateCap');
-  const id = now / WINDOW;
+  const id = windowNow / WINDOW;
   let wused = q;
   let bused = q;
   if (s.windowId === id) {
@@ -200,7 +212,7 @@ export function quote(
     ok: true,
     amountOut: out,
     notional: q,
-    counters: afterFill(s, card.seq, q, blockNumber, now),
+    counters: afterFill(s, card.seq, q, blockNumber, windowNow),
   };
 }
 

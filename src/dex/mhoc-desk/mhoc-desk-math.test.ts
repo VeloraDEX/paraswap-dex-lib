@@ -10,6 +10,7 @@ import {
   type PoolConstants,
   type PropAMMSnapshot,
   quote,
+  windowTime,
 } from './mhoc-desk-math';
 
 type Quote = {
@@ -228,6 +229,28 @@ describe('MhocDesk math: contract-produced vectors', () => {
     expect(out(readme, 'quote', 100_000n * 10n ** 6n)).toEqual(
       33_326_667_999_733_386_656n,
     );
+  });
+
+  it('counts the per-minute budget at the earliest time the swap can land, not the wall clock', () => {
+    // read at 999 (minute 16) with 24,000 of a 25,000 USDC minute budget used; the card lives until 2000
+    const s: PropAMMSnapshot = {
+      ...readme,
+      stateWord: card(250n, 250n) - 1000n + 2000n,
+      maxNotionalPerWindow: 25_000n,
+      windowId: 16n,
+      windowFilled: 24_000n * 10n ** 6n,
+    };
+    const one = 10n ** 18n; // about 3,000 USDC
+    // the wall clock (1020, minute 17) alone frees the budget: the pool, in a block at 1000, reverts
+    expect(quote(c, s, 'base', one, 10n, 1020n).ok).toBe(true);
+    expect(windowTime(s, 1020n)).toEqual(1000n);
+    expect(windowTime(s, 999n)).toEqual(999n);
+    const r = quote(c, s, 'base', one, 10n, 1020n, windowTime(s, 1020n));
+    expect(r.ok ? 'ok' : r.error).toEqual('ExceedsWindowCap');
+    // read in the last second of a minute: the next block is in the next minute and the budget is free
+    const late = { ...s, readTimestamp: 1019n };
+    expect(windowTime(late, 1020n)).toEqual(1020n);
+    expect(quote(c, late, 'base', one, 10n, 1020n, 1020n).ok).toBe(true);
   });
 
   it('prices a sell with kBid and a buy with kAsk, each times K_SCALE', () => {
