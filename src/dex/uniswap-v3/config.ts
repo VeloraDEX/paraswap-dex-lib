@@ -20,6 +20,15 @@ const SUPPORTED_FEES = [10000n, 3000n, 500n, 100n];
 const RAMSES_FORKS_FEES = [...SUPPORTED_FEES, 50n, 250n];
 const PANGOLIN_SUPPORTED_FEES = [8000n, 2500n, 500n, 100n];
 const PHARAOH_V3_SUPPORTED_FEES = [20000n, 10000n, 3000n, 500n, 250n, 100n];
+// CommunityV3 enables 25 tiers: official 0.01%/0.05%, every 0.1% from 0.1% to 2%, and 3%/4%/5% (tickSpacing = fee / 50)
+const COMMUNITY_V3_SUPPORTED_FEES = [
+  50000n,
+  40000n,
+  30000n,
+  ...Array.from({ length: 20 }, (_, i) => BigInt((20 - i) * 1000)),
+  500n,
+  100n,
+];
 
 // Pools that will be initialized on app startup
 // They are added for testing
@@ -165,6 +174,20 @@ export const UniswapV3Config: DexConfigMap<DexParams> = {
       initRetryFrequency: 10,
       initHash: `0xe34f199b19b2b4f47f68442619d555527d244f78a3297ea89325f843f87b8b54`,
       subgraphURL: '9memxmbdvEaCBGvbtLh3MMGcLiMEHN6ooUSBiFU93g5T',
+    },
+  },
+  // Unmodified Uniswap V3 deployment (same pool init code hash) with the factory owner burned: https://communityv3.org
+  CommunityV3: {
+    [Network.MAINNET]: {
+      factory: '0x00a38533c68327aBE0Cc265436e036066E2D6B38',
+      quoter: '0xCC1c929D41106D78D798315AFfFEF6A832eDe90A',
+      router: '0xd53bE749711E7DFf31F4940D42386310b23c4C1E',
+      supportedFees: COMMUNITY_V3_SUPPORTED_FEES,
+      stateMulticall: '0x9c764D2e92dA68E4CDfD784B902283A095ff8b63',
+      uniswapMulticall: '0x4C1A523c249a6718D4C1fE86fD2C2530C81d976D',
+      chunksCount: 10,
+      initRetryFrequency: 10,
+      initHash: `0xe34f199b19b2b4f47f68442619d555527d244f78a3297ea89325f843f87b8b54`,
     },
   },
   SushiSwapV3: {

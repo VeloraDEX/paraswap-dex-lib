@@ -3145,3 +3145,148 @@ describe('PangolinV3', () => {
     checkPoolsLiquidity(poolLiquidity, TokenA.address, dexKey);
   });
 });
+
+describe('CommunityV3', () => {
+  const dexKey = 'CommunityV3';
+
+  describe('Mainnet', () => {
+    let blockNumber: number;
+    let communityV3: UniswapV3;
+
+    const network = Network.MAINNET;
+    const dexHelper = new DummyDexHelper(network);
+    const quoter = UniswapV3Config[dexKey][network].quoter;
+
+    const TokenASymbol = 'USDC';
+    const TokenA = Tokens[network][TokenASymbol];
+
+    // TSLAon (Ondo Global Markets tokenized Tesla), the most liquid CommunityV3 pools are TSLAon/USDC
+    const TokenBSymbol = 'TSLAon';
+    const TokenB = {
+      address: '0xf6b1117ec07684d3958cad8beb1b302bfd21103f',
+      decimals: 18,
+    };
+
+    beforeEach(async () => {
+      blockNumber = await dexHelper.web3Provider.eth.getBlockNumber();
+      communityV3 = new UniswapV3(network, dexKey, dexHelper);
+    });
+
+    it('getPoolIdentifiers and getPricesVolume SELL', async function () {
+      const amounts = [
+        0n,
+        10n * BI_POWS[6],
+        20n * BI_POWS[6],
+        30n * BI_POWS[6],
+      ];
+
+      const pools = await communityV3.getPoolIdentifiers(
+        TokenA,
+        TokenB,
+        SwapSide.SELL,
+        blockNumber,
+      );
+      console.log(
+        `${TokenASymbol} <> ${TokenBSymbol} Pool Identifiers: `,
+        pools,
+      );
+
+      expect(pools.length).toBeGreaterThan(0);
+
+      const poolPrices = await communityV3.getPricesVolume(
+        TokenA,
+        TokenB,
+        amounts,
+        SwapSide.SELL,
+        blockNumber,
+        pools,
+      );
+      console.log(
+        `${TokenASymbol} <> ${TokenBSymbol} Pool Prices: `,
+        poolPrices,
+      );
+
+      expect(poolPrices).not.toBeNull();
+      checkPoolPrices(poolPrices!, amounts, SwapSide.SELL, dexKey);
+
+      let falseChecksCounter = 0;
+      await Promise.all(
+        poolPrices!.map(async price => {
+          const fee =
+            communityV3.eventPools[price.poolIdentifiers![0]]!.feeCode;
+          const res = await checkOnChainPricing(
+            dexHelper,
+            communityV3,
+            'quoteExactInputSingle',
+            blockNumber,
+            quoter,
+            price.prices,
+            TokenA.address,
+            TokenB.address,
+            fee,
+            amounts,
+          );
+          if (res === false) falseChecksCounter++;
+        }),
+      );
+
+      expect(falseChecksCounter).toBeLessThan(poolPrices!.length);
+    });
+
+    it('getPoolIdentifiers and getPricesVolume BUY', async function () {
+      const amounts = [0n, BI_POWS[16], 2n * BI_POWS[16], 3n * BI_POWS[16]];
+
+      const pools = await communityV3.getPoolIdentifiers(
+        TokenA,
+        TokenB,
+        SwapSide.BUY,
+        blockNumber,
+      );
+      console.log(
+        `${TokenASymbol} <> ${TokenBSymbol} Pool Identifiers: `,
+        pools,
+      );
+
+      expect(pools.length).toBeGreaterThan(0);
+
+      const poolPrices = await communityV3.getPricesVolume(
+        TokenA,
+        TokenB,
+        amounts,
+        SwapSide.BUY,
+        blockNumber,
+        pools,
+      );
+      console.log(
+        `${TokenASymbol} <> ${TokenBSymbol} Pool Prices: `,
+        poolPrices,
+      );
+
+      expect(poolPrices).not.toBeNull();
+      checkPoolPrices(poolPrices!, amounts, SwapSide.BUY, dexKey);
+
+      let falseChecksCounter = 0;
+      await Promise.all(
+        poolPrices!.map(async price => {
+          const fee =
+            communityV3.eventPools[price.poolIdentifiers![0]]!.feeCode;
+          const res = await checkOnChainPricing(
+            dexHelper,
+            communityV3,
+            'quoteExactOutputSingle',
+            blockNumber,
+            quoter,
+            price.prices,
+            TokenA.address,
+            TokenB.address,
+            fee,
+            amounts,
+          );
+          if (res === false) falseChecksCounter++;
+        }),
+      );
+
+      expect(falseChecksCounter).toBeLessThan(poolPrices!.length);
+    });
+  });
+});
